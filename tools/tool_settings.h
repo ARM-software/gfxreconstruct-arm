@@ -123,6 +123,7 @@ const char kDisableSubpassFusionOption[]      = "--dsf";
 const char kSavePipelineCacheArgument[]       = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]       = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]    = "--add-new-pipeline-caches";
+const char kFlushInsideMeasurementRangeOption[] = "--flush-inside-measurement-range";
 #if defined(WIN32)
 const char kApiFamilyOption[]             = "--api";
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
@@ -800,6 +801,11 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions& options, const gfx
     if (arg_parser.IsOptionSet(kFlushMeasurementRangeOption))
     {
         options.flush_measurement_frame_range = true;
+    }
+
+    if (arg_parser.IsOptionSet(kFlushInsideMeasurementRangeOption))
+    {
+        options.flush_inside_measurement_range = true;
     }
 
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);

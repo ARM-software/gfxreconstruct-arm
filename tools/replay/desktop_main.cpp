@@ -161,6 +161,7 @@ int main(int argc, const char** argv)
             bool        has_mfr                            = false;
             bool        quit_after_measurement_frame_range = false;
             bool        flush_measurement_frame_range      = false;
+            bool        flush_inside_measurement_range     = false;
             bool        preload_measurement_frame_range    = false;
             std::string measurement_file_name;
 
@@ -175,18 +176,14 @@ int main(int argc, const char** argv)
             if (has_mfr)
             {
                 GetMeasurementFilename(arg_parser, measurement_file_name);
+                flush_inside_measurement_range = vulkan_replay_options.flush_inside_measurement_range;
             }
-
-            if (has_mfr)
-            {
-                GetMeasurementFilename(arg_parser, measurement_file_name);
-            }
-
             gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(start_frame),
                                                  static_cast<uint64_t>(end_frame),
                                                  has_mfr,
                                                  quit_after_measurement_frame_range,
                                                  flush_measurement_frame_range,
+                                                 flush_inside_measurement_range,
                                                  preload_measurement_frame_range,
                                                  measurement_file_name);
 
