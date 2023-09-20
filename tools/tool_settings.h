@@ -116,6 +116,7 @@ const char kPreloadMeasurementRangeOption[]      = "--preload-measurement-range"
 const char kWaitBeforePresent[]                  = "--wait-before-present";
 const char kSkipGetFenceStatus[]                 = "--skip-get-fence-status";
 const char kSkipGetFenceRanges[]                 = "--skip-get-fence-ranges";
+const char kFrameRange[]                         = "--frame-range";
 const char kDisableSubpassFusionOption[]         = "--dsf";
 const char kSavePipelineCacheArgument[]          = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]          = "--load-pipeline-cache";

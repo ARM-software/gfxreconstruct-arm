@@ -54,6 +54,8 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer, public AnnotationHan
 
     void StartFile(FILE* file);
 
+    void SetFile(FILE* file) { file_ = file; };
+
     void EndFile();
 
     bool IsValid() const { return (file_ != nullptr); }

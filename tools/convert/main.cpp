@@ -37,7 +37,7 @@ using gfxrecon::decode::JsonFormat;
 
 const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags";
 
-const char kArguments[] = "--output,--format";
+const char kArguments[] = "--output,--format,--frame-range";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -72,6 +72,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE(
         "  --file-per-frame\tCreates a new file for every frame processed. Frame number is added as a suffix");
     GFXRECON_WRITE_CONSOLE("                  \tto the output file name.");
+    GFXRECON_WRITE_CONSOLE(
+        "  --frame-range\t\tFrame range to be converted. In order to retrieve Trim Trace State, frame 0 has "
+        "to be in frame range.");
 
 #if defined(WIN32) && defined(_DEBUG)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
@@ -133,6 +136,34 @@ static gfxrecon::decode::JsonFormat GetOutputFormat(const gfxrecon::util::Argume
     return gfxrecon::decode::JsonFormat::JSON;
 }
 
+static std::vector<uint32_t> GetFrameIndices(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    const std::string& input_ranges = arg_parser.GetArgumentValue(kFrameRange);
+
+    std::vector<gfxrecon::util::UintRange> frame_ranges =
+        gfxrecon::util::GetUintRanges(input_ranges.c_str(), "frames to be converted", true);
+
+    std::vector<uint32_t> frame_indices;
+
+    for (uint32_t i = 0; i < frame_ranges.size(); ++i)
+    {
+        gfxrecon::util::UintRange& range = frame_ranges[i];
+
+        uint32_t diff = range.last - range.first + 1;
+
+        for (uint32_t j = 0; j < diff; ++j)
+        {
+            uint32_t frame_index = range.first + j;
+
+            frame_indices.push_back(frame_index);
+        }
+    }
+    std::sort(frame_indices.begin(), frame_indices.end());
+    std::reverse(frame_indices.begin(), frame_indices.end());
+
+    return frame_indices;
+}
+
 std::string FormatFrameNumber(uint32_t frame_number)
 {
     std::stringstream stream;
@@ -172,18 +203,19 @@ int main(int argc, const char** argv)
     }
 #endif
 
-    const auto& positional_arguments = arg_parser.GetPositionalArguments();
-    std::string input_filename       = positional_arguments[0];
-    JsonFormat  output_format        = GetOutputFormat(arg_parser);
-    std::string output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
-    std::string filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
-    std::string output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
-    std::string data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
-    bool        dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
-    bool        expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
-    bool        file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
-    bool        output_to_stdout     = output_filename == "stdout";
-
+    const auto&                     positional_arguments = arg_parser.GetPositionalArguments();
+    std::string                     input_filename       = positional_arguments[0];
+    JsonFormat                      output_format        = GetOutputFormat(arg_parser);
+    std::string                     output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
+    std::string                     filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
+    std::string                     output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
+    std::string                     data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
+    std::vector<uint32_t>           frame_indices        = GetFrameIndices(arg_parser);
+    bool                            frame_range_option   = !arg_parser.GetArgumentValue(kFrameRange).empty();
+    bool                            dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
+    bool                            expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
+    bool                            file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
+    bool                            output_to_stdout     = output_filename == "stdout";
     gfxrecon::decode::FileProcessor file_processor;
 
 #ifndef CONVERT_EXPERIMENTAL_D3D12
@@ -214,8 +246,14 @@ int main(int argc, const char** argv)
     {
         std::string json_filename;
         FILE*       out_file_handle = nullptr;
+        FILE*       tmp_file_handle = nullptr;
 
-        if (file_per_frame)
+        if (file_per_frame && frame_range_option)
+        {
+            json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
+                output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
+        }
+        else if (file_per_frame)
         {
             json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
                 output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
@@ -260,6 +298,25 @@ int main(int argc, const char** argv)
             json_consumer.Initialize(json_options, GFXRECON_PROJECT_VERSION_STRING, vulkan_version, input_filename);
             json_consumer.StartFile(out_file_handle);
 
+            if (frame_range_option)
+            {
+                tmp_file_handle = tmpfile();
+                if (tmp_file_handle == nullptr)
+                {
+                    ret_code = 1;
+                    success  = false;
+                    GFXRECON_LOG_ERROR("Failed to create temp file");
+                }
+                if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
+                {
+                    json_consumer.SetFile(out_file_handle);
+                    frame_indices.pop_back();
+                }
+                else
+                {
+                    json_consumer.SetFile(tmp_file_handle);
+                }
+            }
             // If CONVERT_EXPERIMENTAL_D3D12 was set, then add DX12 consumer/decoder
 #ifdef CONVERT_EXPERIMENTAL_D3D12
             gfxrecon::decode::Dx12AsciiConsumer dx12_ascii_consumer;
@@ -271,16 +328,41 @@ int main(int argc, const char** argv)
                                                                      : gfxrecon::util::kToString_Unformatted;
             dx12_ascii_consumer.Initialize(out_file_handle, dx12_json_flags);
 #endif
-
             while (success)
             {
                 success = file_processor.ProcessNextFrame();
+
+                if (success && frame_range_option)
+                {
+                    if (frame_indices.empty())
+                    {
+                        break;
+                    }
+
+                    if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
+                    {
+                        json_consumer.SetFile(out_file_handle);
+                        json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
+                            output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
+                        frame_indices.pop_back();
+                    }
+                    else
+                    {
+                        json_consumer.SetFile(tmp_file_handle);
+                        continue;
+                    }
+                }
                 if (success && file_per_frame)
                 {
                     json_consumer.EndFile();
                     gfxrecon::util::platform::FileClose(out_file_handle);
-                    json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
-                        output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
+
+                    json_filename =
+                        (frame_range_option)
+                            ? json_filename
+                            : gfxrecon::util::filepath::InsertFilenamePostfix(
+                                  output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
+
                     gfxrecon::util::platform::FileOpen(&out_file_handle, json_filename.c_str(), "w");
                     success = out_file_handle != nullptr;
                     if (success)
@@ -299,6 +381,10 @@ int main(int argc, const char** argv)
 #ifdef CONVERT_EXPERIMENTAL_D3D12
             dx12_ascii_consumer.Destroy();
 #endif
+            if (tmp_file_handle != nullptr)
+            {
+                gfxrecon::util::platform::FileClose(tmp_file_handle);
+            }
             if (!output_to_stdout)
             {
                 gfxrecon::util::platform::FileClose(out_file_handle);
