@@ -30,6 +30,7 @@
 #define  GFXRECON_GENERATED_VULKAN_STATE_TABLE_H
 
 #include "encode/vulkan_state_table_base.h"
+#include "encode/custom_vulkan_wrapper_handlers.h"
 
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -271,6 +272,7 @@ class VulkanStateTable : VulkanStateTableBase
     void VisitWrappers(std::function<void(VideoSessionKHRWrapper*)> visitor) const { for (auto entry : videoSessionKHR_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(VideoSessionParametersKHRWrapper*)> visitor) const { for (auto entry : videoSessionParametersKHR_map_) { visitor(entry.second); } }
 
+    CustomVulkanStateTable customStateTable;
   private:
     std::map<format::HandleId, AccelerationStructureKHRWrapper*> accelerationStructureKHR_map_;
     std::map<format::HandleId, AccelerationStructureNVWrapper*> accelerationStructureNV_map_;

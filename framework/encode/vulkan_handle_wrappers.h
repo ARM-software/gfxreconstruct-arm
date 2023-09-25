@@ -478,6 +478,15 @@ struct PrivateDataSlotWrapper : public HandleWrapper<VkPrivateDataSlot>
     uint64_t       data{ 0 };
 };
 
+struct DebugUtilsObjectNameInfoWrapper
+{
+    format::HandleId wrapper_handle;
+    VkDevice         device;
+    format::HandleId object_handle;
+    VkObjectType     object_type;
+    std::string      name;
+};
+
 // Handle alias types for extension handle types that have been promoted to core types.
 typedef SamplerYcbcrConversionWrapper   SamplerYcbcrConversionKHRWrapper;
 typedef DescriptorUpdateTemplateWrapper DescriptorUpdateTemplateKHRWrapper;

@@ -1344,6 +1344,22 @@ void VulkanStateTracker::TrackSetLocalDimmingAMD(VkDevice device, VkSwapchainKHR
     wrapper->local_dimming_enable_AMD = localDimmingEnable;
 }
 
+void VulkanStateTracker::TrackSetDebugUtilsName(format::HandleId                     handle,
+                                                VkDevice                             device,
+                                                const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    const uint64_t wrappedId = GetWrappedId(pNameInfo->objectHandle, pNameInfo->objectType);
+
+    DebugUtilsObjectNameInfoWrapper wrapper;
+    wrapper.wrapper_handle = handle;
+    wrapper.device         = device;
+    wrapper.object_handle  = pNameInfo->objectHandle;
+    wrapper.object_type    = pNameInfo->objectType;
+    wrapper.name           = pNameInfo->pObjectName;
+
+    state_table_.customStateTable.InsertWrapper(std::move(wrapper));
+}
+
 void VulkanStateTracker::DestroyState(InstanceWrapper* wrapper)
 {
     assert(wrapper != nullptr);

@@ -403,6 +403,9 @@ class VulkanStateTracker
 
     void TrackSetLocalDimmingAMD(VkDevice device, VkSwapchainKHR swapChain, VkBool32 localDimmingEnable);
 
+    void
+    TrackSetDebugUtilsName(format::HandleId handle, VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                  parent_handle,

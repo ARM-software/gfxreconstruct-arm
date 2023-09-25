@@ -291,6 +291,8 @@ class VulkanStateWriter
                                                      size_t           data_size,
                                                      const void*      data);
 
+    void WriteDebugUtilsState(const VulkanStateTable& state_table);
+
     template <typename Wrapper>
     void StandardCreateWrite(const VulkanStateTable& state_table)
     {
