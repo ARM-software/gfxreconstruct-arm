@@ -23,6 +23,7 @@
 
 #include "project_version.h"
 #include "file_optimizer.h"
+#include "feature_file_optimizer.h"
 #include "replay_options_editor.h"
 
 #include "../tool_settings.h"
@@ -38,6 +39,7 @@
 #include "format/format_util.h"
 #include "generated/generated_vulkan_decoder.h"
 #include "generated/generated_vulkan_referenced_resource_consumer.h"
+#include "decode/vulkan_feature_tracker_consumer_base.h"
 #include "util/argument_parser.h"
 #include "util/logging.h"
 #include "util/date_time.h"
@@ -157,16 +159,81 @@ void GetUnreferencedResources(const std::string&                              in
     }
 }
 
+void GetUsedPhysicalFeatures(const std::string&                                  input_filename,
+                             gfxrecon::decode::VulkanDecoder*                    decoder,
+                             gfxrecon::decode::VulkanFeatureTrackerConsumerBase* ft_consumer)
+{
+    GFXRECON_ASSERT(decoder != nullptr);
+    GFXRECON_ASSERT(ft_consumer != nullptr);
+
+    gfxrecon::decode::FileProcessor file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        file_processor.AddDecoder(decoder);
+        ft_consumer->SetCaptureMode(true);
+        file_processor.ProcessAllFrames();
+        ft_consumer->SetCaptureMode(false);
+
+        if ((file_processor.GetCurrentFrameNumber() > 0) &&
+            (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
+        {
+            ft_consumer->ProcessFeatures();
+            GFXRECON_WRITE_CONSOLE("Retrieved used physical features");
+        }
+        else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
+        {
+            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
+            gfxrecon::util::Log::Release();
+            exit(-1);
+        }
+        else
+        {
+            GFXRECON_WRITE_CONSOLE("File did not contain any frames");
+            gfxrecon::util::Log::Release();
+            exit(0);
+        }
+    }
+}
+
+void VkRemoveUnusedFeatures(std::string input_filename, std::string output_filename)
+{
+    GFXRECON_WRITE_CONSOLE("Scanning Vulkan file %s for unused features.", input_filename.c_str());
+
+    gfxrecon::decode::VulkanDecoder                    decoder;
+    gfxrecon::decode::VulkanFeatureTrackerConsumerBase ft_consumer;
+    decoder.AddConsumer(&ft_consumer);
+
+    GetUsedPhysicalFeatures(input_filename, &decoder, &ft_consumer);
+
+    gfxrecon::FeatureFileOptimizer file_transformer;
+
+    if (file_transformer.Initialize(input_filename, output_filename))
+    {
+        file_transformer.AddDecoder(&decoder);
+        file_transformer.SetConsumer(&ft_consumer);
+        file_transformer.Process();
+
+        if (file_transformer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
+        {
+            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
+            gfxrecon::util::Log::Release();
+            exit(-1);
+        }
+
+        GFXRECON_WRITE_CONSOLE("Unused features filtering complete.");
+    }
+}
+
 void FilterUnreferencedResources(const std::string&                               input_filename,
                                  const std::string&                               output_filename,
                                  std::unordered_set<gfxrecon::format::HandleId>&& unreferenced_ids)
 {
-    gfxrecon::FileOptimizer file_processor(std::move(unreferenced_ids));
-    if (file_processor.Initialize(input_filename, output_filename))
+    gfxrecon::FileOptimizer file_transformer(std::move(unreferenced_ids));
+    if (file_transformer.Initialize(input_filename, output_filename))
     {
-        file_processor.Process();
+        file_transformer.Process();
 
-        if (file_processor.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
+        if (file_transformer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
         {
             GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
             gfxrecon::util::Log::Release();
@@ -174,8 +241,8 @@ void FilterUnreferencedResources(const std::string&                             
         }
 
         GFXRECON_WRITE_CONSOLE("Resource filtering complete.");
-        GFXRECON_WRITE_CONSOLE("\tOriginal file size: %" PRIu64 " bytes", file_processor.GetNumBytesRead());
-        GFXRECON_WRITE_CONSOLE("\tOptimized file size: %" PRIu64 " bytes", file_processor.GetNumBytesWritten());
+        GFXRECON_WRITE_CONSOLE("\tOriginal file size: %" PRIu64 " bytes", file_transformer.GetNumBytesRead());
+        GFXRECON_WRITE_CONSOLE("\tOptimized file size: %" PRIu64 " bytes", file_transformer.GetNumBytesWritten());
     }
 }
 
@@ -215,13 +282,13 @@ void RunDx12Optimizations(const std::string&                        input_filena
 
 void SetReplayOptions(std::string input_filename, std::string output_filename, std::string replay_options)
 {
-    gfxrecon::ReplayOptionsEditor file_processor;
-    if (file_processor.Initialize(input_filename, output_filename))
+    gfxrecon::ReplayOptionsEditor file_transformer;
+    if (file_transformer.Initialize(input_filename, output_filename))
     {
-        file_processor.SetReplayOptions(replay_options);
-        file_processor.Process();
+        file_transformer.SetReplayOptions(replay_options);
+        file_transformer.Process();
 
-        if (file_processor.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
+        if (file_transformer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
         {
             GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
             gfxrecon::util::Log::Release();
@@ -305,7 +372,31 @@ int main(int argc, const char** argv)
             }
             else if (detected_vulkan)
             {
-                VkRemoveRedundantResources(input_filename, output_filename);
+                std::string tmp_file_name    = ("tmp_" + output_filename);
+                bool        tmp_file_created = false;
+
+                try
+                {
+                    VkRemoveRedundantResources(input_filename, tmp_file_name);
+                    tmp_file_created = true;
+                }
+                catch (const std::runtime_error& e)
+                {
+                    if (!(std::string(e.what()) == std::string("File does not contain a state block to optimize")))
+                    {
+                        throw std::runtime_error("File optimizing crashed while processing");
+                    }
+                }
+
+                if (tmp_file_created)
+                {
+                    VkRemoveUnusedFeatures(tmp_file_name, output_filename);
+                    std::remove(tmp_file_name.c_str());
+                }
+                else
+                {
+                    VkRemoveUnusedFeatures(input_filename, output_filename);
+                }
             }
             else
             {
