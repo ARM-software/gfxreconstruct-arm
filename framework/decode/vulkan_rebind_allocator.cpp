@@ -142,21 +142,20 @@ VkResult VulkanRebindAllocator::Initialize(uint32_t                             
         functions_.get_physical_device_queue_family_properties(
             physical_device, &queue_family_count, queue_family_properties.data());
 
-        graphics_queue_family = 0;
+        staging_queue_family_ = 0;
         for (const VkQueueFamilyProperties& elt : queue_family_properties)
         {
-            if (elt.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if (elt.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT))
             {
-                graphics_queue_count = elt.queueCount;
                 break;
             }
-            graphics_queue_family++;
+            staging_queue_family_++;
         }
 
         VkCommandPoolCreateInfo cmd_pool_info = {
             .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-            .queueFamilyIndex = graphics_queue_family,
+            .queueFamilyIndex = staging_queue_family_,
         };
 
         result = functions_.create_command_pool(device_, &cmd_pool_info, NULL, &cmd_pool_);
@@ -170,7 +169,7 @@ VkResult VulkanRebindAllocator::Initialize(uint32_t                             
             .commandBufferCount = 1,
         };
 
-        functions_.get_device_queue(device_, graphics_queue_family, graphics_queue_count, &staging_queue_);
+        functions_.get_device_queue(device_, staging_queue_family_, 0, &staging_queue_);
 
         result = functions_.allocate_command_buffers(device_, &cmd_buff_alloc_info, &cmd_buffer_);
         assert(result == VK_SUCCESS);
