@@ -47,6 +47,7 @@ BUILD_ROOT = os.path.abspath(
     os.path.join(os.path.split(os.path.abspath(__file__))[0], '..'))
 BUILD_CONFIGS = {'debug': 'dbuild', 'release': 'build'}
 CMAKE_VERSION_3_13 = distutils.version.StrictVersion('3.13.0')
+CMAKE_VERSION_3_12 = distutils.version.StrictVersion('3.12.0')
 CONFIGURATIONS = ['release', 'debug']
 DEFAULT_CONFIGURATION = CONFIGURATIONS[0]
 VERSION = distutils.version.StrictVersion('0.0.0')
@@ -85,6 +86,9 @@ def parse_args():
         choices=CONFIGURATIONS, default=DEFAULT_CONFIGURATION,
         help='Build target configuration. Can be one of: {0}'.format(
             ', '.join(CONFIGURATIONS)))
+    arg_parser.add_argument('-j', '--parallel', dest='jobs',
+            action='store', default="1",
+            help='Specify a parallel build level. Requires CMake 3.12 or above')
     arg_parser.add_argument(
         '--clean', dest='clean', action='store_true', default=False,
         help='Clean the build targets')
@@ -278,6 +282,9 @@ def cmake_build(args):
     Build using CMake
     '''
     cmake_build_args = ['cmake', '--build', '.']
+
+    if(cmake_version() >= CMAKE_VERSION_3_12):
+        cmake_build_args.extend(['-j', args.jobs])
     if is_windows():
         cmake_build_args.extend(
             ['--config', args.configuration.capitalize()])
