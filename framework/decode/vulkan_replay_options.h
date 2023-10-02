@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2020 Valve Corporation
-** Copyright (c) 2019-2022 LunarG, Inc.
+** Copyright (c) 2019-2023 LunarG, Inc.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -55,10 +55,10 @@ struct VulkanReplayOptions : public ReplayOptions
     bool                         skip_failed_allocations{ false };
     bool                         omit_pipeline_cache_data{ false };
     bool                         remove_unsupported_features{ false };
-    bool                         enable_use_captured_swapchain_indices{ false };
     bool                         disable_subpass_fusion{ false };
     bool                         colorspace_fallback{ false };
     bool                         virtual_swapchain_skip_blit{ false };
+    util::SwapchainOption        swapchain_option{ util::SwapchainOption::kVirtual };
     int32_t                      override_gpu_group_index{ -1 };
     int32_t                      surface_index{ -1 };
     CreateResourceAllocator      create_resource_allocator;

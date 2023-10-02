@@ -36,7 +36,6 @@
 #include "decode/vulkan_resource_tracking_consumer.h"
 #include "decode/vulkan_resource_initializer.h"
 #include "decode/vulkan_swapchain.h"
-#include "decode/window.h"
 #include "format/api_call_id.h"
 #include "format/platform_types.h"
 #include "generated/generated_vulkan_dispatch_table.h"
@@ -825,6 +824,15 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                         HandlePointerDecoder<VkSwapchainKHR>*                         pSwapchain);
 
+    VkResult
+    OverrideCreateSharedSwapchainsKHR(PFN_vkCreateSharedSwapchainsKHR                               func,
+                                      VkResult                                                      original_result,
+                                      DeviceInfo*                                                   device_info,
+                                      uint32_t                                                      swapchainCount,
+                                      const StructPointerDecoder<Decoded_VkSwapchainCreateInfoKHR>* pCreateInfos,
+                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
+                                      HandlePointerDecoder<VkSwapchainKHR>*                         pSwapchains);
+
     void OverrideDestroySwapchainKHR(PFN_vkDestroySwapchainKHR                                  func,
                                      DeviceInfo*                                                device_info,
                                      SwapchainKHRInfo*                                          swapchain_info,
@@ -945,6 +953,22 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*         pAllocator,
                                     HandlePointerDecoder<VkSurfaceKHR>*                                pSurface);
 
+    VkResult
+    OverrideCreateDisplayPlaneSurfaceKHR(PFN_vkCreateDisplayPlaneSurfaceKHR func,
+                                         VkResult                           original_result,
+                                         InstanceInfo*                      instance_info,
+                                         const StructPointerDecoder<Decoded_VkDisplaySurfaceCreateInfoKHR>* pCreateInfo,
+                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*         pAllocator,
+                                         HandlePointerDecoder<VkSurfaceKHR>*                                pSurface);
+
+    VkResult
+    OverrideCreateHeadlessSurfaceEXT(PFN_vkCreateHeadlessSurfaceEXT func,
+                                     VkResult                       original_result,
+                                     InstanceInfo*                  instance_info,
+                                     const StructPointerDecoder<Decoded_VkHeadlessSurfaceCreateInfoEXT>* pCreateInfo,
+                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*          pAllocator,
+                                     HandlePointerDecoder<VkSurfaceKHR>*                                 pSurface);
+
     VkBool32
     OverrideGetPhysicalDeviceWaylandPresentationSupportKHR(PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR func,
                                                            const PhysicalDeviceInfo* physical_device_info,
@@ -1027,10 +1051,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                         CommandBufferInfo*        command_buffer_info,
                                         VkCommandBufferResetFlags flags);
 
-    void OverrideCmdDebugMarkerInsertEXT(PFN_vkCmdDebugMarkerInsertEXT                             func,
-                                         CommandBufferInfo*                                        command_buffer_info,
-                                         StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder);
-
+    void     OverrideCmdDebugMarkerInsertEXT(PFN_vkCmdDebugMarkerInsertEXT                             func,
+                                             CommandBufferInfo*                                        command_buffer_info,
+                                             StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder);
     VkResult OverrideWaitSemaphores(PFN_vkWaitSemaphores                                     func,
                                     VkResult                                                 original_result,
                                     const DeviceInfo*                                        device_info,
@@ -1067,6 +1090,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        StructPointerDecoder<Decoded_VkFramebufferCreateInfo>* create_info_decoder,
                                        StructPointerDecoder<Decoded_VkAllocationCallbacks>*   allocator_decoder,
                                        HandlePointerDecoder<VkFramebuffer>*                   frame_buffer_decoder);
+
+    const VulkanReplayOptions options_;
 
   private:
     void RaiseFatalError(const char* message) const;
@@ -1135,11 +1160,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      const std::vector<std::string>& enabled_device_extensions,
                                      VulkanResourceAllocator*        allocator);
 
-    VkResult CreateSurface(InstanceInfo*                       instance_info,
-                           const std::string&                  wsi_extension,
-                           VkFlags                             flags,
-                           HandlePointerDecoder<VkSurfaceKHR>* surface);
-
     void MapDescriptorUpdateTemplateHandles(const DescriptorUpdateTemplateInfo* update_template_info,
                                             DescriptorUpdateTemplateDecoder*    decoder);
 
@@ -1197,8 +1217,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool            IsExtensionBeingFaked(const char* extension);
 
   private:
-    typedef std::unordered_set<Window*> ActiveWindows;
-
     struct HardwareBufferInfo
     {
         format::HandleId memory_id;
@@ -1235,8 +1253,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::function<void(const char*)>                                 fatal_error_handler_;
     std::shared_ptr<application::Application>                        application_;
     VulkanObjectInfoTable                                            object_info_table_;
-    ActiveWindows                                                    active_windows_;
-    const VulkanReplayOptions                                        options_;
     bool                                                             loading_trim_state_;
     SwapchainImageTracker                                            swapchain_image_tracker_;
     HardwareBufferMap                                                hardware_buffers_;
@@ -1244,7 +1260,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unique_ptr<ScreenshotHandler>                               screenshot_handler_;
     std::unique_ptr<VulkanSwapchain>                                 swapchain_;
     std::string                                                      screenshot_file_prefix_;
-    int32_t                                                          create_surface_count_;
     graphics::FpsInfo*                                               fps_info_;
 
     // Imported semaphores are semaphores that are used to track external memory.

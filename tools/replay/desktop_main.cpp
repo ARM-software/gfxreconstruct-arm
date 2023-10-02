@@ -176,6 +176,11 @@ int main(int argc, const char** argv)
                 GetMeasurementFilename(arg_parser, measurement_file_name);
             }
 
+            if (has_mfr)
+            {
+                GetMeasurementFilename(arg_parser, measurement_file_name);
+            }
+
             gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(start_frame),
                                                  static_cast<uint64_t>(end_frame),
                                                  has_mfr,

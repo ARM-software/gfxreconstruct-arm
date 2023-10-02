@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2018-2022 LunarG, Inc.
+# Copyright (c) 2018-2023 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -106,7 +106,6 @@ def CreateReplayParser():
     parser.add_argument('--remove-unsupported', action='store_true', default=False, help='Remove unsupported extensions and features from instance and device creation parameters (forwarded to replay tool)')
     parser.add_argument('--validate', action='store_true', default=False, help='Enables the Khronos Vulkan validation layer (forwarded to replay tool)')
     parser.add_argument('--onhb', '--omit-null-hardware-buffers', action='store_true', default=False, help='Omit Vulkan calls that would pass a NULL AHardwareBuffer* (forwarded to replay tool)')
-    parser.add_argument('--use-captured-swapchain-indices', action='store_true', default=False, help='Use the swapchain indices stored in the capture directly on the swapchain setup for replay. The default without this option is to use a Virtual Swapchain of images which match the swapchain in effect at capture time and which are copied to the underlying swapchain of the implementation being replayed on.')
     parser.add_argument('--vssb', '--virtual-swapchain-skip-blit', action='store_true', default=False, help='Skip blit to real swapchain to gain performance during replay. (forwarded to replay tool)')
     parser.add_argument('--colorspace-fallback', action='store_true', default=False, help='Swap the swapchain color space if unsupported by replay device. Check if color space is not supported by replay device and swap to VK_COLOR_SPACE_SRGB_NONLINEAR_KHR. (forwarded to replay tool).')
     parser.add_argument('--sgfs', '--skip-get-fence-status', metavar='STATUS', default=0, help='Specify behaviour to skip calls to vkWaitForFences and vkGetFenceStatus. Default is 0 - No skip (forwarded to replay tool)')
@@ -120,8 +119,9 @@ def CreateReplayParser():
     parser.add_argument('--save-pipeline-cache', metavar='DEVICE_FILE', help='If set, produces pipeline caches at replay time instead of using the one saved at capture time and save those caches in DEVICE_FILE. (forwarded to replay tool)')
     parser.add_argument('--load-pipeline-cache', metavar='DEVICE_FILE', help='If set, loads data created by the `--save-pipeline-cache` option in DEVICE_FILE and uses it to create the pipelines instead of the pipeline caches saved at capture time. (forwarded to replay tool)')
     parser.add_argument('--add-new-pipeline-caches', action='store_true', default=False, help='If set, allows gfxreconstruct to create new vkPipelineCache objects when it encounters a pipeline created without cache. This option can be used in coordination with `--save-pipeline-cache` and `--load-pipeline-cache`. (forwarded to replay tool)')
-
     parser.add_argument('-m', '--memory-translation', metavar='MODE', choices=['none', 'remap', 'realign', 'rebind'], help='Enable memory translation for replay on GPUs with memory types that are not compatible with the capture GPU\'s memory types.  Available modes are: none, remap, realign, rebind (forwarded to replay tool)')
+    parser.add_argument('--swapchain', metavar='MODE', choices=['virtual', 'captured', 'offscreen'], help='Choose a swapchain mode to replay. Available modes are: virtual, captured, offscreen (forwarded to replay tool)')
+    parser.add_argument('--use-captured-swapchain-indices', action='store_true', default=False, help='Same as "--swapchain captured". Ignored if the "--swapchain" option is used.')
     parser.add_argument('file', nargs='?', help='File on device to play (forwarded to replay tool)')
 
     return parser
@@ -198,6 +198,26 @@ def MakeExtrasString(args):
     if args.use_captured_swapchain_indices:
         arg_list.append('--use-captured-swapchain-indices')
 
+    if args.mfr:
+        arg_list.append('--mfr')
+        arg_list.append('{}'.format(args.mfr))
+
+    if args.measurement_file:
+        arg_list.append('--measurement-file')
+        arg_list.append('{}'.format(args.measurement_file))
+
+    if args.quit_after_measurement_range:
+        arg_list.append('--quit-after-measurement-range')
+        arg_list.append('{}'.format(args.quit_after_measurement_range))
+
+    if args.flush_measurement_range:
+        arg_list.append('--flush-measurement-range')
+        arg_list.append('{}'.format(args.flush_measurement_range))
+
+    if args.swapchain:
+        arg_list.append('--swapchain')
+        arg_list.append('{}'.format(args.swapchain))
+
     if args.vssb:
         arg_list.append('--vssb')
     
@@ -211,20 +231,6 @@ def MakeExtrasString(args):
     if args.sgfr:
         arg_list.append('--sgfr')
         arg_list.append('{}'.format(args.sgfr))
-        
-    if args.mfr:
-        arg_list.append('--mfr')
-        arg_list.append('{}'.format(args.mfr))
-
-    if args.measurement_file:
-        arg_list.append('--measurement-file')
-        arg_list.append('{}'.format(args.measurement_file))
-
-    if args.quit_after_measurement_range:
-        arg_list.append('--quit-after-measurement-range')
-
-    if args.flush_measurement_range:
-        arg_list.append('--flush-measurement-range')
         
     if args.preload_measurement_range:
         arg_list.append('--preload-measurement-range')
