@@ -48,6 +48,7 @@
 #include <numeric>
 #include <unordered_set>
 #include <future>
+#include <sys/resource.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -6364,7 +6365,41 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
         screenshot_handler_->EndFrame();
     }
 
+    LogFrameDebugInfo();
+
     return result;
+}
+
+void VulkanReplayConsumerBase::LogFrameDebugInfo()
+{
+    if (util::Log::WillOutputMessage(util::Log::kDebugSeverity))
+    {
+#ifndef WIN32
+        const long    pages     = sysconf(_SC_AVPHYS_PAGES);
+        const long    page_size = sysconf(_SC_PAGE_SIZE);
+        const long    available = pages * page_size;
+        struct rusage usage;
+        getrusage(RUSAGE_SELF, &usage);
+        long  curr_rss = -1;
+        FILE* fp       = NULL;
+        if ((fp = fopen("/proc/self/statm", "r")))
+        {
+            if (fscanf(fp, "%*s%ld", &curr_rss) == 1)
+            {
+                curr_rss *= page_size;
+            }
+            fclose(fp);
+        }
+        const double f = 1024.0 * 1024.0;
+        GFXRECON_LOG_DEBUG("Frame %d memory (mb): %.02f max RSS, %.02f current RSS, %.02f available",
+                           application_->GetCurrentFrameNumber() + 1,
+                           (double)usage.ru_maxrss / 1024.0,
+                           (double)curr_rss / f,
+                           (double)available / f);
+#else
+        GFXRECON_LOG_DEBUG("Completed frame %d", application_->GetCurrentFrameNumber() + 1);
+#endif // WIN32
+    }
 }
 
 VkResult VulkanReplayConsumerBase::OverrideImportSemaphoreFdKHR(
