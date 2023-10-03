@@ -19,10 +19,26 @@ android {
             }
         }
     }
+    signingConfigs {
+        debug {
+            storeFile file('keystore')
+            storePassword 'GfxReconKey'
+            keyAlias 'key-gfxrecon'
+            keyPassword 'GfxReconKey'
+        }
+        release {
+            storeFile file('keystore')
+            storePassword 'GfxReconKey'
+            keyPassword 'GfxReconKey'
+            keyAlias 'key-gfxrecon'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            debuggable true
+            signingConfig signingConfigs.release
         }
     }
     externalNativeBuild {
