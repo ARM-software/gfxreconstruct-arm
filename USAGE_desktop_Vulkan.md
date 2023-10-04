@@ -414,6 +414,7 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--flush-measurement-range]
                         [--log-level <level>] [--log-file <file>] [--log-debugview]
                         [--api <api>] [--no-debug-popup] <file>
+                        [--colorspace-fallback]
 
 Required arguments:
   <file>                Path to the capture file to replay.
@@ -564,6 +565,10 @@ Optional arguments:
                         when it encounters a pipeline created without cache. This option can
                         be used in coordination with `--save-pipeline-cache` and
                         `--load-pipeline-cache`.
+  --colorspace-fallback
+                        Swap the swapchain color space if unsupported by replay device.
+                        Check if color space is not supported by replay device and 
+                        fallback to VK_COLOR_SPACE_SRGB_NONLINEAR_KHR.
 ```
 
 ### Key Controls
