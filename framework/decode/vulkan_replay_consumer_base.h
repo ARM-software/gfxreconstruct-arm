@@ -1216,6 +1216,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                           uint32_t          pipelineCount);
     bool            IsExtensionBeingFaked(const char* extension);
 
+    void LogFrameDebugInfo();
+
   private:
     struct HardwareBufferInfo
     {
