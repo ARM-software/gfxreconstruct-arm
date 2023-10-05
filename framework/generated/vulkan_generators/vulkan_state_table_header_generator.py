@@ -140,6 +140,7 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
         code += '\n'
         code += visit_code
         code += '\n'
+        code += '    CustomVulkanStateTable customStateTable;\n'
         code += '  private:\n'
         code += map_code
         code += '};\n'
@@ -170,6 +171,6 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
 
     def write_include(self):
         write(
-            '#include "encode/vulkan_state_table_base.h"\n', file=self.outFile
+            '#include "encode/vulkan_state_table_base.h"\n#include "encode/custom_vulkan_wrapper_handlers.h"\n', file=self.outFile
         )
         self.newline()

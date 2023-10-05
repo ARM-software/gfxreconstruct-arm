@@ -5409,7 +5409,11 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
 {
     if (!IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
     {
-        return func(device_info->handle, name_info->GetPointer());
+        auto info = *name_info->GetPointer();
+        if (info.objectHandle != 0)
+        {
+            return func(device_info->handle, &info);
+        }
     }
     return original_result;
 }

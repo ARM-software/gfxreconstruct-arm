@@ -173,6 +173,8 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     // Process swapchain image acquire.
     WriteSwapchainImageState(state_table);
 
+    WriteDebugUtilsState(state_table);
+
     marker.marker_type = format::kEndMarker;
     output_stream_->Write(&marker, sizeof(marker));
 
@@ -3050,6 +3052,28 @@ void VulkanStateWriter::WriteSetRayTracingShaderGroupHandlesCommand(format::Hand
     output_stream_->Write(data, data_size);
 
     ++blocks_written_;
+}
+
+void VulkanStateWriter::WriteDebugUtilsState(const VulkanStateTable& state_table)
+{
+    state_table.customStateTable.VisitWrappers([this](DebugUtilsObjectNameInfoWrapper* wrapper) {
+        const uint64_t wrappedId = GetWrappedId(wrapper->object_handle, wrapper->object_type);
+        if (wrappedId)
+        {
+            VkDebugUtilsObjectNameInfoEXT nameInfo{};
+            nameInfo.sType                = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+            nameInfo.pNext                = nullptr;
+            nameInfo.objectType           = wrapper->object_type;
+            nameInfo.objectHandle         = wrapper->object_handle;
+            nameInfo.pObjectName          = wrapper->name.c_str();
+            DeviceWrapper* device_wrapper = GetWrapper<DeviceWrapper>(wrapper->device);
+            encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+            EncodeStructPtr(&encoder_, &nameInfo);
+            encoder_.EncodeEnumValue(VK_SUCCESS);
+            WriteFunctionCall(format::ApiCallId::ApiCall_vkSetDebugUtilsObjectNameEXT, &parameter_stream_);
+            parameter_stream_.Reset();
+        }
+    });
 }
 
 VkMemoryPropertyFlags VulkanStateWriter::GetMemoryProperties(const DeviceWrapper*       device_wrapper,

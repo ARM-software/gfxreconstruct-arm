@@ -2635,5 +2635,15 @@ void VulkanCaptureManager::PreProcess_vkBindImageMemory2(VkDevice               
     }
 }
 
+void VulkanCaptureManager::PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice                             device,
+                                                                    const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(device);
+    if ((GetCaptureMode() & kModeTrack) == kModeTrack)
+    {
+        state_tracker_->TrackSetDebugUtilsName(VulkanCaptureManager::GetUniqueId(), device, pNameInfo);
+    }
+}
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
