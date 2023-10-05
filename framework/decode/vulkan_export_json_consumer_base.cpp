@@ -140,12 +140,26 @@ bool VulkanExportJsonConsumerBase::WriteBinaryFile(const std::string& filename, 
 
 void VulkanExportJsonConsumerBase::ProcessStateBeginMarker(uint64_t frame_number)
 {
+    if (file_ != stdout)
+    {
+        std::string state_file_name = "frame_" + std::to_string(frame_number) + "_state_recreation.json";
+        if (util::platform::FileOpen(&tmp_file_, state_file_name.c_str(), "w") == 0)
+        {
+            std::swap(file_, tmp_file_);
+            StartFile(file_);
+            num_files_++;
+        }
+    }
     WriteStateMarkerToFile("BeginMarker", frame_number);
 }
 
 void VulkanExportJsonConsumerBase::ProcessStateEndMarker(uint64_t frame_number)
 {
     WriteStateMarkerToFile("EndMarker", frame_number);
+    if (tmp_file_ != nullptr && file_ != stdout)
+    {
+        std::swap(file_, tmp_file_);
+    }
 }
 
 void VulkanExportJsonConsumerBase::ProcessFrameEndMarker(uint64_t frame_number)
