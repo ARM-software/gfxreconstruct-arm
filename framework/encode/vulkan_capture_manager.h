@@ -1295,6 +1295,9 @@ class VulkanCaptureManager : public CaptureManager
 
     void PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
 
+    void PostProcess_vkCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
+                                                   const VkDebugUtilsLabelEXT* pLabelInfo);
+
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
 #endif
