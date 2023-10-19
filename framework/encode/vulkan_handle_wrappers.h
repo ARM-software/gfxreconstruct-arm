@@ -441,6 +441,8 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
 {
     // Members for general wrapper support.
     std::vector<ImageWrapper*> child_images;
+    SwapchainKHRWrapper*       old_swapchain{ nullptr };
+    SwapchainKHRWrapper*       new_swapchain{ nullptr };
 
     // Members for trimming state tracking.
     DeviceWrapper*                 device{ nullptr };

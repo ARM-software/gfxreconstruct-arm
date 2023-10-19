@@ -351,6 +351,12 @@ class VulkanCaptureManager : public CaptureManager
                                             VkDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData);
 
+    void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
+                                          VkDevice                        device,
+                                          const VkSwapchainCreateInfoKHR* pCreateInfo,
+                                          const VkAllocationCallbacks*    pAllocator,
+                                          VkSwapchainKHR*                 pSwapchain);
+
     void PostProcess_vkEnumeratePhysicalDevices(VkResult          result,
                                                 VkInstance        instance,
                                                 uint32_t*         pPhysicalDeviceCount,

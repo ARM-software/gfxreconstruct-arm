@@ -1477,6 +1477,24 @@ void VulkanCaptureManager::OverrideSubmitDebugUtilsMessageEXT(VkInstance        
     }
 }
 
+void VulkanCaptureManager::PostProcess_vkCreateSwapchainKHR(VkResult                        result,
+                                                            VkDevice                        device,
+                                                            const VkSwapchainCreateInfoKHR* pCreateInfo,
+                                                            const VkAllocationCallbacks*    pAllocator,
+                                                            VkSwapchainKHR*                 pSwapchain)
+{
+    auto                            handle_unwrap_memory  = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
+    const VkSwapchainCreateInfoKHR* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
+
+    if (pCreateInfo_unwrapped->oldSwapchain != VK_NULL_HANDLE)
+    {
+        auto old_swapchain_wrapper           = GetWrapper<SwapchainKHRWrapper>(pCreateInfo_unwrapped->oldSwapchain);
+        auto new_swapchain_wrapper           = GetWrapper<SwapchainKHRWrapper>(*pSwapchain);
+        old_swapchain_wrapper->new_swapchain = new_swapchain_wrapper;
+        new_swapchain_wrapper->old_swapchain = old_swapchain_wrapper;
+    }
+}
+
 void VulkanCaptureManager::ProcessEnumeratePhysicalDevices(VkResult          result,
                                                            VkInstance        instance,
                                                            uint32_t          count,
