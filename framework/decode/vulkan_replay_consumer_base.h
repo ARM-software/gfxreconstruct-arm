@@ -1220,6 +1220,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void LogFrameDebugInfo();
 
+    // Retrieve image attachments from the renderpass framebuffer
+    // Returns attachments specified in CreateFramebuffer call, or in BeginRenderPass if imageless flag
+    // is used.
+    std::vector<format::HandleId>
+    GetImageAttachments(StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder);
+
   private:
     struct HardwareBufferInfo
     {

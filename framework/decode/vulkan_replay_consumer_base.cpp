@@ -7260,6 +7260,46 @@ void VulkanReplayConsumerBase::OverrideCmdDebugMarkerInsertEXT(
     }
 };
 
+std::vector<format::HandleId> VulkanReplayConsumerBase::GetImageAttachments(
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder)
+{
+    std::vector<format::HandleId> attachments;
+
+    auto framebuffer_id   = render_pass_begin_info_decoder->GetMetaStructPointer()->framebuffer;
+    auto framebuffer_info = object_info_table_.GetFramebufferInfo(framebuffer_id);
+
+    // image attachments specified in CreateFramebuffer
+    if (!framebuffer_info->attachment_image_view_ids.empty())
+    {
+        for (auto image_view_id : framebuffer_info->attachment_image_view_ids)
+        {
+            auto image_view_info = object_info_table_.GetImageViewInfo(image_view_id);
+            auto image_handle    = image_view_info->image_id;
+            attachments.push_back(image_handle);
+        }
+    }
+    else
+    {
+        // image attachments specified in BeginRenderPass
+        auto pnext = render_pass_begin_info_decoder->GetMetaStructPointer()->pNext;
+        while (pnext != nullptr)
+        {
+            auto pnext_decoded = reinterpret_cast<Decoded_VkBaseOutStructure*>(pnext->GetMetaStructPointer());
+            if (pnext_decoded->decoded_value->sType == VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO)
+            {
+                auto attachment_info = reinterpret_cast<const Decoded_VkRenderPassAttachmentBeginInfo*>(pnext_decoded);
+                auto handle_count    = attachment_info->pAttachments.GetLength();
+                auto handle_ids      = attachment_info->pAttachments.GetPointer();
+                std::copy(handle_ids, handle_ids + handle_count, std::back_inserter(attachments));
+                break;
+            }
+            pnext = pnext_decoded->pNext;
+        }
+    }
+
+    return attachments;
+}
+
 void VulkanReplayConsumerBase::OverrideCmdBeginRenderPass(
     PFN_vkCmdBeginRenderPass                             func,
     CommandBufferInfo*                                   command_buffer_info,
@@ -7270,20 +7310,15 @@ void VulkanReplayConsumerBase::OverrideCmdBeginRenderPass(
     auto render_pass_id = render_pass_begin_info_decoder->GetMetaStructPointer()->renderPass;
     command_buffer_info->frame_buffer_ids.push_back(framebuffer_id);
 
-    auto framebuffer_info = object_info_table_.GetFramebufferInfo(framebuffer_id);
     auto render_pass_info = object_info_table_.GetRenderPassInfo(render_pass_id);
-    if ((render_pass_info != nullptr) && (framebuffer_info != nullptr))
-    {
-        GFXRECON_ASSERT(framebuffer_info->attachment_image_view_ids.size() ==
-                        render_pass_info->attachment_description_final_layouts.size());
 
-        for (size_t i = 0; i < render_pass_info->attachment_description_final_layouts.size(); ++i)
-        {
-            auto image_view_id   = framebuffer_info->attachment_image_view_ids[i];
-            auto image_view_info = object_info_table_.GetImageViewInfo(image_view_id);
-            command_buffer_info->image_layout_barriers[image_view_info->image_id] =
-                render_pass_info->attachment_description_final_layouts[i];
-        }
+    std::vector<format::HandleId> image_attachments = GetImageAttachments(render_pass_begin_info_decoder);
+
+    GFXRECON_ASSERT(image_attachments.size() == render_pass_info->attachment_description_final_layouts.size())
+    for (size_t i = 0; i < image_attachments.size(); ++i)
+    {
+        command_buffer_info->image_layout_barriers[image_attachments[i]] =
+            render_pass_info->attachment_description_final_layouts[i];
     }
 
     VkCommandBuffer command_buffer = command_buffer_info->handle;
