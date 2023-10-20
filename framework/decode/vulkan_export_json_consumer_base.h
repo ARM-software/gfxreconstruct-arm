@@ -291,6 +291,7 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer, public AnnotationHan
 
   private:
     FILE*                  file_{ nullptr };
+    FILE*                  tmp_file_{ nullptr };
     nlohmann::ordered_json header_;
     nlohmann::ordered_json json_data_;
     uint32_t               num_objects_{ 0 };
