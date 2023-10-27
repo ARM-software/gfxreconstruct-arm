@@ -1022,25 +1022,29 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
 }
 #endif
 
+static void PrintVersion(const char* exe_name)
+{
+    std::string app_name     = exe_name;
+    size_t      dir_location = app_name.find_last_of("/\\");
+
+    if (dir_location >= 0)
+    {
+        app_name.replace(0, dir_location + 1, "");
+    }
+
+    GFXRECON_WRITE_CONSOLE("%s version info:", app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("  GFXReconstruct Version %s", GFXRECON_PROJECT_VERSION_STRING);
+    GFXRECON_WRITE_CONSOLE("  Vulkan Header Version %u.%u.%u",
+                           VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
+                           VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
+                           VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
+}
+
 static bool CheckOptionPrintVersion(const char* exe_name, const gfxrecon::util::ArgumentParser& arg_parser)
 {
     if (arg_parser.IsOptionSet(kVersionOption))
     {
-        std::string app_name     = exe_name;
-        size_t      dir_location = app_name.find_last_of("/\\");
-
-        if (dir_location >= 0)
-        {
-            app_name.replace(0, dir_location + 1, "");
-        }
-
-        GFXRECON_WRITE_CONSOLE("%s version info:", app_name.c_str());
-        GFXRECON_WRITE_CONSOLE("  GFXReconstruct Version %s", GFXRECON_PROJECT_VERSION_STRING);
-        GFXRECON_WRITE_CONSOLE("  Vulkan Header Version %u.%u.%u",
-                               VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
-                               VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
-                               VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
-
+        PrintVersion(exe_name);
         return true;
     }
 
