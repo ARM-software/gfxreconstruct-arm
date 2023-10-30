@@ -270,6 +270,10 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             )
 
         body += '\n'
+        lock_expr = self.make_handle_lock(name, values, indent)
+        if lock_expr:
+            body += '\n'
+            body += lock_expr
 
         if is_override:
             # Capture overrides simply call the override function without handle unwrap/wrap
@@ -673,6 +677,27 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
                             )
             args.append(arg_name)
         return expr, ', '.join(args), need_unwrap_memory
+
+    def make_handle_lock(self, name, values, indent):
+        expr = ''
+        isDestroyCall = name.startswith('vkDestroy') or name.startswith('vkFree') or (
+            name == 'vkReleasePerformanceConfigurationINTEL'
+        )
+        isCreateCall = name.startswith('vkCreate') or name.startswith('vkAllocate') 
+        if isDestroyCall:
+            if name in ['vkDestroyInstance', 'vkDestroyDevice']:
+                # Instance/device destroy calls are special case where the target handle is the first parameter
+                handle = values[0]
+            else:
+                # The destroy target is the second parameter, except for pool based allocations where it is the last parameter.
+                handle = values[1]
+                if ("Pool" in handle.base_type) and name.startswith('vkFree'):
+                    handle = values[3]
+        if isCreateCall:
+            handle = values[-1]
+        if isDestroyCall or isCreateCall:
+            expr += indent + 'std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<{}Wrapper>());\n'.format(handle.base_type[2:])
+        return expr
 
     def make_handle_cleanup(self, name, values, indent):
         expr = ''

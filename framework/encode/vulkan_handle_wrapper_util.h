@@ -117,6 +117,12 @@ bool RemoveWrapper(const Wrapper* wrapper)
     return state_handle_table_.RemoveWrapper(wrapper);
 }
 
+template <typename VkHandle>
+std::recursive_mutex& GetMapMutex()
+{
+    return state_handle_table_.GetMapMutex<VkHandle>();
+}
+
 uint64_t GetWrappedId(uint64_t, VkObjectType object_type);
 
 uint64_t GetWrappedId(uint64_t object, VkDebugReportObjectTypeEXT object_type);
