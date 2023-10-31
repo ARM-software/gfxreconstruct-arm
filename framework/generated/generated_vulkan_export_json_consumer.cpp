@@ -37,6 +37,7 @@
 #include "vk_video/vulkan_video_codec_h265std_decode.h"
 #include "vk_video/vulkan_video_codec_h265std_encode.h"
 #include "vk_video/vulkan_video_codecs_common.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -5625,6 +5626,20 @@ void VulkanExportJsonConsumer::Process_vkGetPhysicalDeviceCooperativeMatrixPrope
         HandleToJson(args["physicalDevice"], physicalDevice, json_options_);
         FieldToJson(args["pPropertyCount"], pPropertyCount, json_options_);
         FieldToJson(args["pProperties"], pProperties, json_options_);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkFrameBoundaryANDROID(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    format::HandleId                            semaphore,
+    format::HandleId                            image)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkFrameBoundaryANDROID");
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options_);
+        HandleToJson(args["semaphore"], semaphore, json_options_);
+        HandleToJson(args["image"], image, json_options_);
     WriteBlockEnd();
 }
 

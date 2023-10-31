@@ -40,7 +40,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/external/
 # Version info
 set(GFXRECONSTRUCT_PROJECT_VERSION_MAJOR 1)
 set(GFXRECONSTRUCT_PROJECT_VERSION_MINOR 0)
-set(GFXRECONSTRUCT_PROJECT_VERSION_PATCH 0)
+set(GFXRECONSTRUCT_PROJECT_VERSION_PATCH 2)
 
 set(GFXRECON_PROJECT_VERSION_SHA1 "unknown-build-source")
 set(GFXRECONSTRUCT_PROJECT_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
@@ -106,6 +106,7 @@ option(BUILD_WERROR "Build with warnings as errors" ON)
 include("CodeStyle")
 include("Lint")
 include("Test")
+include("FindVulkanVersion")
 
 # Apply misc build directives to the given target
 macro(common_build_directives TARGET)
@@ -176,7 +177,7 @@ if(MSVC)
                 "set D3D12_SUPPORT=OFF or configure the build with the recommended Windows SDK version. See BUILD.md "
                 "for more information.")
         endif()
-
+        
     else()
         set(BUILD_LAUNCHER_AND_INTERCEPTOR OFF)
     endif()
@@ -188,14 +189,14 @@ if(MSVC)
 
     # Add option to enable/disable AGS support.
     option(GFXRECON_AGS_SUPPORT "Build with AGS support enabled. Ignored if D3D12_SUPPORT=OFF." ON)
-
+    
     if (${D3D12_SUPPORT})
         if (${GFXRECON_AGS_SUPPORT})
             if (CMAKE_SIZEOF_VOID_P EQUAL 8)
                 find_package(AGS)
                 if (TARGET AGS::AGS)
                     add_definitions(-DGFXRECON_AGS_SUPPORT)
-
+                
                     # The value for option GFXRECON_AGS_SUPPORT gets cached so use a non-cached variable
                     # to determine the final result.
                     set(GFXRECON_AGS_SUPPORT_FINAL ON)
@@ -203,7 +204,7 @@ if(MSVC)
             endif() # CMAKE_SIZEOF_VOID_P EQUAL 8
         endif() # GFXRECON_AGS_SUPPORT
     endif() # D3D12_SUPPORT
-
+	
 else(MSVC)
     # Turn off D3D12 support for non MSVC builds.
     set(D3D12_SUPPORT OFF)
@@ -289,12 +290,9 @@ if(BUILD_WERROR)
     endif()
 endif()
 
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/external/Vulkan-Headers)
-    message(FATAL_ERROR "The Vulkan-Headers submodule has not been initialized! Please run `git submodule update --init` in the source directory.")
-endif()
-
-add_subdirectory(${CMAKE_SOURCE_DIR}/external/Vulkan-Headers)
-target_compile_definitions(Vulkan-Headers INTERFACE VK_NO_PROTOTYPES VK_ENABLE_BETA_EXTENSIONS)
+add_library(vulkan_registry INTERFACE)
+target_include_directories(vulkan_registry INTERFACE ${CMAKE_SOURCE_DIR}/external/Vulkan-Headers/include)
+target_compile_definitions(vulkan_registry INTERFACE VK_NO_PROTOTYPES VK_ENABLE_BETA_EXTENSIONS)
 
 add_library(vulkan_memory_allocator INTERFACE)
 target_compile_options(vulkan_memory_allocator INTERFACE
