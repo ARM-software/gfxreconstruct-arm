@@ -2519,6 +2519,25 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
         GFXRECON_LOG_WARNING("The vkCreateInstance parameter pCreateInfo is NULL.");
     }
 
+    if (options_.offscreen_swapchain_frame_boundary)
+    {
+        bool frameBoundaryExtensionFound = false;
+
+        for (const char* extensionName : filtered_extensions)
+        {
+            if (gfxrecon::util::platform::StringCompareNoCase(extensionName, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
+            {
+                frameBoundaryExtensionFound = true;
+                break;
+            }
+        }
+
+        if (!frameBoundaryExtensionFound)
+        {
+            filtered_extensions.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+        }
+    }
+
     // Disable layers; any layers needed for replay should be enabled for the replay app with the VK_INSTANCE_LAYERS
     // environment variable or debug.vulkan.layers Android property.
     if (modified_create_info.enabledLayerCount > 0)
@@ -6667,7 +6686,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAndroidSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateWin32SurfaceKHR(
@@ -6695,7 +6714,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateWin32SurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceWin32PresentationSupportKHR(
@@ -6741,7 +6760,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateXcbSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceXcbPresentationSupportKHR(
@@ -6791,7 +6810,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateXlibSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceXlibPresentationSupportKHR(
@@ -6841,7 +6860,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateWaylandSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateDisplayPlaneSurfaceKHR(
@@ -6869,7 +6888,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDisplayPlaneSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateHeadlessSurfaceEXT(
@@ -6897,7 +6916,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateHeadlessSurfaceEXT(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceWaylandPresentationSupportKHR(
