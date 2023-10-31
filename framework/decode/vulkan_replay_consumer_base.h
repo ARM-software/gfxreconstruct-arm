@@ -1207,6 +1207,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const;
 
     bool CheckCommandBufferInfoForFrameBoundary(const CommandBufferInfo* command_buffer_info);
+    bool CheckPNextChainForFrameBoundary(const DeviceInfo* device_info, const Decoded_VkBaseOutStructure* current);
 
     void LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData);
     void SavePipelineCache(format::HandleId id, const DeviceInfo* device_info, VkPipelineCache pipelineCache);

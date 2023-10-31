@@ -990,10 +990,14 @@ class VulkanCaptureManager : public CaptureManager
                                                           pSubmits[i].pSignalSemaphores);
             }
         }
-
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
+            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            {
+                break;
+            }
+
             for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; ++j)
             {
                 auto cmd_buffer_wrapper = GetWrapper<CommandBufferWrapper>(pSubmits[i].pCommandBuffers[j]);
@@ -1028,6 +1032,11 @@ class VulkanCaptureManager : public CaptureManager
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
+            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            {
+                break;
+            }
+
             for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j)
             {
                 auto cmd_buffer_wrapper =
@@ -1374,6 +1383,7 @@ class VulkanCaptureManager : public CaptureManager
     bool CheckBindAlignment(VkDeviceSize memoryOffset);
 
     bool CheckCommandBufferWrapperForFrameBoundary(const CommandBufferWrapper* command_buffer_wrapper);
+    bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
 
