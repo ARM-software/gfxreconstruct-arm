@@ -143,7 +143,8 @@ void VulkanExportJsonConsumerBase::ProcessStateBeginMarker(uint64_t frame_number
     if (file_ != stdout)
     {
         std::string state_file_name = "frame_" + std::to_string(frame_number) + "_state_recreation.json";
-        if (util::platform::FileOpen(&tmp_file_, state_file_name.c_str(), "w") == 0)
+        std::string output_file     = gfxrecon::util::filepath::Join(json_options_.root_dir, state_file_name);
+        if (util::platform::FileOpen(&tmp_file_, output_file.c_str(), "w") == 0)
         {
             std::swap(file_, tmp_file_);
             StartFile(file_);
