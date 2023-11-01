@@ -94,7 +94,7 @@ struct Decoded_StdVideoDecodeH265ReferenceInfoFlags;
 struct Decoded_StdVideoDecodeH265ReferenceInfo;
 struct Decoded_StdVideoEncodeH265WeightTableFlags;
 struct Decoded_StdVideoEncodeH265WeightTable;
-struct Decoded_StdVideoEncodeH265SliceSegmentLongTermRefPics;
+struct Decoded_StdVideoEncodeH265LongTermRefPics;
 struct Decoded_StdVideoEncodeH265SliceSegmentHeaderFlags;
 struct Decoded_StdVideoEncodeH265SliceSegmentHeader;
 struct Decoded_StdVideoEncodeH265ReferenceListsInfoFlags;
@@ -257,7 +257,7 @@ size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoDecodeH265ReferenceInfo* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265WeightTableFlags* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265WeightTable* wrapper);
-size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265SliceSegmentLongTermRefPics* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265LongTermRefPics* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265SliceSegmentHeaderFlags* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265SliceSegmentHeader* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoEncodeH265ReferenceListsInfoFlags* wrapper);
@@ -2017,6 +2017,12 @@ struct Decoded_VkPhysicalDeviceExternalMemoryRDMAFeaturesNV;
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkMemoryGetRemoteAddressInfoNV* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceExternalMemoryRDMAFeaturesNV* wrapper);
 
+struct Decoded_VkPhysicalDeviceFrameBoundaryFeaturesEXT;
+struct Decoded_VkFrameBoundaryEXT;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceFrameBoundaryFeaturesEXT* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkFrameBoundaryEXT* wrapper);
+
 struct Decoded_VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT;
 struct Decoded_VkSubpassResolvePerformanceQueryEXT;
 struct Decoded_VkMultisampledRenderToSingleSampledInfoEXT;
@@ -2179,6 +2185,12 @@ size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceImageProcessingFeaturesQCOM* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceImageProcessingPropertiesQCOM* wrapper);
 
+struct Decoded_VkPhysicalDeviceNestedCommandBufferFeaturesEXT;
+struct Decoded_VkPhysicalDeviceNestedCommandBufferPropertiesEXT;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceNestedCommandBufferFeaturesEXT* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceNestedCommandBufferPropertiesEXT* wrapper);
+
 struct Decoded_VkExternalMemoryAcquireUnmodifiedEXT;
 
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkExternalMemoryAcquireUnmodifiedEXT* wrapper);
@@ -2247,6 +2259,14 @@ struct Decoded_VkPhysicalDevicePipelineProtectedAccessFeaturesEXT;
 
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDevicePipelineProtectedAccessFeaturesEXT* wrapper);
 
+struct Decoded_VkPhysicalDeviceExternalFormatResolveFeaturesANDROID;
+struct Decoded_VkPhysicalDeviceExternalFormatResolvePropertiesANDROID;
+struct Decoded_VkAndroidHardwareBufferFormatResolvePropertiesANDROID;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceExternalFormatResolveFeaturesANDROID* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceExternalFormatResolvePropertiesANDROID* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkAndroidHardwareBufferFormatResolvePropertiesANDROID* wrapper);
+
 struct Decoded_VkPhysicalDeviceShaderObjectFeaturesEXT;
 struct Decoded_VkPhysicalDeviceShaderObjectPropertiesEXT;
 struct Decoded_VkShaderCreateInfoEXT;
@@ -2277,6 +2297,12 @@ struct Decoded_VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV;
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV* wrapper);
 
+struct Decoded_VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV;
+struct Decoded_VkPhysicalDeviceExtendedSparseAddressSpacePropertiesNV;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceExtendedSparseAddressSpacePropertiesNV* wrapper);
+
 struct Decoded_VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM;
 struct Decoded_VkPhysicalDeviceShaderCoreBuiltinsPropertiesARM;
 
@@ -2297,9 +2323,43 @@ struct Decoded_VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM;
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM* wrapper);
 
+struct Decoded_VkPhysicalDeviceImageProcessing2FeaturesQCOM;
+struct Decoded_VkPhysicalDeviceImageProcessing2PropertiesQCOM;
+struct Decoded_VkSamplerBlockMatchWindowCreateInfoQCOM;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceImageProcessing2FeaturesQCOM* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceImageProcessing2PropertiesQCOM* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSamplerBlockMatchWindowCreateInfoQCOM* wrapper);
+
+struct Decoded_VkPhysicalDeviceCubicWeightsFeaturesQCOM;
+struct Decoded_VkSamplerCubicWeightsCreateInfoQCOM;
+struct Decoded_VkBlitImageCubicWeightsInfoQCOM;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceCubicWeightsFeaturesQCOM* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSamplerCubicWeightsCreateInfoQCOM* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBlitImageCubicWeightsInfoQCOM* wrapper);
+
+struct Decoded_VkPhysicalDeviceYcbcrDegammaFeaturesQCOM;
+struct Decoded_VkSamplerYcbcrConversionYcbcrDegammaCreateInfoQCOM;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceYcbcrDegammaFeaturesQCOM* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSamplerYcbcrConversionYcbcrDegammaCreateInfoQCOM* wrapper);
+
+struct Decoded_VkPhysicalDeviceCubicClampFeaturesQCOM;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceCubicClampFeaturesQCOM* wrapper);
+
 struct Decoded_VkPhysicalDeviceAttachmentFeedbackLoopDynamicStateFeaturesEXT;
 
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceAttachmentFeedbackLoopDynamicStateFeaturesEXT* wrapper);
+
+struct Decoded_VkPhysicalDeviceLayeredDriverPropertiesMSFT;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceLayeredDriverPropertiesMSFT* wrapper);
+
+struct Decoded_VkPhysicalDeviceDescriptorPoolOverallocationFeaturesNV;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceDescriptorPoolOverallocationFeaturesNV* wrapper);
 
 struct Decoded_VkAccelerationStructureBuildRangeInfoKHR;
 struct Decoded_VkAccelerationStructureGeometryTrianglesDataKHR;

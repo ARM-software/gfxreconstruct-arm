@@ -878,7 +878,8 @@ bool CaptureManager::CreateCaptureFile(const std::string& base_filename)
         WriteTraceSettingsJson(operation_annotation);
         operation_annotation += "\n}";
 
-        WriteAnnotation(format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.c_str());
+        ForcedWriteAnnotation(
+            format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.c_str());
     }
     else
     {
@@ -973,23 +974,28 @@ void CaptureManager::WriteExeFileInfo(const gfxrecon::util::filepath::FileInfo& 
     WriteToFile(&exe_info_header, sizeof(exe_info_header));
 }
 
+void CaptureManager::ForcedWriteAnnotation(const format::AnnotationType type, const char* label, const char* data)
+{
+    auto       thread_data  = GetThreadData();
+    const auto label_length = util::platform::StringLength(label);
+    const auto data_length  = util::platform::StringLength(data);
+
+    format::AnnotationHeader annotation;
+    annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+    annotation.block_header.type = format::BlockType::kAnnotation;
+    annotation.annotation_type   = type;
+    GFXRECON_CHECK_CONVERSION_DATA_LOSS(uint32_t, label_length);
+    annotation.label_length = static_cast<uint32_t>(label_length);
+    annotation.data_length  = data_length;
+
+    CombineAndWriteToFile({ { &annotation, sizeof(annotation) }, { label, label_length }, { data, data_length } });
+}
+
 void CaptureManager::WriteAnnotation(const format::AnnotationType type, const char* label, const char* data)
 {
     if ((capture_mode_ & kModeWrite) == kModeWrite)
     {
-        auto       thread_data  = GetThreadData();
-        const auto label_length = util::platform::StringLength(label);
-        const auto data_length  = util::platform::StringLength(data);
-
-        format::AnnotationHeader annotation;
-        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
-        annotation.block_header.type = format::BlockType::kAnnotation;
-        annotation.annotation_type   = type;
-        GFXRECON_CHECK_CONVERSION_DATA_LOSS(uint32_t, label_length);
-        annotation.label_length = static_cast<uint32_t>(label_length);
-        annotation.data_length  = data_length;
-
-        CombineAndWriteToFile({ { &annotation, sizeof(annotation) }, { label, label_length }, { data, data_length } });
+        ForcedWriteAnnotation(type, label, data);
     }
 }
 
