@@ -262,7 +262,7 @@ class CaptureManager
 
     std::string CreateTrimFilename(const std::string& base_filename, const util::UintRange& trim_range);
     bool        CreateCaptureFile(const std::string& base_filename);
-    void        WriteTraceSettingsJson(std::string& operation_annotation);
+    void        WriteCaptureOptions(std::string& operation_annotation);
     void        ActivateTrimming();
     void        DeactivateTrimming();
 

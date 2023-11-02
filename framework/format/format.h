@@ -65,8 +65,13 @@ const size_t   kAdapterDescriptionSize    = 128;
 
 /// Label for operation annotation, which captures parameters used by tools
 /// operating on a capture file.
-const char* const kAnnotationLabelOperation = "operation";
+const char* const kAnnotationLabelOperation     = "operation";
 const char* const kAnnotationLabelReplayOptions = "replayopts";
+
+const char* const kOperationAnnotationGfxreconstructVersion = "gfxrecon-version";
+const char* const kOperationAnnotationVulkanVersion         = "vulkan-version";
+const char* const kOperationAnnotationTimestamp             = "timestamp";
+const char* const kOperationAnnotationCaptureOptions        = "capture-parameters";
 
 constexpr uint32_t MakeCompressedBlockType(uint32_t block_type)
 {
@@ -340,9 +345,9 @@ struct DriverInfoBlock
 
 struct ExeFileInfoBlock
 {
-    MetaDataHeader              meta_header;
-    format::ThreadId            thread_id;
-    util::filepath::FileInfo    info_record;
+    MetaDataHeader           meta_header;
+    format::ThreadId         thread_id;
+    util::filepath::FileInfo info_record;
 };
 
 // Not a header because this command does not include a variable length data payload.
