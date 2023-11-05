@@ -615,6 +615,16 @@ void VulkanExportJsonConsumerBase::Process_vkCmdPushConstants(const ApiCallInfo&
     });
 }
 
+void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const ApiCallInfo& call_info,
+                                                                             format::HandleId   device,
+                                                                             format::HandleId   descriptorSet,
+                                                                             format::HandleId descriptorUpdateTemplate,
+                                                                             DescriptorUpdateTemplateDecoder* pData)
+{
+    ProcessUpdateDescriptorSetWithTemplate(
+        "vkUpdateDescriptorSetWithTemplate", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
+}
+
 void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(
     const ApiCallInfo&               call_info,
     format::HandleId                 device,
@@ -622,9 +632,20 @@ void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(
     format::HandleId                 descriptorUpdateTemplate,
     DescriptorUpdateTemplateDecoder* pData)
 {
-    using namespace gfxrecon::util;
+    ProcessUpdateDescriptorSetWithTemplate(
+        "vkUpdateDescriptorSetWithTemplateKHR", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
+}
 
-    auto& function = WriteApiCallStart(call_info, "vkUpdateDescriptorSetWithTemplateKHR");
+void VulkanExportJsonConsumerBase::ProcessUpdateDescriptorSetWithTemplate(std::string        function_name,
+                                                                          const ApiCallInfo& call_info,
+                                                                          format::HandleId   device,
+                                                                          format::HandleId   descriptorSet,
+                                                                          format::HandleId   descriptorUpdateTemplate,
+                                                                          DescriptorUpdateTemplateDecoder* pData)
+{
+    using namespace util;
+
+    auto& function = WriteApiCallStart(call_info, function_name.c_str());
     auto& args     = function[NameArgs()];
 
     HandleToJson(args["device"], device, json_options_);
