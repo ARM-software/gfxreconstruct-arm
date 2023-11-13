@@ -24,6 +24,7 @@
 #define GFXRECON_ENCODE_VULKAN_STATE_TABLE_BASE_H
 
 #include "encode/vulkan_handle_wrappers.h"
+#include "encode/vulkan_state_table_map.h"
 #include "format/format.h"
 #include "util/defines.h"
 
@@ -74,43 +75,40 @@ class VulkanStateTableBase
     }
 
     template <typename Wrapper>
-    bool InsertEntry(typename Wrapper::HandleType                                handle,
-                     Wrapper*                                                    wrapper,
-                     std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    bool InsertEntry(typename Wrapper::HandleType                               handle,
+                     Wrapper*                                                   wrapper,
+                     UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
-        const std::unique_lock<std::shared_mutex> lock(mutex_);
-        const auto&                               inserted = map.insert(std::make_pair(handle, wrapper));
+        const std::lock_guard<std::recursive_mutex> lock(map.mutex);
+        const auto&                                 inserted = map.insert(std::make_pair(handle, wrapper));
         return inserted.second;
     }
 
     template <typename Wrapper>
-    bool RemoveEntry(const typename Wrapper::HandleType                          handle,
-                     std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    bool RemoveEntry(const typename Wrapper::HandleType                         handle,
+                     UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
-        const std::unique_lock<std::shared_mutex> lock(mutex_);
+        const std::lock_guard<std::recursive_mutex> lock(map.mutex);
         return (map.erase(handle) != 0);
     }
 
     template <typename Wrapper>
-    Wrapper* GetWrapper(typename Wrapper::HandleType                                      handle,
-                        const std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    Wrapper* GetWrapper(typename Wrapper::HandleType                                     handle,
+                        const UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
-        const std::shared_lock<std::shared_mutex> lock(mutex_);
-        auto                                      entry = map.find(handle);
+        const std::lock_guard<std::recursive_mutex> lock(map.mutex);
+        auto                                        entry = map.find(handle);
         return (entry != map.end()) ? entry->second : nullptr;
     }
 
     template <typename Wrapper>
-    const Wrapper* GetWrapper(typename Wrapper::HandleType                                      handle,
-                              const std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map) const
+    const Wrapper* GetWrapper(typename Wrapper::HandleType                                     handle,
+                              const UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map) const
     {
-        const std::shared_lock<std::shared_mutex> lock(mutex_);
-        auto                                      entry = map.find(handle);
+        const std::lock_guard<std::recursive_mutex> lock(map.mutex);
+        auto                                        entry = map.find(handle);
         return (entry != map.end()) ? entry->second : nullptr;
     }
-
-  private:
-    mutable std::shared_mutex mutex_;
 };
 
 GFXRECON_END_NAMESPACE(encode)

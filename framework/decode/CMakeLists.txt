@@ -136,6 +136,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_captured_swapchain.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_export_json_consumer_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_export_json_consumer_base.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_enum_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_mapping_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_mapping_util.cpp
@@ -251,7 +253,7 @@ target_include_directories(gfxrecon_decode
                                ${CMAKE_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
 
-target_link_libraries(gfxrecon_decode gfxrecon_graphics gfxrecon_format gfxrecon_util Vulkan::Headers vulkan_memory_allocator platform_specific nlohmann_json::nlohmann_json $<$<BOOL:${D3D12_SUPPORT}>:dxguid.lib>)
+target_link_libraries(gfxrecon_decode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry vulkan_memory_allocator platform_specific nlohmann_json::nlohmann_json $<$<BOOL:${D3D12_SUPPORT}>:dxguid.lib>)
 
 common_build_directives(gfxrecon_decode)
 

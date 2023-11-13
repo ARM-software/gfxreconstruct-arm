@@ -100,7 +100,8 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
         vk_remove_code = ''
         vk_const_get_code = ''
         vk_get_code = ''
-        vk_map_code = ''        
+        vk_map_code = ''
+        vk_get_map_lock_code = ''
 
         for vkhandle_name in sorted(self.handle_names):
             if vkhandle_name in self.DUPLICATE_HANDLE_TYPES:
@@ -121,7 +122,8 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
             vk_remove_code += '    }\n'
             vk_get_code += 'template<> inline {0}* VulkanStateHandleTable::GetWrapper<{0}>({1} handle) {{ return VulkanStateTableBase::GetWrapper(handle, {2}); }}\n'.format(handle_wrapper, vkhandle_name, handle_map)
             vk_const_get_code += 'template<> inline const {0}* VulkanStateHandleTable::GetWrapper<{0}>({1} handle) const {{ return VulkanStateTableBase::GetWrapper(handle, {2}); }}\n'.format(handle_wrapper, vkhandle_name, handle_map)
-            vk_map_code += '    std::unordered_map<{0}, {1}*> {2};\n'.format(vkhandle_name, handle_wrapper, handle_map)
+            vk_get_map_lock_code += 'template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<{0}>(){{ return {1}.mutex; }}\n'.format(handle_wrapper, handle_map) 
+            vk_map_code += '    UnorderedStateMap<{0}, {1}*> {2};\n'.format(vkhandle_name, handle_wrapper, handle_map)
 
         self.newline()
         code = 'class VulkanStateTable : VulkanStateTableBase\n'
@@ -158,7 +160,9 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
         code += '    template<typename Wrapper> const Wrapper* GetWrapper(typename Wrapper::HandleType handle) const { return nullptr; }\n'
         code += '\n'
         code += '    template<typename Wrapper> Wrapper* GetWrapper(typename Wrapper::HandleType handle) { return nullptr; }\n'
-        code += '\n'                
+        code += '\n'
+        code += '    template<typename Wrapper> std::recursive_mutex& GetMapMutex();\n'
+        code += '\n'
         code += '  private:\n'
         code += vk_map_code
         code += '};\n'
@@ -166,6 +170,8 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
         code += vk_const_get_code
         code += '\n'
         code += vk_get_code
+        code += '\n'
+        code += vk_get_map_lock_code
         write(code, file=self.outFile)
     # yapf: enable
 

@@ -96,10 +96,11 @@ int main(int argc, const char** argv)
 
     // Default initialize logging to report issues while loading settings.
     gfxrecon::util::Log::Init(gfxrecon::decode::kDefaultLogLevel);
+    PrintVersion(argv[0]);
 
     gfxrecon::util::ArgumentParser arg_parser(argc, argv, kOptions, kArguments);
 
-    if (CheckOptionPrintVersion(argv[0], arg_parser) || CheckOptionPrintUsage(argv[0], arg_parser))
+    if (arg_parser.IsOptionSet(kVersionOption) || CheckOptionPrintUsage(argv[0], arg_parser))
     {
         gfxrecon::util::Log::Release();
         exit(0);

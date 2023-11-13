@@ -33,6 +33,8 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/file_optimizer.h
                    ${CMAKE_CURRENT_LIST_DIR}/file_optimizer.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/feature_file_optimizer.h
+                   ${CMAKE_CURRENT_LIST_DIR}/feature_file_optimizer.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/replay_options_editor.h
                    ${CMAKE_CURRENT_LIST_DIR}/replay_options_editor.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/annotation_editor.h
@@ -64,6 +66,7 @@ target_include_directories(gfxrecon-optimize PUBLIC ${CMAKE_BINARY_DIR})
 target_link_libraries(gfxrecon-optimize
                           gfxrecon_application
                           gfxrecon_decode
+                          gfxrecon_encode
                           gfxrecon_graphics
                           gfxrecon_format
                           gfxrecon_util

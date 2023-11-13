@@ -135,6 +135,7 @@ class VulkanVirtualSwapchain : public VulkanSwapchain
     };
 
     // Structure to track VulkanVirtualSwapchain private data specific to a particular VkSwapchainKHR handle.
+    // Offscreen only need virtual_swapchain_images.
     struct SwapchainResourceData
     {
         // Create a map that correlates copy command data with a queue family index.

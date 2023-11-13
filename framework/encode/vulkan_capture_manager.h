@@ -357,6 +357,12 @@ class VulkanCaptureManager : public CaptureManager
                                             VkDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData);
 
+    void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
+                                          VkDevice                        device,
+                                          const VkSwapchainCreateInfoKHR* pCreateInfo,
+                                          const VkAllocationCallbacks*    pAllocator,
+                                          VkSwapchainKHR*                 pSwapchain);
+
     void PostProcess_vkEnumeratePhysicalDevices(VkResult          result,
                                                 VkInstance        instance,
                                                 uint32_t*         pPhysicalDeviceCount,
@@ -1303,6 +1309,11 @@ class VulkanCaptureManager : public CaptureManager
 
     void PostProcess_vkCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
                                                    const VkDebugUtilsLabelEXT* pLabelInfo);
+
+    void PostProcess_vkFrameBoundaryANDROID(VkDevice device, VkSemaphore semaphore, VkImage image)
+    {
+        EndFrame();
+    }
 
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);

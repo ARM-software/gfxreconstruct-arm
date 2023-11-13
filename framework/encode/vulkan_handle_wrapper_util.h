@@ -29,6 +29,7 @@
 #include "format/format_util.h"
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "generated/generated_vulkan_state_table.h"
+#include "generated/generated_vulkan_enum_to_string.h"
 #include "util/defines.h"
 
 #include <algorithm>
@@ -72,6 +73,9 @@ inline format::HandleId GetTempWrapperId<CommandPoolWrapper>(const VkCommandPool
     return 0;
 }
 
+template <typename WrapperType>
+VkObjectType GetObjectType();
+
 template <typename Wrapper>
 format::HandleId GetWrappedId(const typename Wrapper::HandleType& handle)
 {
@@ -88,7 +92,10 @@ format::HandleId GetWrappedId(const typename Wrapper::HandleType& handle)
     auto wrapper = state_handle_table_.GetWrapper<Wrapper>(handle);
     if (wrapper == nullptr)
     {
-        GFXRECON_LOG_WARNING("GetWrappedId() couldn't find Handle: %" PRIu64 "'s wrapper. It might have been destroyed",
+        std::string type_name = util::ToString<VkObjectType>(GetObjectType<Wrapper>());
+        GFXRECON_LOG_WARNING("GetWrappedId() couldn't find %s Handle: %" PRIu64
+                             "'s wrapper. It might have been destroyed",
+                             type_name.c_str(),
                              handle);
         return format::kNullHandleId;
     }
@@ -105,7 +112,10 @@ Wrapper* GetWrapper(const typename Wrapper::HandleType& handle)
     auto wrapper = state_handle_table_.GetWrapper<Wrapper>(handle);
     if (wrapper == nullptr)
     {
-        GFXRECON_LOG_WARNING("GetWrapper() couldn't find Handle: %" PRIu64 "'s wrapper. It might have been destroyed",
+        std::string type_name = util::ToString<VkObjectType>(GetObjectType<Wrapper>());
+        GFXRECON_LOG_WARNING("GetWrapper() couldn't find %s Handle: %" PRIu64
+                             "'s wrapper. It might have been destroyed",
+                             type_name.c_str(),
                              handle);
     }
     return wrapper;
@@ -115,6 +125,12 @@ template <typename Wrapper>
 bool RemoveWrapper(const Wrapper* wrapper)
 {
     return state_handle_table_.RemoveWrapper(wrapper);
+}
+
+template <typename Wrapper>
+std::recursive_mutex& GetMapMutex()
+{
+    return state_handle_table_.GetMapMutex<Wrapper>();
 }
 
 uint64_t GetWrappedId(uint64_t, VkObjectType object_type);
@@ -189,9 +205,17 @@ void CreateWrappedDispatchHandle(typename ParentWrapper::HandleType parent,
         }
         if (!state_handle_table_.InsertWrapper(wrapper))
         {
-            GFXRECON_LOG_WARNING("Create a duplicated Handle: %" PRIu64
-                                 ". This wrapper can't be written into VulkanStateHandleTable.",
-                                 *handle);
+            Wrapper*    old_wrapper = state_handle_table_.GetWrapper<Wrapper>(wrapper->handle);
+            std::string type_name   = util::ToString<VkObjectType>(GetObjectType<Wrapper>());
+            GFXRECON_LOG_WARNING("Tried to create duplicate object of type %s"
+                                 "VkHandle: %" PRIu64 "New id %" PRIu64 "."
+                                 "Original handle_id: %" PRIu64 "."
+                                 "Wrapper can't be written into VulkanStateHandleTable.",
+                                 type_name.c_str(),
+                                 *handle,
+                                 wrapper->handle_id,
+                                 old_wrapper->handle_id);
+            delete wrapper;
         }
     }
 }
@@ -207,9 +231,17 @@ void CreateWrappedNonDispatchHandle(typename Wrapper::HandleType* handle, PFN_Ge
         wrapper->handle_id = get_id();
         if (!state_handle_table_.InsertWrapper(wrapper))
         {
-            GFXRECON_LOG_WARNING("Create a duplicated Handle: %" PRIu64
-                                 ". This wrapper can't be written into VulkanStateHandleTable.",
-                                 *handle);
+            Wrapper*    old_wrapper = state_handle_table_.GetWrapper<Wrapper>(wrapper->handle);
+            std::string type_name   = util::ToString<VkObjectType>(GetObjectType<Wrapper>());
+            GFXRECON_LOG_WARNING("Tried to create duplicate object of type %s"
+                                 "VkHandle: %" PRIu64 "New id %" PRIu64 "."
+                                 "Original handle_id: %" PRIu64 "."
+                                 "Wrapper can't be written into VulkanStateHandleTable.",
+                                 type_name.c_str(),
+                                 *handle,
+                                 wrapper->handle_id,
+                                 old_wrapper->handle_id);
+            delete wrapper;
         }
     }
 }
@@ -402,16 +434,28 @@ CreateWrappedHandle<DeviceWrapper, SwapchainKHRWrapper, ImageWrapper>(VkDevice, 
     assert(co_parent != VK_NULL_HANDLE);
     assert(handle != nullptr);
 
-    auto parent_wrapper = GetWrapper<SwapchainKHRWrapper>(co_parent);
-
+    auto          parent_wrapper = GetWrapper<SwapchainKHRWrapper>(co_parent);
+    ImageWrapper* wrapper        = nullptr;
     // Filter duplicate display retrieval.
-    ImageWrapper* wrapper = nullptr;
     for (auto entry : parent_wrapper->child_images)
     {
         if (entry->handle == (*handle))
         {
-            wrapper = entry;
-            break;
+            return;
+        }
+    }
+
+    // Filter old swapchain images
+    if (parent_wrapper->old_swapchain)
+    {
+        for (auto old_image : parent_wrapper->old_swapchain->child_images)
+        {
+            if (*handle == old_image->handle)
+            {
+                wrapper = old_image;
+                parent_wrapper->child_images.push_back(wrapper);
+                return;
+            }
         }
     }
 
@@ -610,6 +654,22 @@ inline void DestroyWrappedHandle<SwapchainKHRWrapper>(VkSwapchainKHR handle)
 
         for (auto image_wrapper : wrapper->child_images)
         {
+            if (wrapper->new_swapchain != nullptr)
+            {
+                bool found_old_image = false;
+                for (auto new_image_wrapper : wrapper->new_swapchain->child_images)
+                {
+                    if (new_image_wrapper->handle == image_wrapper->handle)
+                    {
+                        found_old_image = true;
+                        break;
+                    }
+                }
+                if (found_old_image)
+                {
+                    continue;
+                }
+            }
             RemoveWrapper<ImageWrapper>(image_wrapper);
             delete image_wrapper;
         }

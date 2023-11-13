@@ -140,12 +140,27 @@ bool VulkanExportJsonConsumerBase::WriteBinaryFile(const std::string& filename, 
 
 void VulkanExportJsonConsumerBase::ProcessStateBeginMarker(uint64_t frame_number)
 {
+    if (file_ != stdout)
+    {
+        std::string state_file_name = "frame_" + std::to_string(frame_number) + "_state_recreation.json";
+        std::string output_file     = gfxrecon::util::filepath::Join(json_options_.root_dir, state_file_name);
+        if (util::platform::FileOpen(&tmp_file_, output_file.c_str(), "w") == 0)
+        {
+            std::swap(file_, tmp_file_);
+            StartFile(file_);
+            num_files_++;
+        }
+    }
     WriteStateMarkerToFile("BeginMarker", frame_number);
 }
 
 void VulkanExportJsonConsumerBase::ProcessStateEndMarker(uint64_t frame_number)
 {
     WriteStateMarkerToFile("EndMarker", frame_number);
+    if (tmp_file_ != nullptr && file_ != stdout)
+    {
+        std::swap(file_, tmp_file_);
+    }
 }
 
 void VulkanExportJsonConsumerBase::ProcessFrameEndMarker(uint64_t frame_number)
@@ -600,6 +615,16 @@ void VulkanExportJsonConsumerBase::Process_vkCmdPushConstants(const ApiCallInfo&
     });
 }
 
+void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const ApiCallInfo& call_info,
+                                                                             format::HandleId   device,
+                                                                             format::HandleId   descriptorSet,
+                                                                             format::HandleId descriptorUpdateTemplate,
+                                                                             DescriptorUpdateTemplateDecoder* pData)
+{
+    ProcessUpdateDescriptorSetWithTemplate(
+        "vkUpdateDescriptorSetWithTemplate", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
+}
+
 void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(
     const ApiCallInfo&               call_info,
     format::HandleId                 device,
@@ -607,9 +632,20 @@ void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(
     format::HandleId                 descriptorUpdateTemplate,
     DescriptorUpdateTemplateDecoder* pData)
 {
-    using namespace gfxrecon::util;
+    ProcessUpdateDescriptorSetWithTemplate(
+        "vkUpdateDescriptorSetWithTemplateKHR", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
+}
 
-    auto& function = WriteApiCallStart(call_info, "vkUpdateDescriptorSetWithTemplateKHR");
+void VulkanExportJsonConsumerBase::ProcessUpdateDescriptorSetWithTemplate(std::string        function_name,
+                                                                          const ApiCallInfo& call_info,
+                                                                          format::HandleId   device,
+                                                                          format::HandleId   descriptorSet,
+                                                                          format::HandleId   descriptorUpdateTemplate,
+                                                                          DescriptorUpdateTemplateDecoder* pData)
+{
+    using namespace util;
+
+    auto& function = WriteApiCallStart(call_info, function_name.c_str());
     auto& args     = function[NameArgs()];
 
     HandleToJson(args["device"], device, json_options_);

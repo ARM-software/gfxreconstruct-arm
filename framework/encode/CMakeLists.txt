@@ -94,6 +94,7 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrapper_util.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_info.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_table_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_table_map.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker_initializers.h
@@ -140,7 +141,7 @@ target_include_directories(gfxrecon_encode
                                ${CMAKE_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
 
-target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util Vulkan::Headers platform_specific)
+target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
 
 common_build_directives(gfxrecon_encode)
 

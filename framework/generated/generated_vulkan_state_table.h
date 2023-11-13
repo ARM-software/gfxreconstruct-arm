@@ -558,52 +558,54 @@ class VulkanStateHandleTable : VulkanStateTableBase
 
     template<typename Wrapper> Wrapper* GetWrapper(typename Wrapper::HandleType handle) { return nullptr; }
 
+    template<typename Wrapper> std::recursive_mutex& GetMapMutex();
+
   private:
-    std::unordered_map<VkAccelerationStructureKHR, AccelerationStructureKHRWrapper*> accelerationStructureKHR_map_;
-    std::unordered_map<VkAccelerationStructureNV, AccelerationStructureNVWrapper*> accelerationStructureNV_map_;
-    std::unordered_map<VkBuffer, BufferWrapper*> buffer_map_;
-    std::unordered_map<VkBufferView, BufferViewWrapper*> bufferView_map_;
-    std::unordered_map<VkCommandBuffer, CommandBufferWrapper*> commandBuffer_map_;
-    std::unordered_map<VkCommandPool, CommandPoolWrapper*> commandPool_map_;
-    std::unordered_map<VkDebugReportCallbackEXT, DebugReportCallbackEXTWrapper*> debugReportCallbackEXT_map_;
-    std::unordered_map<VkDebugUtilsMessengerEXT, DebugUtilsMessengerEXTWrapper*> debugUtilsMessengerEXT_map_;
-    std::unordered_map<VkDeferredOperationKHR, DeferredOperationKHRWrapper*> deferredOperationKHR_map_;
-    std::unordered_map<VkDescriptorPool, DescriptorPoolWrapper*> descriptorPool_map_;
-    std::unordered_map<VkDescriptorSet, DescriptorSetWrapper*> descriptorSet_map_;
-    std::unordered_map<VkDescriptorSetLayout, DescriptorSetLayoutWrapper*> descriptorSetLayout_map_;
-    std::unordered_map<VkDescriptorUpdateTemplate, DescriptorUpdateTemplateWrapper*> descriptorUpdateTemplate_map_;
-    std::unordered_map<VkDevice, DeviceWrapper*> device_map_;
-    std::unordered_map<VkDeviceMemory, DeviceMemoryWrapper*> deviceMemory_map_;
-    std::unordered_map<VkDisplayKHR, DisplayKHRWrapper*> displayKHR_map_;
-    std::unordered_map<VkDisplayModeKHR, DisplayModeKHRWrapper*> displayModeKHR_map_;
-    std::unordered_map<VkEvent, EventWrapper*> event_map_;
-    std::unordered_map<VkFence, FenceWrapper*> fence_map_;
-    std::unordered_map<VkFramebuffer, FramebufferWrapper*> framebuffer_map_;
-    std::unordered_map<VkImage, ImageWrapper*> image_map_;
-    std::unordered_map<VkImageView, ImageViewWrapper*> imageView_map_;
-    std::unordered_map<VkIndirectCommandsLayoutNV, IndirectCommandsLayoutNVWrapper*> indirectCommandsLayoutNV_map_;
-    std::unordered_map<VkInstance, InstanceWrapper*> instance_map_;
-    std::unordered_map<VkMicromapEXT, MicromapEXTWrapper*> micromapEXT_map_;
-    std::unordered_map<VkOpticalFlowSessionNV, OpticalFlowSessionNVWrapper*> opticalFlowSessionNV_map_;
-    std::unordered_map<VkPerformanceConfigurationINTEL, PerformanceConfigurationINTELWrapper*> performanceConfigurationINTEL_map_;
-    std::unordered_map<VkPhysicalDevice, PhysicalDeviceWrapper*> physicalDevice_map_;
-    std::unordered_map<VkPipeline, PipelineWrapper*> pipeline_map_;
-    std::unordered_map<VkPipelineCache, PipelineCacheWrapper*> pipelineCache_map_;
-    std::unordered_map<VkPipelineLayout, PipelineLayoutWrapper*> pipelineLayout_map_;
-    std::unordered_map<VkPrivateDataSlot, PrivateDataSlotWrapper*> privateDataSlot_map_;
-    std::unordered_map<VkQueryPool, QueryPoolWrapper*> queryPool_map_;
-    std::unordered_map<VkQueue, QueueWrapper*> queue_map_;
-    std::unordered_map<VkRenderPass, RenderPassWrapper*> renderPass_map_;
-    std::unordered_map<VkSampler, SamplerWrapper*> sampler_map_;
-    std::unordered_map<VkSamplerYcbcrConversion, SamplerYcbcrConversionWrapper*> samplerYcbcrConversion_map_;
-    std::unordered_map<VkSemaphore, SemaphoreWrapper*> semaphore_map_;
-    std::unordered_map<VkShaderEXT, ShaderEXTWrapper*> shaderEXT_map_;
-    std::unordered_map<VkShaderModule, ShaderModuleWrapper*> shaderModule_map_;
-    std::unordered_map<VkSurfaceKHR, SurfaceKHRWrapper*> surfaceKHR_map_;
-    std::unordered_map<VkSwapchainKHR, SwapchainKHRWrapper*> swapchainKHR_map_;
-    std::unordered_map<VkValidationCacheEXT, ValidationCacheEXTWrapper*> validationCacheEXT_map_;
-    std::unordered_map<VkVideoSessionKHR, VideoSessionKHRWrapper*> videoSessionKHR_map_;
-    std::unordered_map<VkVideoSessionParametersKHR, VideoSessionParametersKHRWrapper*> videoSessionParametersKHR_map_;
+    UnorderedStateMap<VkAccelerationStructureKHR, AccelerationStructureKHRWrapper*> accelerationStructureKHR_map_;
+    UnorderedStateMap<VkAccelerationStructureNV, AccelerationStructureNVWrapper*> accelerationStructureNV_map_;
+    UnorderedStateMap<VkBuffer, BufferWrapper*> buffer_map_;
+    UnorderedStateMap<VkBufferView, BufferViewWrapper*> bufferView_map_;
+    UnorderedStateMap<VkCommandBuffer, CommandBufferWrapper*> commandBuffer_map_;
+    UnorderedStateMap<VkCommandPool, CommandPoolWrapper*> commandPool_map_;
+    UnorderedStateMap<VkDebugReportCallbackEXT, DebugReportCallbackEXTWrapper*> debugReportCallbackEXT_map_;
+    UnorderedStateMap<VkDebugUtilsMessengerEXT, DebugUtilsMessengerEXTWrapper*> debugUtilsMessengerEXT_map_;
+    UnorderedStateMap<VkDeferredOperationKHR, DeferredOperationKHRWrapper*> deferredOperationKHR_map_;
+    UnorderedStateMap<VkDescriptorPool, DescriptorPoolWrapper*> descriptorPool_map_;
+    UnorderedStateMap<VkDescriptorSet, DescriptorSetWrapper*> descriptorSet_map_;
+    UnorderedStateMap<VkDescriptorSetLayout, DescriptorSetLayoutWrapper*> descriptorSetLayout_map_;
+    UnorderedStateMap<VkDescriptorUpdateTemplate, DescriptorUpdateTemplateWrapper*> descriptorUpdateTemplate_map_;
+    UnorderedStateMap<VkDevice, DeviceWrapper*> device_map_;
+    UnorderedStateMap<VkDeviceMemory, DeviceMemoryWrapper*> deviceMemory_map_;
+    UnorderedStateMap<VkDisplayKHR, DisplayKHRWrapper*> displayKHR_map_;
+    UnorderedStateMap<VkDisplayModeKHR, DisplayModeKHRWrapper*> displayModeKHR_map_;
+    UnorderedStateMap<VkEvent, EventWrapper*> event_map_;
+    UnorderedStateMap<VkFence, FenceWrapper*> fence_map_;
+    UnorderedStateMap<VkFramebuffer, FramebufferWrapper*> framebuffer_map_;
+    UnorderedStateMap<VkImage, ImageWrapper*> image_map_;
+    UnorderedStateMap<VkImageView, ImageViewWrapper*> imageView_map_;
+    UnorderedStateMap<VkIndirectCommandsLayoutNV, IndirectCommandsLayoutNVWrapper*> indirectCommandsLayoutNV_map_;
+    UnorderedStateMap<VkInstance, InstanceWrapper*> instance_map_;
+    UnorderedStateMap<VkMicromapEXT, MicromapEXTWrapper*> micromapEXT_map_;
+    UnorderedStateMap<VkOpticalFlowSessionNV, OpticalFlowSessionNVWrapper*> opticalFlowSessionNV_map_;
+    UnorderedStateMap<VkPerformanceConfigurationINTEL, PerformanceConfigurationINTELWrapper*> performanceConfigurationINTEL_map_;
+    UnorderedStateMap<VkPhysicalDevice, PhysicalDeviceWrapper*> physicalDevice_map_;
+    UnorderedStateMap<VkPipeline, PipelineWrapper*> pipeline_map_;
+    UnorderedStateMap<VkPipelineCache, PipelineCacheWrapper*> pipelineCache_map_;
+    UnorderedStateMap<VkPipelineLayout, PipelineLayoutWrapper*> pipelineLayout_map_;
+    UnorderedStateMap<VkPrivateDataSlot, PrivateDataSlotWrapper*> privateDataSlot_map_;
+    UnorderedStateMap<VkQueryPool, QueryPoolWrapper*> queryPool_map_;
+    UnorderedStateMap<VkQueue, QueueWrapper*> queue_map_;
+    UnorderedStateMap<VkRenderPass, RenderPassWrapper*> renderPass_map_;
+    UnorderedStateMap<VkSampler, SamplerWrapper*> sampler_map_;
+    UnorderedStateMap<VkSamplerYcbcrConversion, SamplerYcbcrConversionWrapper*> samplerYcbcrConversion_map_;
+    UnorderedStateMap<VkSemaphore, SemaphoreWrapper*> semaphore_map_;
+    UnorderedStateMap<VkShaderEXT, ShaderEXTWrapper*> shaderEXT_map_;
+    UnorderedStateMap<VkShaderModule, ShaderModuleWrapper*> shaderModule_map_;
+    UnorderedStateMap<VkSurfaceKHR, SurfaceKHRWrapper*> surfaceKHR_map_;
+    UnorderedStateMap<VkSwapchainKHR, SwapchainKHRWrapper*> swapchainKHR_map_;
+    UnorderedStateMap<VkValidationCacheEXT, ValidationCacheEXTWrapper*> validationCacheEXT_map_;
+    UnorderedStateMap<VkVideoSessionKHR, VideoSessionKHRWrapper*> videoSessionKHR_map_;
+    UnorderedStateMap<VkVideoSessionParametersKHR, VideoSessionParametersKHRWrapper*> videoSessionParametersKHR_map_;
 };
 
 template<> inline const AccelerationStructureKHRWrapper* VulkanStateHandleTable::GetWrapper<AccelerationStructureKHRWrapper>(VkAccelerationStructureKHR handle) const { return VulkanStateTableBase::GetWrapper(handle, accelerationStructureKHR_map_); }
@@ -697,6 +699,52 @@ template<> inline SwapchainKHRWrapper* VulkanStateHandleTable::GetWrapper<Swapch
 template<> inline ValidationCacheEXTWrapper* VulkanStateHandleTable::GetWrapper<ValidationCacheEXTWrapper>(VkValidationCacheEXT handle) { return VulkanStateTableBase::GetWrapper(handle, validationCacheEXT_map_); }
 template<> inline VideoSessionKHRWrapper* VulkanStateHandleTable::GetWrapper<VideoSessionKHRWrapper>(VkVideoSessionKHR handle) { return VulkanStateTableBase::GetWrapper(handle, videoSessionKHR_map_); }
 template<> inline VideoSessionParametersKHRWrapper* VulkanStateHandleTable::GetWrapper<VideoSessionParametersKHRWrapper>(VkVideoSessionParametersKHR handle) { return VulkanStateTableBase::GetWrapper(handle, videoSessionParametersKHR_map_); }
+
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<AccelerationStructureKHRWrapper>(){ return accelerationStructureKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<AccelerationStructureNVWrapper>(){ return accelerationStructureNV_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<BufferWrapper>(){ return buffer_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<BufferViewWrapper>(){ return bufferView_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<CommandBufferWrapper>(){ return commandBuffer_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<CommandPoolWrapper>(){ return commandPool_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DebugReportCallbackEXTWrapper>(){ return debugReportCallbackEXT_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DebugUtilsMessengerEXTWrapper>(){ return debugUtilsMessengerEXT_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DeferredOperationKHRWrapper>(){ return deferredOperationKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DescriptorPoolWrapper>(){ return descriptorPool_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DescriptorSetWrapper>(){ return descriptorSet_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DescriptorSetLayoutWrapper>(){ return descriptorSetLayout_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DescriptorUpdateTemplateWrapper>(){ return descriptorUpdateTemplate_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DeviceWrapper>(){ return device_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DeviceMemoryWrapper>(){ return deviceMemory_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DisplayKHRWrapper>(){ return displayKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<DisplayModeKHRWrapper>(){ return displayModeKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<EventWrapper>(){ return event_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<FenceWrapper>(){ return fence_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<FramebufferWrapper>(){ return framebuffer_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<ImageWrapper>(){ return image_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<ImageViewWrapper>(){ return imageView_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<IndirectCommandsLayoutNVWrapper>(){ return indirectCommandsLayoutNV_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<InstanceWrapper>(){ return instance_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<MicromapEXTWrapper>(){ return micromapEXT_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<OpticalFlowSessionNVWrapper>(){ return opticalFlowSessionNV_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PerformanceConfigurationINTELWrapper>(){ return performanceConfigurationINTEL_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PhysicalDeviceWrapper>(){ return physicalDevice_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PipelineWrapper>(){ return pipeline_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PipelineCacheWrapper>(){ return pipelineCache_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PipelineLayoutWrapper>(){ return pipelineLayout_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<PrivateDataSlotWrapper>(){ return privateDataSlot_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<QueryPoolWrapper>(){ return queryPool_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<QueueWrapper>(){ return queue_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<RenderPassWrapper>(){ return renderPass_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<SamplerWrapper>(){ return sampler_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<SamplerYcbcrConversionWrapper>(){ return samplerYcbcrConversion_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<SemaphoreWrapper>(){ return semaphore_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<ShaderEXTWrapper>(){ return shaderEXT_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<ShaderModuleWrapper>(){ return shaderModule_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<SurfaceKHRWrapper>(){ return surfaceKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<SwapchainKHRWrapper>(){ return swapchainKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<ValidationCacheEXTWrapper>(){ return validationCacheEXT_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<VideoSessionKHRWrapper>(){ return videoSessionKHR_map_.mutex; }
+template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<VideoSessionParametersKHRWrapper>(){ return videoSessionParametersKHR_map_.mutex; }
 
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

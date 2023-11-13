@@ -61,7 +61,8 @@ void        DestroyActivity(struct android_app* app);
 
 void android_main(struct android_app* app)
 {
-    gfxrecon::util::Log::Init();
+    gfxrecon::util::Log::Init(gfxrecon::decode::kDefaultLogLevel);
+    PrintVersion(kApplicationName);
 
     // Keep screen on while window is active.
     ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
@@ -74,7 +75,7 @@ void android_main(struct android_app* app)
 
     bool run = true;
 
-    if (CheckOptionPrintUsage(kApplicationName, arg_parser) || CheckOptionPrintVersion(kApplicationName, arg_parser))
+    if (CheckOptionPrintUsage(kApplicationName, arg_parser) || arg_parser.IsOptionSet(kVersionOption))
     {
         run = false;
     }

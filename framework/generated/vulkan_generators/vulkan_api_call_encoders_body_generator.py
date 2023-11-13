@@ -228,12 +228,17 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
         has_outputs = self.has_outputs(return_type, values)
         arg_list = self.make_arg_list(values)
 
+        capture_manager = 'manager'
+        if name == "vkCreateInstance":
+            capture_manager = 'VulkanCaptureManager::Get()'
         body = ''
-
+        if name != "vkCreateInstance":
+            body += indent + 'VulkanCaptureManager* manager = VulkanCaptureManager::Get();\n'
+            body += indent + 'GFXRECON_ASSERT(manager != nullptr);\n'
         if name == "vkCreateInstance" or name == "vkQueuePresentKHR":
             body += indent + 'auto api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();\n'
         else:
-            body += indent + 'auto force_command_serialization = VulkanCaptureManager::Get()->GetForceCommandSerialization();\n'
+            body += indent + 'auto force_command_serialization = manager->GetForceCommandSerialization();\n'
             body += indent + 'std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;\n'
             body += indent + 'std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;\n'
             body += indent + 'if (force_command_serialization)\n'
@@ -255,8 +260,8 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             body += indent + 'bool omit_output_data = false;\n'
             body += '\n'
 
-        body += indent + 'CustomEncoderPreCall<format::ApiCallId::ApiCall_{}>::Dispatch(VulkanCaptureManager::Get(), {});\n'.format(
-            name, arg_list
+        body += indent + 'CustomEncoderPreCall<format::ApiCallId::ApiCall_{}>::Dispatch({}, {});\n'.format(
+            name, capture_manager, arg_list
         )
 
         if not encode_after:
@@ -265,6 +270,10 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             )
 
         body += '\n'
+        lock_expr = self.make_handle_lock(name, values, indent)
+        if lock_expr:
+            body += '\n'
+            body += lock_expr
 
         if is_override:
             # Capture overrides simply call the override function without handle unwrap/wrap
@@ -291,7 +300,7 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             )
             if unwrap_expr:
                 if need_unwrap_memory:
-                    body += indent + 'auto handle_unwrap_memory = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();\n'
+                    body += indent + f'auto handle_unwrap_memory = {capture_manager}->GetHandleUnwrapMemory();\n'
                 body += unwrap_expr
                 body += '\n'
 
@@ -338,12 +347,12 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
 
         body += '\n'
         if return_type and return_type != 'void':
-            body += '    CustomEncoderPostCall<format::ApiCallId::ApiCall_{}>::Dispatch(VulkanCaptureManager::Get(), result, {});\n'.format(
-                name, arg_list
+            body += '    CustomEncoderPostCall<format::ApiCallId::ApiCall_{}>::Dispatch({}, result, {});\n'.format(
+                name, capture_manager, arg_list
             )
         else:
-            body += '    CustomEncoderPostCall<format::ApiCallId::ApiCall_{}>::Dispatch(VulkanCaptureManager::Get(), {});\n'.format(
-                name, arg_list
+            body += '    CustomEncoderPostCall<format::ApiCallId::ApiCall_{}>::Dispatch({}, {});\n'.format(
+                name, capture_manager, arg_list
             )
 
         cleanup_expr = self.make_handle_cleanup(name, values, indent)
@@ -385,6 +394,10 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
         return body
 
     def make_begin_api_call(self, name, values):
+        capture_manager = 'manager'
+        if name == 'vkCreateInstance':
+            capture_manager = 'VulkanCaptureManager::Get()'
+
         if name.startswith('vkCreate') or name.startswith(
             'vkAllocate'
         ) or name.startswith('vkDestroy') or name.startswith(
@@ -392,12 +405,12 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
         ) or self.retrieves_handles(values) or (
             values[0].base_type == 'VkCommandBuffer'
         ) or (name == 'vkReleasePerformanceConfigurationINTEL'):
-            return 'auto encoder = VulkanCaptureManager::Get()->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_{});\n'.format(
-                name
+            return 'auto encoder = {}->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_{});\n'.format(
+                capture_manager, name
             )
         else:
-            return 'auto encoder = VulkanCaptureManager::Get()->BeginApiCallCapture(format::ApiCallId::ApiCall_{});\n'.format(
-                name
+            return 'auto encoder = {}->BeginApiCallCapture(format::ApiCallId::ApiCall_{});\n'.format(
+                capture_manager, name
             )
 
     def get_struct_handle_member_info(self, members):
@@ -424,7 +437,9 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
         return member_handle_type, member_handle_name, member_array_length
 
     def make_end_api_call(self, name, values, return_type):
-        decl = 'VulkanCaptureManager::Get()->'
+        decl = 'manager->'
+        if name == 'vkCreateInstance':
+            decl = 'VulkanCaptureManager::Get()->'
 
         if name.startswith('vkCreate') or name.startswith(
             'vkAllocate'
@@ -662,6 +677,27 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
                             )
             args.append(arg_name)
         return expr, ', '.join(args), need_unwrap_memory
+
+    def make_handle_lock(self, name, values, indent):
+        expr = ''
+        isDestroyCall = name.startswith('vkDestroy') or name.startswith('vkFree') or (
+            name == 'vkReleasePerformanceConfigurationINTEL'
+        )
+        isCreateCall = name.startswith('vkCreate') or name.startswith('vkAllocate') 
+        if isDestroyCall:
+            if name in ['vkDestroyInstance', 'vkDestroyDevice']:
+                # Instance/device destroy calls are special case where the target handle is the first parameter
+                handle = values[0]
+            else:
+                # The destroy target is the second parameter, except for pool based allocations where it is the last parameter.
+                handle = values[1]
+                if ("Pool" in handle.base_type) and name.startswith('vkFree'):
+                    handle = values[3]
+        if isCreateCall:
+            handle = values[-1]
+        if isDestroyCall or isCreateCall:
+            expr += indent + 'std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<{}Wrapper>());\n'.format(handle.base_type[2:])
+        return expr
 
     def make_handle_cleanup(self, name, values, indent):
         expr = ''

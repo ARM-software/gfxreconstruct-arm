@@ -30,6 +30,8 @@
 
 #include "util/logging.h"
 
+#include "format/platform_types.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(feature_util)
 
