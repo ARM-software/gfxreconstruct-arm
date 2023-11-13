@@ -289,6 +289,12 @@ class VulkanCaptureManager : public CaptureManager
                                                     const VkAllocationCallbacks*                pAllocator,
                                                     VkAccelerationStructureKHR* pAccelerationStructureKHR);
 
+    void
+    OverrideCmdBuildAccelerationStructuresKHR(VkCommandBuffer                                        commandBuffer,
+                                              uint32_t                                               infoCount,
+                                              const VkAccelerationStructureBuildGeometryInfoKHR*     pInfos,
+                                              const VkAccelerationStructureBuildRangeInfoKHR* const* ppBuildRangeInfos);
+
     VkResult OverrideAllocateMemory(VkDevice                     device,
                                     const VkMemoryAllocateInfo*  pAllocateInfo,
                                     const VkAllocationCallbacks* pAllocator,
@@ -1294,6 +1300,9 @@ class VulkanCaptureManager : public CaptureManager
                                                const VkDebugMarkerMarkerInfoEXT* pMarkerInfo);
 
     void PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+
+    void PostProcess_vkCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
+                                                   const VkDebugUtilsLabelEXT* pLabelInfo);
 
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);

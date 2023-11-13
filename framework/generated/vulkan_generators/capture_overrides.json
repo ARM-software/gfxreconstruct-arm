@@ -22,6 +22,7 @@
     "vkQueueInsertDebugUtilsLabelEXT": "VulkanCaptureManager::Get()->OverrideQueueInsertDebugUtilsLabelEXT", 
     "vkSetDebugUtilsObjectNameEXT": "VulkanCaptureManager::Get()->OverrideSetDebugUtilsObjectNameEXT",    
     "vkSetDebugUtilsObjectTagEXT": "VulkanCaptureManager::Get()->OverrideSetDebugUtilsObjectTagEXT",     
-    "vkSubmitDebugUtilsMessageEXT": "VulkanCaptureManager::Get()->OverrideSubmitDebugUtilsMessageEXT"  
-    }
+    "vkSubmitDebugUtilsMessageEXT": "VulkanCaptureManager::Get()->OverrideSubmitDebugUtilsMessageEXT",
+    "vkCmdBuildAccelerationStructuresKHR": "VulkanCaptureManager::Get()->OverrideCmdBuildAccelerationStructuresKHR"
+  }
 }

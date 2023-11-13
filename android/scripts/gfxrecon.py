@@ -59,7 +59,8 @@ class DeviceSelectionException(Exception):
     pass
 
 def QueryAvailableDevices():
-    devices = subprocess.getoutput(adb_devices).splitlines()[1:]
+    result = subprocess.run(shlex.split(adb_devices, posix='win' not in sys.platform), capture_output=True, check=True)
+    devices = result.stdout.decode().strip().splitlines()[1:]
     return [device.split('\t')[0] for device in devices]
 
 def CheckDeviceSelection():
@@ -208,11 +209,9 @@ def MakeExtrasString(args):
 
     if args.quit_after_measurement_range:
         arg_list.append('--quit-after-measurement-range')
-        arg_list.append('{}'.format(args.quit_after_measurement_range))
 
     if args.flush_measurement_range:
         arg_list.append('--flush-measurement-range')
-        arg_list.append('{}'.format(args.flush_measurement_range))
 
     if args.swapchain:
         arg_list.append('--swapchain')

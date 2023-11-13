@@ -172,6 +172,9 @@ class VulkanConsumerBase
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData)
     {}
+
+    virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId tlas, const std::vector<format::HandleId>& blases)
+    {}
 };
 
 GFXRECON_END_NAMESPACE(decode)

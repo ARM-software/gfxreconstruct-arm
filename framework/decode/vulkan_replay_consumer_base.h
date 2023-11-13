@@ -47,6 +47,7 @@
 
 #include "application/application.h"
 
+#include "graphics/dx12_gpu_va_map.h"
 #include "vulkan/vulkan.h"
 
 #include <algorithm>
@@ -780,9 +781,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void OverrideCmdEndDebugUtilsLabelEXT(PFN_vkCmdEndDebugUtilsLabelEXT func,
                                           const CommandBufferInfo*       command_buffer_info);
 
-    void OverrideCmdInsertDebugUtilsLabelEXT(PFN_vkCmdInsertDebugUtilsLabelEXT func,
-                                             const CommandBufferInfo*          command_buffer_info,
-                                             const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label);
+    void
+    OverrideCmdInsertDebugUtilsLabelEXT(PFN_vkCmdInsertDebugUtilsLabelEXT                         func,
+                                        CommandBufferInfo*                                        command_buffer_info,
+                                        const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label_info_decoder);
 
     void OverrideDestroyDebugUtilsMessengerEXT(PFN_vkDestroyDebugUtilsMessengerEXT                        func,
                                                const InstanceInfo*                                        instance_info,
@@ -1070,9 +1072,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                         CommandBufferInfo*        command_buffer_info,
                                         VkCommandBufferResetFlags flags);
 
-    void     OverrideCmdDebugMarkerInsertEXT(PFN_vkCmdDebugMarkerInsertEXT                             func,
-                                             CommandBufferInfo*                                        command_buffer_info,
-                                             StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder);
+    void OverrideCmdDebugMarkerInsertEXT(PFN_vkCmdDebugMarkerInsertEXT                             func,
+                                         CommandBufferInfo*                                        command_buffer_info,
+                                         StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder);
+
     VkResult OverrideWaitSemaphores(PFN_vkWaitSemaphores                                     func,
                                     VkResult                                                 original_result,
                                     const DeviceInfo*                                        device_info,
@@ -1236,6 +1239,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool            IsExtensionBeingFaked(const char* extension);
 
     void LogFrameDebugInfo();
+
+    // Retrieve image attachments from the renderpass framebuffer
+    // Returns attachments specified in CreateFramebuffer call, or in BeginRenderPass if imageless flag
+    // is used.
+    std::vector<format::HandleId>
+    GetImageAttachments(StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder);
 
   private:
     struct HardwareBufferInfo

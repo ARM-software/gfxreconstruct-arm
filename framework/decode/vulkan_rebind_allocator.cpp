@@ -209,6 +209,8 @@ VkResult VulkanRebindAllocator::Initialize(uint32_t                             
             create_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
         }
 
+        create_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
         result = vmaCreateAllocator(&create_info, &allocator_);
     }
 

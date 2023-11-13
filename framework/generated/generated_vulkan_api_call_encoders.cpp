@@ -22332,10 +22332,7 @@ VKAPI_ATTR void VKAPI_CALL CmdBuildAccelerationStructuresKHR(
         VulkanCaptureManager::Get()->EndCommandApiCallCapture(commandBuffer, TrackCmdBuildAccelerationStructuresKHRHandles, infoCount, pInfos);
     }
 
-    auto handle_unwrap_memory = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
-    const VkAccelerationStructureBuildGeometryInfoKHR* pInfos_unwrapped = UnwrapStructArrayHandles(pInfos, infoCount, handle_unwrap_memory);
-
-    GetDeviceTable(commandBuffer)->CmdBuildAccelerationStructuresKHR(commandBuffer, infoCount, pInfos_unwrapped, ppBuildRangeInfos);
+    VulkanCaptureManager::Get()->OverrideCmdBuildAccelerationStructuresKHR(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBuildAccelerationStructuresKHR>::Dispatch(VulkanCaptureManager::Get(), commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
 }
