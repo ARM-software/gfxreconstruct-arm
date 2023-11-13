@@ -1320,7 +1320,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<format::HandleId, std::pair<const DeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
     std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
     std::vector<const char*>                                                            faked_extensions_;
-    std::unordered_map<VkDeviceAddress, VkBuffer>                                       device_address_map_;
     std::unique_ptr<VulkanAccelerationStructureBuilder>                                 acceleration_structure_builder_;
 };
 
