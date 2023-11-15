@@ -25,6 +25,7 @@
 #include "encode/vulkan_state_info.h"
 #include "encode/custom_vulkan_struct_handle_wrappers.h"
 #include "encode/vulkan_handle_wrapper_util.h"
+#include "generated/generated_vulkan_struct_trackers.h"
 #include "graphics/vulkan_util.h"
 
 #include <algorithm>
@@ -214,7 +215,7 @@ void VulkanStateTracker::TrackPhysicalDeviceSurfaceCapabilities2(VkPhysicalDevic
 
     if (surface_info.pNext != nullptr)
     {
-        entry.surface_info.pNext = TrackPNextStruct(surface_info.pNext, &entry.surface_info_pnext_memory);
+        entry.surface_info.pNext = TrackStruct(surface_info.pNext, &entry.surface_info_pnext_memory);
     }
 
     entry.surface_capabilities_pnext_memory.Reset();
@@ -225,7 +226,7 @@ void VulkanStateTracker::TrackPhysicalDeviceSurfaceCapabilities2(VkPhysicalDevic
     if (surface_capabilities->pNext != nullptr)
     {
         entry.surface_capabilities.pNext =
-            const_cast<void*>(TrackPNextStruct(surface_capabilities->pNext, &entry.surface_capabilities_pnext_memory));
+            const_cast<void*>(TrackStruct(surface_capabilities->pNext, &entry.surface_capabilities_pnext_memory));
     }
 }
 
@@ -277,7 +278,7 @@ void VulkanStateTracker::TrackPhysicalDeviceSurfaceFormats2(VkPhysicalDevice    
 
         if (surface_info.pNext != nullptr)
         {
-            entry.surface_info.pNext = TrackPNextStruct(surface_info.pNext, &entry.surface_info_pnext_memory);
+            entry.surface_info.pNext = TrackStruct(surface_info.pNext, &entry.surface_info_pnext_memory);
         }
 
         entry.surface_formats.resize(surface_format_count);
@@ -291,8 +292,8 @@ void VulkanStateTracker::TrackPhysicalDeviceSurfaceFormats2(VkPhysicalDevice    
 
             if (surface_formats[i].pNext != nullptr)
             {
-                entry.surface_formats[i].pNext = const_cast<void*>(
-                    TrackPNextStruct(surface_formats[i].pNext, &entry.surface_formats_pnext_memory[i]));
+                entry.surface_formats[i].pNext =
+                    const_cast<void*>(TrackStruct(surface_formats[i].pNext, &entry.surface_formats_pnext_memory[i]));
             }
         }
     }
@@ -314,7 +315,7 @@ void VulkanStateTracker::TrackPhysicalDeviceSurfacePresentModes(VkPhysicalDevice
     entry.surface_info_pnext_memory.Reset();
     if (surface_info_pnext != nullptr)
     {
-        entry.surface_info_pnext = TrackPNextStruct(surface_info_pnext, &entry.surface_info_pnext_memory);
+        entry.surface_info_pnext = TrackStruct(surface_info_pnext, &entry.surface_info_pnext_memory);
     }
 }
 
@@ -333,7 +334,7 @@ void VulkanStateTracker::TrackDeviceGroupSurfacePresentModes(VkDevice           
     entry.surface_info_pnext_memory.Reset();
     if (surface_info_pnext != nullptr)
     {
-        entry.surface_info_pnext = TrackPNextStruct(surface_info_pnext, &entry.surface_info_pnext_memory);
+        entry.surface_info_pnext = TrackStruct(surface_info_pnext, &entry.surface_info_pnext_memory);
     }
 }
 
@@ -360,7 +361,7 @@ void VulkanStateTracker::TrackBufferMemoryBinding(
 
     if (bind_info_pnext != nullptr)
     {
-        wrapper->bind_pnext = TrackPNextStruct(bind_info_pnext, &wrapper->bind_pnext_memory);
+        wrapper->bind_pnext = TrackStruct(bind_info_pnext, &wrapper->bind_pnext_memory);
     }
 }
 
@@ -379,7 +380,7 @@ void VulkanStateTracker::TrackImageMemoryBinding(
 
     if (bind_info_pnext != nullptr)
     {
-        wrapper->bind_pnext = TrackPNextStruct(bind_info_pnext, &wrapper->bind_pnext_memory);
+        wrapper->bind_pnext = TrackStruct(bind_info_pnext, &wrapper->bind_pnext_memory);
     }
 }
 
@@ -613,7 +614,7 @@ void VulkanStateTracker::TrackUpdateDescriptorSets(uint32_t                    w
                 binding.write_pnext_memory.Reset();
                 if (write->pNext != nullptr)
                 {
-                    binding.write_pnext = TrackPNextStruct(write->pNext, &binding.write_pnext_memory);
+                    binding.write_pnext = TrackStruct(write->pNext, &binding.write_pnext_memory);
                     auto* pnext         = reinterpret_cast<const VkBaseInStructure*>(binding.write_pnext);
                     switch (pnext->sType)
                     {
