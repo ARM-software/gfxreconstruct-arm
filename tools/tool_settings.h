@@ -106,21 +106,22 @@ const char kFlushMeasurementRangeOption[]        = "--flush-measurement-range";
 const char kSwapchainOption[]                    = "--swapchain";
 const char kEnableUseCapturedSwapchainIndices[] =
     "--use-captured-swapchain-indices"; // The same: util::SwapchainOption::kCaptured
-const char kVirtualSwapchainSkipBlit[]           = "--vssb";
-const char kColorspaceFallback[]                 = "--colorspace-fallback";
-const char kFormatArgument[]                     = "--format";
-const char kIncludeBinariesOption[]              = "--include-binaries";
-const char kExpandFlagsOption[]                  = "--expand-flags";
-const char kFilePerFrameOption[]                 = "--file-per-frame";
-const char kPreloadMeasurementRangeOption[]      = "--preload-measurement-range";
-const char kWaitBeforePresent[]                  = "--wait-before-present";
-const char kSkipGetFenceStatus[]                 = "--skip-get-fence-status";
-const char kSkipGetFenceRanges[]                 = "--skip-get-fence-ranges";
-const char kFrameRange[]                         = "--frame-range";
-const char kDisableSubpassFusionOption[]         = "--dsf";
-const char kSavePipelineCacheArgument[]          = "--save-pipeline-cache";
-const char kLoadPipelineCacheArgument[]          = "--load-pipeline-cache";
-const char kCreateNewPipelineCacheOption[]       = "--add-new-pipeline-caches";
+const char kVirtualSwapchainSkipBlit[]        = "--vssb";
+const char kOffscreenSwapchainFrameBoundary[] = "--offscreen-swapchain-frame-boundary";
+const char kColorspaceFallback[]              = "--colorspace-fallback";
+const char kFormatArgument[]                  = "--format";
+const char kIncludeBinariesOption[]           = "--include-binaries";
+const char kExpandFlagsOption[]               = "--expand-flags";
+const char kFilePerFrameOption[]              = "--file-per-frame";
+const char kPreloadMeasurementRangeOption[]   = "--preload-measurement-range";
+const char kWaitBeforePresent[]               = "--wait-before-present";
+const char kSkipGetFenceStatus[]              = "--skip-get-fence-status";
+const char kSkipGetFenceRanges[]              = "--skip-get-fence-ranges";
+const char kFrameRange[]                      = "--frame-range";
+const char kDisableSubpassFusionOption[]      = "--dsf";
+const char kSavePipelineCacheArgument[]       = "--save-pipeline-cache";
+const char kLoadPipelineCacheArgument[]       = "--load-pipeline-cache";
+const char kCreateNewPipelineCacheOption[]    = "--add-new-pipeline-caches";
 #if defined(WIN32)
 const char kApiFamilyOption[]             = "--api";
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
@@ -881,6 +882,11 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     if (arg_parser.IsOptionSet(kVirtualSwapchainSkipBlit))
     {
         replay_options.virtual_swapchain_skip_blit = true;
+    }
+
+    if (arg_parser.IsOptionSet(kOffscreenSwapchainFrameBoundary))
+    {
+        replay_options.offscreen_swapchain_frame_boundary = true;
     }
 
     if (arg_parser.IsOptionSet(kColorspaceFallback))
