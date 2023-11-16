@@ -50,6 +50,7 @@ void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo* buffer_info, 
     {
         (*existing_buffer)->original_address_ = original_address;
         (*existing_buffer)->new_address_      = new_address;
+        (*existing_buffer)->buffer_info_      = buffer_info;
     } else {
         buffers_.push_back(std::make_unique<BufferEntry>(original_address, new_address, buffer_info));
     }
@@ -112,8 +113,8 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
         {
             address = (*as)->new_address_;
         }
-    } 
-    else 
+    }
+    else
     {
         throw "Acceleration structure address not found";
     }
@@ -129,8 +130,8 @@ void VulkanAccelerationStructureBuilder::UpdateBufferDeviceAddress(VkDeviceAddre
     if (buffer != buffers_.end())
     {
         address = (*buffer)->new_address_;
-    } 
-    else 
+    }
+    else
     {
         VkDeviceSize offset = 0;
         auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
@@ -150,8 +151,8 @@ VulkanAccelerationStructureBuilder::BufferEntry* VulkanAccelerationStructureBuil
     if (buffer != buffers_.end())
     {
         return buffer->get();
-    } 
-    else 
+    }
+    else
     {
         VkDeviceSize offset = 0;
         auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
