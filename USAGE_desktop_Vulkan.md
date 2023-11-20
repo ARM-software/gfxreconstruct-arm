@@ -553,6 +553,9 @@ Optional arguments:
                         start and end of the measurement range.
   --vssb
                         Skip blit to real swapchain to gain performance during replay.
+  --use-ext-frame-boundary
+                        Convert all offscreen frame boundaries to `VK_EXT_frame_boundary`
+                        frame boundaries.
   --offscreen-swapchain-frame-boundary
                         Should only be used with offscreen swapchain.
                         Activate the extension VK_EXT_frame_boundary (always supported if
