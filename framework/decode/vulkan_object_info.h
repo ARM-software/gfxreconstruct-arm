@@ -312,6 +312,7 @@ struct BufferInfo : public VulkanObjectInfo<VkBuffer>
     VkMemoryPropertyFlags memory_property_flags{ 0 };
     VkBufferUsageFlags    usage{ 0 };
     uint32_t              queue_family_index{ 0 };
+    uint32_t              size{ 0 };
 };
 
 struct ImageInfo : public VulkanObjectInfo<VkImage>

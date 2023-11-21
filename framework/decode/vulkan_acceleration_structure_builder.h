@@ -48,11 +48,12 @@ class VulkanAccelerationStructureBuilder
         PFN_vkGetBufferDeviceAddress                   get_buffer_device_address{ nullptr };
         PFN_vkCmdBuildAccelerationStructuresKHR        cmd_build_acceleration_structures{ nullptr };
         PFN_vkGetAccelerationStructureDeviceAddressKHR get_acceleration_structure_device_address{ nullptr };
+        PFN_vkGetBufferMemoryRequirements              get_buffer_memory_requirements{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions functions, VkDevice device, VulkanResourceAllocator* allocator);
 
-    void UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder *pData);
+    void UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData);
 
     void CmdBuildAccelerationStructures(VkCommandBuffer                              commandBuffer,
                                         uint32_t                                     info_count,
@@ -104,14 +105,14 @@ class VulkanAccelerationStructureBuilder
 
     VkBuffer CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage);
 
-    VkDeviceOrHostAddressKHR GetBufferAddress(VkDeviceOrHostAddressKHR captured_address);
+    VkDeviceOrHostAddressKHR    GetBufferAddress(VkDeviceOrHostAddressKHR captured_address);
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
-    void UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
-    void UpdateBufferDeviceAddress(VkDeviceAddress& address);
-    void UpdateDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& build_geometry);
-    BufferEntry* GetBufferByDeviceAddress(VkDeviceAddress runtime_address);
-    VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
-    VkDeviceAddress GetDeviceAddress(VkAccelerationStructureKHR acceleration_structure);
+    void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
+    void                        UpdateBufferDeviceAddress(VkDeviceAddress& address);
+    void                        UpdateDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& build_geometry);
+    BufferEntry*                GetBufferByDeviceAddress(VkDeviceAddress runtime_address);
+    VkDeviceAddress             GetBufferDeviceAddress(VkBuffer buffer);
+    VkDeviceAddress             GetDeviceAddress(VkAccelerationStructureKHR acceleration_structure);
 
     VkAccelerationStructureKHR CreateAccelerationStructure(VkAccelerationStructureBuildGeometryInfoKHR& geometry_info,
                                                            VkAccelerationStructureBuildRangeInfoKHR*    range_info,
@@ -121,8 +122,7 @@ class VulkanAccelerationStructureBuilder
     GetAccelerationStructureSizeInfo(VkAccelerationStructureBuildGeometryInfoKHR* geometry_info,
                                      VkAccelerationStructureBuildRangeInfoKHR*    range_info);
 
-
-  void UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR &instances);
+    void UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR& instances);
 };
 
 GFXRECON_END_NAMESPACE(decode)

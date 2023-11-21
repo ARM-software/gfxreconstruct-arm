@@ -41,7 +41,9 @@ void VulkanAccelerationStructureBuilder::RegisterAccelerationStructure(VkAcceler
         device_address, 0, handle, VkAccelerationStructureBuildSizesInfoKHR()));
 }
 
-void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo* buffer_info, VkDeviceAddress original_address, VkDeviceAddress new_address)
+void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo*     buffer_info,
+                                                       VkDeviceAddress original_address,
+                                                       VkDeviceAddress new_address)
 {
     auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
         return entry->buffer_info_->handle == buffer_info->handle;
@@ -51,7 +53,9 @@ void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo* buffer_info, 
         (*existing_buffer)->original_address_ = original_address;
         (*existing_buffer)->new_address_      = new_address;
         (*existing_buffer)->buffer_info_      = buffer_info;
-    } else {
+    }
+    else
+    {
         buffers_.push_back(std::make_unique<BufferEntry>(original_address, new_address, buffer_info));
     }
 }
@@ -144,7 +148,8 @@ void VulkanAccelerationStructureBuilder::UpdateBufferDeviceAddress(VkDeviceAddre
     }
 }
 
-VulkanAccelerationStructureBuilder::BufferEntry* VulkanAccelerationStructureBuilder::GetBufferByDeviceAddress(VkDeviceAddress runtime_address)
+VulkanAccelerationStructureBuilder::BufferEntry*
+VulkanAccelerationStructureBuilder::GetBufferByDeviceAddress(VkDeviceAddress runtime_address)
 {
     auto buffer = std::find_if(
         buffers_.begin(), buffers_.end(), [&](const auto& entry) { return entry->new_address_ == runtime_address; });
@@ -164,13 +169,14 @@ VulkanAccelerationStructureBuilder::BufferEntry* VulkanAccelerationStructureBuil
 }
 
 // Map accel struct HandleId to AccelerationStructureKHR handle
-void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder *descriptor)
+void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
+    gfxrecon::decode::DescriptorUpdateTemplateDecoder* descriptor)
 {
     const size_t accel_struct_count = descriptor->GetAccelerationStructureKHRCount();
-    for(size_t i = 0; i < accel_struct_count; ++i)
+    for (size_t i = 0; i < accel_struct_count; ++i)
     {
-        format::HandleId accel_struct_id = descriptor->GetAccelerationStructureKHRHandleIdsPointer()[i];
-        VkAccelerationStructureKHR accel_struct = descriptor->GetAccelerationStructureKHRPointer()[i];
+        format::HandleId           accel_struct_id = descriptor->GetAccelerationStructureKHRHandleIdsPointer()[i];
+        VkAccelerationStructureKHR accel_struct    = descriptor->GetAccelerationStructureKHRPointer()[i];
 
         auto target_as = std::find_if(std::begin(acceleration_structures_),
                                       std::end(acceleration_structures_),
@@ -183,9 +189,10 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(gfxr
     }
 }
 
-void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR &instances)
+void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
+    VkAccelerationStructureGeometryInstancesDataKHR& instances)
 {
-    if(instances.arrayOfPointers)
+    if (instances.arrayOfPointers)
     {
         throw "Unsupported";
     }
@@ -193,9 +200,19 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(VkAccelerationStru
     UpdateBufferDeviceAddress(instances.data.deviceAddress);
     // find buffer by device address
     BufferInfo* instance_buffer = GetBufferByDeviceAddress(instances.data.deviceAddress)->buffer_info_;
+
+    // Get the amount of instances in the instance buffer
+    uint32_t instances_count = instance_buffer->size / sizeof(VkAccelerationStructureInstanceKHR);
+
     VkAccelerationStructureInstanceKHR* data;
-    allocator_->MapResourceMemoryDirect(sizeof(VkAccelerationStructureInstanceKHR), 0, (void**)&data, instance_buffer->allocator_data);
-    UpdateAccelerationStructDeviceAddress(data->accelerationStructureReference);
+    allocator_->MapResourceMemoryDirect(sizeof(VkAccelerationStructureInstanceKHR) * instances_count,
+                                        0,
+                                        (void**)&data,
+                                        instance_buffer->allocator_data);
+    for (uint32_t instance_index = 0; instance_index < instances_count; ++instance_index)
+    {
+        UpdateAccelerationStructDeviceAddress(data[instance_index].accelerationStructureReference);
+    }
     allocator_->UnmapResourceMemoryDirect(instance_buffer->allocator_data);
 }
 
@@ -243,7 +260,8 @@ void VulkanAccelerationStructureBuilder::SetAccelerationStructureEntry(VkAcceler
     }
 }
 
-VulkanAccelerationStructureBuilder::AccelerationStructureEntry* VulkanAccelerationStructureBuilder::GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct)
+VulkanAccelerationStructureBuilder::AccelerationStructureEntry*
+VulkanAccelerationStructureBuilder::GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct)
 {
     auto entry = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](auto& entry) {
         return entry->handle_ == acceleration_struct;
@@ -329,9 +347,10 @@ VkAccelerationStructureBuildSizesInfoKHR VulkanAccelerationStructureBuilder::Get
     std::vector<uint32_t> primitive_counts(geometry_info->geometryCount);
     for (uint32_t i = 0; i < geometry_info->geometryCount; ++i)
     {
-        primitive_counts.push_back(range_info->primitiveCount);
+        primitive_counts[i] = range_info->primitiveCount;
     }
-    VkAccelerationStructureBuildSizesInfoKHR size_info;
+    VkAccelerationStructureBuildSizesInfoKHR size_info{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
+                                                        nullptr };
     functions_.get_acceleration_structure_build_sizes(
         device_, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, geometry_info, primitive_counts.data(), &size_info);
     return size_info;

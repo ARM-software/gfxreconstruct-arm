@@ -2722,11 +2722,12 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
 
             const encode::DeviceTable*                    device_table = GetDeviceTable(*replay_device);
             VulkanAccelerationStructureBuilder::Functions functions    = {
-                .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
-                .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
-                .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
-                .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
-                .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
+                   .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
+                   .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
+                   .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
+                   .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
+                   .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
+                   .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements
             };
             acceleration_structure_builder_ =
                 std::make_unique<VulkanAccelerationStructureBuilder>(functions, *replay_device, allocator);
@@ -4041,9 +4042,9 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
 
             VkMemoryAllocateInfo                     modified_allocate_info = (*replay_allocate_info);
             VkMemoryOpaqueCaptureAddressAllocateInfo address_info           = {
-                VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
-                modified_allocate_info.pNext,
-                opaque_address
+                          VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
+                          modified_allocate_info.pNext,
+                          opaque_address
             };
             modified_allocate_info.pNext = &address_info;
 
@@ -4525,6 +4526,7 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
 
         buffer_info->allocator_data = allocator_data;
         buffer_info->usage          = replay_create_info->usage;
+        buffer_info->size           = replay_create_info->size;
 
         if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
             (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))
@@ -7154,8 +7156,8 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
 
     auto new_device_address = func(device, address_info);
 
-    format::HandleId buffer = pInfo->GetMetaStructPointer()->buffer;
-    auto buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
+    format::HandleId buffer      = pInfo->GetMetaStructPointer()->buffer;
+    auto             buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
     acceleration_structure_builder_->SetBufferInfo(buffer_data, original_result, new_device_address);
 
     return new_device_address;
@@ -7183,9 +7185,9 @@ void VulkanReplayConsumerBase::OverrideGetAccelerationStructureDeviceAddressKHR(
             "rebind' may not support the replay of captured device addresses, so replay may fail.");
     }
 
-    VkDevice                                           device       = device_info->handle;
-    const VkAccelerationStructureDeviceAddressInfoKHR* address_info = pInfo->GetPointer();
-    auto new_device_address = func(device, address_info);
+    VkDevice                                           device             = device_info->handle;
+    const VkAccelerationStructureDeviceAddressInfoKHR* address_info       = pInfo->GetPointer();
+    auto                                               new_device_address = func(device, address_info);
     acceleration_structure_builder_->SetAccelerationStructureEntry(
         address_info->accelerationStructure, original_result, new_device_address);
 }
@@ -8019,7 +8021,7 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
     {
         in_descriptorUpdateTemplate = update_template_info->handle;
     }
-    
+
     acceleration_structure_builder_->UpdateDescriptorSetWithTemplateKHR(pData);
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplateKHR(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
