@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "capture-x64-debug",
+            "name": "gfxrecon-capture",
             "type": "cppdbg",
             "request": "launch",
-            "preLaunchTask": "build-x64-debug",
+            "preLaunchTask": "build-task",
             "program": "< ---------- PATH TO VULKAN PROGRAM ---------- >",
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -14,7 +14,7 @@
             "environment": [
                 {
                     "name": "VK_LAYER_PATH",
-                    "value": "${workspaceFolder}/dbuild/linux/x64/cmake_output/layer/:$VK_LAYER_PATH"
+                    "value": "${workspaceFolder}/build/layer/:$VK_LAYER_PATH"
                 },
                 {
                     "name": "VK_INSTANCE_LAYERS",
@@ -26,7 +26,7 @@
                 },
                 {
                     "name": "GFXRECON_CAPTURE_FILE",
-                    "value": "${workspaceFolder}/capture.gfxr"
+                    "value": "${workspaceFolder}/captures/capture.gfxr"
                 }
             ],
             "setupCommands": [
@@ -46,13 +46,14 @@
             ]
         },
         {
-            "name": "replay-x64-debug",
+            "name": "gfxrecon-replay",
             "type": "cppdbg",
             "request": "launch",
-            "preLaunchTask": "build-x64-debug",
-            "program": "${workspaceFolder}/dbuild/linux/x64/cmake_output/tools/replay/gfxrecon-replay",
+            "preLaunchTask": "build-task",
+            "program": "${workspaceFolder}/build/tools/replay/gfxrecon-replay",
             "args": [
-                "< ---------- PATH TO GFXRECONSTRUCT TRACE ---------- >"
+                "< ---------- PATH TO GFXRECONSTRUCT TRACE ---------- >",
+                "< ---------- GFXRECON-REPLAY ARGUMENTS ---------- >"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
