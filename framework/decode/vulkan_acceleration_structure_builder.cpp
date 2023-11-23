@@ -287,7 +287,8 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
 {
     for (uint32_t i = 0; i < info_count; ++i)
     {
-        if (geometry_infos[i].mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR)
+        const auto& mode = geometry_infos[i].mode;
+        if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR)
         {
             // Create new acceleration structure and scratch of required size
             VkAccelerationStructureBuildSizesInfoKHR size_info =
@@ -309,6 +310,10 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             original_as_entry->replacement_acceleration_struct_ =
                 std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
             original_as_entry->new_address_ = GetDeviceAddress(original_as);
+        } 
+        else if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
+        {
+
         }
     }
     functions_.cmd_build_acceleration_structures(commandBuffer, info_count, geometry_infos, range_infos);
