@@ -1,15 +1,19 @@
 {
     "tasks": [
         {
-            "label": "build-x64-debug",
+            "label": "build-task",
             "type": "shell",
             "command": "/usr/bin/python",
             "args": [
                 "${workspaceFolder}/scripts/build.py",
+                "--build-dir",
+                "${workspaceFolder}/build",
                 "-a",
                 "x64",
                 "-c",
-                "debug"
+                "debug",
+                "-j",
+                "16"
             ],
             "group": "build",
             "problemMatcher": [
