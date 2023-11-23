@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2020 LunarG, Inc.
-** Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,7 @@
 #if defined(WIN32)
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 606;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;
 }
 extern "C"
 {
@@ -401,6 +401,8 @@ int main(int argc, const char** argv)
             else
             {
                 GFXRECON_LOG_ERROR("Could not detect graphics API. Aborting optimization.")
+                gfxrecon::util::Log::Release();
+                return -1;
             }
         }
         // Manual mode. Follow user instructions.

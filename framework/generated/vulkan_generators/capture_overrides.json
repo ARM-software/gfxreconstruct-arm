@@ -22,6 +22,7 @@
         "vkQueueInsertDebugUtilsLabelEXT": "manager->OverrideQueueInsertDebugUtilsLabelEXT",
         "vkSetDebugUtilsObjectNameEXT": "manager->OverrideSetDebugUtilsObjectNameEXT",
         "vkSetDebugUtilsObjectTagEXT": "manager->OverrideSetDebugUtilsObjectTagEXT",
-        "vkSubmitDebugUtilsMessageEXT": "manager->OverrideSubmitDebugUtilsMessageEXT"
+        "vkSubmitDebugUtilsMessageEXT": "manager->OverrideSubmitDebugUtilsMessageEXT",
+        "vkCmdBuildAccelerationStructuresKHR": "manager->OverrideCmdBuildAccelerationStructuresKHR"
     }
 }

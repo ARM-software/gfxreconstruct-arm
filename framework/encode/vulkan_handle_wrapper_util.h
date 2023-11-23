@@ -81,7 +81,7 @@ format::HandleId GetWrappedId(const typename Wrapper::HandleType& handle)
 {
     if (handle == VK_NULL_HANDLE)
     {
-        return 0;
+        return format::kNullHandleId;
     }
     auto temp_id = GetTempWrapperId<Wrapper>(handle);
     if (temp_id != 0)
@@ -97,7 +97,7 @@ format::HandleId GetWrappedId(const typename Wrapper::HandleType& handle)
                              "'s wrapper. It might have been destroyed",
                              type_name.c_str(),
                              handle);
-        return 0;
+        return format::kNullHandleId;
     }
     return wrapper->handle_id;
 }
