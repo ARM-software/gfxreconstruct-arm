@@ -998,6 +998,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos);
 
+    void
+    OverrideCmdCopyAccelerationStructureKHR(PFN_vkCmdCopyAccelerationStructureKHR func,
+                                            CommandBufferInfo*                    command_buffer_info,
+                                            StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo);
+
     void OverrideCmdWriteAccelerationStructuresPropertiesKHR(
         PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
         CommandBufferInfo*                                command_buffer_info,

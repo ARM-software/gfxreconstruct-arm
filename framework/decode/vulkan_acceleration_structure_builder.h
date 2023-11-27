@@ -43,22 +43,32 @@ class VulkanAccelerationStructureBuilder
   public:
     struct Functions
     {
-        PFN_vkGetAccelerationStructureBuildSizesKHR    get_acceleration_structure_build_sizes{ nullptr };
-        PFN_vkCreateAccelerationStructureKHR           create_acceleration_structure{ nullptr };
-        PFN_vkGetBufferDeviceAddress                   get_buffer_device_address{ nullptr };
-        PFN_vkCmdBuildAccelerationStructuresKHR        cmd_build_acceleration_structures{ nullptr };
-        PFN_vkGetAccelerationStructureDeviceAddressKHR get_acceleration_structure_device_address{ nullptr };
-        PFN_vkGetBufferMemoryRequirements              get_buffer_memory_requirements{ nullptr };
+        PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };
+        PFN_vkCreateAccelerationStructureKHR              create_acceleration_structure{ nullptr };
+        PFN_vkGetBufferDeviceAddress                      get_buffer_device_address{ nullptr };
+        PFN_vkCmdBuildAccelerationStructuresKHR           cmd_build_acceleration_structures{ nullptr };
+        PFN_vkGetAccelerationStructureDeviceAddressKHR    get_acceleration_structure_device_address{ nullptr };
+        PFN_vkGetBufferMemoryRequirements                 get_buffer_memory_requirements{ nullptr };
+        PFN_vkCmdCopyAccelerationStructureKHR             cmd_copy_acceleration_structure{ nullptr };
+        PFN_vkCmdWriteAccelerationStructuresPropertiesKHR cmd_write_acceleration_structures_properties{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions functions, VkDevice device, VulkanResourceAllocator* allocator);
 
     void UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData);
 
-    void CmdBuildAccelerationStructures(VkCommandBuffer                              commandBuffer,
+    void CmdBuildAccelerationStructures(VkCommandBuffer                              command_buffer,
                                         uint32_t                                     info_count,
                                         VkAccelerationStructureBuildGeometryInfoKHR* geometry_infos,
                                         VkAccelerationStructureBuildRangeInfoKHR**   range_infos);
+
+    void CmdCopyAccelerationStructure(VkCommandBuffer command_buffer, VkCopyAccelerationStructureInfoKHR* copy_info);
+    void CmdWriteAccelerationStructuresProperties(VkCommandBuffer             command_buffer,
+                                                  uint32_t                    count,
+                                                  VkAccelerationStructureKHR* acceleration_structures,
+                                                  VkQueryType                 query_type,
+                                                  VkQueryPool                 pool,
+                                                  uint32_t                    first_query);
 
     void SetBufferInfo(BufferInfo* buffer_info, VkDeviceAddress original_address, VkDeviceAddress new_address);
     void SetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct,

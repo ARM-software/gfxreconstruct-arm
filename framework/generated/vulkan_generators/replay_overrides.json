@@ -117,6 +117,8 @@
     "vkSetDebugUtilsObjectNameEXT": "OverrideSetDebugUtilsObjectNameEXT",
     "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
     "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
-    "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR"
+    "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",
+    "vkCmdCopyAccelerationStructureKHR" : "OverrideCmdCopyAccelerationStructureKHR",
+    "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR"
   }
 }

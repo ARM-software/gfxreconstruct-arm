@@ -2722,12 +2722,15 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
 
             const encode::DeviceTable*                    device_table = GetDeviceTable(*replay_device);
             VulkanAccelerationStructureBuilder::Functions functions    = {
-                   .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
-                   .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
-                   .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
-                   .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
-                   .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
-                   .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements
+                .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
+                .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
+                .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
+                .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
+                .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
+                .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements,
+                .cmd_copy_acceleration_structure           = device_table->CmdCopyAccelerationStructureKHR,
+                .cmd_write_acceleration_structures_properties =
+                    device_table->CmdWriteAccelerationStructuresPropertiesKHR
             };
             acceleration_structure_builder_ =
                 std::make_unique<VulkanAccelerationStructureBuilder>(functions, *replay_device, allocator);
@@ -4042,9 +4045,9 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
 
             VkMemoryAllocateInfo                     modified_allocate_info = (*replay_allocate_info);
             VkMemoryOpaqueCaptureAddressAllocateInfo address_info           = {
-                          VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
-                          modified_allocate_info.pNext,
-                          opaque_address
+                VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
+                modified_allocate_info.pNext,
+                opaque_address
             };
             modified_allocate_info.pNext = &address_info;
 
@@ -6930,6 +6933,13 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
         command_buffer_info->handle, infoCount, pInfos->GetPointer(), ppBuildRangeInfos->GetPointer());
 }
 
+void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
+    PFN_vkCmdCopyAccelerationStructureKHR                             func,
+    CommandBufferInfo*                                                command_buffer_info,
+    StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo)
+{
+    acceleration_structure_builder_->CmdCopyAccelerationStructure(command_buffer_info->handle, pInfo->GetPointer());
+}
 void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
     PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
     CommandBufferInfo*                                command_buffer_info,
@@ -6938,7 +6948,15 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     VkQueryType                                       queryType,
     gfxrecon::decode::QueryPoolInfo*                  in_queryPool,
     uint32_t                                          firstQuery)
-{}
+{
+    acceleration_structure_builder_->CmdWriteAccelerationStructuresProperties(
+        command_buffer_info->handle,
+        count,
+        pAccelerationStructures->GetHandlePointer(),
+        queryType,
+        in_queryPool->handle,
+        firstQuery);
+}
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
     PFN_vkCreateRayTracingPipelinesKHR                                     func,

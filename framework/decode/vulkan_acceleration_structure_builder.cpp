@@ -76,8 +76,11 @@ VkBuffer VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkB
     VulkanResourceAllocator::ResourceData buffer_allocator_data;
     allocator_->CreateBuffer(&create_info, nullptr, format::kNullHandleId, &buffer, &buffer_allocator_data);
 
+    VkMemoryRequirements requirements{};
+    functions_.get_buffer_memory_requirements(device_, buffer, &requirements);
+
     VkMemoryAllocateInfo allocate_info{ .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                        .allocationSize  = size,
+                                        .allocationSize  = requirements.size,
                                         .memoryTypeIndex = 1 };
 
     VkDeviceMemory                      memory{};
@@ -311,6 +314,58 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
     functions_.cmd_build_acceleration_structures(commandBuffer, info_count, geometry_infos, range_infos);
 }
 
+void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandBuffer                     commandBuffer,
+                                                                      VkCopyAccelerationStructureInfoKHR* copy_info)
+{
+    // In the typical compaction scenario, we copy the built acceleration structure to a smaller storage,
+    // which is only created but not built
+    VkCopyAccelerationStructureInfoKHR modified_info = *copy_info;
+
+    if (modified_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR)
+    {
+        // First, get the replay device address of the destination structure and store it
+        auto compacted_entry = GetAccelerationStructureEntry(modified_info.dst);
+
+        const VkAccelerationStructureDeviceAddressInfoKHR dst_device_address_info{
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, modified_info.dst
+        };
+
+        compacted_entry->new_address_ =
+            functions_.get_acceleration_structure_device_address(device_, &dst_device_address_info);
+
+        // Replace the handle to be of the real built structure
+        auto original_entry = GetAccelerationStructureEntry(modified_info.src);
+        modified_info.src   = original_entry->replacement_acceleration_struct_->handle_;
+    }
+    functions_.cmd_copy_acceleration_structure(commandBuffer, &modified_info);
+}
+
+void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresProperties(
+    VkCommandBuffer             command_buffer,
+    uint32_t                    count,
+    VkAccelerationStructureKHR* acceleration_structures,
+    VkQueryType                 query_type,
+    VkQueryPool                 pool,
+    uint32_t                    first_query)
+{
+    for (uint32_t index = 0; index < count; ++index)
+    {
+        VkAccelerationStructureKHR capture_handle = acceleration_structures[index];
+        auto                       entry          = GetAccelerationStructureEntry(capture_handle);
+        if (entry->replacement_acceleration_struct_)
+        {
+            acceleration_structures[index] = entry->replacement_acceleration_struct_->handle_;
+        }
+        else
+        {
+            acceleration_structures[index] = entry->handle_;
+        }
+    }
+
+    functions_.cmd_write_acceleration_structures_properties(
+        command_buffer, count, acceleration_structures, query_type, pool, first_query);
+}
+
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetDeviceAddress(VkAccelerationStructureKHR acceleration_structure)
 {
     VkAccelerationStructureDeviceAddressInfoKHR info{
@@ -330,11 +385,10 @@ VkAccelerationStructureKHR VulkanAccelerationStructureBuilder::CreateAcceleratio
         CreateBuffer(size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
 
     VkAccelerationStructureCreateInfoKHR create_info = {
-        .sType       = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-        .createFlags = geometry_info.flags,
-        .buffer      = buffer_as,
-        .size        = size_info.accelerationStructureSize,
-        .type        = geometry_info.type,
+        .sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+        .buffer = buffer_as,
+        .size   = size_info.accelerationStructureSize,
+        .type   = geometry_info.type,
     };
     VkAccelerationStructureKHR acceleration_structure;
     VkResult status = functions_.create_acceleration_structure(device_, &create_info, nullptr, &acceleration_structure);
