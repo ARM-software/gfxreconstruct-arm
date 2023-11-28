@@ -116,6 +116,7 @@
     "vkQueueInsertDebugUtilsLabelEXT": "OverrideQueueInsertDebugUtilsLabelEXT",
     "vkSetDebugUtilsObjectNameEXT": "OverrideSetDebugUtilsObjectNameEXT",
     "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
-    "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT"
+    "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
+    "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID"
   }
 }

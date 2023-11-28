@@ -1094,6 +1094,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        StructPointerDecoder<Decoded_VkAllocationCallbacks>*   allocator_decoder,
                                        HandlePointerDecoder<VkFramebuffer>*                   frame_buffer_decoder);
 
+    void OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryANDROID func,
+                                      const DeviceInfo*          device_info,
+                                      const SemaphoreInfo*       semaphore_info,
+                                      const ImageInfo*           image_info);
+
     const VulkanReplayOptions options_;
 
   private:
@@ -1207,6 +1212,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const;
 
+    void FillFrameBoundaryExtFromCommandBufferInfo(const CommandBufferInfo* command_buffer_info,
+                                                   VkFrameBoundaryEXT*      frame_boundary,
+                                                   std::vector<VkImage>&    frame_boundary_images);
+    void InsertFrameBoundaryExt(void* pnext_chain, const VkFrameBoundaryEXT* frame_boundary);
+
     bool CheckCommandBufferInfoForFrameBoundary(const CommandBufferInfo* command_buffer_info);
     bool CheckPNextChainForFrameBoundary(const DeviceInfo* device_info, const Decoded_VkBaseOutStructure* current);
 
@@ -1303,6 +1313,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<format::HandleId, std::pair<const DeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
     std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
     std::vector<const char*>                                                            faked_extensions_;
+
+    // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
+    std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
+
+    /*
+    Set command pool to NULL at init
+    At each frameBoundaryANDROID:
+        - Create command pool if needed (the first time)
+        - Go through the map and remove executed command buffers
+        - Create command buffer
+        - Submit it
+    */
 };
 
 GFXRECON_END_NAMESPACE(decode)

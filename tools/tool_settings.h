@@ -107,6 +107,7 @@ const char kSwapchainOption[]                    = "--swapchain";
 const char kEnableUseCapturedSwapchainIndices[] =
     "--use-captured-swapchain-indices"; // The same: util::SwapchainOption::kCaptured
 const char kVirtualSwapchainSkipBlit[]        = "--vssb";
+const char kUseExtFrameBoundaryOption[]       = "--use-ext-frame-boundary";
 const char kOffscreenSwapchainFrameBoundary[] = "--offscreen-swapchain-frame-boundary";
 const char kColorspaceFallback[]              = "--colorspace-fallback";
 const char kFormatArgument[]                  = "--format";
@@ -882,6 +883,11 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     if (arg_parser.IsOptionSet(kVirtualSwapchainSkipBlit))
     {
         replay_options.virtual_swapchain_skip_blit = true;
+    }
+
+    if (arg_parser.IsOptionSet(kUseExtFrameBoundaryOption))
+    {
+        replay_options.use_ext_frame_boundary = true;
     }
 
     if (arg_parser.IsOptionSet(kOffscreenSwapchainFrameBoundary))

@@ -32,8 +32,8 @@ const char kOptions[] =
     "screenshot-all,--onhb|--omit-null-hardware-buffers,--qamr|--quit-after-measurement-range,--"
     "fmr|--flush-measurement-range,--use-captured-swapchain-indices,--vssb|--virtual-swapchain-skip-blit,"
     "--colorspace-fallback,--dcp,--discard-cached-psos,--use-cached-psos,--dx12-override-object-names,--"
-    "preload-measurement-range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--offscreen-swapchain-frame-"
-    "boundary";
+    "preload-measurement-range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--"
+    "offscreen-swapchain-frame-boundary";
 const char kArguments[] =
     "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
@@ -210,6 +210,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tIgnored if the \"--swapchain\" option is used.");
     GFXRECON_WRITE_CONSOLE("  --vssb");
     GFXRECON_WRITE_CONSOLE("          \t\tSkip blit to real swapchain to gain performance during replay.");
+    GFXRECON_WRITE_CONSOLE("  --use-ext-frame-boundary");
+    GFXRECON_WRITE_CONSOLE("          \t\tConvert all offscreen frame boundaries to `VK_EXT_frame_boundary`");
+    GFXRECON_WRITE_CONSOLE("          \t\tframe boundaries.");
     GFXRECON_WRITE_CONSOLE("  --offscreen-swapchain-frame-boundary");
     GFXRECON_WRITE_CONSOLE("          \t\tShould only be used with offscreen swapchain.");
     GFXRECON_WRITE_CONSOLE("          \t\tActivate the extension VK_EXT_frame_boundary (always supported if");
