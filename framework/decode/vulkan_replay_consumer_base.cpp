@@ -4694,8 +4694,10 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
         // Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
         // vkBindBufferMemory failures due to memory requirement mismatch during replay. So here we add
         // VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
+        // We also need to add VK_BUFFER_USAGE_TRANSFER_DST_BIT to be able to restore buffer and copy to it
         auto modified_create_info = const_cast<VkBufferCreateInfo*>(replay_create_info);
         modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     }
 
     if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
@@ -4821,18 +4823,20 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     auto                                  replay_image = pImage->GetHandlePointer();
     auto                                  capture_id   = (*pImage->GetPointer());
 
+    auto modified_create_info = *pCreateInfo->GetPointer();
     if (replaying_trimmed_capture_)
     {
         // The GFXR trimmed capture process sets VK_IMAGE_USAGE_TRANSFER_SRC_BIT flag for image VkImageCreateInfo.
         // Since image memory requirements can differ when VK_IMAGE_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
         // vkBindImageMemory failures due to memory requirement mismatch during replay. So here we add
         // VK_IMAGE_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
-        auto modified_create_info = const_cast<VkImageCreateInfo*>(pCreateInfo->GetPointer());
-        modified_create_info->usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        // We also need to add VK_IMAGE_USAGE_TRANSFER_DST_BIT to be able to restore image and copy to it
+        modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     }
 
     VkResult result = allocator->CreateImage(
-        pCreateInfo->GetPointer(), GetAllocationCallbacks(pAllocator), capture_id, replay_image, &allocator_data);
+        &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_image, &allocator_data);
 
     auto replay_create_info = pCreateInfo->GetPointer();
 
