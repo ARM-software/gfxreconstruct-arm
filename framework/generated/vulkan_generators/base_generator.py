@@ -896,6 +896,10 @@ class BaseGenerator(OutputGenerator):
             if not self.is_cmd_black_listed(key)
         ]
 
+    def clean_type_define(self, full_type):
+        """Default to identity function, base classes may override."""
+        return full_type
+
     def check_struct_pnext_handles(self, typename):
         """Determines if the specified struct type can reference pNext extension structs that contain handles."""
         found_handles = False
@@ -1290,7 +1294,7 @@ class BaseGenerator(OutputGenerator):
         return 'void {}()'.format(name)
 
     def make_structure_type_enum(self, typeinfo, typename):
-        """Generate the VkStructreType enumeration value for the specified structure type."""
+        """Generate the VkStructureType enumeration value for the specified structure type."""
         members = typeinfo.elem.findall('.//member')
 
         for member in members:
@@ -1351,7 +1355,7 @@ class BaseGenerator(OutputGenerator):
             return lengths
         else:
             # XML does not provide lengths for all dimensions, instantiate a specialization of ArraySize2D to fetch the sizes
-            type_list = ', '.join([v.full_type for v in values])
+            type_list = ', '.join([self.clean_type_define(v.full_type) for v in values])
             arg_list = ', '.join([v.name for v in values])
             return ['ArraySize2D<{}>({})'.format(type_list, arg_list)]
 

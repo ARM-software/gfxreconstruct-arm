@@ -119,6 +119,7 @@
     "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
     "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",
     "vkCmdCopyAccelerationStructureKHR" : "OverrideCmdCopyAccelerationStructureKHR",
-    "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR"
+    "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
+    "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID"
   }
 }

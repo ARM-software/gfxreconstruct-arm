@@ -863,6 +863,19 @@ optional arguments:
   --vssb, --virtual-swapchain-skip-blit
                         Skip blit to real swapchain to gain performance during
                         replay. (forwarded to replay tool)
+  --use-ext-frame-boundary
+                        Convert all offscreen frame boundaries to
+                        `VK_EXT_frame_boundary` frame boundaries.
+                        (forwarded to replay tool)
+  --offscreen-swapchain-frame-boundary
+                        Should only be used with offscreen swapchain. Activate
+                        the extension VK_EXT_frame_boundary (always supported
+                        if trimming, check for driver support otherwise) and
+                        insert command buffer submission with
+                        VkFrameBoundaryEXT where vkQueuePresentKHR was called
+                        in the original capture. This allows to preserve frames
+                        when capturing a replay that uses. offscreen swapchain.
+                        (forwarded to replay tool)
   --save-pipeline-cache DEVICE_FILE
                         If set, produces pipeline caches at replay time instead
                         of using the one saved at capture time and save those

@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -1118,6 +1119,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        StructPointerDecoder<Decoded_VkAllocationCallbacks>*   allocator_decoder,
                                        HandlePointerDecoder<VkFramebuffer>*                   frame_buffer_decoder);
 
+    void OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryANDROID func,
+                                      const DeviceInfo*          device_info,
+                                      const SemaphoreInfo*       semaphore_info,
+                                      const ImageInfo*           image_info);
+
     const VulkanReplayOptions options_;
 
   private:
@@ -1231,7 +1237,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const;
 
+    void FillFrameBoundaryExtFromCommandBufferInfo(const CommandBufferInfo* command_buffer_info,
+                                                   VkFrameBoundaryEXT*      frame_boundary,
+                                                   std::vector<VkImage>&    frame_boundary_images);
+    void InsertFrameBoundaryExt(void* pnext_chain, const VkFrameBoundaryEXT* frame_boundary);
+
     bool CheckCommandBufferInfoForFrameBoundary(const CommandBufferInfo* command_buffer_info);
+    bool CheckPNextChainForFrameBoundary(const DeviceInfo* device_info, const Decoded_VkBaseOutStructure* current);
 
     void LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData);
     void SavePipelineCache(format::HandleId id, const DeviceInfo* device_info, VkPipelineCache pipelineCache);
@@ -1289,6 +1301,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::shared_ptr<application::Application>                        application_;
     VulkanObjectInfoTable                                            object_info_table_;
     bool                                                             loading_trim_state_;
+    bool                                                             replaying_trimmed_capture_;
     SwapchainImageTracker                                            swapchain_image_tracker_;
     HardwareBufferMap                                                hardware_buffers_;
     HardwareBufferMemoryMap                                          hardware_buffer_memory_info_;
@@ -1326,6 +1339,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
     std::vector<const char*>                                                            faked_extensions_;
     std::unique_ptr<VulkanAccelerationStructureBuilder>                                 acceleration_structure_builder_;
+
+    // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
+    std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
+
+    /*
+    Set command pool to NULL at init
+    At each frameBoundaryANDROID:
+        - Create command pool if needed (the first time)
+        - Go through the map and remove executed command buffers
+        - Create command buffer
+        - Submit it
+    */
 };
 
 GFXRECON_END_NAMESPACE(decode)

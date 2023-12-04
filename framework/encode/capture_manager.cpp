@@ -253,6 +253,7 @@ bool CaptureManager::Initialize(std::string base_filename, const CaptureSettings
     force_file_flush_                = trace_settings.force_flush;
     debug_layer_                     = trace_settings.debug_layer;
     debug_device_lost_               = trace_settings.debug_device_lost;
+    debug_set_objects_name_          = trace_settings.debug_set_objects_name;
     screenshots_enabled_             = !trace_settings.screenshot_ranges.empty();
     screenshot_format_               = trace_settings.screenshot_format;
     screenshot_indices_              = CalcScreenshotIndices(trace_settings.screenshot_ranges);

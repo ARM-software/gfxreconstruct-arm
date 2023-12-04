@@ -30,6 +30,8 @@
 #include "encode/vulkan_state_writer.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_struct_handle_wrappers.h"
+#include "generated/generated_vulkan_api_call_encoders.h"
+#include "generated/generated_vulkan_enum_to_string.h"
 #include "graphics/vulkan_device_util.h"
 #include "graphics/vulkan_util.h"
 #include "graphics/vulkan_feature_util.h"
@@ -2646,6 +2648,32 @@ bool VulkanCaptureManager::CheckCommandBufferWrapperForFrameBoundary(const Comma
     return false;
 }
 
+bool VulkanCaptureManager::CheckPNextChainForFrameBoundary(const VkBaseInStructure* current)
+{
+    if (current == nullptr)
+    {
+        return false;
+    }
+
+    while (current->sType != VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT && current->pNext != nullptr)
+    {
+        current = current->pNext;
+    }
+
+    if (current->sType == VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT)
+    {
+        const VkFrameBoundaryEXT* frame_boundary = reinterpret_cast<const VkFrameBoundaryEXT*>(current);
+
+        if (frame_boundary->flags & VK_FRAME_BOUNDARY_FRAME_END_BIT_EXT)
+        {
+            EndFrame();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void VulkanCaptureManager::PreProcess_vkBindBufferMemory(VkDevice       device,
                                                          VkBuffer       buffer,
                                                          VkDeviceMemory memory,
@@ -2722,6 +2750,246 @@ void VulkanCaptureManager::PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice    
     if ((GetCaptureMode() & kModeTrack) == kModeTrack)
     {
         state_tracker_->TrackSetDebugUtilsName(VulkanCaptureManager::GetUniqueId(), device, pNameInfo);
+    }
+}
+
+template <typename WrapperType>
+void SetObjectName(VkDevice device, typename WrapperType::HandleType handle)
+{
+    VkObjectType  object_type               = GetObjectType<WrapperType>();
+    uint64_t      wrappedId                 = GetWrappedId<WrapperType>(handle);
+    std::string   object_type_str           = util::ToString<VkObjectType>(object_type);
+    constexpr int vk_object_type_prefix_len = 15;
+    object_type_str.erase(0, vk_object_type_prefix_len);
+    object_type_str.append(" ");
+    object_type_str.append(std::to_string(wrappedId));
+    VkDebugUtilsObjectNameInfoEXT name_info;
+    name_info.pNext        = nullptr;
+    name_info.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    name_info.objectHandle = (uint64_t)handle;
+    name_info.pObjectName  = object_type_str.c_str();
+    name_info.objectType   = object_type;
+    encode::SetDebugUtilsObjectNameEXT(device, &name_info);
+}
+
+void VulkanCaptureManager::PostProcess_vkCreateDevice(VkPhysicalDevice             physicalDevice,
+                                                      const VkDeviceCreateInfo*    pCreateInfo,
+                                                      const VkAllocationCallbacks* pAllocator,
+                                                      VkDevice*                    pDevice)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<DeviceWrapper>(*pDevice, *pDevice);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateSemaphore(VkDevice                     device,
+                                                         const VkSemaphoreCreateInfo* pCreateInfo,
+                                                         const VkAllocationCallbacks* pAllocator,
+                                                         VkSemaphore*                 pSemaphore)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<SemaphoreWrapper>(device, *pSemaphore);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkAllocateCommandBuffers(VkDevice                           device,
+                                                                const VkCommandBufferAllocateInfo* pAllocateInfo,
+                                                                VkCommandBuffer*                   pCommandBuffers)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<CommandBufferWrapper>(device, *pCommandBuffers);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateFence(VkDevice                     device,
+                                                     const VkFenceCreateInfo*     pCreateInfo,
+                                                     const VkAllocationCallbacks* pAllocator,
+                                                     VkFence*                     pFence)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<FenceWrapper>(device, *pFence);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkAllocateMemory(VkDevice                     device,
+                                                        const VkMemoryAllocateInfo*  pAllocateInfo,
+                                                        const VkAllocationCallbacks* pAllocator,
+                                                        VkDeviceMemory*              pMemory)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<DeviceMemoryWrapper>(device, *pMemory);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateBuffer(VkDevice                     device,
+                                                      const VkBufferCreateInfo*    pCreateInfo,
+                                                      const VkAllocationCallbacks* pAllocator,
+                                                      VkBuffer*                    pBuffer)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<BufferWrapper>(device, *pBuffer);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateImage(VkDevice                     device,
+                                                     const VkImageCreateInfo*     pCreateInfo,
+                                                     const VkAllocationCallbacks* pAllocator,
+                                                     VkImage*                     pImage)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<ImageWrapper>(device, *pImage);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateEvent(VkDevice                     device,
+                                                     const VkEventCreateInfo*     pCreateInfo,
+                                                     const VkAllocationCallbacks* pAllocator,
+                                                     VkEvent*                     pEvent)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<EventWrapper>(device, *pEvent);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateQueryPool(VkDevice                     device,
+                                                         const VkQueryPoolCreateInfo* pCreateInfo,
+                                                         const VkAllocationCallbacks* pAllocator,
+                                                         VkQueryPool*                 pQueryPool)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<QueryPoolWrapper>(device, *pQueryPool);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateBufferView(VkDevice                      device,
+                                                          const VkBufferViewCreateInfo* pCreateInfo,
+                                                          const VkAllocationCallbacks*  pAllocator,
+                                                          VkBufferView*                 pView)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<BufferViewWrapper>(device, *pView);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateImageView(VkDevice                     device,
+                                                         const VkImageViewCreateInfo* pCreateInfo,
+                                                         const VkAllocationCallbacks* pAllocator,
+                                                         VkImageView*                 pView)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<ImageViewWrapper>(device, *pView);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateShaderModule(VkDevice                        device,
+                                                            const VkShaderModuleCreateInfo* pCreateInfo,
+                                                            const VkAllocationCallbacks*    pAllocator,
+                                                            VkShaderModule*                 pShaderModule)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<ShaderModuleWrapper>(device, *pShaderModule);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreatePipelineCache(VkDevice                         device,
+                                                             const VkPipelineCacheCreateInfo* pCreateInfo,
+                                                             const VkAllocationCallbacks*     pAllocator,
+                                                             VkPipelineCache*                 pPipelineCache)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<PipelineCacheWrapper>(device, *pPipelineCache);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreatePipelineLayout(VkDevice                          device,
+                                                              const VkPipelineLayoutCreateInfo* pCreateInfo,
+                                                              const VkAllocationCallbacks*      pAllocator,
+                                                              VkPipelineLayout*                 pPipelineLayout)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<PipelineLayoutWrapper>(device, *pPipelineLayout);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateRenderPass(VkDevice                      device,
+                                                          const VkRenderPassCreateInfo* pCreateInfo,
+                                                          const VkAllocationCallbacks*  pAllocator,
+                                                          VkRenderPass*                 pRenderPass)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<RenderPassWrapper>(device, *pRenderPass);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateGraphicsPipelines(VkDevice                            device,
+                                                                 VkPipelineCache                     pipelineCache,
+                                                                 uint32_t                            createInfoCount,
+                                                                 const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                                                 const VkAllocationCallbacks*        pAllocator,
+                                                                 VkPipeline*                         pPipelines)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<PipelineWrapper>(device, *pPipelines);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateDescriptorSetLayout(VkDevice                               device,
+                                                                   const VkDescriptorSetLayoutCreateInfo* pCreateInfo,
+                                                                   const VkAllocationCallbacks*           pAllocator,
+                                                                   VkDescriptorSetLayout*                 pSetLayout)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<DescriptorSetLayoutWrapper>(device, *pSetLayout);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateSampler(VkDevice                     device,
+                                                       const VkSamplerCreateInfo*   pCreateInfo,
+                                                       const VkAllocationCallbacks* pAllocator,
+                                                       VkSampler*                   pSampler)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<SamplerWrapper>(device, *pSampler);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateDescriptorPool(VkDevice                          device,
+                                                              const VkDescriptorPoolCreateInfo* pCreateInfo,
+                                                              const VkAllocationCallbacks*      pAllocator,
+                                                              VkDescriptorPool*                 pDescriptorPool)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<DescriptorPoolWrapper>(device, *pDescriptorPool);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkAllocateDescriptorSets(VkDevice                           device,
+                                                                const VkDescriptorSetAllocateInfo* pAllocateInfo,
+                                                                VkDescriptorSet*                   pDescriptorSets)
+{
+    if (*pDescriptorSets != VK_NULL_HANDLE && debug_set_objects_name_)
+    {
+        SetObjectName<DescriptorSetWrapper>(device, *pDescriptorSets);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateFramebuffer(VkDevice                       device,
+                                                           const VkFramebufferCreateInfo* pCreateInfo,
+                                                           const VkAllocationCallbacks*   pAllocator,
+                                                           VkFramebuffer*                 pFramebuffer)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<FramebufferWrapper>(device, *pFramebuffer);
+    }
+}
+void VulkanCaptureManager::PostProcess_vkCreateCommandPool(VkDevice                       device,
+                                                           const VkCommandPoolCreateInfo* pCreateInfo,
+                                                           const VkAllocationCallbacks*   pAllocator,
+                                                           VkCommandPool*                 pCommandPool)
+{
+    if (debug_set_objects_name_)
+    {
+        SetObjectName<CommandPoolWrapper>(device, *pCommandPool);
     }
 }
 

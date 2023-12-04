@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -175,7 +176,7 @@ VulkanReplayConsumerBase::VulkanReplayConsumerBase(std::shared_ptr<application::
                                                    const VulkanReplayOptions&                options) :
     loader_handle_(nullptr),
     get_instance_proc_addr_(nullptr), create_instance_proc_(nullptr), application_(application), options_(options),
-    loading_trim_state_(false), have_imported_semaphores_(false), fps_info_(nullptr)
+    loading_trim_state_(false), replaying_trimmed_capture_(false), have_imported_semaphores_(false), fps_info_(nullptr)
 {
     assert(application_ != nullptr);
     assert(options.create_resource_allocator != nullptr);
@@ -284,6 +285,9 @@ void VulkanReplayConsumerBase::ProcessStateBeginMarker(uint64_t frame_number)
 {
     GFXRECON_UNREFERENCED_PARAMETER(frame_number);
     loading_trim_state_ = true;
+
+    // If a trace file has the state begin marker, it must be a trim trace file.
+    replaying_trimmed_capture_ = true;
 }
 
 void VulkanReplayConsumerBase::ProcessStateEndMarker(uint64_t frame_number)
@@ -2158,6 +2162,59 @@ void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* 
     }
 }
 
+void VulkanReplayConsumerBase::FillFrameBoundaryExtFromCommandBufferInfo(const CommandBufferInfo* command_buffer_info,
+                                                                         VkFrameBoundaryEXT*      frame_boundary,
+                                                                         std::vector<VkImage>&    frame_boundary_images)
+{
+    assert(command_buffer_info->is_frame_boundary);
+
+    frame_boundary_images.clear();
+
+    for (size_t i = 0; i < command_buffer_info->frame_buffer_ids.size(); ++i)
+    {
+        auto framebuffer_info = object_info_table_.GetFramebufferInfo(command_buffer_info->frame_buffer_ids[i]);
+
+        for (size_t j = 0; j < framebuffer_info->attachment_image_view_ids.size(); ++j)
+        {
+            auto image_view_id   = framebuffer_info->attachment_image_view_ids[j];
+            auto image_view_info = object_info_table_.GetImageViewInfo(image_view_id);
+            auto image_info      = object_info_table_.GetImageInfo(image_view_info->image_id);
+
+            frame_boundary_images.push_back(image_info->handle);
+        }
+    }
+
+    frame_boundary->sType       = VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT;
+    frame_boundary->pNext       = nullptr;
+    frame_boundary->flags       = VK_FRAME_BOUNDARY_FRAME_END_BIT_EXT;
+    frame_boundary->frameID     = application_->GetCurrentFrameNumber();
+    frame_boundary->imageCount  = frame_boundary_images.size();
+    frame_boundary->pImages     = frame_boundary_images.data();
+    frame_boundary->bufferCount = 0;
+    frame_boundary->pBuffers    = nullptr;
+    frame_boundary->tagName     = application_->GetCurrentFrameNumber();
+    frame_boundary->tagSize     = command_buffer_info->frame_boundary_label.size();
+    frame_boundary->pTag        = command_buffer_info->frame_boundary_label.data();
+}
+
+void VulkanReplayConsumerBase::InsertFrameBoundaryExt(void* pnext_chain, const VkFrameBoundaryEXT* frame_boundary)
+{
+    VkBaseOutStructure* current = reinterpret_cast<VkBaseOutStructure*>(pnext_chain);
+    while (current->pNext != nullptr)
+    {
+        current = current->pNext;
+
+        if (current->sType == VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT)
+        {
+            GFXRECON_LOG_WARNING(
+                "Trying to insert VkFrameBoundaryEXT but there already is one. The new one will be ignored.");
+            return;
+        }
+    }
+
+    current->pNext = reinterpret_cast<VkBaseOutStructure*>(&frame_boundary);
+}
+
 bool VulkanReplayConsumerBase::CheckCommandBufferInfoForFrameBoundary(const CommandBufferInfo* command_buffer_info)
 {
     GFXRECON_ASSERT(command_buffer_info != nullptr);
@@ -2237,6 +2294,73 @@ bool VulkanReplayConsumerBase::CheckCommandBufferInfoForFrameBoundary(const Comm
         return true;
     }
     return false;
+}
+
+bool VulkanReplayConsumerBase::CheckPNextChainForFrameBoundary(const DeviceInfo*                 device_info,
+                                                               const Decoded_VkBaseOutStructure* current)
+{
+    while (current->decoded_value->sType != VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT && current->pNext != nullptr &&
+           current->pNext->GetMetaStructPointer() != nullptr)
+    {
+        current = reinterpret_cast<const Decoded_VkBaseOutStructure*>(current->pNext->GetMetaStructPointer());
+    }
+
+    if (current->decoded_value->sType != VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT)
+    {
+        return false;
+    }
+
+    const Decoded_VkFrameBoundaryEXT* frame_boundary = reinterpret_cast<const Decoded_VkFrameBoundaryEXT*>(current);
+
+    if ((frame_boundary->decoded_value->flags & VK_FRAME_BOUNDARY_FRAME_END_BIT_EXT) == 0)
+    {
+        return false;
+    }
+
+    auto instance_table = GetInstanceTable(device_info->parent);
+    GFXRECON_ASSERT(instance_table != nullptr);
+
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    instance_table->GetPhysicalDeviceMemoryProperties(device_info->parent, &memory_properties);
+
+    if (screenshot_handler_->IsScreenshotFrame())
+    {
+        for (uint32_t i = 0; i < frame_boundary->pImages.GetLength(); ++i)
+        {
+            const std::string filename_prefix =
+                screenshot_file_prefix_ + "_frame_" + std::to_string(screenshot_handler_->GetCurrentFrame());
+
+            const format::HandleId handleId   = frame_boundary->pImages.GetPointer()[i];
+            const ImageInfo*       image_info = GetObjectInfoTable().GetImageInfo(handleId);
+
+            const uint32_t screenshot_width =
+                options_.screenshot_scale
+                    ? static_cast<uint32_t>(options_.screenshot_scale * image_info->extent.width)
+                    : (options_.screenshot_width ? options_.screenshot_width : image_info->extent.width);
+
+            const uint32_t screenshot_height =
+                options_.screenshot_scale
+                    ? static_cast<uint32_t>(options_.screenshot_scale * image_info->extent.height)
+                    : (options_.screenshot_height ? options_.screenshot_height : image_info->extent.height);
+
+            screenshot_handler_->WriteImage(filename_prefix,
+                                            device_info->handle,
+                                            GetDeviceTable(device_info->handle),
+                                            memory_properties,
+                                            device_info->allocator.get(),
+                                            image_info->handle,
+                                            image_info->format,
+                                            image_info->extent.width,
+                                            image_info->extent.height,
+                                            screenshot_width,
+                                            screenshot_height,
+                                            image_info->current_layout);
+        }
+    }
+
+    screenshot_handler_->EndFrame();
+
+    return true;
 }
 
 VkResult
@@ -2450,6 +2574,43 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
     else
     {
         GFXRECON_LOG_WARNING("The vkCreateInstance parameter pCreateInfo is NULL.");
+    }
+
+    if (options_.offscreen_swapchain_frame_boundary)
+    {
+        bool frameBoundaryExtensionFound = false;
+
+        for (const char* extensionName : filtered_extensions)
+        {
+            if (gfxrecon::util::platform::StringCompareNoCase(extensionName, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
+            {
+                frameBoundaryExtensionFound = true;
+                break;
+            }
+        }
+
+        if (!frameBoundaryExtensionFound)
+        {
+            filtered_extensions.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+        }
+    }
+
+    if (options_.use_ext_frame_boundary)
+    {
+        bool frame_boundary_extension_found = false;
+        for (const char* extension_name : filtered_extensions)
+        {
+            if (gfxrecon::util::platform::StringCompareNoCase(extension_name, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
+            {
+                frame_boundary_extension_found = true;
+                break;
+            }
+        }
+
+        if (!frame_boundary_extension_found)
+        {
+            filtered_extensions.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+        }
     }
 
     // Disable layers; any layers needed for replay should be enabled for the replay app with the VK_INSTANCE_LAYERS
@@ -2752,11 +2913,19 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
 
     if (device_info != nullptr)
     {
-        device = device_info->handle;
+        device            = device_info->handle;
+        auto device_table = GetDeviceTable(device);
+
+        auto it = fba_resources_.find(device);
+        if (it != fba_resources_.end())
+        {
+            device_table->DestroyCommandPool(device, it->second.first, nullptr);
+            fba_resources_.erase(device);
+        }
 
         if (screenshot_handler_ != nullptr)
         {
-            screenshot_handler_->DestroyDeviceResources(device, GetDeviceTable(device));
+            screenshot_handler_->DestroyDeviceResources(device, device_table);
         }
 
         device_info->allocator->Destroy();
@@ -3335,6 +3504,31 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
         fence = fence_info->handle;
     }
 
+    std::vector<VkFrameBoundaryEXT>   inserted_frame_boundaries;
+    std::vector<std::vector<VkImage>> inserted_frame_boundaries_images;
+    if (options_.use_ext_frame_boundary)
+    {
+        for (uint32_t i = 0; i < submitCount; ++i)
+        {
+            size_t                  command_buffer_count = submit_info_data[i].pCommandBuffers.GetLength();
+            const format::HandleId* command_buffer_ids   = submit_info_data[i].pCommandBuffers.GetPointer();
+            for (uint32_t j = 0; j < command_buffer_count; ++j)
+            {
+                const CommandBufferInfo* command_buffer_info =
+                    GetObjectInfoTable().GetCommandBufferInfo(command_buffer_ids[j]);
+
+                if (command_buffer_info->is_frame_boundary)
+                {
+                    FillFrameBoundaryExtFromCommandBufferInfo(command_buffer_info,
+                                                              &inserted_frame_boundaries.emplace_back(),
+                                                              inserted_frame_boundaries_images.emplace_back());
+                    InsertFrameBoundaryExt(submit_info_data[i].decoded_value, &inserted_frame_boundaries.back());
+                    break;
+                }
+            }
+        }
+    }
+
     // Only attempt to filter imported semaphores if we know at least one has been imported.
     // If rendering is restricted to a specific surface, shadow semaphore and forward progress state will need to be
     // tracked.
@@ -3446,6 +3640,13 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
         {
             if (submit_info_data != nullptr)
             {
+                if (CheckPNextChainForFrameBoundary(
+                        object_info_table_.GetDeviceInfo(queue_info->parent_id),
+                        reinterpret_cast<const Decoded_VkBaseOutStructure*>(submit_info_data)))
+                {
+                    break;
+                }
+
                 size_t     command_buffer_count = submit_info_data[i].pCommandBuffers.GetLength();
                 const auto command_buffer_ids   = submit_info_data[i].pCommandBuffers.GetPointer();
                 for (uint32_t j = 0; j < command_buffer_count; ++j)
@@ -3493,6 +3694,32 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2 func,
     if (fence_info != nullptr)
     {
         fence = fence_info->handle;
+    }
+
+    std::vector<VkFrameBoundaryEXT>   inserted_frame_boundaries;
+    std::vector<std::vector<VkImage>> inserted_frame_boundaries_images;
+    if (options_.use_ext_frame_boundary)
+    {
+        for (uint32_t i = 0; i < submitCount; ++i)
+        {
+            size_t     command_buffer_count = submit_info_data[i].pCommandBufferInfos->GetLength();
+            const auto command_buffer_infos = submit_info_data[i].pCommandBufferInfos->GetMetaStructPointer();
+
+            for (uint32_t j = 0; j < command_buffer_count; ++j)
+            {
+                const CommandBufferInfo* command_buffer_info =
+                    GetObjectInfoTable().GetCommandBufferInfo(command_buffer_infos[j].commandBuffer);
+
+                if (command_buffer_info->is_frame_boundary)
+                {
+                    FillFrameBoundaryExtFromCommandBufferInfo(command_buffer_info,
+                                                              &inserted_frame_boundaries.emplace_back(),
+                                                              inserted_frame_boundaries_images.emplace_back());
+                    InsertFrameBoundaryExt(submit_info_data[i].decoded_value, &inserted_frame_boundaries.back());
+                    break;
+                }
+            }
+        }
     }
 
     // Only attempt to filter imported semaphores if we know at least one has been imported.
@@ -3615,6 +3842,13 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2 func,
         {
             if (submit_info_data != nullptr)
             {
+                if (CheckPNextChainForFrameBoundary(
+                        object_info_table_.GetDeviceInfo(queue_info->parent_id),
+                        reinterpret_cast<const Decoded_VkBaseOutStructure*>(submit_info_data)))
+                {
+                    break;
+                }
+
                 size_t     command_buffer_count = submit_info_data[i].pCommandBufferInfos->GetLength();
                 const auto command_buffer_infos = submit_info_data[i].pCommandBufferInfos->GetMetaStructPointer();
                 for (uint32_t j = 0; j < command_buffer_count; ++j)
@@ -4468,6 +4702,19 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
     bool                uses_address         = false;
     VkBufferCreateFlags address_create_flags = 0;
     VkBufferUsageFlags  address_usage_flags  = 0;
+
+    if (replaying_trimmed_capture_)
+    {
+        // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer VkBufferCreateInfo.
+        // Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
+        // vkBindBufferMemory failures due to memory requirement mismatch during replay. So here we add
+        // VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
+        // We also need to add VK_BUFFER_USAGE_TRANSFER_DST_BIT to be able to restore buffer and copy to it
+        auto modified_create_info = const_cast<VkBufferCreateInfo*>(replay_create_info);
+        modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+
     if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
     {
         if ((replay_create_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) ==
@@ -4592,8 +4839,20 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     auto                                  replay_image = pImage->GetHandlePointer();
     auto                                  capture_id   = (*pImage->GetPointer());
 
+    auto modified_create_info = *pCreateInfo->GetPointer();
+    if (replaying_trimmed_capture_)
+    {
+        // The GFXR trimmed capture process sets VK_IMAGE_USAGE_TRANSFER_SRC_BIT flag for image VkImageCreateInfo.
+        // Since image memory requirements can differ when VK_IMAGE_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
+        // vkBindImageMemory failures due to memory requirement mismatch during replay. So here we add
+        // VK_IMAGE_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
+        // We also need to add VK_IMAGE_USAGE_TRANSFER_DST_BIT to be able to restore image and copy to it
+        modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
     VkResult result = allocator->CreateImage(
-        pCreateInfo->GetPointer(), GetAllocationCallbacks(pAllocator), capture_id, replay_image, &allocator_data);
+        &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_image, &allocator_data);
 
     auto replay_create_info = pCreateInfo->GetPointer();
 
@@ -5402,15 +5661,24 @@ void VulkanReplayConsumerBase::OverrideCmdInsertDebugUtilsLabelEXT(
     const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label_info_decoder)
 {
     const VkDebugUtilsLabelEXT* label_info = label_info_decoder->GetPointer();
-    if (!IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
-    {
-        func(command_buffer_info->handle, label_info);
-    }
+
+    bool call_next_layer = !IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
     // Look for the label that identifies this command buffer as a VR frame boundary.
     if (util::platform::StringContains(label_info->pLabelName, graphics::kVulkanVrFrameDelimiterString))
     {
-        command_buffer_info->is_frame_boundary = true;
+        command_buffer_info->is_frame_boundary    = true;
+        command_buffer_info->frame_boundary_label = label_info->pLabelName;
+
+        if (options_.use_ext_frame_boundary)
+        {
+            call_next_layer = false;
+        }
+    }
+
+    if (call_next_layer)
+    {
+        func(command_buffer_info->handle, label_info);
     }
 }
 
@@ -6602,7 +6870,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAndroidSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateWin32SurfaceKHR(
@@ -6630,7 +6898,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateWin32SurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceWin32PresentationSupportKHR(
@@ -6676,7 +6944,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateXcbSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceXcbPresentationSupportKHR(
@@ -6726,7 +6994,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateXlibSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceXlibPresentationSupportKHR(
@@ -6776,7 +7044,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateWaylandSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateDisplayPlaneSurfaceKHR(
@@ -6804,7 +7072,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDisplayPlaneSurfaceKHR(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateHeadlessSurfaceEXT(
@@ -6832,7 +7100,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateHeadlessSurfaceEXT(
                                      pSurface,
                                      GetInstanceTable(instance_info->handle),
                                      application_.get(),
-                                     options_.surface_index);
+                                     options_);
 }
 
 VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceWaylandPresentationSupportKHR(
@@ -7356,12 +7624,24 @@ void VulkanReplayConsumerBase::OverrideCmdDebugMarkerInsertEXT(
     StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder)
 {
     const VkDebugMarkerMarkerInfoEXT* marker_info = marker_info_decoder->GetPointer();
-    func(command_buffer_info->handle, marker_info);
+
+    bool call_next_layer = true;
 
     // Look for the debug marker that identifies this command buffer as a VR frame boundary.
     if (util::platform::StringContains(marker_info->pMarkerName, graphics::kVulkanVrFrameDelimiterString))
     {
-        command_buffer_info->is_frame_boundary = true;
+        command_buffer_info->is_frame_boundary    = true;
+        command_buffer_info->frame_boundary_label = marker_info->pMarkerName;
+
+        if (options_.use_ext_frame_boundary)
+        {
+            call_next_layer = false;
+        }
+    }
+
+    if (call_next_layer)
+    {
+        func(command_buffer_info->handle, marker_info);
     }
 };
 
@@ -7486,6 +7766,103 @@ VkResult VulkanReplayConsumerBase::OverrideCreateFramebuffer(
     }
 
     return result;
+}
+
+void VulkanReplayConsumerBase::OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryANDROID func,
+                                                            const DeviceInfo*          device_info,
+                                                            const SemaphoreInfo*       semaphore_info,
+                                                            const ImageInfo*           image_info)
+{
+    GFXRECON_ASSERT((device_info != nullptr));
+
+    VkDevice    device    = device_info->handle;
+    VkSemaphore semaphore = semaphore_info ? semaphore_info->handle : VK_NULL_HANDLE;
+    VkImage     image     = image_info ? image_info->handle : VK_NULL_HANDLE;
+
+    if (options_.use_ext_frame_boundary)
+    {
+        auto device_table = GetDeviceTable(device);
+
+        // Retrieve adequate queue family
+
+        uint32_t queueFamily = 0;
+
+        // Create command pool and command buffer if necessary
+
+        auto it = fba_resources_.find(device);
+        if (it == fba_resources_.end())
+        {
+            VkCommandPoolCreateInfo commandPoolCreateInfo;
+            commandPoolCreateInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            commandPoolCreateInfo.pNext            = nullptr;
+            commandPoolCreateInfo.flags            = 0;
+            commandPoolCreateInfo.queueFamilyIndex = queueFamily;
+
+            VkCommandPool commandPool;
+            device_table->CreateCommandPool(device, &commandPoolCreateInfo, nullptr, &commandPool);
+
+            VkCommandBufferAllocateInfo commandBufferAllocateInfo;
+            commandBufferAllocateInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferAllocateInfo.pNext              = nullptr;
+            commandBufferAllocateInfo.commandPool        = commandPool;
+            commandBufferAllocateInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            commandBufferAllocateInfo.commandBufferCount = 1;
+
+            VkCommandBuffer commandBuffer;
+            device_table->AllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
+
+            VkCommandBufferBeginInfo commandBufferBeginInfo;
+            commandBufferBeginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            commandBufferBeginInfo.pNext            = nullptr;
+            commandBufferBeginInfo.flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+            commandBufferBeginInfo.pInheritanceInfo = nullptr;
+
+            device_table->BeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+            device_table->EndCommandBuffer(commandBuffer);
+
+            it = fba_resources_.emplace(device, std::make_pair(commandPool, commandBuffer)).first;
+        }
+
+        // Queue submission with VkFrameBoundaryEXT
+
+        VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+        VkSubmitInfo submitInfo;
+        submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext                = nullptr;
+        submitInfo.waitSemaphoreCount   = 1;
+        submitInfo.pWaitSemaphores      = &semaphore;
+        submitInfo.pWaitDstStageMask    = &dstStageMask;
+        submitInfo.commandBufferCount   = 1;
+        submitInfo.pCommandBuffers      = &it->second.second;
+        submitInfo.signalSemaphoreCount = 0;
+        submitInfo.pSignalSemaphores    = nullptr;
+
+        VkFrameBoundaryEXT frameBoundaryExt;
+        frameBoundaryExt.sType       = VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT;
+        frameBoundaryExt.pNext       = nullptr;
+        frameBoundaryExt.flags       = VK_FRAME_BOUNDARY_FRAME_END_BIT_EXT;
+        frameBoundaryExt.frameID     = application_->GetCurrentFrameNumber();
+        frameBoundaryExt.imageCount  = (image == VK_NULL_HANDLE ? 0 : 1);
+        frameBoundaryExt.pImages     = (image == VK_NULL_HANDLE ? nullptr : &image);
+        frameBoundaryExt.bufferCount = 0;
+        frameBoundaryExt.pBuffers    = nullptr;
+        frameBoundaryExt.tagName     = frameBoundaryExt.frameID;
+        frameBoundaryExt.tagSize     = 0;
+        frameBoundaryExt.pTag        = nullptr;
+
+        submitInfo.pNext = &frameBoundaryExt;
+
+        VkQueue queue;
+        device_table->GetDeviceQueue(device, queueFamily, 0, &queue);
+        device_table->QueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+        // Destruction of command pool and command buffer is done at destruction of the device
+    }
+    else
+    {
+        func(device, semaphore, image);
+    }
 }
 
 // We want to allow skipping the query for tool properties because the capture layer actually adds this extension

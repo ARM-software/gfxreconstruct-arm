@@ -410,6 +410,8 @@ class VulkanStateTracker
 
     void
     TrackSetDebugUtilsName(format::HandleId handle, VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+    
+    void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 

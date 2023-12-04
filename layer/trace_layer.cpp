@@ -63,7 +63,7 @@ struct LayerExtensionProps
 
 const std::vector<struct LayerExtensionProps> kDeviceExtensionProps = {
     { VkExtensionProperties{ "VK_EXT_tooling_info", 1 }, { "vkGetPhysicalDeviceToolPropertiesEXT" }, {} },
-    { VkExtensionProperties{ "VK_EXT_DEBUG_MARKER_EXTENSION_NAME", VK_EXT_DEBUG_MARKER_SPEC_VERSION },
+    { VkExtensionProperties{ VK_EXT_DEBUG_MARKER_EXTENSION_NAME, VK_EXT_DEBUG_MARKER_SPEC_VERSION },
       {},
       { "vkCmdDebugMarkerBeginEXT",
         "vkCmdDebugMarkerEndEXT",
@@ -71,6 +71,7 @@ const std::vector<struct LayerExtensionProps> kDeviceExtensionProps = {
         "vkDebugMarkerSetObjectNameEXT",
         "vkDebugMarkerSetObjectTagEXT" } },
     { VkExtensionProperties{ "VK_ANDROID_frame_boundary", 1 }, {}, { "vkFrameBoundaryANDROID" } },
+    { VkExtensionProperties{ "VK_EXT_frame_boundary", 1 }, {}, {} },
 };
 
 /// An alphabetical list of device extensions which we do not report upstream if

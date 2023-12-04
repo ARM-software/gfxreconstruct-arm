@@ -1370,7 +1370,7 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                             VkImageView   staging_view     = VK_NULL_HANDLE;
 
                             view_info.subresourceRange.baseArrayLayer = layer;
-
+                            view_info.image                           = staging_image;
                             result = device_table_->CreateImageView(device_, &view_info, nullptr, &staging_view);
 
                             if (result == VK_SUCCESS)

@@ -138,6 +138,7 @@ void android_main(struct android_app* app)
                                                      has_mfr,
                                                      replay_options.quit_after_measurement_frame_range,
                                                      replay_options.flush_measurement_frame_range,
+                                                     replay_options.flush_inside_measurement_range,
                                                      replay_options.preload_measurement_range,
                                                      measurement_file_name);
 

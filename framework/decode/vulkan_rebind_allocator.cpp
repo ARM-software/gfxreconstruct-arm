@@ -152,22 +152,20 @@ VkResult VulkanRebindAllocator::Initialize(uint32_t                             
             staging_queue_family_++;
         }
 
-        VkCommandPoolCreateInfo cmd_pool_info = {
-            .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-            .queueFamilyIndex = staging_queue_family_,
-        };
+        VkCommandPoolCreateInfo cmd_pool_info = {};
+        cmd_pool_info.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmd_pool_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        cmd_pool_info.queueFamilyIndex        = staging_queue_family_;
 
         result = functions_.create_command_pool(device_, &cmd_pool_info, NULL, &cmd_pool_);
         assert(result == VK_SUCCESS);
 
-        VkCommandBufferAllocateInfo cmd_buff_alloc_info = {
-            .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .pNext              = NULL,
-            .commandPool        = cmd_pool_,
-            .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1,
-        };
+        VkCommandBufferAllocateInfo cmd_buff_alloc_info = {};
+        cmd_buff_alloc_info.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd_buff_alloc_info.pNext                       = NULL;
+        cmd_buff_alloc_info.commandPool                 = cmd_pool_;
+        cmd_buff_alloc_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmd_buff_alloc_info.commandBufferCount          = 1;
 
         functions_.get_device_queue(device_, staging_queue_family_, 0, &staging_queue_);
 
@@ -1000,23 +998,23 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
 {
     if (resource_alloc_info->is_image && dst_offset != 0)
     {
-        // TODO implement offset based stagging image copy
+        // TODO: implement offset based stagging image copy
+        GFXRECON_LOG_WARNING("Skipping image with offset in staging write: support not yet implemented");
         return;
     }
 
     VkBuffer           staging_buf{};
-    VkBufferCreateInfo staging_buf_create_info{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size  = data_size,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    };
+    VkBufferCreateInfo staging_buf_create_info{};
+    staging_buf_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    staging_buf_create_info.size  = data_size;
+    staging_buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
     VmaAllocation           staging_alloc{};
     VmaAllocationInfo       staging_alloc_info{};
-    VmaAllocationCreateInfo staging_alloc_create_info = {
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
-    };
+    VmaAllocationCreateInfo staging_alloc_create_info = {};
+    staging_alloc_create_info.flags =
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    staging_alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
     VkResult result = vmaCreateBuffer(allocator_,
                                       &staging_buf_create_info,
@@ -1039,9 +1037,8 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
         vmaFlushAllocation(allocator_, staging_alloc, 0, VK_WHOLE_SIZE);
         vmaUnmapMemory(allocator_, staging_alloc);
 
-        VkCommandBufferBeginInfo cmd_buf_begin_info = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        };
+        VkCommandBufferBeginInfo cmd_buf_begin_info = {};
+        cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
         result = functions_.begin_command_buffer(cmd_buffer_, &cmd_buf_begin_info);
     }
@@ -1064,14 +1061,18 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
 
             if (original_image)
             {
-                VkBufferImageCopy region{
-                    .bufferOffset      = 0,
-                    .bufferRowLength   = 0,
-                    .bufferImageHeight = 0,
-                    .imageSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-                    .imageOffset       = { 0, 0, 0 },
-                    .imageExtent       = { 1, 1, 1 },
-                };
+                // TODO: handle mip maps/array layers
+                GFXRECON_LOG_WARNING(
+                    "Ignoring potential mip maps/array layers in staging buffer to image copy: support "
+                    "not yet implemented");
+
+                VkBufferImageCopy region{};
+                region.bufferOffset      = 0;
+                region.bufferRowLength   = 0;
+                region.bufferImageHeight = 0;
+                region.imageSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+                region.imageOffset       = { 0, 0, 0 };
+                region.imageExtent       = { 1, 1, 1 };
 
                 functions_.cmd_copy_buffer_to_image(
                     cmd_buffer_, staging_buf, original_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -1093,11 +1094,10 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
 
             if (original_buffer)
             {
-                VkBufferCopy copy_region{
-                    .srcOffset = 0,
-                    .dstOffset = dst_offset,
-                    .size      = data_size,
-                };
+                VkBufferCopy copy_region{};
+                copy_region.srcOffset = 0;
+                copy_region.dstOffset = dst_offset;
+                copy_region.size      = data_size;
 
                 functions_.cmd_copy_buffer(cmd_buffer_, staging_buf, original_buffer, 1, &copy_region);
                 result = functions_.end_command_buffer(cmd_buffer_);
@@ -1107,11 +1107,10 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
 
     if (result == VK_SUCCESS)
     {
-        VkSubmitInfo compute_submit_info{
-            .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .commandBufferCount = 1,
-            .pCommandBuffers    = &cmd_buffer_,
-        };
+        VkSubmitInfo compute_submit_info{};
+        compute_submit_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        compute_submit_info.commandBufferCount = 1;
+        compute_submit_info.pCommandBuffers    = &cmd_buffer_;
 
         result = functions_.queue_submit(staging_queue_, 1, &compute_submit_info, VK_NULL_HANDLE);
     }
