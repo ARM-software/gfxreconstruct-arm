@@ -1406,7 +1406,10 @@ void VulkanStateTracker::TrackSetDebugUtilsName(format::HandleId                
                                                 const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
 {
     const uint64_t wrappedId = GetWrappedId(pNameInfo->objectHandle, pNameInfo->objectType);
-
+    if (!wrappedId)
+    {
+        return;
+    }
     DebugUtilsObjectNameInfoWrapper wrapper;
     wrapper.wrapper_handle = handle;
     wrapper.device         = device;

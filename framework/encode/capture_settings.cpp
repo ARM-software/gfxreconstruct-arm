@@ -115,6 +115,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define DEBUG_LAYER_LOWER                                    "debug_layer"
 #define DEBUG_LAYER_UPPER                                    "DEBUG_LAYER"
 #define DEBUG_DEVICE_LOST_LOWER                              "debug_device_lost"
+#define DEBUG_SET_OBJECTS_NAME_LOWER                         "debug_set_objects_name"
+#define DEBUG_SET_OBJECTS_NAME_UPPER                         "DEBUG_SET_OBJECTS_NAME"
 #define DEBUG_DEVICE_LOST_UPPER                              "DEBUG_DEVICE_LOST"
 #define DISABLE_DXR_LOWER                                    "disable_dxr"
 #define DISABLE_DXR_UPPER                                    "DISABLE_DXR"
@@ -189,6 +191,7 @@ const char kPageGuardSignalHandlerWatcherEnvVar[]            = GFXRECON_OPTION_S
 const char kPageGuardSignalHandlerWatcherMaxRestoresEnvVar[] = GFXRECON_OPTION_STR(PAGE_GUARD_SIGNAL_HANDLER_WATCHER_MAX_RESTORES);
 const char kDebugLayerEnvVar[]                               = GFXRECON_OPTION_STR(DEBUG_LAYER);
 const char kDebugDeviceLostEnvVar[]                          = GFXRECON_OPTION_STR(DEBUG_DEVICE_LOST);
+const char kDebugSetObjectsNameEnvVar[]                      = GFXRECON_OPTION_STR(DEBUG_SET_OBJECTS_NAME);
 const char kDisableDxrEnvVar[]                               = GFXRECON_OPTION_STR(DISABLE_DXR);
 const char kAccelStructPaddingEnvVar[]                       = GFXRECON_OPTION_STR(ACCEL_STRUCT_PADDING);
 const char kForceCommandSerializationEnvVar[]                = GFXRECON_OPTION_STR(FORCE_COMMAND_SERIALIZATION);
@@ -243,6 +246,7 @@ const std::string kOptionKeyPageGuardSignalHandlerWatcher            = std::stri
 const std::string kOptionKeyPageGuardSignalHandlerWatcherMaxRestores = std::string(kSettingsFilter) + std::string(PAGE_GUARD_SIGNAL_HANDLER_WATCHER_MAX_RESTORES_LOWER);
 const std::string kDebugLayer                                        = std::string(kSettingsFilter) + std::string(DEBUG_LAYER_LOWER);
 const std::string kDebugDeviceLost                                   = std::string(kSettingsFilter) + std::string(DEBUG_DEVICE_LOST_LOWER);
+const std::string kDebugSetObjectsName                               = std::string(kSettingsFilter) + std::string(DEBUG_SET_OBJECTS_NAME_LOWER);
 const std::string kOptionDisableDxr                                  = std::string(kSettingsFilter) + std::string(DISABLE_DXR_LOWER);
 const std::string kOptionAccelStructPadding                          = std::string(kSettingsFilter) + std::string(ACCEL_STRUCT_PADDING_LOWER);
 const std::string kOptionForceCommandSerialization                   = std::string(kSettingsFilter) + std::string(FORCE_COMMAND_SERIALIZATION_LOWER);
@@ -386,6 +390,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     // Debug environment variables
     LoadSingleOptionEnvVar(options, kDebugLayerEnvVar, kDebugLayer);
     LoadSingleOptionEnvVar(options, kDebugDeviceLostEnvVar, kDebugDeviceLost);
+    LoadSingleOptionEnvVar(options, kDebugSetObjectsNameEnvVar, kDebugSetObjectsName);
 
     // Screenshot environment variables
     LoadSingleOptionEnvVar(options, kScreenshotDirEnvVar, kOptionKeyScreenshotDir);
@@ -537,6 +542,8 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         ParseBoolString(FindOption(options, kDebugLayer), settings->trace_settings_.debug_layer);
     settings->trace_settings_.debug_device_lost =
         ParseBoolString(FindOption(options, kDebugDeviceLost), settings->trace_settings_.debug_device_lost);
+    settings->trace_settings_.debug_set_objects_name =
+        ParseBoolString(FindOption(options, kDebugSetObjectsName), settings->trace_settings_.debug_set_objects_name);
 
     ProcessLogOptions(options, settings);
 
