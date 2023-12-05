@@ -46,6 +46,7 @@
 
 #include "vulkan/vulkan.h"
 
+#include <filesystem>
 #include <cassert>
 #include <stdexcept>
 #include <string>
@@ -246,7 +247,7 @@ void FilterUnreferencedResources(const std::string&                             
     }
 }
 
-void VkRemoveRedundantResources(std::string input_filename, std::string output_filename)
+void VkRemoveRedundantResources(std::string input_filename, std::string output_filename, bool& output_produced)
 {
     GFXRECON_WRITE_CONSOLE("Scanning Vulkan file %s for unreferenced resources.", input_filename.c_str());
     std::unordered_set<gfxrecon::format::HandleId> unreferenced_ids;
@@ -258,11 +259,12 @@ void VkRemoveRedundantResources(std::string input_filename, std::string output_f
         GFXRECON_WRITE_CONSOLE("Writing optimized file, removing initialization data for %" PRIu64 " unused resources.",
                                unreferenced_ids.size());
         FilterUnreferencedResources(input_filename, output_filename, std::move(unreferenced_ids));
+        output_produced = true;
     }
     else
     {
-        GFXRECON_WRITE_CONSOLE("No unused resources detected.  A new file will not be created.",
-                               input_filename.c_str());
+        GFXRECON_WRITE_CONSOLE("No unused resources detected.", input_filename.c_str());
+        output_produced = false;
     }
 }
 
@@ -372,13 +374,22 @@ int main(int argc, const char** argv)
             }
             else if (detected_vulkan)
             {
-                std::string tmp_file_name    = ("tmp_" + output_filename);
+                std::filesystem::path p(output_filename);
+                if (p.extension() != ".tmp")
+                {
+                    p.replace_extension("tmp");
+                }
+                else
+                {
+                    p.replace_extension("tmp2");
+                }
+
+                std::string tmp_file_name    = p.string();
                 bool        tmp_file_created = false;
 
                 try
                 {
-                    VkRemoveRedundantResources(input_filename, tmp_file_name);
-                    tmp_file_created = true;
+                    VkRemoveRedundantResources(input_filename, tmp_file_name, tmp_file_created);
                 }
                 catch (const std::runtime_error& e)
                 {
