@@ -1338,7 +1338,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<format::HandleId, std::pair<const DeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
     std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
     std::vector<const char*>                                                            faked_extensions_;
-    std::unique_ptr<VulkanAccelerationStructureBuilder>                                 acceleration_structure_builder_;
+    // map acceleration structure builders for each device
+    std::unordered_map<format::HandleId, std::unique_ptr<VulkanAccelerationStructureBuilder>>
+        acceleration_structure_builders_;
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;

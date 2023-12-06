@@ -413,8 +413,6 @@ class VulkanStateTracker
     
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
-    void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
-
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                  parent_handle,

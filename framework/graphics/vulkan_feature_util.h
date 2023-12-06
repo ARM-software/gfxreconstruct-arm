@@ -50,6 +50,10 @@ bool IsSupportedExtension(const std::vector<const char*>& extensions_names, cons
 void RemoveUnsupportedExtensions(const std::vector<VkExtensionProperties>& properties,
                                  std::vector<const char*>*                 extensions);
 
+void RemoveExtensionIfUnsupported(const std::vector<VkExtensionProperties>& properties,
+                                  std::vector<const char*>*                 extensions,
+                                  const char*                               extension);
+
 void RemoveIgnorableExtensions(const std::vector<VkExtensionProperties>& properties,
                                std::vector<const char*>*                 extensions);
 

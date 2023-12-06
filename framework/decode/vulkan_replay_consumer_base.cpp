@@ -33,6 +33,7 @@
 #include "decode/vulkan_object_cleanup_util.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
+#include "generated/generated_vulkan_constant_maps.h"
 #include "graphics/vulkan_device_util.h"
 #include "graphics/vulkan_feature_util.h"
 #include "graphics/vulkan_util.h"
@@ -65,23 +66,6 @@ const std::unordered_set<std::string> kSurfaceExtensions = {
     VK_KHR_MIR_SURFACE_EXTENSION_NAME,     VK_NN_VI_SURFACE_EXTENSION_NAME,   VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,   VK_KHR_XCB_SURFACE_EXTENSION_NAME, VK_KHR_XLIB_SURFACE_EXTENSION_NAME
 };
-
-const std::unordered_set<VkColorSpaceKHR> kColorspaceSwapchainExtension = { VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT,
-                                                                            VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT,
-                                                                            VK_COLOR_SPACE_BT2020_LINEAR_EXT,
-                                                                            VK_COLOR_SPACE_BT709_LINEAR_EXT,
-                                                                            VK_COLOR_SPACE_BT709_NONLINEAR_EXT,
-                                                                            VK_COLOR_SPACE_DCI_P3_LINEAR_EXT,
-                                                                            VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT,
-                                                                            VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT,
-                                                                            VK_COLOR_SPACE_DOLBYVISION_EXT,
-                                                                            VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
-                                                                            VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT,
-                                                                            VK_COLOR_SPACE_HDR10_HLG_EXT,
-                                                                            VK_COLOR_SPACE_HDR10_ST2084_EXT,
-                                                                            VK_COLOR_SPACE_PASS_THROUGH_EXT };
-
-const VkColorSpaceKHR kAMDNativeDisplayColorspace = VK_COLOR_SPACE_DISPLAY_NATIVE_AMD;
 
 // Device extensions to enable for trimming state setup, when available.
 const std::unordered_set<std::string> kTrimStateSetupDeviceExtensions = { VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME };
@@ -2477,31 +2461,10 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
                 }
                 else if (options_.colorspace_fallback)
                 {
-                    if (!feature_util::IsSupportedExtension(available_extensions,
-                                                            VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME))
+                    for (auto& extension_name : kColorSpaceExtensionNames)
                     {
-                        auto iter = std::find_if(
-                            filtered_extensions.begin(), filtered_extensions.end(), [](const char* extension) {
-                                return util::platform::StringCompare(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,
-                                                                     extension) == 0;
-                            });
-                        if (iter != filtered_extensions.end())
-                        {
-                            filtered_extensions.erase(iter);
-                        }
-                    }
-                    if (!feature_util::IsSupportedExtension(available_extensions,
-                                                            VK_AMD_DISPLAY_NATIVE_HDR_EXTENSION_NAME))
-                    {
-                        auto iter = std::find_if(
-                            filtered_extensions.begin(), filtered_extensions.end(), [](const char* extension) {
-                                return util::platform::StringCompare(VK_AMD_DISPLAY_NATIVE_HDR_EXTENSION_NAME,
-                                                                     extension) == 0;
-                            });
-                        if (iter != filtered_extensions.end())
-                        {
-                            filtered_extensions.erase(iter);
-                        }
+                        feature_util::RemoveExtensionIfUnsupported(
+                            available_extensions, &filtered_extensions, extension_name);
                     }
                 }
                 else
@@ -2881,20 +2844,24 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                 device_info->queue_family_index_enabled[queue_create_info->queueFamilyIndex] = true;
             }
 
-            const encode::DeviceTable*                    device_table = GetDeviceTable(*replay_device);
-            VulkanAccelerationStructureBuilder::Functions functions    = {
-                .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
-                .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
-                .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
-                .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
-                .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
-                .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements,
-                .cmd_copy_acceleration_structure           = device_table->CmdCopyAccelerationStructureKHR,
-                .cmd_write_acceleration_structures_properties =
-                    device_table->CmdWriteAccelerationStructuresPropertiesKHR
-            };
-            acceleration_structure_builder_ =
-                std::make_unique<VulkanAccelerationStructureBuilder>(functions, *replay_device, allocator);
+            const encode::DeviceTable* device_table = GetDeviceTable(*replay_device);
+            if (!allocator->SupportsOpaqueDeviceAddresses())
+            {
+                VulkanAccelerationStructureBuilder::Functions as_builder_functions = {
+                    .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
+                    .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
+                    .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
+                    .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
+                    .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
+                    .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements,
+                    .cmd_copy_acceleration_structure           = device_table->CmdCopyAccelerationStructureKHR,
+                    .cmd_write_acceleration_structures_properties =
+                        device_table->CmdWriteAccelerationStructuresPropertiesKHR
+                };
+                acceleration_structure_builders_[*pDevice->GetPointer()] =
+                    std::make_unique<VulkanAccelerationStructureBuilder>(
+                        as_builder_functions, *replay_device, allocator);
+            }
         }
 
         // Restore modified property/feature create info values to the original application values
@@ -4489,6 +4456,20 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
             buffer_info->handle, buffer_info->allocator_data, memory_info->allocator_data);
     }
 
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        // On fastforwarded traces buffer device addressess might be missing (no GetBufferDeviceAddress calls)
+        // Fill out this data based on original memory device address and binding offset
+        auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
+        GFXRECON_ASSERT(entry != device_info->opaque_addresses.end());
+        if (entry != device_info->opaque_addresses.end())
+        {
+            auto memory_device_address   = entry->second;
+            auto original_buffer_address = memory_device_address + memoryOffset;
+            acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
+                buffer_info, original_buffer_address, 0);
+        }
+    }
     return result;
 }
 
@@ -5819,21 +5800,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
         PhysicalDeviceInfo* physical_device_info = object_info_table_.GetPhysicalDeviceInfo(device_info->parent_id);
         InstanceInfo*       instance_info        = object_info_table_.GetInstanceInfo(physical_device_info->parent_id);
 
-        if (kColorspaceSwapchainExtension.count(replay_create_info->imageColorSpace) != 0)
+        auto colorspace_extension_map_iterator = kColorSpaceExtensionMap.find(replay_create_info->imageColorSpace);
+        if (colorspace_extension_map_iterator != kColorSpaceExtensionMap.end())
         {
+            auto supported_extension_iterator = std::find(instance_info->enabled_extensions.begin(),
+                                                          instance_info->enabled_extensions.end(),
+                                                          colorspace_extension_map_iterator->second);
             colorspace_extension_used_unsupported =
-                std::find_if(instance_info->enabled_extensions.begin(),
-                             instance_info->enabled_extensions.end(),
-                             [](const std::string& s) { return s == VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME; }) ==
-                instance_info->enabled_extensions.end();
-        }
-        else if (replay_create_info->imageColorSpace == kAMDNativeDisplayColorspace)
-        {
-            colorspace_extension_used_unsupported =
-                std::find_if(instance_info->enabled_extensions.begin(),
-                             instance_info->enabled_extensions.end(),
-                             [](const std::string& s) { return s == VK_AMD_DISPLAY_NATIVE_HDR_EXTENSION_NAME; }) ==
-                instance_info->enabled_extensions.end();
+                supported_extension_iterator == instance_info->enabled_extensions.end();
         }
 
         if (colorspace_extension_used_unsupported)
@@ -7182,9 +7156,10 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
             device, replay_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
     }
 
-    if (result == VK_SUCCESS)
+    if (result == VK_SUCCESS && !device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builder_->RegisterAccelerationStructure(*replay_accel_struct, device_address);
+        acceleration_structure_builders_[device_info->capture_id]->RegisterAccelerationStructure(*replay_accel_struct,
+                                                                                                 device_address);
     }
 
     return result;
@@ -7197,8 +7172,19 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos)
 {
-    acceleration_structure_builder_->CmdBuildAccelerationStructures(
-        command_buffer_info->handle, infoCount, pInfos->GetPointer(), ppBuildRangeInfos->GetPointer());
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        VkCommandBuffer                              command_buffer    = command_buffer_info->handle;
+        VkAccelerationStructureBuildGeometryInfoKHR* infos             = pInfos->GetPointer();
+        VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos = ppBuildRangeInfos->GetPointer();
+        func(command_buffer, infoCount, infos, build_range_infos);
+    }
+    else
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->CmdBuildAccelerationStructures(
+            command_buffer_info->handle, infoCount, pInfos->GetPointer(), ppBuildRangeInfos->GetPointer());
+    }
 }
 
 void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
@@ -7206,7 +7192,18 @@ void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
     CommandBufferInfo*                                                command_buffer_info,
     StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo)
 {
-    acceleration_structure_builder_->CmdCopyAccelerationStructure(command_buffer_info->handle, pInfo->GetPointer());
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        VkCommandBuffer                     command_buffer = command_buffer_info->handle;
+        VkCopyAccelerationStructureInfoKHR* info           = pInfo->GetPointer();
+        func(command_buffer, info);
+    }
+    else
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->CmdCopyAccelerationStructure(
+            command_buffer_info->handle, pInfo->GetPointer());
+    }
 }
 void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
     PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
@@ -7217,13 +7214,24 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     gfxrecon::decode::QueryPoolInfo*                  in_queryPool,
     uint32_t                                          firstQuery)
 {
-    acceleration_structure_builder_->CmdWriteAccelerationStructuresProperties(
-        command_buffer_info->handle,
-        count,
-        pAccelerationStructures->GetHandlePointer(),
-        queryType,
-        in_queryPool->handle,
-        firstQuery);
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        VkCommandBuffer                   command_buffer       = command_buffer_info->handle;
+        const VkAccelerationStructureKHR* acceleration_structs = pAccelerationStructures->GetHandlePointer();
+        VkQueryPool                       query_pool           = in_queryPool->handle;
+        func(command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
+    }
+    else
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->CmdWriteAccelerationStructuresProperties(
+            command_buffer_info->handle,
+            count,
+            pAccelerationStructures->GetHandlePointer(),
+            queryType,
+            in_queryPool->handle,
+            firstQuery);
+    }
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
@@ -7430,21 +7438,18 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
                                 "replay device does not support this feature, so replay may fail.");
     }
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
-    {
-        GFXRECON_LOG_WARNING_ONCE(
-            "The captured application used vkGetBufferDeviceAddress. The specified replay option '-m rebind' may not "
-            "support the replay of captured device addresses, so replay may fail.");
-    }
-
     VkDevice                         device       = device_info->handle;
     const VkBufferDeviceAddressInfo* address_info = pInfo->GetPointer();
 
     auto new_device_address = func(device, address_info);
 
-    format::HandleId buffer      = pInfo->GetMetaStructPointer()->buffer;
-    auto             buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
-    acceleration_structure_builder_->SetBufferInfo(buffer_data, original_result, new_device_address);
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        format::HandleId buffer      = pInfo->GetMetaStructPointer()->buffer;
+        auto             buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
+        acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
+            buffer_data, original_result, new_device_address);
+    }
 
     return new_device_address;
 }
@@ -7466,16 +7471,12 @@ void VulkanReplayConsumerBase::OverrideGetAccelerationStructureDeviceAddressKHR(
 
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        GFXRECON_LOG_WARNING_ONCE(
-            "The captured application used vkGetAccelerationStructureDeviceAddressKHR. The specified replay option '-m "
-            "rebind' may not support the replay of captured device addresses, so replay may fail.");
+        VkDevice                                           device             = device_info->handle;
+        const VkAccelerationStructureDeviceAddressInfoKHR* address_info       = pInfo->GetPointer();
+        auto                                               new_device_address = func(device, address_info);
+        acceleration_structure_builders_[device_info->capture_id]->SetAccelerationStructureEntry(
+            address_info->accelerationStructure, original_result, new_device_address);
     }
-
-    VkDevice                                           device             = device_info->handle;
-    const VkAccelerationStructureDeviceAddressInfoKHR* address_info       = pInfo->GetPointer();
-    auto                                               new_device_address = func(device, address_info);
-    acceleration_structure_builder_->SetAccelerationStructureEntry(
-        address_info->accelerationStructure, original_result, new_device_address);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesNV(
@@ -8355,6 +8356,8 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
     VkDescriptorSet in_descriptorSet =
         MapHandle<DescriptorSetInfo>(descriptorSet, &VulkanObjectInfoTable::GetDescriptorSetInfo);
     VkDescriptorUpdateTemplate in_descriptorUpdateTemplate = VK_NULL_HANDLE;
+    DeviceInfo*                device_info                 = object_info_table_.GetDeviceInfo(device);
+
     auto update_template_info = object_info_table_.GetDescriptorUpdateTemplateInfo(descriptorUpdateTemplate);
 
     MapDescriptorUpdateTemplateHandles(update_template_info, pData);
@@ -8363,8 +8366,10 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
     {
         in_descriptorUpdateTemplate = update_template_info->handle;
     }
-
-    acceleration_structure_builder_->UpdateDescriptorSetWithTemplateKHR(pData);
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(pData);
+    }
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplate(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
 }
@@ -8408,6 +8413,7 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
     VkDescriptorSet in_descriptorSet =
         MapHandle<DescriptorSetInfo>(descriptorSet, &VulkanObjectInfoTable::GetDescriptorSetInfo);
     VkDescriptorUpdateTemplate in_descriptorUpdateTemplate = VK_NULL_HANDLE;
+    DeviceInfo*                device_info                 = object_info_table_.GetDeviceInfo(device);
     auto update_template_info = object_info_table_.GetDescriptorUpdateTemplateInfo(descriptorUpdateTemplate);
 
     MapDescriptorUpdateTemplateHandles(update_template_info, pData);
@@ -8417,7 +8423,10 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
         in_descriptorUpdateTemplate = update_template_info->handle;
     }
 
-    acceleration_structure_builder_->UpdateDescriptorSetWithTemplateKHR(pData);
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(pData);
+    }
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplateKHR(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
 }

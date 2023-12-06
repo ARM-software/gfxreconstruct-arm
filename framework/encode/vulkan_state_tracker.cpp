@@ -405,44 +405,6 @@ void VulkanStateTracker::TrackTLASBuildCommand(
     }
 }
 
-void VulkanStateTracker::TrackTLASBuildCommand(
-    VkCommandBuffer                                        command_buffer,
-    uint32_t                                               info_count,
-    const VkAccelerationStructureBuildGeometryInfoKHR*     infos,
-    const VkAccelerationStructureBuildRangeInfoKHR* const* pp_buildRange_infos)
-{
-    if (info_count && infos && pp_buildRange_infos)
-    {
-        CommandBufferWrapper* buf_wrapper = GetWrapper<CommandBufferWrapper>(command_buffer);
-
-        for (uint32_t i = 0; i < info_count; ++i)
-        {
-            if (infos[i].type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR &&
-                infos[i].dstAccelerationStructure != VK_NULL_HANDLE && infos[i].geometryCount && infos[i].pGeometries)
-            {
-                AccelerationStructureKHRWrapper* tlas_wrapper =
-                    GetWrapper<AccelerationStructureKHRWrapper>(infos[i].dstAccelerationStructure);
-
-                tlas_wrapper->blas.clear();
-
-                for (uint32_t g = 0; g < infos[i].geometryCount; ++g)
-                {
-                    if (infos[i].pGeometries[g].geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
-                    {
-                        const VkDeviceAddress address = infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
-                        const CommandBufferWrapper::tlas_build_info tlas_info = {
-                            address, pp_buildRange_infos[i]->primitiveCount, pp_buildRange_infos[i]->primitiveOffset
-                        };
-
-                        buf_wrapper->tlas_build_info_map.emplace_back(
-                            std::make_pair(tlas_wrapper, std::move(tlas_info)));
-                    }
-                }
-            }
-        }
-    }
-}
-
 void VulkanStateTracker::TrackImageMemoryBinding(
     VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset, const void* bind_info_pnext)
 {
