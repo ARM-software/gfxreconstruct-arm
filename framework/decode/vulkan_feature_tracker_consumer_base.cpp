@@ -444,23 +444,33 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
 
     for (uint32_t i = 0; i < createInfoCount; i++)
     {
-        if (pCreateInfosDec[i].pMultisampleState->sampleShadingEnable == VK_TRUE)
+        if (pCreateInfosDec[i].pMultisampleState != nullptr &&
+            pCreateInfosDec[i].pMultisampleState->sampleShadingEnable == VK_TRUE)
         {
             core10_.sampleRateShading = true;
         }
-        if (pCreateInfosDec[i].pStages->stage == VK_SHADER_STAGE_GEOMETRY_BIT)
+
+        for (uint32_t j = 0; j < pCreateInfosDec[i].stageCount; j++)
         {
-            core10_.geometryShader = true;
-        }
-        else if (pCreateInfosDec[i].pStages->stage == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ||
-                 pCreateInfosDec[i].pStages->stage == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)
-        {
-            core10_.tessellationShader = true;
+            if (pCreateInfosDec[i].pStages[j].stage == VK_SHADER_STAGE_GEOMETRY_BIT)
+            {
+                core10_.geometryShader = true;
+            }
+            else if (pCreateInfosDec[i].pStages[j].stage == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ||
+                     pCreateInfosDec[i].pStages[j].stage == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)
+            {
+                core10_.tessellationShader = true;
+            }
         }
     }
 
     for (uint32_t i = 0; i < createInfoCount; i++)
     {
+        if (pCreateInfosDec[i].pColorBlendState == nullptr)
+        {
+            continue;
+        }
+
         auto     pColorBlendState = pCreateInfosDec[i].pColorBlendState;
         auto     pAttachments     = pColorBlendState->pAttachments;
         uint32_t attachmentCount  = pColorBlendState->attachmentCount;
@@ -470,21 +480,21 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
                                                VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR,
                                                VK_BLEND_FACTOR_SRC1_ALPHA,
                                                VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA };
-            for (uint32_t i = 0; i < 4; i++)
+            for (uint32_t k = 0; k < 4; k++)
             {
-                if (pAttachments->srcColorBlendFactor == factors[i])
+                if (pAttachments->srcColorBlendFactor == factors[k])
                 {
                     core10_.dualSrcBlend = true;
                 }
-                if (pAttachments->dstColorBlendFactor == factors[i])
+                if (pAttachments->dstColorBlendFactor == factors[k])
                 {
                     core10_.dualSrcBlend = true;
                 }
-                if (pAttachments->srcAlphaBlendFactor == factors[i])
+                if (pAttachments->srcAlphaBlendFactor == factors[k])
                 {
                     core10_.dualSrcBlend = true;
                 }
-                if (pAttachments->dstAlphaBlendFactor == factors[i])
+                if (pAttachments->dstAlphaBlendFactor == factors[k])
                 {
                     core10_.dualSrcBlend = true;
                 }
@@ -494,28 +504,34 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
 
     for (uint32_t i = 0; i < createInfoCount; i++)
     {
-        if (pCreateInfosDec[i].pColorBlendState->logicOpEnable == VK_TRUE)
+        if (pCreateInfosDec[i].pColorBlendState != nullptr &&
+            pCreateInfosDec[i].pColorBlendState->logicOpEnable == VK_TRUE)
         {
             core10_.logicOp = true;
         }
-        if (pCreateInfosDec[i].pViewportState->viewportCount > 1 || pCreateInfosDec[i].pViewportState->scissorCount > 1)
+        if (pCreateInfosDec[i].pViewportState != nullptr && (pCreateInfosDec[i].pViewportState->viewportCount > 1 ||
+                                                             pCreateInfosDec[i].pViewportState->scissorCount > 1))
         {
             core10_.multiViewport = true;
         }
-        if (pCreateInfosDec[i].pMultisampleState->alphaToOneEnable == VK_TRUE)
+        if (pCreateInfosDec[i].pMultisampleState != nullptr &&
+            pCreateInfosDec[i].pMultisampleState->alphaToOneEnable == VK_TRUE)
         {
             core10_.alphaToOne = true;
         }
-        if (pCreateInfosDec[i].pDepthStencilState->depthBoundsTestEnable == VK_TRUE)
+        if (pCreateInfosDec[i].pDepthStencilState != nullptr &&
+            pCreateInfosDec[i].pDepthStencilState->depthBoundsTestEnable == VK_TRUE)
         {
             core10_.depthBounds = true;
         }
-        if (pCreateInfosDec[i].pRasterizationState->polygonMode == VK_POLYGON_MODE_POINT ||
-            pCreateInfosDec[i].pRasterizationState->polygonMode == VK_POLYGON_MODE_LINE)
+        if (pCreateInfosDec[i].pRasterizationState != nullptr &&
+            (pCreateInfosDec[i].pRasterizationState->polygonMode == VK_POLYGON_MODE_POINT ||
+             pCreateInfosDec[i].pRasterizationState->polygonMode == VK_POLYGON_MODE_LINE))
         {
             core10_.fillModeNonSolid = true;
         }
-        if (pCreateInfosDec[i].pRasterizationState->depthClampEnable == VK_TRUE)
+        if (pCreateInfosDec[i].pRasterizationState != nullptr &&
+            pCreateInfosDec[i].pRasterizationState->depthClampEnable == VK_TRUE)
         {
             core10_.depthClamp = true;
         }
@@ -523,6 +539,11 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
 
     for (uint32_t i = 0; i < createInfoCount; i++)
     {
+        if (pCreateInfosDec[i].pColorBlendState == nullptr)
+        {
+            continue;
+        }
+
         auto     pAttachments    = pCreateInfosDec[i].pColorBlendState->pAttachments;
         uint32_t attachmentCount = pCreateInfosDec[i].pColorBlendState->attachmentCount;
 
@@ -547,20 +568,23 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
         }
     }
 
-    void* pNext = const_cast<void*>(pCreateInfosDec->pViewportState->pNext);
-    while (pNext != nullptr)
+    if (pCreateInfosDec->pViewportState != nullptr)
     {
-        if (((VkBaseInStructure*)pNext)->sType ==
-            VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_EXCLUSIVE_SCISSOR_STATE_CREATE_INFO_NV)
+        void* pNext = const_cast<void*>(pCreateInfosDec->pViewportState->pNext);
+        while (pNext != nullptr)
         {
-            auto exclusiveScissorCount =
-                ((VkPipelineViewportExclusiveScissorStateCreateInfoNV*)pNext)->exclusiveScissorCount;
-            if ((exclusiveScissorCount != 0) && (exclusiveScissorCount != 1))
+            if (((VkBaseInStructure*)pNext)->sType ==
+                VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_EXCLUSIVE_SCISSOR_STATE_CREATE_INFO_NV)
             {
-                core10_.multiViewport = true;
+                auto exclusiveScissorCount =
+                    ((VkPipelineViewportExclusiveScissorStateCreateInfoNV*)pNext)->exclusiveScissorCount;
+                if ((exclusiveScissorCount != 0) && (exclusiveScissorCount != 1))
+                {
+                    core10_.multiViewport = true;
+                }
             }
+            pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
         }
-        pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
     }
 }
 
@@ -620,12 +644,14 @@ void VulkanFeatureTrackerConsumerBase::Process_vkBeginCommandBuffer(
     format::HandleId                                        commandBuffer,
     StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
 {
-    auto pInheritanceInfoDec = pBeginInfo->GetMetaStructPointer()->decoded_value->pInheritanceInfo;
-
-    if (pInheritanceInfoDec == nullptr)
+    if (pBeginInfo->GetMetaStructPointer() == nullptr ||
+        pBeginInfo->GetMetaStructPointer()->decoded_value->pInheritanceInfo == nullptr)
     {
         return;
     }
+
+    auto pInheritanceInfoDec = pBeginInfo->GetMetaStructPointer()->decoded_value->pInheritanceInfo;
+
     // Potential TODO, bitwise OR new VkQueryControlFlagBits values (currently only VK_QUERY_CONTROL_PRECISE_BIT exists)
     if (pInheritanceInfoDec->occlusionQueryEnable != VK_FALSE ||
         ((pInheritanceInfoDec->queryFlags & ~(VK_QUERY_CONTROL_PRECISE_BIT)) == 0))
