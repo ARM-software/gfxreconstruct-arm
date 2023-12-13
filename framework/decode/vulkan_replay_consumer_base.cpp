@@ -2850,7 +2850,7 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                 VulkanAccelerationStructureBuilder::Functions as_builder_functions = {
                     .get_acceleration_structure_build_sizes    = device_table->GetAccelerationStructureBuildSizesKHR,
                     .create_acceleration_structure             = device_table->CreateAccelerationStructureKHR,
-                    .get_buffer_device_address                 = device_table->GetBufferDeviceAddress,
+                    .get_buffer_device_address                 = device_table->GetBufferDeviceAddressKHR,
                     .cmd_build_acceleration_structures         = device_table->CmdBuildAccelerationStructuresKHR,
                     .get_acceleration_structure_device_address = device_table->GetAccelerationStructureDeviceAddressKHR,
                     .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements,
@@ -4757,7 +4757,6 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
 
         buffer_info->allocator_data = allocator_data;
         buffer_info->usage          = replay_create_info->usage;
-        buffer_info->size           = replay_create_info->size;
 
         if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
             (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))

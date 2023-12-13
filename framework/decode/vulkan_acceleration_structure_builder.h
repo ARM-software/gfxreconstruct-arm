@@ -45,7 +45,7 @@ class VulkanAccelerationStructureBuilder
     {
         PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };
         PFN_vkCreateAccelerationStructureKHR              create_acceleration_structure{ nullptr };
-        PFN_vkGetBufferDeviceAddress                      get_buffer_device_address{ nullptr };
+        PFN_vkGetBufferDeviceAddressKHR                   get_buffer_device_address{ nullptr };
         PFN_vkCmdBuildAccelerationStructuresKHR           cmd_build_acceleration_structures{ nullptr };
         PFN_vkGetAccelerationStructureDeviceAddressKHR    get_acceleration_structure_device_address{ nullptr };
         PFN_vkGetBufferMemoryRequirements                 get_buffer_memory_requirements{ nullptr };
@@ -119,7 +119,8 @@ class VulkanAccelerationStructureBuilder
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
     void                        UpdateBufferDeviceAddress(VkDeviceAddress& address);
-    void                        UpdateDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& build_geometry);
+    void                        UpdateDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
+                                                    VkAccelerationStructureBuildRangeInfoKHR*    range_infos);
     BufferEntry*                GetBufferByDeviceAddress(VkDeviceAddress runtime_address);
     VkDeviceAddress             GetBufferDeviceAddress(VkBuffer buffer);
     VkDeviceAddress             GetDeviceAddress(VkAccelerationStructureKHR acceleration_structure);
@@ -132,7 +133,8 @@ class VulkanAccelerationStructureBuilder
     GetAccelerationStructureSizeInfo(VkAccelerationStructureBuildGeometryInfoKHR* geometry_info,
                                      VkAccelerationStructureBuildRangeInfoKHR*    range_info);
 
-    void UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR& instances);
+    void UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR& instances,
+                              const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
 };
 
 GFXRECON_END_NAMESPACE(decode)
