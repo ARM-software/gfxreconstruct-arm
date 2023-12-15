@@ -51,6 +51,8 @@ class VulkanAccelerationStructureBuilder
         PFN_vkGetBufferMemoryRequirements                 get_buffer_memory_requirements{ nullptr };
         PFN_vkCmdCopyAccelerationStructureKHR             cmd_copy_acceleration_structure{ nullptr };
         PFN_vkCmdWriteAccelerationStructuresPropertiesKHR cmd_write_acceleration_structures_properties{ nullptr };
+        PFN_vkDestroyAccelerationStructureKHR             destroy_acceleration_structure{ nullptr };
+        PFN_vkDestroyBuffer                               destroy_buffer{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions functions, VkDevice device, VulkanResourceAllocator* allocator);
@@ -71,10 +73,12 @@ class VulkanAccelerationStructureBuilder
                                                   uint32_t                    first_query);
 
     void SetBufferInfo(BufferInfo* buffer_info, VkDeviceAddress original_address, VkDeviceAddress new_address);
+    void UntrackBufferInfo(const BufferInfo* buffer_info);
     void SetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct,
                                        VkDeviceAddress            original_address,
                                        VkDeviceAddress            new_address);
     void RegisterAccelerationStructure(VkAccelerationStructureKHR handle, VkDeviceAddress device_address);
+    void UntrackAccelerationStructure(const AccelerationStructureKHRInfo* acceleration_structure_info);
 
   private:
     class AccelerationStructureEntry
@@ -85,6 +89,8 @@ class VulkanAccelerationStructureBuilder
         VkAccelerationStructureKHR                  handle_;
         VkAccelerationStructureBuildSizesInfoKHR    size_info_;
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
+        VkBuffer                                    storage_{ VK_NULL_HANDLE };
+        VkBuffer                                    scratch_{ VK_NULL_HANDLE };
 
         AccelerationStructureEntry(VkDeviceAddress                          original_address,
                                    VkDeviceAddress                          new_address,
@@ -92,6 +98,16 @@ class VulkanAccelerationStructureBuilder
                                    VkAccelerationStructureBuildSizesInfoKHR size_info) :
             original_address_(original_address),
             new_address_(new_address), handle_(handle), size_info_(size_info)
+        {}
+
+        AccelerationStructureEntry(VkDeviceAddress                          original_address,
+                                   VkDeviceAddress                          new_address,
+                                   VkAccelerationStructureKHR               handle,
+                                   VkAccelerationStructureBuildSizesInfoKHR size_info,
+                                   VkBuffer                                 storage,
+                                   VkBuffer                                 scratch) :
+            original_address_(original_address),
+            new_address_(new_address), handle_(handle), size_info_(size_info), storage_(storage), scratch_(scratch)
         {}
     };
 
@@ -127,7 +143,8 @@ class VulkanAccelerationStructureBuilder
 
     VkAccelerationStructureKHR CreateAccelerationStructure(VkAccelerationStructureBuildGeometryInfoKHR& geometry_info,
                                                            VkAccelerationStructureBuildRangeInfoKHR*    range_info,
-                                                           const VkAccelerationStructureBuildSizesInfoKHR& size_info);
+                                                           const VkAccelerationStructureBuildSizesInfoKHR& size_info,
+                                                           VkBuffer                                        storage);
 
     VkAccelerationStructureBuildSizesInfoKHR
     GetAccelerationStructureSizeInfo(VkAccelerationStructureBuildGeometryInfoKHR* geometry_info,

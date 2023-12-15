@@ -2856,7 +2856,9 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .get_buffer_memory_requirements            = device_table->GetBufferMemoryRequirements,
                     .cmd_copy_acceleration_structure           = device_table->CmdCopyAccelerationStructureKHR,
                     .cmd_write_acceleration_structures_properties =
-                        device_table->CmdWriteAccelerationStructuresPropertiesKHR
+                        device_table->CmdWriteAccelerationStructuresPropertiesKHR,
+                    .destroy_acceleration_structure = device_table->DestroyAccelerationStructureKHR,
+                    .destroy_buffer                 = device_table->DestroyBuffer
                 };
                 acceleration_structure_builders_[*pDevice->GetPointer()] =
                     std::make_unique<VulkanAccelerationStructureBuilder>(
@@ -4461,7 +4463,6 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
         // On fastforwarded traces buffer device addressess might be missing (no GetBufferDeviceAddress calls)
         // Fill out this data based on original memory device address and binding offset
         auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
-        GFXRECON_ASSERT(entry != device_info->opaque_addresses.end());
         if (entry != device_info->opaque_addresses.end())
         {
             auto memory_device_address   = entry->second;
@@ -4794,6 +4795,11 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         allocator_data = buffer_info->allocator_data;
 
         buffer_info->allocator_data = 0;
+    }
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device_info->capture_id]->UntrackBufferInfo(buffer_info);
     }
 
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
@@ -7863,6 +7869,34 @@ void VulkanReplayConsumerBase::OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryA
     {
         func(device, semaphore, image);
     }
+}
+
+void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
+    PFN_vkDestroyAccelerationStructureKHR                func,
+    const DeviceInfo*                                    device_info,
+    const AccelerationStructureKHRInfo*                  acceleration_structure_info,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    VkAccelerationStructureKHR            acceleration_structure = VK_NULL_HANDLE;
+    VulkanResourceAllocator::ResourceData allocator_data         = 0;
+
+    if (acceleration_structure_info != nullptr)
+    {
+        acceleration_structure = acceleration_structure_info->handle;
+    }
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device_info->capture_id]->UntrackAccelerationStructure(
+            acceleration_structure_info);
+    }
+
+    func(device_info->handle, acceleration_structure, GetAllocationCallbacks(pAllocator));
 }
 
 // We want to allow skipping the query for tool properties because the capture layer actually adds this extension

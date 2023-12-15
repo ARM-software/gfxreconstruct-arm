@@ -1124,6 +1124,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       const SemaphoreInfo*       semaphore_info,
                                       const ImageInfo*           image_info);
 
+    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR func,
+                                                 const DeviceInfo*                     device_info,
+                                                 const AccelerationStructureKHRInfo*   acceleration_structure_info,
+                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
     const VulkanReplayOptions options_;
 
   private:
