@@ -121,6 +121,7 @@
     "vkCmdCopyAccelerationStructureKHR" : "OverrideCmdCopyAccelerationStructureKHR",
     "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
     "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID",
-    "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR"
+    "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
+    "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets"
   }
 }

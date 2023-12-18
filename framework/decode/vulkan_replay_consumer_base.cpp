@@ -7216,7 +7216,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     uint32_t                                          count,
     HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
     VkQueryType                                       queryType,
-    gfxrecon::decode::QueryPoolInfo*                  in_queryPool,
+    gfxrecon::decode::QueryPoolInfo*                  query_pool_info,
     uint32_t                                          firstQuery)
 {
     DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
@@ -7224,7 +7224,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     {
         VkCommandBuffer                   command_buffer       = command_buffer_info->handle;
         const VkAccelerationStructureKHR* acceleration_structs = pAccelerationStructures->GetHandlePointer();
-        VkQueryPool                       query_pool           = in_queryPool->handle;
+        VkQueryPool                       query_pool           = query_pool_info->handle;
         func(command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
     }
     else
@@ -7234,7 +7234,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
             count,
             pAccelerationStructures->GetHandlePointer(),
             queryType,
-            in_queryPool->handle,
+            query_pool_info->handle,
             firstQuery);
     }
 }
@@ -7897,6 +7897,60 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
     }
 
     func(device_info->handle, acceleration_structure, GetAllocationCallbacks(pAllocator));
+}
+
+void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
+    PFN_vkUpdateDescriptorSets                          func,
+    const DeviceInfo*                                   device_info,
+    uint32_t                                            descriptor_write_count,
+    StructPointerDecoder<Decoded_VkWriteDescriptorSet>* descriptor_writes_decoder,
+    uint32_t                                            descriptor_copy_count,
+    StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  descriptor_copies_decoder)
+{
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    if (descriptor_write_count > 0)
+    {
+        assert(descriptor_writes_decoder != nullptr);
+    }
+    if (descriptor_copy_count > 0)
+    {
+        assert(descriptor_copies_decoder != nullptr);
+    }
+
+    VkWriteDescriptorSet* writes = descriptor_writes_decoder->GetPointer();
+    for (uint32_t i = 0; i < descriptor_write_count; ++i)
+    {
+        if (writes[i].descriptorType == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR &&
+            !allocator->SupportsOpaqueDeviceAddresses())
+        {
+            // Find the relevant data in the pNext chain
+            const VkBaseInStructure* structure = reinterpret_cast<const VkBaseInStructure*>(writes[i].pNext);
+            while (structure != nullptr)
+            {
+                if (structure->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR)
+                {
+                    acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
+                        const_cast<VkWriteDescriptorSetAccelerationStructureKHR*>(
+                            reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(structure)));
+                    break;
+                }
+                else
+                {
+                    structure = structure->pNext;
+                }
+            }
+        }
+    }
+
+    func(device_info->handle,
+         descriptor_write_count,
+         descriptor_writes_decoder->GetPointer(),
+         descriptor_copy_count,
+         descriptor_copies_decoder->GetPointer());
 }
 
 // We want to allow skipping the query for tool properties because the capture layer actually adds this extension

@@ -1010,7 +1010,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         uint32_t                                          count,
         HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
         VkQueryType                                       queryType,
-        gfxrecon::decode::QueryPoolInfo*                  in_queryPool,
+        gfxrecon::decode::QueryPoolInfo*                  query_pool_info,
         uint32_t                                          firstQuery);
 
     VkResult OverrideCreateRayTracingPipelinesKHR(
@@ -1128,6 +1128,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                  const DeviceInfo*                     device_info,
                                                  const AccelerationStructureKHRInfo*   acceleration_structure_info,
                                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideUpdateDescriptorSets(PFN_vkUpdateDescriptorSets                          func,
+                                      const DeviceInfo*                                   device_info,
+                                      uint32_t                                            descriptor_write_count,
+                                      StructPointerDecoder<Decoded_VkWriteDescriptorSet>* descriptor_writes_decoder,
+                                      uint32_t                                            descriptor_copy_count,
+                                      StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  descriptor_copies_decoder);
 
     const VulkanReplayOptions options_;
 

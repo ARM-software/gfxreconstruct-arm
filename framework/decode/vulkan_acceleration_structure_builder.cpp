@@ -216,6 +216,19 @@ VulkanAccelerationStructureBuilder::GetBufferByDeviceAddress(VkDeviceAddress run
     return buffer->get();
 }
 
+void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(VkWriteDescriptorSetAccelerationStructureKHR* ac_write)
+{
+    for (uint32_t i = 0; i < ac_write->accelerationStructureCount; ++i)
+    {
+        AccelerationStructureEntry* entry = GetAccelerationStructureEntry(ac_write->pAccelerationStructures[i]);
+        if (entry && entry->replacement_acceleration_struct_)
+        {
+            const_cast<VkAccelerationStructureKHR*>(ac_write->pAccelerationStructures)[i] =
+                entry->replacement_acceleration_struct_->handle_;
+        }
+    }
+}
+
 // Map accel struct HandleId to AccelerationStructureKHR handle
 void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
     gfxrecon::decode::DescriptorUpdateTemplateDecoder* descriptor)

@@ -57,6 +57,7 @@ class VulkanAccelerationStructureBuilder
 
     VulkanAccelerationStructureBuilder(Functions functions, VkDevice device, VulkanResourceAllocator* allocator);
 
+    void UpdateDescriptorSets(VkWriteDescriptorSetAccelerationStructureKHR* ac_write);
     void UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData);
 
     void CmdBuildAccelerationStructures(VkCommandBuffer                              command_buffer,
