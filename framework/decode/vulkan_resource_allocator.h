@@ -269,6 +269,8 @@ class VulkanResourceAllocator
 
     virtual bool SupportsOpaqueDeviceAddresses() = 0;
 
+    virtual bool SupportsExternalMemory() = 0;
+
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) { return 0; }
 };
 

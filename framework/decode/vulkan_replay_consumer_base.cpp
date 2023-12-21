@@ -4173,7 +4173,8 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         bool                address_override_found = false;
         bool                uses_import_memory     = false;
         uint64_t            opaque_address         = 0;
-        VkBaseOutStructure* current_struct = reinterpret_cast<const VkBaseOutStructure*>(replay_allocate_info)->pNext;
+        VkBaseOutStructure* current_struct =
+            const_cast<VkBaseOutStructure*>(reinterpret_cast<const VkBaseOutStructure*>(replay_allocate_info));
 
         size_t                                            host_pointer_size = 0;
         std::unique_ptr<void, std::function<void(void*)>> external_memory_guard(
@@ -4229,6 +4230,17 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
             else if (current_struct->sType == VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO)
             {
                 address_override_found = true;
+            }
+
+            // Skip unwanted extensions to AllocateInfo
+            if (current_struct->pNext)
+            {
+                // Skip android hardware buffer allocation if unsupported in the allocator
+                if (current_struct->pNext->sType == VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID &&
+                    !allocator->SupportsExternalMemory())
+                {
+                    current_struct->pNext = current_struct->pNext->pNext;
+                }
             }
 
             current_struct = current_struct->pNext;
@@ -4835,6 +4847,27 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         // We also need to add VK_IMAGE_USAGE_TRANSFER_DST_BIT to be able to restore image and copy to it
         modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
+    // Skip external memory extension if unsupported in allocator
+    auto create_info_extension = reinterpret_cast<VkBaseOutStructure*>(&modified_create_info);
+    while (create_info_extension)
+    {
+        if (create_info_extension->pNext)
+        {
+            const VkBaseOutStructure* next_extension =
+                reinterpret_cast<const VkBaseOutStructure*>(create_info_extension->pNext);
+
+            if (!allocator->SupportsExternalMemory())
+            {
+                if (next_extension->sType == VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO ||
+                    next_extension->sType == VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID)
+                {
+                    create_info_extension->pNext = next_extension->pNext;
+                }
+            }
+        }
+        create_info_extension = create_info_extension->pNext;
     }
 
     VkResult result = allocator->CreateImage(
