@@ -512,5 +512,41 @@ void VulkanDecoderBase::DispatchSetTlasToBlasDependencyCommand(format::HandleId 
     }
 }
 
+void VulkanDecoderBase::DispatchInitVulkanAccelerationStructuresCommand(const uint8_t* parameter_buffer,
+                                                                        size_t         buffer_size)
+{
+
+    format::HandleId                                                          device_id;
+    format::HandleId                                                          command_buffer_id;
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR> pInfos;
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>   ppRangeInfos;
+
+    std::size_t bytes_read = ValueDecoder::DecodeHandleIdValue(parameter_buffer, buffer_size, &device_id);
+    bytes_read +=
+        ValueDecoder::DecodeHandleIdValue(parameter_buffer + bytes_read, buffer_size - bytes_read, &command_buffer_id);
+    bytes_read += pInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
+    bytes_read += ppRangeInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
+
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffers;
+    for (uint32_t i = 0; i < pInfos.GetLength(); ++i)
+    {
+        if (pInfos.GetPointer()[i].type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+        {
+            instance_buffers.emplace_back(
+                std::vector<VkAccelerationStructureInstanceKHR>(ppRangeInfos.GetPointer()[i]->primitiveCount));
+            std::memcpy(instance_buffers.back().data(),
+                        parameter_buffer + bytes_read,
+                        instance_buffers[i].size() * sizeof(VkAccelerationStructureInstanceKHR));
+        }
+    }
+
+    // TODO Pass the data to consumers, which in turn will trigger the acceleration structure builder
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessInitVulkanAccelerationStructuresCommand(
+            device_id, command_buffer_id, pInfos.GetLength(), &pInfos, &ppRangeInfos, instance_buffers);
+    }
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

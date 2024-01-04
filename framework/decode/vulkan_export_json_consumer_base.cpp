@@ -705,5 +705,36 @@ void VulkanExportJsonConsumerBase::ProcessAnnotation(uint64_t               bloc
     WriteBlockEnd();
 }
 
+void VulkanExportJsonConsumerBase::ProcessSetTlasToBlasRelationCommand(format::HandleId                     tlas,
+                                                                       const std::vector<format::HandleId>& blases)
+{
+    WriteMetaCommandToFile("SetTLAStoBLASRelationCommand", [&](auto& jdata) {
+        HandleToJson(jdata["TLAS_id"], tlas, json_options_);
+        for (const auto& blas_id : blases)
+        {
+            jdata["BLAS_ids"].push_back(blas_id);
+        }
+    });
+}
+
+void VulkanExportJsonConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
+    format::HandleId                                                           device,
+    format::HandleId                                                           command_buffer,
+    uint32_t                                                                   info_count,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
+{
+    WriteMetaCommandToFile("InitVulkanAccelerationStructuresCommand", [&](auto& jdata) {
+        HandleToJson(jdata["device"], device, json_options_);
+        HandleToJson(jdata["command_buffer"], command_buffer, json_options_);
+        FieldToJson(jdata["info_count"], info_count, json_options_);
+        // TODO Write relevant build information somehow - maybe just write acc ids to know that we are trying to build
+        for (uint32_t i = 0; i < info_count; ++i)
+        {
+            jdata["acc_ids"].push_back(pInfos[i].GetMetaStructPointer()->dstAccelerationStructure);
+        }
+    });
+}
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
