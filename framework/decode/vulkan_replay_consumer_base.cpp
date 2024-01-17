@@ -4188,7 +4188,8 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                 if ((alloc_flags_info->flags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) ==
                     VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT)
                 {
-                    if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
+                    if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay &&
+                        allocator->SupportsOpaqueDeviceAddresses())
                     {
                         uses_address = true;
                         alloc_flags_info->flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
@@ -4709,7 +4710,8 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
         modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     }
 
-    if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
+    if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay &&
+        allocator->SupportsOpaqueDeviceAddresses())
     {
         if ((replay_create_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) ==
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
