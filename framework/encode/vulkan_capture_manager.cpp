@@ -932,7 +932,7 @@ void VulkanCaptureManager::OverrideCmdBuildAccelerationStructuresKHR(
 {
     if ((GetCaptureMode() & kModeTrack) == kModeTrack)
     {
-        state_tracker_->TrackTLASBuildCommand(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
+        state_tracker_->TrackAccelerationStructureBuildCommand(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
     }
 
     const DeviceTable* device_table = GetDeviceTable(commandBuffer);

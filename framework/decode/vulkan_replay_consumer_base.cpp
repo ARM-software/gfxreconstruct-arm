@@ -214,6 +214,11 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // Idle all devices before destroying other resources.
     WaitDevicesIdle();
 
+    for (auto& [device, builder] : acceleration_structure_builders_)
+    {
+        builder.reset();
+    }
+
     // Cleanup screenshot resources before destroying device.
     object_info_table_.VisitDeviceInfo([this](const DeviceInfo* info) {
         assert(info != nullptr);
@@ -2858,11 +2863,23 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .cmd_write_acceleration_structures_properties =
                         device_table->CmdWriteAccelerationStructuresPropertiesKHR,
                     .destroy_acceleration_structure = device_table->DestroyAccelerationStructureKHR,
-                    .destroy_buffer                 = device_table->DestroyBuffer
+                    .destroy_buffer                 = device_table->DestroyBuffer,
+                    .create_command_pool            = device_table->CreateCommandPool,
+                    .destroy_command_pool           = device_table->DestroyCommandPool,
+                    .allocate_command_buffers       = device_table->AllocateCommandBuffers,
+                    .get_device_queue               = device_table->GetDeviceQueue,
+                    .begin_command_buffer           = device_table->BeginCommandBuffer,
+                    .end_command_buffer             = device_table->EndCommandBuffer,
+                    .reset_command_buffer           = device_table->ResetCommandBuffer,
+                    .queue_submit                   = device_table->QueueSubmit,
+                    .queue_wait_idle                = device_table->QueueWaitIdle
                 };
                 acceleration_structure_builders_[*pDevice->GetPointer()] =
                     std::make_unique<VulkanAccelerationStructureBuilder>(
-                        as_builder_functions, *replay_device, allocator);
+                        as_builder_functions,
+                        *replay_device,
+                        allocator,
+                        *physical_device_info->replay_device_info->memory_properties);
             }
         }
 
@@ -7189,6 +7206,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
 
         result = device_table->CreateAccelerationStructureKHR(
             device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
+        // Only retry this if it failed with this specific error
+        if (result == VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS)
+        {
+            modified_create_info.createFlags &= ~VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
+            modified_create_info.deviceAddress = 0;
+            result                             = device_table->CreateAccelerationStructureKHR(
+                device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
+        }
     }
     else
     {
@@ -7219,8 +7244,10 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
         VkAccelerationStructureBuildGeometryInfoKHR* infos             = pInfos->GetPointer();
         VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos = ppBuildRangeInfos->GetPointer();
         func(command_buffer, infoCount, infos, build_range_infos);
+        return;
     }
-    else
+    // Use the builder when the rebind allocator is selected and the trimming is done / not used
+    else if (!loading_trim_state_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdBuildAccelerationStructures(
             command_buffer_info->handle, infoCount, pInfos->GetPointer(), ppBuildRangeInfos->GetPointer());
@@ -7957,25 +7984,28 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
     }
 
     VkWriteDescriptorSet* writes = descriptor_writes_decoder->GetPointer();
-    for (uint32_t i = 0; i < descriptor_write_count; ++i)
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        if (writes[i].descriptorType == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR &&
-            !allocator->SupportsOpaqueDeviceAddresses())
+        for (uint32_t i = 0; i < descriptor_write_count; ++i)
         {
-            // Find the relevant data in the pNext chain
-            const VkBaseInStructure* structure = reinterpret_cast<const VkBaseInStructure*>(writes[i].pNext);
-            while (structure != nullptr)
+            if (writes[i].descriptorType == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
             {
-                if (structure->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR)
+                // Find the relevant data in the pNext chain
+                const VkBaseInStructure* structure = reinterpret_cast<const VkBaseInStructure*>(writes[i].pNext);
+                while (structure != nullptr)
                 {
-                    acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
-                        const_cast<VkWriteDescriptorSetAccelerationStructureKHR*>(
-                            reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(structure)));
-                    break;
-                }
-                else
-                {
-                    structure = structure->pNext;
+                    if (structure->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR)
+                    {
+                        acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
+                            const_cast<VkWriteDescriptorSetAccelerationStructureKHR*>(
+                                reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(structure)));
+                        break;
+                    }
+                    else
+                    {
+                        structure = structure->pNext;
+                    }
                 }
             }
         }
@@ -8551,6 +8581,44 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
     }
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplateKHR(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
+}
+
+void VulkanReplayConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
+    format::HandleId                                                           device,
+    format::HandleId                                                           command_buffer,
+    uint32_t                                                                   info_count,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
+{
+    DeviceInfo* device_info = GetObjectInfoTable().GetDeviceInfo(device);
+    GFXRECON_ASSERT(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    {
+        return;
+    }
+
+    MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
+
+    CommandBufferInfo* cmd_buffer_info = GetObjectInfoTable().GetCommandBufferInfo(command_buffer);
+    if (!cmd_buffer_info)
+    {
+        acceleration_structure_builders_[device]->ProcessInitVulkanAccelerationStructuresCommand(
+            VK_NULL_HANDLE, info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
+    }
+    else
+    {
+        acceleration_structure_builders_[device]->ProcessInitVulkanAccelerationStructuresCommand(
+            cmd_buffer_info->handle,
+            info_count,
+            pInfos->GetPointer(),
+            ppRangeInfos->GetPointer(),
+            instance_buffers_data);
+    }
 }
 
 void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData)

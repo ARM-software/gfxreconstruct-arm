@@ -387,10 +387,11 @@ class VulkanStateTracker
                                                     VkAccelerationStructureKHR accel_struct,
                                                     VkDeviceAddress            address);
 
-    void TrackTLASBuildCommand(VkCommandBuffer                                        command_buffer,
-                               uint32_t                                               info_count,
-                               const VkAccelerationStructureBuildGeometryInfoKHR*     infos,
-                               const VkAccelerationStructureBuildRangeInfoKHR* const* pp_buildRange_infos);
+    void
+    TrackAccelerationStructureBuildCommand(VkCommandBuffer                                        command_buffer,
+                                           uint32_t                                               info_count,
+                                           const VkAccelerationStructureBuildGeometryInfoKHR*     infos,
+                                           const VkAccelerationStructureBuildRangeInfoKHR* const* pp_buildRange_infos);
 
     void TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address);
 
@@ -410,7 +411,7 @@ class VulkanStateTracker
 
     void
     TrackSetDebugUtilsName(format::HandleId handle, VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
-    
+
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
   private:
