@@ -214,10 +214,7 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // Idle all devices before destroying other resources.
     WaitDevicesIdle();
 
-    for (auto& [device, builder] : acceleration_structure_builders_)
-    {
-        builder.reset();
-    }
+    acceleration_structure_builders_.clear();
 
     // Cleanup screenshot resources before destroying device.
     object_info_table_.VisitDeviceInfo([this](const DeviceInfo* info) {
@@ -2914,6 +2911,11 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
             screenshot_handler_->DestroyDeviceResources(device, device_table);
         }
 
+        if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+        {
+            auto builder = acceleration_structure_builders_.erase(device_info->capture_id);
+        }
+
         device_info->allocator->Destroy();
     }
 
@@ -4490,7 +4492,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
 
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        // On fastforwarded traces buffer device addressess might be missing (no GetBufferDeviceAddress calls)
+        // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
         // Fill out this data based on original memory device address and binding offset
         auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
         if (entry != device_info->opaque_addresses.end())

@@ -725,15 +725,14 @@ void VulkanExportJsonConsumerBase::ProcessInitVulkanAccelerationStructuresComman
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
     WriteMetaCommandToFile("InitVulkanAccelerationStructuresCommand", [&](auto& jdata) {
         HandleToJson(jdata["device"], device, json_options_);
-        HandleToJson(jdata["command_buffer"], command_buffer, json_options_);
-        FieldToJson(jdata["info_count"], info_count, json_options_);
-        // TODO Write relevant build information somehow - maybe just write acc ids to know that we are trying to build
-        for (uint32_t i = 0; i < info_count; ++i)
-        {
-            jdata["acc_ids"].push_back(pInfos[i].GetMetaStructPointer()->dstAccelerationStructure);
-        }
+        HandleToJson(jdata["commandBuffer"], command_buffer, json_options_);
+        FieldToJson(jdata["infoCount"], info_count, json_options_);
+        FieldToJson(jdata["pInfos"], pInfos, json_options_);
+        FieldToJson(jdata["ppBuildRangeInfos"], ppRangeInfos, json_options_);
+        // TODO: display intance data in meaningfull way
     });
 }
 GFXRECON_END_NAMESPACE(decode)

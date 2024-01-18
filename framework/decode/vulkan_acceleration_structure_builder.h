@@ -173,8 +173,7 @@ class VulkanAccelerationStructureBuilder
         CommandExecuteObjects(VkDevice device, PFN_vkDestroyCommandPool destroy_func) :
             m_device(device), destroy_command_pool(destroy_func)
         {}
-        // TODO Object destruction
-        ~CommandExecuteObjects() {}
+        ~CommandExecuteObjects() { destroy_command_pool(m_device, m_pool, nullptr); }
         PFN_vkDestroyCommandPool destroy_command_pool{ nullptr };
 
         VkDevice        m_device{ VK_NULL_HANDLE };

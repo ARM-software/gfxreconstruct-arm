@@ -1147,20 +1147,15 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
                                                command_ptr->geometry_infos.data(),
                                                command_ptr->build_range_infos.data()));
 
-        header.meta_header.block_header.size += parameter_stream_.GetDataSize();
-
-        for (const auto& bytes : command_ptr->instance_buffer_data)
+        for (uint32_t i = 0; i < command_ptr->instance_buffer_data.size(); ++i)
         {
-            header.meta_header.block_header.size += bytes.size();
+            EncodeStructArray(
+                &encoder_, command_ptr->instance_buffer_data[i].data(), command_ptr->instance_buffer_data[i].size());
         }
 
+        header.meta_header.block_header.size += parameter_stream_.GetDataSize();
         output_stream_->Write(&header, sizeof(header));
         output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
-
-        for (const auto& bytes : command_ptr->instance_buffer_data)
-        {
-            output_stream_->Write(bytes.data(), bytes.size());
-        }
 
         parameter_stream_.Reset();
 

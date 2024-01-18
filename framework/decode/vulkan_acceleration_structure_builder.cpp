@@ -38,7 +38,6 @@ VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
 
 VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
 {
-    m_cmd_execute_obj.reset();
     for (auto& entry : acceleration_structures_)
     {
         if (entry->replacement_acceleration_struct_)
@@ -46,6 +45,11 @@ VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
             functions_.destroy_acceleration_structure(
                 device_, entry->replacement_acceleration_struct_->handle_, nullptr);
         }
+    }
+
+    for (auto& [handle, info] : buffer_infos_)
+    {
+        functions_.destroy_buffer(device_, handle, nullptr);
     }
 }
 
@@ -253,10 +257,19 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
 
     if (as != acceleration_structures_.end())
     {
-        address = (*as)->replacement_acceleration_struct_->new_address_;
+        if ((*as)->replacement_acceleration_struct_)
+        {
+            address = (*as)->replacement_acceleration_struct_->new_address_;
+        }
+        else
+        {
+            // This is the case when the acceleration structure was not built but copied into
+            address = (*as)->new_address_;
+        }
         return;
     }
 
+    // When we have already updated instance buffer, we will be searching for the new address
     as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
         return entry->replacement_acceleration_struct_->new_address_ == address;
     });
@@ -334,7 +347,6 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(VkWriteDescriptorS
     }
 }
 
-// Map accel struct HandleId to AccelerationStructureKHR handle
 void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
     gfxrecon::decode::DescriptorUpdateTemplateDecoder* descriptor)
 {
@@ -385,7 +397,7 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
 void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
 {
     // Just initialize without any check - the caller checks if the objects are already created
-    VkResult result{ VK_SUCCESS };
+    VkResult result;
 
     m_cmd_execute_obj = std::make_unique<CommandExecuteObjects>(device_, functions_.destroy_command_pool);
 
@@ -587,12 +599,7 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         // First, get the replay device address of the destination structure and store it
         auto compacted_entry = GetAccelerationStructureEntry(modified_info.dst);
 
-        const VkAccelerationStructureDeviceAddressInfoKHR dst_device_address_info{
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, modified_info.dst
-        };
-
-        compacted_entry->new_address_ =
-            functions_.get_acceleration_structure_device_address(device_, &dst_device_address_info);
+        compacted_entry->new_address_ = GetAccelerationStructureDeviceAddress(modified_info.dst);
 
         // Replace the handle to be of the real built structure
         auto original_entry = GetAccelerationStructureEntry(modified_info.src);
@@ -661,7 +668,7 @@ VkAccelerationStructureBuildSizesInfoKHR VulkanAccelerationStructureBuilder::Get
     std::vector<uint32_t> primitive_counts(geometry_info->geometryCount);
     for (uint32_t i = 0; i < geometry_info->geometryCount; ++i)
     {
-        primitive_counts[i] = range_info->primitiveCount;
+        primitive_counts[i] = range_info[i].primitiveCount;
     }
     VkAccelerationStructureBuildSizesInfoKHR size_info{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
                                                         nullptr };

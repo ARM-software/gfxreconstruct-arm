@@ -180,8 +180,8 @@ struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
     format::HandleId hardware_buffer_memory_id{ format::kNullHandleId };
 
     // State tracking info for memory with device addresses.
-    format::HandleId device_id{ format::kNullHandleId };
-    VkDeviceAddress  address{ 0 };
+    format::HandleId                                    device_id{ format::kNullHandleId };
+    VkDeviceAddress                                     address{ 0 };
     std::unordered_map<VkDeviceAddress, BufferWrapper*> bound_buffers;
 };
 
@@ -498,13 +498,13 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
                 delete[] p_range_info;
             }
         }
-        uint32_t                                                 command_index;
-        format::HandleId                                         device;
-        format::HandleId                                         command_buffer;
-        std::vector<VkAccelerationStructureBuildGeometryInfoKHR> geometry_infos;
-        std::vector<HandleUnwrapMemory>                          geometry_infos_memory;
-        std::vector<VkAccelerationStructureBuildRangeInfoKHR*>   build_range_infos;
-        std::vector<std::vector<uint8_t>>                        instance_buffer_data;
+        uint32_t                                                     command_index;
+        format::HandleId                                             device;
+        format::HandleId                                             command_buffer;
+        std::vector<VkAccelerationStructureBuildGeometryInfoKHR>     geometry_infos;
+        std::vector<HandleUnwrapMemory>                              geometry_infos_memory;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR*>       build_range_infos;
+        std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffer_data;
     };
     using LastBuildCmdPtr = std::shared_ptr<AccelerationStructureKHRBuildCommandData>;
     std::shared_ptr<AccelerationStructureKHRBuildCommandData> latest_build_command_;
