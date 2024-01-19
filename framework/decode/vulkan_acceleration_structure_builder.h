@@ -102,6 +102,8 @@ class VulkanAccelerationStructureBuilder
         VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data);
 
+    void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
+
   private:
     class AccelerationStructureEntry
     {
@@ -139,13 +141,17 @@ class VulkanAccelerationStructureBuilder
     Functions                functions_;
     VkDevice                 device_;
     VulkanResourceAllocator* allocator_;
+    std::unordered_map<VkCommandBuffer,
+                       std::vector<std::tuple<BufferInfo*, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
+        instance_buffer_updates_;
 
     BufferEntry* CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data = nullptr);
 
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
     void                        UpdateBufferDeviceAddress(VkDeviceAddress& address);
-    void                        UpdateDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
+    void                        UpdateDeviceAddress(VkCommandBuffer                              command_buffer,
+                                                    VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
                                                     VkAccelerationStructureBuildRangeInfoKHR*    range_infos);
     BufferEntry*                GetBufferByRuntimeDeviceAddress(VkDeviceAddress runtime_address);
     BufferEntry*                GetBufferByCaptureDeviceAddress(VkDeviceAddress original_address);
@@ -161,7 +167,8 @@ class VulkanAccelerationStructureBuilder
     GetAccelerationStructureSizeInfo(VkAccelerationStructureBuildGeometryInfoKHR* geometry_info,
                                      VkAccelerationStructureBuildRangeInfoKHR*    range_info);
 
-    void UpdateInstanceBuffer(VkAccelerationStructureGeometryInstancesDataKHR& instances,
+    void UpdateInstanceBuffer(VkCommandBuffer                                  command_buffer,
+                              VkAccelerationStructureGeometryInstancesDataKHR& instances,
                               const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
 
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
@@ -183,6 +190,9 @@ class VulkanAccelerationStructureBuilder
     };
 
     std::unique_ptr<CommandExecuteObjects> m_cmd_execute_obj;
+    void                                   UpdateInstanceBufferContent(BufferInfo*                              instance_buffer,
+                                                                       VkDeviceSize                             offset,
+                                                                       VkAccelerationStructureBuildRangeInfoKHR build_range);
 };
 
 GFXRECON_END_NAMESPACE(decode)

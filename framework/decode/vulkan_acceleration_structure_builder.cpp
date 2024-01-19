@@ -275,7 +275,7 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
     });
     if (as == acceleration_structures_.end())
     {
-        throw "Acceleration structure address not found";
+        GFXRECON_LOG_DEBUG("Acceleration structure address not found: " PRIx64, address);
     }
 }
 
@@ -366,12 +366,13 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
 }
 
 void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
+    VkCommandBuffer                                  command_buffer,
     VkAccelerationStructureGeometryInstancesDataKHR& instances,
     const VkAccelerationStructureBuildRangeInfoKHR&  build_range)
 {
     if (instances.arrayOfPointers)
     {
-        throw "Unsupported";
+        throw std::runtime_error("Unsupported instances.arrayOfPointers");
     }
     // update device address of the instance buffer
     UpdateBufferDeviceAddress(instances.data.deviceAddress);
@@ -379,6 +380,14 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
     BufferInfo*  instance_buffer = GetBufferByRuntimeDeviceAddress(instances.data.deviceAddress)->buffer_info_;
     VkDeviceSize offset          = instances.data.deviceAddress - GetBufferDeviceAddress(instance_buffer->handle);
 
+    // store information on instance buffer content to be updated before queuesubmit
+    instance_buffer_updates_[command_buffer].push_back(std::make_tuple(instance_buffer, offset, build_range));
+}
+
+// Map provided instance buffer, update acceleration structure references inside
+void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
+    BufferInfo* instance_buffer, VkDeviceSize offset, VkAccelerationStructureBuildRangeInfoKHR build_range)
+{
     uint8_t* data;
     allocator_->MapResourceMemoryDirect(sizeof(VkAccelerationStructureInstanceKHR) * build_range.primitiveCount,
                                         0,
@@ -458,7 +467,9 @@ void VulkanAccelerationStructureBuilder::ExecuteCommandBuffer()
 }
 
 void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
-    VkAccelerationStructureBuildGeometryInfoKHR& build_geometry, VkAccelerationStructureBuildRangeInfoKHR* range_infos)
+    VkCommandBuffer                              command_buffer,
+    VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
+    VkAccelerationStructureBuildRangeInfoKHR*    range_infos)
 {
     for (uint32_t geometry_index = 0; geometry_index < build_geometry.geometryCount; ++geometry_index)
     {
@@ -478,7 +489,7 @@ void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
                 // instance data - find the instance buffer by device address, map it, update referenced bottom level AS
                 // address
                 auto& instances = geometry_data.geometry.instances;
-                UpdateInstanceBuffer(instances, range_infos[geometry_index]);
+                UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
             }
         }
     }
@@ -553,7 +564,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
             geometry_infos[i].dstAccelerationStructure  = original_as_entry->replacement_acceleration_struct_->handle_;
             geometry_infos[i].scratchData.deviceAddress = GetBufferDeviceAddress(scratch->buffer_info_->handle);
-            UpdateDeviceAddress(geometry_infos[i], range_infos[i]);
+            UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
         }
         else if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
         {
@@ -581,13 +592,13 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                 GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
 
             // update geometry buffers
-            UpdateDeviceAddress(geometry_infos[i], range_infos[i]);
+            UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
         }
     }
     functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
 }
 
-void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandBuffer                     commandBuffer,
+void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandBuffer command_buffer,
                                                                       VkCopyAccelerationStructureInfoKHR* copy_info)
 {
     // In the typical compaction scenario, we copy the built acceleration structure to a smaller storage,
@@ -605,7 +616,7 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         auto original_entry = GetAccelerationStructureEntry(modified_info.src);
         modified_info.src   = original_entry->replacement_acceleration_struct_->handle_;
     }
-    functions_.cmd_copy_acceleration_structure(commandBuffer, &modified_info);
+    functions_.cmd_copy_acceleration_structure(command_buffer, &modified_info);
 }
 
 void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresProperties(
@@ -675,6 +686,31 @@ VkAccelerationStructureBuildSizesInfoKHR VulkanAccelerationStructureBuilder::Get
     functions_.get_acceleration_structure_build_sizes(
         device_, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, geometry_info, primitive_counts.data(), &size_info);
     return size_info;
+}
+
+// For each submitted buffer, if it contains a TLAS build command, update its instance buffer
+// with replacement BLAS address
+void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits)
+{
+    for (int i = 0; i < submitCount; ++i)
+    {
+        auto submission = pSubmits[i];
+        for (int cmdbuffer_index = 0; cmdbuffer_index < submission.commandBufferCount; ++cmdbuffer_index)
+        {
+            auto submitted_buffer = submission.pCommandBuffers[cmdbuffer_index];
+
+            auto instance_buffers_update_itr = instance_buffer_updates_.find(submitted_buffer);
+            if (instance_buffers_update_itr != instance_buffer_updates_.end())
+            {
+                auto instance_buffers_update = instance_buffers_update_itr->second;
+                for (auto [instance_buffer_info, offset, range_info] : instance_buffers_update)
+                {
+                    UpdateInstanceBufferContent(instance_buffer_info, offset, range_info);
+                }
+                instance_buffer_updates_.erase(instance_buffers_update_itr);
+            }
+        }
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

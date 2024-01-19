@@ -3517,6 +3517,13 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
         }
     }
 
+    auto device_info = object_info_table_.GetDeviceInfo(queue_info->parent_id);
+
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device_info->capture_id]->OnQueueSubmit(submitCount, pSubmits->GetPointer());
+    }
+
     // Only attempt to filter imported semaphores if we know at least one has been imported.
     // If rendering is restricted to a specific surface, shadow semaphore and forward progress state will need to be
     // tracked.
