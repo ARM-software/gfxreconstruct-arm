@@ -251,6 +251,8 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
 
     virtual bool SupportsOpaqueDeviceAddresses() override { return true; }
 
+    virtual bool SupportsExternalMemory() override { return true; }
+
   protected:
     struct ResourceAllocInfo
     {

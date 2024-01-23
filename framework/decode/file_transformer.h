@@ -150,7 +150,7 @@ class FileTransformer
 
     bool ReadBlockHeader(format::BlockHeader* block_header);
 
-  private:
+  protected:
     FILE*                               input_file_;
     FILE*                               output_file_;
     format::FileHeader                  file_header_;

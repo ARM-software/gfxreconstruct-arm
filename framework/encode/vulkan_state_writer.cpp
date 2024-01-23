@@ -24,6 +24,7 @@
 
 #include "encode/struct_pointer_encoder.h"
 #include "encode/vulkan_state_info.h"
+#include "encode/custom_vulkan_array_size_2d.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 
@@ -38,6 +39,11 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
+
+using RangeInfoArraySize = ArraySize2D<VkCommandBuffer,
+                                       uint32_t,
+                                       const VkAccelerationStructureBuildGeometryInfoKHR*,
+                                       const VkAccelerationStructureBuildRangeInfoKHR* const*>;
 
 const uint32_t kDefaultQueueFamilyIndex = 0;
 
@@ -149,6 +155,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     WritePipelineState(state_table);
     WriteAccelerationStructureKHRState(state_table);
     WriteTlasToBlasDependenciesMetadata(state_table);
+    WriteAccelerationStructureBuildMetaCommand(state_table);
     StandardCreateWrite<AccelerationStructureNVWrapper>(state_table);
 
     // Descriptor creation.
@@ -1105,6 +1112,55 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
             ++blocks_written_;
         }
     });
+}
+
+void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanStateTable& state_table)
+{
+    std::vector<AccelerationStructureKHRWrapper::LastBuildCmdPtr> commands;
+    state_table.VisitWrappers([&](const AccelerationStructureKHRWrapper* wrapper) {
+        assert(wrapper != nullptr);
+        // The build command can be shared by many acceleration structures, ensure that we only pick unique ones
+        if (std::find(commands.begin(), commands.end(), wrapper->latest_build_command_) == commands.end())
+        {
+            commands.emplace_back(wrapper->latest_build_command_);
+        }
+    });
+
+    for (const auto& command_ptr : commands)
+    {
+        format::InitVulkanAccelerationStructuresHeader header;
+        header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        header.meta_header.block_header.size = GetMetaDataBlockBaseSize(header);
+        header.meta_header.meta_data_id      = format::MakeMetaDataId(
+            format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitVulkanAccelerationStructures);
+
+        parameter_stream_.Reset();
+
+        encoder_.EncodeHandleIdValue(command_ptr->device);
+        encoder_.EncodeHandleIdValue(command_ptr->command_buffer);
+
+        EncodeStructArray(&encoder_, command_ptr->geometry_infos.data(), command_ptr->geometry_infos.size());
+        EncodeStructArray2D(&encoder_,
+                            command_ptr->build_range_infos.data(),
+                            RangeInfoArraySize(VK_NULL_HANDLE,
+                                               command_ptr->geometry_infos.size(),
+                                               command_ptr->geometry_infos.data(),
+                                               command_ptr->build_range_infos.data()));
+
+        for (uint32_t i = 0; i < command_ptr->instance_buffer_data.size(); ++i)
+        {
+            EncodeStructArray(
+                &encoder_, command_ptr->instance_buffer_data[i].data(), command_ptr->instance_buffer_data[i].size());
+        }
+
+        header.meta_header.block_header.size += parameter_stream_.GetDataSize();
+        output_stream_->Write(&header, sizeof(header));
+        output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
+
+        parameter_stream_.Reset();
+
+        ++blocks_written_;
+    }
 }
 
 void VulkanStateWriter::WriteAccelerationStructureKHRState(const VulkanStateTable& state_table)

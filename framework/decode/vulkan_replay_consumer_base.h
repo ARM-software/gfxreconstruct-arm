@@ -44,9 +44,11 @@
 #include "graphics/fps_info.h"
 #include "util/defines.h"
 #include "util/logging.h"
+#include "decode/vulkan_acceleration_structure_builder.h"
 
 #include "application/application.h"
 
+#include "graphics/dx12_gpu_va_map.h"
 #include "vulkan/vulkan.h"
 
 #include <algorithm>
@@ -178,6 +180,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorSet,
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
+
+    virtual void ProcessInitVulkanAccelerationStructuresCommand(
+        format::HandleId                                                           device,
+        format::HandleId                                                           command_buffer,
+        uint32_t                                                                   info_count,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
+        std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;
 
   protected:
     const VulkanObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
@@ -990,6 +1000,27 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                         pAccelerationStructureKHR);
 
+    void OverrideCmdBuildAccelerationStructuresKHR(
+        PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
+        CommandBufferInfo*                                                         command_buffer_info,
+        uint32_t                                                                   infoCount,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos);
+
+    void
+    OverrideCmdCopyAccelerationStructureKHR(PFN_vkCmdCopyAccelerationStructureKHR func,
+                                            CommandBufferInfo*                    command_buffer_info,
+                                            StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo);
+
+    void OverrideCmdWriteAccelerationStructuresPropertiesKHR(
+        PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
+        CommandBufferInfo*                                command_buffer_info,
+        uint32_t                                          count,
+        HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
+        VkQueryType                                       queryType,
+        gfxrecon::decode::QueryPoolInfo*                  query_pool_info,
+        uint32_t                                          firstQuery);
+
     VkResult OverrideCreateRayTracingPipelinesKHR(
         PFN_vkCreateRayTracingPipelinesKHR                                     func,
         VkResult                                                               original_result,
@@ -1008,11 +1039,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     VkDeviceAddress
     OverrideGetBufferDeviceAddress(PFN_vkGetBufferDeviceAddress                                   func,
+                                   VkDeviceAddress                                                returnValue,
                                    const DeviceInfo*                                              device_info,
                                    const StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo);
 
     void OverrideGetAccelerationStructureDeviceAddressKHR(
         PFN_vkGetAccelerationStructureDeviceAddressKHR                                   func,
+        VkDeviceAddress                                                                  original_result,
         const DeviceInfo*                                                                device_info,
         const StructPointerDecoder<Decoded_VkAccelerationStructureDeviceAddressInfoKHR>* pInfo);
 
@@ -1098,6 +1131,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       const DeviceInfo*          device_info,
                                       const SemaphoreInfo*       semaphore_info,
                                       const ImageInfo*           image_info);
+
+    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR func,
+                                                 const DeviceInfo*                     device_info,
+                                                 const AccelerationStructureKHRInfo*   acceleration_structure_info,
+                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideUpdateDescriptorSets(PFN_vkUpdateDescriptorSets                          func,
+                                      const DeviceInfo*                                   device_info,
+                                      uint32_t                                            descriptor_write_count,
+                                      StructPointerDecoder<Decoded_VkWriteDescriptorSet>* descriptor_writes_decoder,
+                                      uint32_t                                            descriptor_copy_count,
+                                      StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  descriptor_copies_decoder);
 
     const VulkanReplayOptions options_;
 
@@ -1313,6 +1358,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<format::HandleId, std::pair<const DeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
     std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
     std::vector<const char*>                                                            faked_extensions_;
+    // map acceleration structure builders for each device
+    std::unordered_map<format::HandleId, std::unique_ptr<VulkanAccelerationStructureBuilder>>
+        acceleration_structure_builders_;
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;

@@ -1222,13 +1222,13 @@ void VulkanReplayConsumer::Process_vkUpdateDescriptorSets(
     uint32_t                                    descriptorCopyCount,
     StructPointerDecoder<Decoded_VkCopyDescriptorSet>* pDescriptorCopies)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    const VkWriteDescriptorSet* in_pDescriptorWrites = pDescriptorWrites->GetPointer();
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+
     MapStructArrayHandles(pDescriptorWrites->GetMetaStructPointer(), pDescriptorWrites->GetLength(), GetObjectInfoTable());
-    const VkCopyDescriptorSet* in_pDescriptorCopies = pDescriptorCopies->GetPointer();
+
     MapStructArrayHandles(pDescriptorCopies->GetMetaStructPointer(), pDescriptorCopies->GetLength(), GetObjectInfoTable());
 
-    GetDeviceTable(in_device)->UpdateDescriptorSets(in_device, descriptorWriteCount, in_pDescriptorWrites, descriptorCopyCount, in_pDescriptorCopies);
+    OverrideUpdateDescriptorSets(GetDeviceTable(in_device->handle)->UpdateDescriptorSets, in_device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
 }
 
 void VulkanReplayConsumer::Process_vkCreateFramebuffer(
@@ -2600,7 +2600,7 @@ void VulkanReplayConsumer::Process_vkGetBufferDeviceAddress(
 
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    OverrideGetBufferDeviceAddress(GetDeviceTable(in_device->handle)->GetBufferDeviceAddress, in_device, pInfo);
+    OverrideGetBufferDeviceAddress(GetDeviceTable(in_device->handle)->GetBufferDeviceAddress, returnValue, in_device, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkGetBufferOpaqueCaptureAddress(
@@ -4880,7 +4880,7 @@ void VulkanReplayConsumer::Process_vkGetBufferDeviceAddressKHR(
 
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    OverrideGetBufferDeviceAddress(GetDeviceTable(in_device->handle)->GetBufferDeviceAddressKHR, in_device, pInfo);
+    OverrideGetBufferDeviceAddress(GetDeviceTable(in_device->handle)->GetBufferDeviceAddressKHR, returnValue, in_device, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkGetBufferOpaqueCaptureAddressKHR(
@@ -8870,11 +8870,10 @@ void VulkanReplayConsumer::Process_vkDestroyAccelerationStructureKHR(
     format::HandleId                            accelerationStructure,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    VkAccelerationStructureKHR in_accelerationStructure = MapHandle<AccelerationStructureKHRInfo>(accelerationStructure, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+    auto in_accelerationStructure = GetObjectInfoTable().GetAccelerationStructureKHRInfo(accelerationStructure);
 
-    GetDeviceTable(in_device)->DestroyAccelerationStructureKHR(in_device, in_accelerationStructure, in_pAllocator);
+    OverrideDestroyAccelerationStructureKHR(GetDeviceTable(in_device->handle)->DestroyAccelerationStructureKHR, in_device, in_accelerationStructure, pAllocator);
     RemoveHandle(accelerationStructure, &VulkanObjectInfoTable::RemoveAccelerationStructureKHRInfo);
 }
 
@@ -8885,12 +8884,11 @@ void VulkanReplayConsumer::Process_vkCmdBuildAccelerationStructuresKHR(
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>* ppBuildRangeInfos)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    const VkAccelerationStructureBuildGeometryInfoKHR* in_pInfos = pInfos->GetPointer();
-    MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
-    const VkAccelerationStructureBuildRangeInfoKHR* const* in_ppBuildRangeInfos = ppBuildRangeInfos->GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
 
-    GetDeviceTable(in_commandBuffer)->CmdBuildAccelerationStructuresKHR(in_commandBuffer, infoCount, in_pInfos, in_ppBuildRangeInfos);
+    MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
+
+    OverrideCmdBuildAccelerationStructuresKHR(GetDeviceTable(in_commandBuffer->handle)->CmdBuildAccelerationStructuresKHR, in_commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
 }
 
 void VulkanReplayConsumer::Process_vkCmdBuildAccelerationStructuresIndirectKHR(
@@ -8968,11 +8966,11 @@ void VulkanReplayConsumer::Process_vkCmdCopyAccelerationStructureKHR(
     format::HandleId                            commandBuffer,
     StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    const VkCopyAccelerationStructureInfoKHR* in_pInfo = pInfo->GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
+
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    GetDeviceTable(in_commandBuffer)->CmdCopyAccelerationStructureKHR(in_commandBuffer, in_pInfo);
+    OverrideCmdCopyAccelerationStructureKHR(GetDeviceTable(in_commandBuffer->handle)->CmdCopyAccelerationStructureKHR, in_commandBuffer, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkCmdCopyAccelerationStructureToMemoryKHR(
@@ -9009,7 +9007,7 @@ void VulkanReplayConsumer::Process_vkGetAccelerationStructureDeviceAddressKHR(
 
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    OverrideGetAccelerationStructureDeviceAddressKHR(GetDeviceTable(in_device->handle)->GetAccelerationStructureDeviceAddressKHR, in_device, pInfo);
+    OverrideGetAccelerationStructureDeviceAddressKHR(GetDeviceTable(in_device->handle)->GetAccelerationStructureDeviceAddressKHR, returnValue, in_device, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkCmdWriteAccelerationStructuresPropertiesKHR(
@@ -9021,11 +9019,11 @@ void VulkanReplayConsumer::Process_vkCmdWriteAccelerationStructuresPropertiesKHR
     format::HandleId                            queryPool,
     uint32_t                                    firstQuery)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    const VkAccelerationStructureKHR* in_pAccelerationStructures = MapHandles<AccelerationStructureKHRInfo>(pAccelerationStructures, accelerationStructureCount, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
-    VkQueryPool in_queryPool = MapHandle<QueryPoolInfo>(queryPool, &VulkanObjectInfoTable::GetQueryPoolInfo);
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
+    MapHandles<AccelerationStructureKHRInfo>(pAccelerationStructures, accelerationStructureCount, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
+    auto in_queryPool = GetObjectInfoTable().GetQueryPoolInfo(queryPool);
 
-    GetDeviceTable(in_commandBuffer)->CmdWriteAccelerationStructuresPropertiesKHR(in_commandBuffer, accelerationStructureCount, in_pAccelerationStructures, queryType, in_queryPool, firstQuery);
+    OverrideCmdWriteAccelerationStructuresPropertiesKHR(GetDeviceTable(in_commandBuffer->handle)->CmdWriteAccelerationStructuresPropertiesKHR, in_commandBuffer, accelerationStructureCount, pAccelerationStructures, queryType, in_queryPool, firstQuery);
 }
 
 void VulkanReplayConsumer::Process_vkGetDeviceAccelerationStructureCompatibilityKHR(

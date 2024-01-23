@@ -283,6 +283,14 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     virtual bool SupportsOpaqueDeviceAddresses() override { return false; }
 
+    virtual bool SupportsExternalMemory() override { return false; }
+
+    virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data)
+    {
+        GFXRECON_ASSERT(alloc_data != 0);
+        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->size;
+    }
+
   private:
     struct MemoryAllocInfo;
 

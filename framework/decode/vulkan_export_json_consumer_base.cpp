@@ -705,5 +705,35 @@ void VulkanExportJsonConsumerBase::ProcessAnnotation(uint64_t               bloc
     WriteBlockEnd();
 }
 
+void VulkanExportJsonConsumerBase::ProcessSetTlasToBlasRelationCommand(format::HandleId                     tlas,
+                                                                       const std::vector<format::HandleId>& blases)
+{
+    WriteMetaCommandToFile("SetTLAStoBLASRelationCommand", [&](auto& jdata) {
+        HandleToJson(jdata["TLAS_id"], tlas, json_options_);
+        for (const auto& blas_id : blases)
+        {
+            jdata["BLAS_ids"].push_back(blas_id);
+        }
+    });
+}
+
+void VulkanExportJsonConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
+    format::HandleId                                                           device,
+    format::HandleId                                                           command_buffer,
+    uint32_t                                                                   info_count,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
+    WriteMetaCommandToFile("InitVulkanAccelerationStructuresCommand", [&](auto& jdata) {
+        HandleToJson(jdata["device"], device, json_options_);
+        HandleToJson(jdata["commandBuffer"], command_buffer, json_options_);
+        FieldToJson(jdata["infoCount"], info_count, json_options_);
+        FieldToJson(jdata["pInfos"], pInfos, json_options_);
+        FieldToJson(jdata["ppBuildRangeInfos"], ppRangeInfos, json_options_);
+        // TODO: display intance data in meaningfull way
+    });
+}
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
