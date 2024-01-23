@@ -49,7 +49,7 @@ VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
 
     for (auto& [handle, info] : buffer_infos_)
     {
-        functions_.destroy_buffer(device_, handle, nullptr);
+        allocator_->DestroyBuffer(handle, nullptr, info.allocator_data);
     }
 }
 
@@ -457,6 +457,7 @@ void VulkanAccelerationStructureBuilder::ExecuteCommandBuffer()
     submit_info.signalSemaphoreCount = 0;
     submit_info.pSignalSemaphores    = nullptr;
 
+    OnQueueSubmit(1, &submit_info);
     VkResult result = functions_.queue_submit(m_cmd_execute_obj->m_queue, 1, &submit_info, VK_NULL_HANDLE);
 
     if (result == VK_SUCCESS)
