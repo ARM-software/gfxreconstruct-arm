@@ -414,6 +414,8 @@ class VulkanStateTracker
 
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
+    void SetExperimentalRaytracingFastforwarding(bool value) { experimental_raytracing_fastforwarding = value; };
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                  parent_handle,
@@ -489,6 +491,8 @@ class VulkanStateTracker
 
     // Keeps track of acceleration structures' device addresses
     std::unordered_map<VkDeviceAddress, AccelerationStructureKHRWrapper*> as_device_addresses_map;
+
+    bool experimental_raytracing_fastforwarding{ false };
 };
 
 GFXRECON_END_NAMESPACE(encode)

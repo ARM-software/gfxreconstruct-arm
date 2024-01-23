@@ -1422,7 +1422,11 @@ class VulkanCaptureManager : public CaptureManager
 
     virtual ~VulkanCaptureManager() override {}
 
-    virtual void CreateStateTracker() override { state_tracker_ = std::make_unique<VulkanStateTracker>(); }
+    virtual void CreateStateTracker() override
+    {
+        state_tracker_ = std::make_unique<VulkanStateTracker>();
+        state_tracker_->SetExperimentalRaytracingFastforwarding(GetExperimentalRaytracingFastforwardingSetting());
+    }
 
     virtual void DestroyStateTracker() override { state_tracker_ = nullptr; }
 

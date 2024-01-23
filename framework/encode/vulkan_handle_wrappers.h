@@ -491,22 +491,12 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     // Only used when tracking
     struct AccelerationStructureKHRBuildCommandData
     {
-        ~AccelerationStructureKHRBuildCommandData()
-        {
-            for (auto& p_range_info : build_range_infos)
-            {
-                delete[] p_range_info;
-            }
-        }
-        uint32_t                                                     command_index;
-        format::HandleId                                             device;
-        format::HandleId                                             command_buffer;
-        std::vector<VkAccelerationStructureBuildGeometryInfoKHR>     geometry_infos;
-        std::vector<HandleUnwrapMemory>                              geometry_infos_memory;
-        std::vector<VkAccelerationStructureBuildRangeInfoKHR*>       build_range_infos;
-        std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffer_data;
+        format::HandleId                                                   device;
+        std::vector<VkAccelerationStructureBuildGeometryInfoKHR>           geometry_infos;
+        std::vector<HandleUnwrapMemory>                                    geometry_infos_memory;
+        std::vector<std::vector<VkAccelerationStructureBuildRangeInfoKHR>> build_range_infos;
+        std::vector<std::vector<VkAccelerationStructureInstanceKHR>>       instance_buffer_data;
     };
-    using LastBuildCmdPtr = std::shared_ptr<AccelerationStructureKHRBuildCommandData>;
     std::shared_ptr<AccelerationStructureKHRBuildCommandData> latest_build_command_;
 };
 

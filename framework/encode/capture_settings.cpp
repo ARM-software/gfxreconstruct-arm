@@ -138,6 +138,9 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define RV_ANNOTATION_DESCRIPTOR_UPPER                       "RV_ANNOTATION_DESCRIPTOR"
 #define FENCE_QUERY_DELAY_LOWER                              "fence_query_delay"
 #define FENCE_QUERY_DELAY_UPPER                              "FENCE_QUERY_DELAY"
+#define EXPERIMENTAL_RAYTRACING_FASTFORWARDING_LOWER         "experimental_raytracing_fastforwarding"
+#define EXPERIMENTAL_RAYTRACING_FASTFORWARDING_UPPER         "EXPERIMENTAL_RAYTRACING_FASTFORWARDING"
+
 
 
 #if defined(__ANDROID__)
@@ -202,6 +205,8 @@ const char kAnnotationRandEnvVar[]                           = GFXRECON_OPTION_S
 const char kAnnotationGPUVAEnvVar[]                          = GFXRECON_OPTION_STR(RV_ANNOTATION_GPUVA);
 const char kAnnotationDescriptorEnvVar[]                     = GFXRECON_OPTION_STR(RV_ANNOTATION_DESCRIPTOR);
 const char kFenceQueryDelayEnvVar[]                          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY);
+const char kExperimentalRaytracingFastforwardingEnvVar[]     = GFXRECON_OPTION_STR(EXPERIMENTAL_RAYTRACING_FASTFORWARDING);
+
 
 #if defined(__ANDROID__)
 const char kCaptureAndroidTriggerEnvVar[]                    = GFXRECON_OPTION_STR(CAPTURE_ANDROID_TRIGGER);
@@ -257,6 +262,8 @@ const std::string kOptionKeyAnnotationRand                           = std::stri
 const std::string kOptionKeyAnnotationGPUVA                          = std::string(kSettingsFilter) + std::string(RV_ANNOTATION_GPUVA_LOWER);
 const std::string kOptionKeyAnnotationDescriptor                     = std::string(kSettingsFilter) + std::string(RV_ANNOTATION_DESCRIPTOR_LOWER);
 const std::string kOptionFenceQueryDelay                             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LOWER);
+const std::string kOptionExperimentalRaytracingFastforwarding        = std::string(kSettingsFilter) + std::string(EXPERIMENTAL_RAYTRACING_FASTFORWARDING_LOWER);
+
 
 #if defined(GFXRECON_ENABLE_LZ4_COMPRESSION)
 const format::CompressionType kDefaultCompressionType = format::CompressionType::kLz4;
@@ -414,6 +421,9 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kAnnotationGPUVAEnvVar, kOptionKeyAnnotationGPUVA);
     LoadSingleOptionEnvVar(options, kAnnotationDescriptorEnvVar, kOptionKeyAnnotationDescriptor);
     LoadSingleOptionEnvVar(options, kFenceQueryDelayEnvVar, kOptionFenceQueryDelay);
+
+    LoadSingleOptionEnvVar(
+        options, kExperimentalRaytracingFastforwardingEnvVar, kOptionExperimentalRaytracingFastforwarding);
 }
 
 void CaptureSettings::LoadOptionsFile(OptionsMap* options)
@@ -589,6 +599,9 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
                                      settings->trace_settings_.rv_anotation_info.descriptor_mask);
     settings->trace_settings_.fence_query_delay =
         ParseIntegerString(FindOption(options, kOptionFenceQueryDelay), settings->trace_settings_.fence_query_delay);
+    settings->trace_settings_.experimental_raytracing_fastforwarding =
+        ParseBoolString(FindOption(options, kOptionExperimentalRaytracingFastforwarding),
+                        settings->trace_settings_.experimental_raytracing_fastforwarding);
 }
 
 void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* settings)

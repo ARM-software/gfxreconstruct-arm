@@ -417,26 +417,31 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
             cmd_buf_wrapper->tlas_build_info_map.emplace_back(std::make_pair(wrappers[i], std::move(tlas_info)));
 
+            if (!experimental_raytracing_fastforwarding)
+            {
+                continue;
+            }
+
             std::size_t data_size = sizeof(VkAccelerationStructureInstanceKHR) * pp_buildRange_infos[i]->primitiveCount;
 
             // Find in which memory range the device address is contained
-            auto result = std::find_if(device_memory_addresses_map.begin(),
-                                       device_memory_addresses_map.end(),
-                                       [address](const std::pair<VkDeviceAddress, const DeviceMemoryWrapper*>& entry) {
-                                           return (entry.first <= address) &&
-                                                  ((entry.first + entry.second->allocation_size) > address);
-                                       });
+            auto memory_wrapper = std::find_if(
+                device_memory_addresses_map.begin(),
+                device_memory_addresses_map.end(),
+                [address](const std::pair<VkDeviceAddress, const DeviceMemoryWrapper*>& entry) {
+                    return (entry.first <= address) && ((entry.first + entry.second->allocation_size) > address);
+                });
 
-            GFXRECON_ASSERT(result != device_memory_addresses_map.end());
+            GFXRECON_ASSERT(memory_wrapper != device_memory_addresses_map.end());
 
             // Find the buffer, which contains this address
             auto instance_buffer_wrapper = std::find_if(
-                result->second->bound_buffers.begin(),
-                result->second->bound_buffers.end(),
+                memory_wrapper->second->bound_buffers.begin(),
+                memory_wrapper->second->bound_buffers.end(),
                 [address](const std::pair<VkDeviceAddress, const BufferWrapper*>& entry) {
                     return (entry.first <= address) && ((entry.first + entry.second->created_size) > address);
                 });
-            GFXRECON_ASSERT(instance_buffer_wrapper != result->second->bound_buffers.end());
+            GFXRECON_ASSERT(instance_buffer_wrapper != memory_wrapper->second->bound_buffers.end());
 
             VkDeviceSize offset = address - instance_buffer_wrapper->first;
             GFXRECON_ASSERT(offset >= 0);
@@ -445,43 +450,45 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                 std::vector<VkAccelerationStructureInstanceKHR>(pp_buildRange_infos[i]->primitiveCount));
 
             void* mapped;
-            GetDeviceTable(cmd_buf_wrapper->handle)
-                ->MapMemory(instance_buffer_wrapper->second->bind_device->handle,
-                            result->second->handle,
-                            instance_buffer_wrapper->second->bind_offset + offset,
-                            data_size,
-                            0,
-                            &mapped);
+            auto  device_handle = instance_buffer_wrapper->second->bind_device->handle;
+            auto  device_table  = GetDeviceTable(device_handle);
+            auto  data_offset   = instance_buffer_wrapper->second->bind_offset + offset;
+
+            device_table->MapMemory(device_handle, memory_wrapper->second->handle, data_offset, data_size, 0, &mapped);
             std::memcpy(instance_buffers_data.back().data(), mapped, data_size);
-            GetDeviceTable(cmd_buf_wrapper->handle)
-                ->UnmapMemory(instance_buffer_wrapper->second->bind_device->handle, result->second->handle);
+            device_table->UnmapMemory(device_handle, memory_wrapper->second->handle);
         }
     }
 
-    auto data = std::make_shared<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>();
-    data->command_buffer = cmd_buf_wrapper->handle_id;
-
-    data->geometry_infos.reserve(info_count);
-    std::copy(infos, infos + info_count, std::back_inserter(data->geometry_infos));
-
-    data->geometry_infos_memory.resize(info_count);
-    data->build_range_infos.resize(info_count);
-
-    for (uint32_t i = 0; i < info_count; ++i)
+    if (experimental_raytracing_fastforwarding)
     {
-        data->geometry_infos_memory[i].Reset();
-        data->geometry_infos[i].pGeometries = TrackStruct(infos[i].pGeometries, &data->geometry_infos_memory[i]);
-        data->build_range_infos[i]          = new VkAccelerationStructureBuildRangeInfoKHR[infos[i].geometryCount];
-        std::copy(pp_buildRange_infos[i], pp_buildRange_infos[i] + infos[i].geometryCount, data->build_range_infos[i]);
-    }
 
-    data->command_index        = build_command_index++;
-    data->instance_buffer_data = std::move(instance_buffers_data);
+        auto data = std::make_shared<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>();
 
-    for (auto& wrapper : wrappers)
-    {
-        data->device                   = wrapper->device_id;
-        wrapper->latest_build_command_ = data;
+        data->geometry_infos.reserve(info_count);
+        std::copy(infos, infos + info_count, std::back_inserter(data->geometry_infos));
+
+        data->geometry_infos_memory.resize(info_count);
+        data->build_range_infos.resize(info_count);
+
+        for (uint32_t i = 0; i < info_count; ++i)
+        {
+            data->geometry_infos_memory[i].Reset();
+            data->geometry_infos[i].pGeometries = TrackStruct(infos[i].pGeometries, &data->geometry_infos_memory[i]);
+
+            data->build_range_infos[i].reserve(infos[i].geometryCount);
+            std::copy(pp_buildRange_infos[i],
+                      pp_buildRange_infos[i] + infos[i].geometryCount,
+                      std::back_inserter(data->build_range_infos[i]));
+        }
+
+        data->instance_buffer_data = std::move(instance_buffers_data);
+
+        for (auto& wrapper : wrappers)
+        {
+            data->device                   = wrapper->device_id;
+            wrapper->latest_build_command_ = data;
+        }
     }
 }
 

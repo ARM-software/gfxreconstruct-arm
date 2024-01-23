@@ -522,8 +522,6 @@ void VulkanDecoderBase::DispatchInitVulkanAccelerationStructuresCommand(const ui
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>   ppRangeInfos;
 
     std::size_t bytes_read = ValueDecoder::DecodeHandleIdValue(parameter_buffer, buffer_size, &device_id);
-    bytes_read +=
-        ValueDecoder::DecodeHandleIdValue(parameter_buffer + bytes_read, buffer_size - bytes_read, &command_buffer_id);
     bytes_read += pInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
     bytes_read += ppRangeInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
 
@@ -540,7 +538,6 @@ void VulkanDecoderBase::DispatchInitVulkanAccelerationStructuresCommand(const ui
         }
     }
 
-    // TODO Pass the data to consumers, which in turn will trigger the acceleration structure builder
     for (auto consumer : consumers_)
     {
         consumer->ProcessInitVulkanAccelerationStructuresCommand(

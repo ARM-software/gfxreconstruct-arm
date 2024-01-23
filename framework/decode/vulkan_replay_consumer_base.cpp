@@ -7206,28 +7206,23 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
                            capture_id);
     }
 
-    if (device_info->property_feature_info.feature_accelerationStructureCaptureReplay)
+    VkAccelerationStructureCreateInfoKHR modified_create_info = (*replay_create_info);
+    if (device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
+        device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
         // Set opaque device address
-        VkAccelerationStructureCreateInfoKHR modified_create_info = (*replay_create_info);
         modified_create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
         modified_create_info.deviceAddress = device_address;
 
         result = device_table->CreateAccelerationStructureKHR(
             device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
-        // Only retry this if it failed with this specific error
-        if (result == VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS)
-        {
-            modified_create_info.createFlags &= ~VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
-            modified_create_info.deviceAddress = 0;
-            result                             = device_table->CreateAccelerationStructureKHR(
-                device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
-        }
     }
     else
     {
-        result = device_table->CreateAccelerationStructureKHR(
-            device, replay_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
+        modified_create_info.createFlags &= ~VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
+        modified_create_info.deviceAddress = 0;
+        result                             = device_table->CreateAccelerationStructureKHR(
+            device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
     }
 
     if (result == VK_SUCCESS && !device_info->allocator->SupportsOpaqueDeviceAddresses())

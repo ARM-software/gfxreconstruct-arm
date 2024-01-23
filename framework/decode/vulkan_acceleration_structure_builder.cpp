@@ -99,6 +99,10 @@ void VulkanAccelerationStructureBuilder::ProcessInitVulkanAccelerationStructures
 
     BeginCommandBuffer();
 
+    std::vector<BufferEntry*> state_recreation_buffer_entries;
+    VkBufferUsageFlags        usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                               VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     for (uint32_t i = 0; i < info_count; ++i)
     {
         for (uint32_t g = 0; g < geometry_infos[i].geometryCount; ++g)
@@ -107,26 +111,35 @@ void VulkanAccelerationStructureBuilder::ProcessInitVulkanAccelerationStructures
             {
                 continue;
             }
-            auto buffer_entry =
-                GetBufferByCaptureDeviceAddress(geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress);
-            if (buffer_entry)
-            {
-                continue;
-            }
-            VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
             VkDeviceSize buffer_size = range_infos[i][g].primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
 
-            BufferEntry* entry       = CreateBuffer(buffer_size, usage, instance_buffers_data[i].data());
-            entry->original_address_ = geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
-            entry->new_address_      = GetBufferDeviceAddress(entry->buffer_info_->handle);
+            state_recreation_buffer_entries.push_back(
+                CreateBuffer(buffer_size, usage, instance_buffers_data[i].data()));
+            state_recreation_buffer_entries.back()->original_address_ =
+                geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
+            state_recreation_buffer_entries.back()->new_address_ =
+                GetBufferDeviceAddress(state_recreation_buffer_entries.back()->buffer_info_->handle);
         }
     }
 
     CmdBuildAccelerationStructures(command_buffer, info_count, geometry_infos, range_infos);
 
     ExecuteCommandBuffer();
+
+    // Clean those buffers up
+    if (!state_recreation_buffer_entries.empty())
+    {
+        for (const auto& entry : state_recreation_buffer_entries)
+        {
+            allocator_->DestroyBuffer(entry->buffer_info_->handle, nullptr, entry->buffer_info_->allocator_data);
+            buffer_infos_.erase(entry->buffer_info_->handle);
+            buffers_.erase(
+                std::find_if(buffers_.begin(), buffers_.end(), [&entry](const std::unique_ptr<BufferEntry>& ptr) {
+                    return ptr.get() == entry;
+                }));
+        }
+    }
 }
 
 void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo*     buffer_info,
@@ -326,11 +339,7 @@ VulkanAccelerationStructureBuilder::GetBufferByCaptureDeviceAddress(VkDeviceAddr
     auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const std::unique_ptr<BufferEntry>& entry) {
         return entry->original_address_ == original_address;
     });
-    // The idea here is that some buffers may not survive when trimming
-    if (buffer == buffers_.end())
-    {
-        return nullptr;
-    }
+    GFXRECON_ASSERT(buffer != buffers_.end());
     return buffer->get();
 }
 
