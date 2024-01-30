@@ -595,11 +595,20 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             geometry_infos[i].srcAccelerationStructure = replacement_src_as;
 
             // update dstAccelerationStructure handle
-            // dst AS was created but not built, record new device address
             auto original_dst_as = GetAccelerationStructureEntry(geometry_infos[i].dstAccelerationStructure);
             GFXRECON_ASSERT(original_dst_as);
-            original_dst_as->new_address_ =
-                GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
+            if (original_dst_as->replacement_acceleration_struct_)
+            {
+                // dst AS was built before
+                GFXRECON_ASSERT(original_dst_as->replacement_acceleration_struct_->handle_ != 0);
+                geometry_infos[i].dstAccelerationStructure = original_dst_as->replacement_acceleration_struct_->handle_;
+            }
+            else
+            {
+                // dst AS was created but not built, record new device address
+                original_dst_as->new_address_ =
+                    GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
+            }
 
             // update geometry buffers
             UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
@@ -620,12 +629,23 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         // First, get the replay device address of the destination structure and store it
         auto compacted_entry = GetAccelerationStructureEntry(modified_info.dst);
 
+        // clang-format off
+        // TODO: Similarly to the build destination, copy destination should be recreated here to adjust
+        // the AS size on replay. Compacting copy destination is typically created by commands:
+        // vkCmdWriteAccelerationStructuresPropertiesKHR(VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
+        // vkCreateAccelerationStructureKHR(...compacted-size...) 
+        // vkCmdCopyAccelerationStructureKHR(...dst: compacted-as...) 
+        // The compacted size can be different on each device, so the destination AS needs a
+        // replacement of size calculated at runtime.
+        // clang-format on
+
         compacted_entry->new_address_ = GetAccelerationStructureDeviceAddress(modified_info.dst);
 
         // Replace the handle to be of the real built structure
         auto original_entry = GetAccelerationStructureEntry(modified_info.src);
         modified_info.src   = original_entry->replacement_acceleration_struct_->handle_;
     }
+    // TODO: non-compacting copy
     functions_.cmd_copy_acceleration_structure(command_buffer, &modified_info);
 }
 
