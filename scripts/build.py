@@ -222,7 +222,10 @@ def cmake_generate_options(args):
         generate_options.append(
             '-DBUILD_LAUNCHER_AND_INTERCEPTOR={}'.format(
                 'OFF' if not args.build_launcher else 'ON'))
-    
+        if "GFXRECON_INTERNAL_VERSION" in os.environ:
+            generate_options.append(
+                '-DGFXRECON_PROJECT_VERSION_DESIGNATION=-{}'.format(os.environ["GFXRECON_INTERNAL_VERSION"]))
+
     return generate_options
 
 
