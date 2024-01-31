@@ -72,9 +72,30 @@ void VulkanAccelerationStructureBuilder::UntrackAccelerationStructure(
 
     if (result != acceleration_structures_.end() && result->get()->replacement_acceleration_struct_)
     {
-
         const auto& real_as = result->get()->replacement_acceleration_struct_;
         functions_.destroy_acceleration_structure(device_, real_as->handle_, nullptr);
+        if (real_as->storage_)
+        {
+            auto buffer =
+                GetBufferByRuntimeDeviceAddress(GetBufferDeviceAddress(real_as->storage_->buffer_info_->handle));
+            allocator_->DestroyBufferDirect(
+                buffer->buffer_info_->handle, nullptr, buffer->buffer_info_->allocator_data);
+
+            buffers_.erase(std::find_if(
+                buffers_.begin(), buffers_.end(), [&buffer](const auto& entry) { return entry.get() == buffer; }));
+            buffer_infos_.erase(real_as->storage_->buffer_info_->handle);
+        }
+        if (real_as->scratch_)
+        {
+            auto buffer =
+                GetBufferByRuntimeDeviceAddress(GetBufferDeviceAddress(real_as->scratch_->buffer_info_->handle));
+            allocator_->DestroyBufferDirect(
+                buffer->buffer_info_->handle, nullptr, buffer->buffer_info_->allocator_data);
+
+            buffers_.erase(std::find_if(
+                buffers_.begin(), buffers_.end(), [&buffer](const auto& entry) { return entry.get() == buffer; }));
+            buffer_infos_.erase(real_as->scratch_->buffer_info_->handle);
+        }
     }
 
     acceleration_structures_.erase(result);
@@ -245,7 +266,7 @@ VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsag
     it->second.queue_family_index    = 0;
     it->second.usage                 = create_info.usage;
 
-    buffers_.push_back(std::make_unique<BufferEntry>(0, 0, &it->second));
+    buffers_.push_back(std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), &it->second));
 
     return buffers_.back().get();
 }
@@ -343,15 +364,64 @@ VulkanAccelerationStructureBuilder::GetBufferByCaptureDeviceAddress(VkDeviceAddr
     return buffer->get();
 }
 
-void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(VkWriteDescriptorSetAccelerationStructureKHR* ac_write)
+void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(uint32_t              descriptor_write_count,
+                                                              VkWriteDescriptorSet* descriptor_writes,
+                                                              uint32_t              descriptor_copy_count,
+                                                              VkCopyDescriptorSet*  descriptor_copies)
 {
-    for (uint32_t i = 0; i < ac_write->accelerationStructureCount; ++i)
+    GFXRECON_UNREFERENCED_PARAMETER(descriptor_copy_count);
+    GFXRECON_UNREFERENCED_PARAMETER(descriptor_copies);
+
+    VkWriteDescriptorSetAccelerationStructureKHR* acceleration_structure_write = nullptr;
+    uint32_t                                      index                        = 0;
+    for (uint32_t i = 0; i < descriptor_write_count; ++i)
     {
-        AccelerationStructureEntry* entry = GetAccelerationStructureEntry(ac_write->pAccelerationStructures[i]);
-        if (entry && entry->replacement_acceleration_struct_)
+        if (descriptor_writes[i].descriptorType != VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
         {
-            const_cast<VkAccelerationStructureKHR*>(ac_write->pAccelerationStructures)[i] =
+            continue;
+        }
+        // Find the relevant data in the pNext chain
+        const VkBaseOutStructure* structure = reinterpret_cast<const VkBaseOutStructure*>(descriptor_writes[i].pNext);
+        while (structure != nullptr)
+        {
+            if (structure->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR)
+            {
+                acceleration_structure_write = const_cast<VkWriteDescriptorSetAccelerationStructureKHR*>(
+                    reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(structure));
+                index = i;
+                break;
+            }
+            else
+            {
+                structure = structure->pNext;
+            }
+        }
+    }
+
+    if (!acceleration_structure_write)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0; i < acceleration_structure_write->accelerationStructureCount; ++i)
+    {
+        AccelerationStructureEntry* entry =
+            GetAccelerationStructureEntry(acceleration_structure_write->pAccelerationStructures[i]);
+        if (!entry)
+        {
+            GFXRECON_LOG_DEBUG("Trying to update the descriptor with untracked acceleration structure");
+            throw "Trying to update the descriptor with untracked acceleration structure";
+        }
+        if (entry->replacement_acceleration_struct_)
+        {
+            const_cast<VkAccelerationStructureKHR*>(acceleration_structure_write->pAccelerationStructures)[i] =
                 entry->replacement_acceleration_struct_->handle_;
+        }
+        else if (entry->new_address_ == 0)
+        {
+            // Cache this update and perform it later, on build / copy of the target structure,
+            // when we are sure that the handle is valid
+            cached_descriptor_write.emplace(entry->handle_, &descriptor_writes[index]);
         }
     }
 }
@@ -505,23 +575,6 @@ void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
     }
 }
 
-void VulkanAccelerationStructureBuilder::SetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct,
-                                                                       VkDeviceAddress            original_address,
-                                                                       VkDeviceAddress            new_address)
-{
-    auto entry = GetAccelerationStructureEntry(acceleration_struct);
-    if (entry)
-    {
-        entry->original_address_ = original_address;
-        entry->new_address_      = new_address;
-    }
-    else
-    {
-        acceleration_structures_.push_back(std::make_unique<AccelerationStructureEntry>(
-            original_address, new_address, acceleration_struct, VkAccelerationStructureBuildSizesInfoKHR()));
-    }
-}
-
 VulkanAccelerationStructureBuilder::AccelerationStructureEntry*
 VulkanAccelerationStructureBuilder::GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct)
 {
@@ -565,6 +618,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                 auto replacement_as_address = GetAccelerationStructureDeviceAddress(replacement_as);
                 original_as_entry->replacement_acceleration_struct_ =
                     std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
+                original_as_entry->replacement_acceleration_struct_->storage_ = storage;
 
                 original_as_entry->new_address_ = replacement_as_address;
             }
@@ -574,6 +628,8 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
             geometry_infos[i].dstAccelerationStructure  = original_as_entry->replacement_acceleration_struct_->handle_;
             geometry_infos[i].scratchData.deviceAddress = GetBufferDeviceAddress(scratch->buffer_info_->handle);
+            original_as_entry->replacement_acceleration_struct_->scratch_ = scratch;
+
             UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
         }
         else if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
@@ -602,12 +658,14 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                 // dst AS was built before
                 GFXRECON_ASSERT(original_dst_as->replacement_acceleration_struct_->handle_ != 0);
                 geometry_infos[i].dstAccelerationStructure = original_dst_as->replacement_acceleration_struct_->handle_;
+                original_dst_as->replacement_acceleration_struct_->scratch_ = scratch;
             }
             else
             {
                 // dst AS was created but not built, record new device address
                 original_dst_as->new_address_ =
                     GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
+                original_dst_as->scratch_ = scratch;
             }
 
             // update geometry buffers
@@ -633,8 +691,8 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         // TODO: Similarly to the build destination, copy destination should be recreated here to adjust
         // the AS size on replay. Compacting copy destination is typically created by commands:
         // vkCmdWriteAccelerationStructuresPropertiesKHR(VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
-        // vkCreateAccelerationStructureKHR(...compacted-size...) 
-        // vkCmdCopyAccelerationStructureKHR(...dst: compacted-as...) 
+        // vkCreateAccelerationStructureKHR(...compacted-size...)
+        // vkCmdCopyAccelerationStructureKHR(...dst: compacted-as...)
         // The compacted size can be different on each device, so the destination AS needs a
         // replacement of size calculated at runtime.
         // clang-format on
@@ -699,7 +757,7 @@ VkAccelerationStructureKHR VulkanAccelerationStructureBuilder::CreateAcceleratio
         .type   = geometry_info.type,
     };
     VkAccelerationStructureKHR acceleration_structure;
-    VkResult status = functions_.create_acceleration_structure(device_, &create_info, nullptr, &acceleration_structure);
+    functions_.create_acceleration_structure(device_, &create_info, nullptr, &acceleration_structure);
     return acceleration_structure;
 }
 
@@ -725,9 +783,9 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
     for (int i = 0; i < submitCount; ++i)
     {
         auto submission = pSubmits[i];
-        for (int cmdbuffer_index = 0; cmdbuffer_index < submission.commandBufferCount; ++cmdbuffer_index)
+        for (int cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
         {
-            auto submitted_buffer = submission.pCommandBuffers[cmdbuffer_index];
+            auto submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
 
             auto instance_buffers_update_itr = instance_buffer_updates_.find(submitted_buffer);
             if (instance_buffers_update_itr != instance_buffer_updates_.end())
@@ -741,7 +799,23 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
             }
         }
     }
-}
 
+    for (auto it = cached_descriptor_write.begin(); it != cached_descriptor_write.end();)
+    {
+        auto entry = GetAccelerationStructureEntry(it->first);
+        if (entry->replacement_acceleration_struct_)
+        {
+            auto handle =
+                std::find(it->second.acc_structs_data.begin(), it->second.acc_structs_data.end(), entry->handle_);
+            *handle = entry->replacement_acceleration_struct_->handle_;
+            functions_.update_descriptor_sets(device_, 1, it->second.write_.get(), 0, nullptr);
+            it = cached_descriptor_write.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

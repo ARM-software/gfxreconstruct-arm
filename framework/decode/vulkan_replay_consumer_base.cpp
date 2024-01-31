@@ -2869,7 +2869,8 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .end_command_buffer             = device_table->EndCommandBuffer,
                     .reset_command_buffer           = device_table->ResetCommandBuffer,
                     .queue_submit                   = device_table->QueueSubmit,
-                    .queue_wait_idle                = device_table->QueueWaitIdle
+                    .queue_wait_idle                = device_table->QueueWaitIdle,
+                    .update_descriptor_sets         = device_table->UpdateDescriptorSets
                 };
                 acceleration_structure_builders_[*pDevice->GetPointer()] =
                     std::make_unique<VulkanAccelerationStructureBuilder>(
@@ -7539,15 +7540,6 @@ void VulkanReplayConsumerBase::OverrideGetAccelerationStructureDeviceAddressKHR(
                                   "require the accelerationStructureCaptureReplay feature for accurate capture and "
                                   "replay. The replay device does not support this feature, so replay may fail.");
     }
-
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
-    {
-        VkDevice                                           device             = device_info->handle;
-        const VkAccelerationStructureDeviceAddressInfoKHR* address_info       = pInfo->GetPointer();
-        auto                                               new_device_address = func(device, address_info);
-        acceleration_structure_builders_[device_info->capture_id]->SetAccelerationStructureEntry(
-            address_info->accelerationStructure, original_result, new_device_address);
-    }
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesNV(
@@ -7987,32 +7979,13 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
         assert(descriptor_copies_decoder != nullptr);
     }
 
-    VkWriteDescriptorSet* writes = descriptor_writes_decoder->GetPointer();
-
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        for (uint32_t i = 0; i < descriptor_write_count; ++i)
-        {
-            if (writes[i].descriptorType == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
-            {
-                // Find the relevant data in the pNext chain
-                const VkBaseInStructure* structure = reinterpret_cast<const VkBaseInStructure*>(writes[i].pNext);
-                while (structure != nullptr)
-                {
-                    if (structure->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR)
-                    {
-                        acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
-                            const_cast<VkWriteDescriptorSetAccelerationStructureKHR*>(
-                                reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(structure)));
-                        break;
-                    }
-                    else
-                    {
-                        structure = structure->pNext;
-                    }
-                }
-            }
-        }
+        acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
+            descriptor_write_count,
+            descriptor_writes_decoder->GetPointer(),
+            descriptor_copy_count,
+            descriptor_copies_decoder->GetPointer());
     }
 
     func(device_info->handle,

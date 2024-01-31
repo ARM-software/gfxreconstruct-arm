@@ -62,6 +62,7 @@ class VulkanAccelerationStructureBuilder
         PFN_vkResetCommandBuffer                          reset_command_buffer{ nullptr };
         PFN_vkQueueSubmit                                 queue_submit{ nullptr };
         PFN_vkQueueWaitIdle                               queue_wait_idle{ nullptr };
+        PFN_vkUpdateDescriptorSets                        update_descriptor_sets{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions                               functions,
@@ -70,7 +71,10 @@ class VulkanAccelerationStructureBuilder
                                        const VkPhysicalDeviceMemoryProperties& properties);
 
     ~VulkanAccelerationStructureBuilder();
-    void UpdateDescriptorSets(VkWriteDescriptorSetAccelerationStructureKHR* ac_write);
+    void UpdateDescriptorSets(uint32_t              descriptor_write_count,
+                              VkWriteDescriptorSet* descriptor_writes,
+                              uint32_t              descriptor_copy_count,
+                              VkCopyDescriptorSet*  descriptor_copies);
     void UpdateDescriptorSetWithTemplateKHR(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData);
 
     void CmdBuildAccelerationStructures(VkCommandBuffer                              command_buffer,
@@ -88,9 +92,6 @@ class VulkanAccelerationStructureBuilder
 
     void SetBufferInfo(BufferInfo* buffer_info, VkDeviceAddress original_address, VkDeviceAddress new_address);
     void UntrackBufferInfo(const BufferInfo* buffer_info);
-    void SetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct,
-                                       VkDeviceAddress            original_address,
-                                       VkDeviceAddress            new_address);
     void RegisterAccelerationStructure(VkAccelerationStructureKHR handle, VkDeviceAddress device_address);
     void UntrackAccelerationStructure(const AccelerationStructureKHRInfo* acceleration_structure_info);
 
@@ -105,24 +106,6 @@ class VulkanAccelerationStructureBuilder
     void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
 
   private:
-    class AccelerationStructureEntry
-    {
-      public:
-        VkDeviceAddress                             original_address_;
-        VkDeviceAddress                             new_address_;
-        VkAccelerationStructureKHR                  handle_;
-        VkAccelerationStructureBuildSizesInfoKHR    size_info_;
-        std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
-
-        AccelerationStructureEntry(VkDeviceAddress                          original_address,
-                                   VkDeviceAddress                          new_address,
-                                   VkAccelerationStructureKHR               handle,
-                                   VkAccelerationStructureBuildSizesInfoKHR size_info) :
-            original_address_(original_address),
-            new_address_(new_address), handle_(handle), size_info_(size_info)
-        {}
-    };
-
     struct BufferEntry
     {
         VkDeviceAddress original_address_;
@@ -131,6 +114,33 @@ class VulkanAccelerationStructureBuilder
 
         BufferEntry(VkDeviceAddress original_address, VkDeviceAddress new_address, BufferInfo* buffer_info) :
             original_address_(original_address), new_address_(new_address), buffer_info_(buffer_info)
+        {}
+    };
+
+    struct AccelerationStructureEntry
+    {
+        VkDeviceAddress                             original_address_;
+        VkDeviceAddress                             new_address_;
+        VkAccelerationStructureKHR                  handle_;
+        VkAccelerationStructureBuildSizesInfoKHR    size_info_;
+        std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
+        BufferEntry*                                storage_{ nullptr };
+        BufferEntry*                                scratch_{ nullptr };
+
+        AccelerationStructureEntry(VkDeviceAddress                          original_address,
+                                   VkDeviceAddress                          new_address,
+                                   VkAccelerationStructureKHR               handle,
+                                   VkAccelerationStructureBuildSizesInfoKHR size_info) :
+            AccelerationStructureEntry(original_address, new_address, handle, size_info, nullptr, nullptr)
+        {}
+        AccelerationStructureEntry(VkDeviceAddress                          original_address,
+                                   VkDeviceAddress                          new_address,
+                                   VkAccelerationStructureKHR               handle,
+                                   VkAccelerationStructureBuildSizesInfoKHR size_info,
+                                   BufferEntry*                             storage,
+                                   BufferEntry*                             scratch) :
+            original_address_(original_address),
+            new_address_(new_address), handle_(handle), size_info_(size_info), storage_(storage), scratch_(scratch)
         {}
     };
 
@@ -144,6 +154,36 @@ class VulkanAccelerationStructureBuilder
     std::unordered_map<VkCommandBuffer,
                        std::vector<std::tuple<BufferInfo*, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
         instance_buffer_updates_;
+
+    struct DescriptorWriteData
+    {
+
+        std::unique_ptr<VkWriteDescriptorSet>                         write_;
+        std::unique_ptr<VkWriteDescriptorSetAccelerationStructureKHR> p_next_data;
+        std::vector<VkAccelerationStructureKHR>                       acc_structs_data;
+
+        // We cache only the writes that concerned acceleration structures, hence the scope
+        // of data we need to copy and store is fairly limited
+        DescriptorWriteData(VkWriteDescriptorSet* write)
+        {
+            write_  = std::make_unique<VkWriteDescriptorSet>();
+            *write_ = *write;
+
+            auto acc_write_src = reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(write->pNext);
+            p_next_data        = std::make_unique<VkWriteDescriptorSetAccelerationStructureKHR>();
+
+            write_->pNext                           = p_next_data.get();
+            p_next_data->sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+            p_next_data->pNext                      = nullptr;
+            p_next_data->accelerationStructureCount = acc_write_src->accelerationStructureCount;
+            acc_structs_data.reserve(acc_write_src->accelerationStructureCount);
+            std::copy(acc_write_src->pAccelerationStructures,
+                      acc_write_src->pAccelerationStructures + acc_write_src->accelerationStructureCount,
+                      std::back_inserter(acc_structs_data));
+            p_next_data->pAccelerationStructures = acc_structs_data.data();
+        }
+    };
+    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
 
     BufferEntry* CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data = nullptr);
 
