@@ -108,13 +108,27 @@ class VulkanAccelerationStructureBuilder
   private:
     struct BufferEntry
     {
-        VkDeviceAddress original_address_;
-        VkDeviceAddress new_address_;
-        BufferInfo*     buffer_info_;
+        VkDeviceAddress          original_address_;
+        VkDeviceAddress          new_address_;
+        BufferInfo*              buffer_info_;
+        VulkanResourceAllocator* allocator_;
 
-        BufferEntry(VkDeviceAddress original_address, VkDeviceAddress new_address, BufferInfo* buffer_info) :
-            original_address_(original_address), new_address_(new_address), buffer_info_(buffer_info)
+        BufferEntry(VkDeviceAddress          original_address,
+                    VkDeviceAddress          new_address,
+                    BufferInfo*              buffer_info,
+                    VulkanResourceAllocator* allocator) :
+            original_address_(original_address),
+            new_address_(new_address), buffer_info_(buffer_info), allocator_(allocator)
         {}
+        ~BufferEntry()
+        {
+            // We own the data if buffer is internal
+            if (buffer_info_->capture_id == format::kNullHandleId && buffer_info_->parent_id == format::kNullHandleId)
+            {
+                allocator_->DestroyBufferDirect(buffer_info_->handle, nullptr, buffer_info_->allocator_data);
+                delete buffer_info_;
+            }
+        }
     };
 
     struct AccelerationStructureEntry
@@ -124,40 +138,34 @@ class VulkanAccelerationStructureBuilder
         VkAccelerationStructureKHR                  handle_;
         VkAccelerationStructureBuildSizesInfoKHR    size_info_;
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
-        BufferEntry*                                storage_{ nullptr };
-        BufferEntry*                                scratch_{ nullptr };
+
+        BufferEntry* storage_{ nullptr };
+        BufferEntry* scratch_{ nullptr };
+        VkDeviceSize scratch_size{ 0 };
 
         AccelerationStructureEntry(VkDeviceAddress                          original_address,
                                    VkDeviceAddress                          new_address,
                                    VkAccelerationStructureKHR               handle,
                                    VkAccelerationStructureBuildSizesInfoKHR size_info) :
-            AccelerationStructureEntry(original_address, new_address, handle, size_info, nullptr, nullptr)
-        {}
-        AccelerationStructureEntry(VkDeviceAddress                          original_address,
-                                   VkDeviceAddress                          new_address,
-                                   VkAccelerationStructureKHR               handle,
-                                   VkAccelerationStructureBuildSizesInfoKHR size_info,
-                                   BufferEntry*                             storage,
-                                   BufferEntry*                             scratch) :
             original_address_(original_address),
-            new_address_(new_address), handle_(handle), size_info_(size_info), storage_(storage), scratch_(scratch)
+            new_address_(new_address), handle_(handle), size_info_(size_info)
         {}
     };
 
     std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
     std::vector<std::unique_ptr<BufferEntry>>                buffers_;
-    std::unordered_map<VkBuffer, BufferInfo>                 buffer_infos_;
 
-    Functions                functions_;
-    VkDevice                 device_;
-    VulkanResourceAllocator* allocator_;
+    Functions                        functions_;
+    VkDevice                         device_;
+    VulkanResourceAllocator*         allocator_;
+    VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
+
     std::unordered_map<VkCommandBuffer,
                        std::vector<std::tuple<BufferInfo*, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
         instance_buffer_updates_;
 
     struct DescriptorWriteData
     {
-
         std::unique_ptr<VkWriteDescriptorSet>                         write_;
         std::unique_ptr<VkWriteDescriptorSetAccelerationStructureKHR> p_next_data;
         std::vector<VkAccelerationStructureKHR>                       acc_structs_data;
@@ -185,7 +193,8 @@ class VulkanAccelerationStructureBuilder
     };
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
 
-    BufferEntry* CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data = nullptr);
+    std::unique_ptr<BufferEntry>
+    CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data = nullptr);
 
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
@@ -211,28 +220,28 @@ class VulkanAccelerationStructureBuilder
                               VkAccelerationStructureGeometryInstancesDataKHR& instances,
                               const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
 
-    VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
-    void                             InitializeInternalExecObjects();
-    void                             BeginCommandBuffer();
-    void                             ExecuteCommandBuffer();
+    void UpdateInstanceBufferContent(BufferInfo*                              instance_buffer,
+                                     VkDeviceSize                             offset,
+                                     VkAccelerationStructureBuildRangeInfoKHR build_range);
+
+    void InitializeInternalExecObjects();
+    void BeginCommandBuffer();
+    void ExecuteCommandBuffer();
     struct CommandExecuteObjects
     {
         CommandExecuteObjects(VkDevice device, PFN_vkDestroyCommandPool destroy_func) :
-            m_device(device), destroy_command_pool(destroy_func)
+            device_(device), destroy_command_pool_(destroy_func)
         {}
-        ~CommandExecuteObjects() { destroy_command_pool(m_device, m_pool, nullptr); }
-        PFN_vkDestroyCommandPool destroy_command_pool{ nullptr };
+        ~CommandExecuteObjects() { destroy_command_pool_(device_, pool_, nullptr); }
+        PFN_vkDestroyCommandPool destroy_command_pool_{ nullptr };
 
-        VkDevice        m_device{ VK_NULL_HANDLE };
-        VkCommandPool   m_pool{ VK_NULL_HANDLE };
-        VkCommandBuffer m_command_buffer{ VK_NULL_HANDLE };
-        VkQueue         m_queue{ VK_NULL_HANDLE };
+        VkDevice        device_{ VK_NULL_HANDLE };
+        VkCommandPool   pool_{ VK_NULL_HANDLE };
+        VkCommandBuffer command_buffer_{ VK_NULL_HANDLE };
+        VkQueue         queue_{ VK_NULL_HANDLE };
     };
 
-    std::unique_ptr<CommandExecuteObjects> m_cmd_execute_obj;
-    void                                   UpdateInstanceBufferContent(BufferInfo*                              instance_buffer,
-                                                                       VkDeviceSize                             offset,
-                                                                       VkAccelerationStructureBuildRangeInfoKHR build_range);
+    std::unique_ptr<CommandExecuteObjects> cmd_execute_obj_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
