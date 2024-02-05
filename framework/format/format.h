@@ -145,7 +145,8 @@ enum class MetaDataType : uint16_t
     kReserved25                             = 25,
     kDx12RuntimeInfoCommand                 = 26,
     kParentToChildDependency                = 27,
-    kInitVulkanAccelerationStructures       = 28
+    kVulkanBuildAccelerationStructuresCommand       = 28,
+    kVulkanCopyAccelerationStructuresCommand = 29
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -641,7 +642,12 @@ struct ParentToChildDependencyHeader
     uint32_t                    child_count;
 };
 
-struct InitVulkanAccelerationStructuresHeader
+struct VulkanMetaBuildAccelerationStructuresHeader
+{
+    format::MetaDataHeader meta_header;
+};
+
+struct VulkanCopyAccelerationStructuresCommandHeader
 {
     format::MetaDataHeader meta_header;
 };

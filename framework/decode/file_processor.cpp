@@ -1838,9 +1838,9 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                                  "Failed to read parent to child dependency meta-data block header");
         }
     }
-    else if (meta_data_type == format::MetaDataType::kInitVulkanAccelerationStructures)
+    else if (meta_data_type == format::MetaDataType::kVulkanBuildAccelerationStructuresCommand)
     {
-        format::InitVulkanAccelerationStructuresHeader header;
+        format::VulkanMetaBuildAccelerationStructuresHeader header;
         size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
         success                      = ReadParameterBuffer(parameter_buffer_size);
 
@@ -1852,8 +1852,8 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                 {
                     DecodeAllocator::Begin();
 
-                    decoder->DispatchInitVulkanAccelerationStructuresCommand(parameter_buffer_.data(),
-                                                                             parameter_buffer_size);
+                    decoder->DispatchVulkanAccelerationStructuresBuildMetaCommand(parameter_buffer_.data(),
+                                                                                  parameter_buffer_size);
 
                     DecodeAllocator::End();
                 }
@@ -1863,6 +1863,28 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         {
             HandleBlockReadError(kErrorReadingBlockHeader,
                                  "Failed to read acceleration structure init meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanCopyAccelerationStructuresCommand)
+    {
+        format::VulkanCopyAccelerationStructuresCommandHeader header;
+        size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success                      = ReadParameterBuffer(parameter_buffer_size);
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    DecodeAllocator::Begin();
+
+                    decoder->DispatchVulkanAccelerationStructuresCopyMetaCommand(parameter_buffer_.data(),
+                                                                                 parameter_buffer_size);
+
+                    DecodeAllocator::End();
+                }
+            }
         }
     }
     else

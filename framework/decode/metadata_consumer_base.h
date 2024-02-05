@@ -109,13 +109,15 @@ class MetadataConsumerBase
     virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId tlas, const std::vector<format::HandleId>& blases)
     {}
 
-    virtual void ProcessInitVulkanAccelerationStructuresCommand(
+    virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
-        format::HandleId                                                           command_buffer_id,
         uint32_t                                                                   info_count,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* geometry_infos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
+    {}
+    virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
+        format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
     {}
 };
 

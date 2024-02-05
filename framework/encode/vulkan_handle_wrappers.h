@@ -491,13 +491,22 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     // Only used when tracking
     struct AccelerationStructureKHRBuildCommandData
     {
-        format::HandleId                                                   device;
-        std::vector<VkAccelerationStructureBuildGeometryInfoKHR>           geometry_infos;
-        std::vector<HandleUnwrapMemory>                                    geometry_infos_memory;
-        std::vector<std::vector<VkAccelerationStructureBuildRangeInfoKHR>> build_range_infos;
-        std::vector<std::vector<VkAccelerationStructureInstanceKHR>>       instance_buffer_data;
+        format::HandleId                                      device;
+        VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
+        HandleUnwrapMemory                                    geometry_info_memory;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
+        std::vector<VkAccelerationStructureInstanceKHR>       instance_buffer_data;
     };
-    std::shared_ptr<AccelerationStructureKHRBuildCommandData> latest_build_command_;
+    std::unique_ptr<AccelerationStructureKHRBuildCommandData> latest_update_command_;
+    std::unique_ptr<AccelerationStructureKHRBuildCommandData> latest_build_command_;
+
+    struct AccelerationStructureCopyCommandData
+    {
+        format::HandleId                   device;
+        VkCopyAccelerationStructureInfoKHR info;
+        HandleUnwrapMemory                 p_next_memory;
+    };
+    std::unique_ptr<AccelerationStructureCopyCommandData> latest_copy_command;
 };
 
 struct AccelerationStructureNVWrapper : public HandleWrapper<VkAccelerationStructureNV>

@@ -26,6 +26,7 @@
 #include "util/json_util.h"
 #include "util/platform.h"
 #include "util/file_path.h"
+#include "vulkan_export_json_consumer_base.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -717,22 +718,32 @@ void VulkanExportJsonConsumerBase::ProcessSetTlasToBlasRelationCommand(format::H
     });
 }
 
-void VulkanExportJsonConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
+void VulkanExportJsonConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaCommand(
     format::HandleId                                                           device,
-    format::HandleId                                                           command_buffer,
     uint32_t                                                                   info_count,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
 {
     GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
-    WriteMetaCommandToFile("InitVulkanAccelerationStructuresCommand", [&](auto& jdata) {
+    WriteMetaCommandToFile("VulkanBuildAccelerationStructuresMetaCommand", [&](auto& jdata) {
         HandleToJson(jdata["device"], device, json_options_);
-        HandleToJson(jdata["commandBuffer"], command_buffer, json_options_);
         FieldToJson(jdata["infoCount"], info_count, json_options_);
         FieldToJson(jdata["pInfos"], pInfos, json_options_);
         FieldToJson(jdata["ppBuildRangeInfos"], ppRangeInfos, json_options_);
-        // TODO: display intance data in meaningfull way
+        if (!instance_buffers_data.empty())
+        {
+            FieldToJson(jdata["instance_buffer_data"], "[Binary data]", json_options_);
+        }
+    });
+}
+void VulkanExportJsonConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaCommand(
+    format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
+{
+    WriteMetaCommandToFile("VulkanCopyAccelerationStructuresMetaCommand", [&](auto& jdata) {
+        HandleToJson(jdata["device"], device, json_options_);
+        FieldToJson(jdata["infoCount"], copy_infos->GetLength(), json_options_);
+        FieldToJson(jdata["pInfos"], copy_infos, json_options_);
     });
 }
 GFXRECON_END_NAMESPACE(decode)

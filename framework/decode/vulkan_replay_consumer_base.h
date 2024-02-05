@@ -181,13 +181,15 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
 
-    virtual void ProcessInitVulkanAccelerationStructuresCommand(
+    virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
-        format::HandleId                                                           command_buffer,
         uint32_t                                                                   info_count,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;
+
+    virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
+        format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
 
   protected:
     const VulkanObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }

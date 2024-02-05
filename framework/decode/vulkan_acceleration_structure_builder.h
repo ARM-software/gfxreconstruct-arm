@@ -95,14 +95,14 @@ class VulkanAccelerationStructureBuilder
     void RegisterAccelerationStructure(VkAccelerationStructureKHR handle, VkDeviceAddress device_address);
     void UntrackAccelerationStructure(const AccelerationStructureKHRInfo* acceleration_structure_info);
 
-    // Used when building acc structures in state recreation, naming to be changed
-    void ProcessInitVulkanAccelerationStructuresCommand(
-        VkCommandBuffer                                               command_buffer,
+    void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         uint32_t                                                      info_count,
         VkAccelerationStructureBuildGeometryInfoKHR*                  geometry_infos,
         VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data);
 
+    void ProcessCopyVulkanAccelerationStructuresMetaCommand(uint32_t                            info_count,
+                                                            VkCopyAccelerationStructureInfoKHR* copy_infos);
     void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
 
   private:

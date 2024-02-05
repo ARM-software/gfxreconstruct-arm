@@ -1114,117 +1114,183 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
     });
 }
 
+// Rename this to represent the whole acc structure prepare process
 void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanStateTable& state_table)
 {
-    bool should_write_metacall = false;
-    std::unordered_map<format::HandleId, AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>
-        merged_blas_commands;
-    std::unordered_map<format::HandleId, AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>
-        merged_tlas_commands;
+    AccelerationStructureBuildCommandsContainer merged_blas_build_commands;
+    AccelerationStructureBuildCommandsContainer merged_blas_update_commands;
+    AccelerationStructureCopyCommandsContainer  merged_copy_commands;
+    AccelerationStructureBuildCommandsContainer merged_tlas_build_commands;
+    AccelerationStructureBuildCommandsContainer merged_tlas_update_commands;
 
     state_table.VisitWrappers([&](const AccelerationStructureKHRWrapper* wrapper) {
         assert(wrapper != nullptr);
 
-        // If we are fastforwarding a trace with rebind allocator enabled, there will be wrappers with empty tracked
-        // command those would be the wrappers of the acceleration structures we replaced in the acceleration structure
-        // builder
-        if (!wrapper->latest_build_command_)
+        if (wrapper->latest_build_command_)
         {
-            return;
-        }
-        should_write_metacall = true;
-        // The build command can be shared by many acceleration structures, ensure that we only pick unique ones
-        uint32_t info_count = wrapper->latest_build_command_->geometry_infos.size();
-        for (uint32_t i = 0; i < info_count; ++i)
-        {
-            std::unordered_map<format::HandleId,
-                               AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>*
-                dst_container = nullptr;
-            if (wrapper->latest_build_command_->geometry_infos[i].type ==
-                VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+            AccelerationStructureBuildCommandsContainer* build_container = nullptr;
+            if (wrapper->latest_build_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
             {
-                dst_container = &merged_blas_commands;
+                build_container = &merged_blas_build_commands;
             }
-            else if (wrapper->latest_build_command_->geometry_infos[i].type ==
-                     VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+            else if (wrapper->latest_build_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
             {
-                dst_container = &merged_tlas_commands;
+                build_container = &merged_tlas_build_commands;
             }
 
-            auto result = dst_container->find(wrapper->latest_build_command_->device);
-            if (result == dst_container->end())
+            auto result = build_container->find(wrapper->device_id);
+            if (result == build_container->end())
             {
-                auto [it, inserted] =
-                    dst_container->emplace(wrapper->latest_build_command_->device,
-                                           AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData{});
+                auto [it, inserted] = build_container->insert(
+                    std::make_pair(wrapper->device_id, AccelerationStructureBuildCommandData{}));
                 result = it;
             }
 
             result->second.device = wrapper->latest_build_command_->device;
-            result->second.geometry_infos.push_back(wrapper->latest_build_command_->geometry_infos[i]);
+            result->second.geometry_infos.push_back(wrapper->latest_build_command_->geometry_info);
 
-            result->second.build_range_infos.push_back(wrapper->latest_build_command_->build_range_infos[i]);
-            for (const auto& instance_buffer_data : wrapper->latest_build_command_->instance_buffer_data)
+            result->second.build_range_infos.push_back(wrapper->latest_build_command_->build_range_infos);
+            result->second.instance_buffers_data.push_back(wrapper->latest_build_command_->instance_buffer_data);
+        }
+
+        if (wrapper->latest_update_command_)
+        {
+            AccelerationStructureBuildCommandsContainer* update_container = nullptr;
+
+            if (wrapper->latest_update_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
             {
-                result->second.instance_buffer_data.push_back(instance_buffer_data);
+                update_container = &merged_blas_update_commands;
             }
+            else if (wrapper->latest_update_command_->geometry_info.type ==
+                     VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+            {
+                update_container = &merged_tlas_update_commands;
+            }
+            auto result = update_container->find(wrapper->device_id);
+            if (result == update_container->end())
+            {
+                auto [it, inserted] = update_container->insert(
+                    std::make_pair(wrapper->device_id, AccelerationStructureBuildCommandData{}));
+                result = it;
+            }
+
+            result->second.device = wrapper->latest_update_command_->device;
+            result->second.geometry_infos.push_back(wrapper->latest_update_command_->geometry_info);
+
+            result->second.build_range_infos.push_back(wrapper->latest_update_command_->build_range_infos);
+            result->second.instance_buffers_data.push_back(wrapper->latest_update_command_->instance_buffer_data);
+        }
+
+        if (wrapper->latest_copy_command)
+        {
+            auto result = merged_copy_commands.find(wrapper->device_id);
+            if (result == merged_copy_commands.end())
+            {
+                auto [it, inserted] = merged_copy_commands.insert(
+                    std::make_pair(wrapper->device_id, AccelerationStructureCopyCommandData{}));
+                result = it;
+            }
+            result->second.device = wrapper->device_id;
+            result->second.infos.push_back(wrapper->latest_copy_command->info);
         }
     });
 
-    if (should_write_metacall)
+    std::vector<AccelerationStructureBuildCommandsContainer> command_containers = { merged_blas_build_commands,
+                                                                                    merged_tlas_build_commands };
+    for (const auto& [device, command] : merged_blas_build_commands)
     {
-        for (const auto& command_container : { merged_blas_commands, merged_tlas_commands })
+        EncodeAccelerationStructureBuildMetaCommand(command);
+    }
+
+    for (const auto& [device, command] : merged_copy_commands)
+    {
+        EncodeAccelerationStructureCopyMetaCommand(command);
+    }
+
+    for (const auto& [device, command] : merged_tlas_build_commands)
+    {
+        EncodeAccelerationStructureBuildMetaCommand(command);
+    }
+    command_containers = { merged_blas_update_commands, merged_tlas_update_commands };
+
+    for (const auto& command_container : command_containers)
+    {
+        for (const auto& [device, command] : command_container)
         {
-            for (const auto& [device, command] : command_container)
-            {
-                parameter_stream_.Reset();
-
-                format::InitVulkanAccelerationStructuresHeader header;
-                header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
-                header.meta_header.block_header.size = GetMetaDataBlockBaseSize(header);
-                header.meta_header.meta_data_id      = format::MakeMetaDataId(
-                    format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitVulkanAccelerationStructures);
-
-                encoder_.EncodeHandleIdValue(command.device);
-
-                EncodeStructArray(&encoder_, command.geometry_infos.data(), command.geometry_infos.size());
-
-                std::vector<VkAccelerationStructureBuildRangeInfoKHR*> c_interface_array;
-                for (const auto& v : command.build_range_infos)
-                {
-                    c_interface_array.push_back(const_cast<VkAccelerationStructureBuildRangeInfoKHR*>(v.data()));
-                }
-
-                EncodeStructArray2D(&encoder_,
-                                    c_interface_array.data(),
-                                    RangeInfoArraySize(VK_NULL_HANDLE,
-                                                       command.geometry_infos.size(),
-                                                       command.geometry_infos.data(),
-                                                       c_interface_array.data()));
-
-                header.meta_header.block_header.size += parameter_stream_.GetDataSize();
-
-                for (const auto& instance_buffer : command.instance_buffer_data)
-                {
-                    header.meta_header.block_header.size +=
-                        instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR);
-                }
-
-                output_stream_->Write(&header, sizeof(header));
-                output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
-
-                for (const auto& instance_buffer : command.instance_buffer_data)
-                {
-                    output_stream_->Write(instance_buffer.data(),
-                                          instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR));
-                }
-
-                parameter_stream_.Reset();
-
-                ++blocks_written_;
-            }
+            EncodeAccelerationStructureBuildMetaCommand(command);
         }
     }
+}
+
+void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
+    const AccelerationStructureBuildCommandData& command)
+{
+    parameter_stream_.Reset();
+
+    format::VulkanMetaBuildAccelerationStructuresHeader header;
+    header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+    header.meta_header.block_header.size = GetMetaDataBlockBaseSize(header);
+    header.meta_header.meta_data_id      = format::MakeMetaDataId(
+        format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kVulkanBuildAccelerationStructuresCommand);
+
+    encoder_.EncodeHandleIdValue(command.device);
+
+    EncodeStructArray(&encoder_, command.geometry_infos.data(), command.geometry_infos.size());
+
+    std::vector<VkAccelerationStructureBuildRangeInfoKHR*> c_interface_array;
+    for (const auto& v : command.build_range_infos)
+    {
+        c_interface_array.push_back(const_cast<VkAccelerationStructureBuildRangeInfoKHR*>(v.data()));
+    }
+
+    EncodeStructArray2D(
+        &encoder_,
+        c_interface_array.data(),
+        RangeInfoArraySize(
+            VK_NULL_HANDLE, command.geometry_infos.size(), command.geometry_infos.data(), c_interface_array.data()));
+
+    header.meta_header.block_header.size += parameter_stream_.GetDataSize();
+
+    for (const auto& instance_buffer : command.instance_buffers_data)
+    {
+        header.meta_header.block_header.size += instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR);
+    }
+
+    output_stream_->Write(&header, sizeof(header));
+    output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
+
+    for (const auto& instance_buffer : command.instance_buffers_data)
+    {
+        output_stream_->Write(instance_buffer.data(),
+                              instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR));
+    }
+
+    parameter_stream_.Reset();
+
+    ++blocks_written_;
+}
+
+void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command)
+{
+    parameter_stream_.Reset();
+
+    format::VulkanCopyAccelerationStructuresCommandHeader header;
+    header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+    header.meta_header.block_header.size = GetMetaDataBlockBaseSize(header);
+    header.meta_header.meta_data_id      = format::MakeMetaDataId(
+        format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kVulkanCopyAccelerationStructuresCommand);
+
+    encoder_.EncodeHandleIdValue(command.device);
+    EncodeStructArray(&encoder_, command.infos.data(), command.infos.size());
+
+    header.meta_header.block_header.size += parameter_stream_.GetDataSize();
+
+    output_stream_->Write(&header, sizeof(header));
+    output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
+
+    parameter_stream_.Reset();
+
+    ++blocks_written_;
 }
 
 void VulkanStateWriter::WriteAccelerationStructureKHRState(const VulkanStateTable& state_table)

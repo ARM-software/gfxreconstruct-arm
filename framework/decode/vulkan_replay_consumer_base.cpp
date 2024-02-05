@@ -7271,7 +7271,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
         VkCopyAccelerationStructureInfoKHR* info           = pInfo->GetPointer();
         func(command_buffer, info);
     }
-    else
+    else if (!loading_trim_state_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdCopyAccelerationStructure(
             command_buffer_info->handle, pInfo->GetPointer());
@@ -8560,9 +8560,28 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
 }
 
-void VulkanReplayConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
+void VulkanReplayConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaCommand(
+    format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
+{
+    DeviceInfo* device_info = GetObjectInfoTable().GetDeviceInfo(device);
+    GFXRECON_ASSERT(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    {
+        return;
+    }
+
+    MapStructArrayHandles(copy_infos->GetMetaStructPointer(), copy_infos->GetLength(), GetObjectInfoTable());
+
+    acceleration_structure_builders_[device]->ProcessCopyVulkanAccelerationStructuresMetaCommand(
+        copy_infos->GetLength(), copy_infos->GetPointer());
+}
+
+void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaCommand(
     format::HandleId                                                           device,
-    format::HandleId                                                           command_buffer,
     uint32_t                                                                   info_count,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
@@ -8581,21 +8600,8 @@ void VulkanReplayConsumerBase::ProcessInitVulkanAccelerationStructuresCommand(
 
     MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
 
-    CommandBufferInfo* cmd_buffer_info = GetObjectInfoTable().GetCommandBufferInfo(command_buffer);
-    if (!cmd_buffer_info)
-    {
-        acceleration_structure_builders_[device]->ProcessInitVulkanAccelerationStructuresCommand(
-            VK_NULL_HANDLE, info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
-    }
-    else
-    {
-        acceleration_structure_builders_[device]->ProcessInitVulkanAccelerationStructuresCommand(
-            cmd_buffer_info->handle,
-            info_count,
-            pInfos->GetPointer(),
-            ppRangeInfos->GetPointer(),
-            instance_buffers_data);
-    }
+    acceleration_structure_builders_[device]->ProcessBuildVulkanAccelerationStructuresMetaCommand(
+        info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
 }
 
 void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData)

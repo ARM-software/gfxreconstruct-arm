@@ -198,13 +198,15 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer, public AnnotationHan
     virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId                     tlas,
                                                      const std::vector<format::HandleId>& blases) override;
 
-    virtual void ProcessInitVulkanAccelerationStructuresCommand(
+    virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
-        format::HandleId                                                           command_buffer,
         uint32_t                                                                   info_count,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;
+
+    virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
+        format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
 
   private:
     // Delete the in-memory JSON tree from the last line and count the new object.

@@ -90,8 +90,7 @@ void VulkanAccelerationStructureBuilder::UntrackAccelerationStructure(
     acceleration_structures_.erase(result);
 }
 
-void VulkanAccelerationStructureBuilder::ProcessInitVulkanAccelerationStructuresCommand(
-    VkCommandBuffer                                               command_buffer,
+void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructuresMetaCommand(
     uint32_t                                                      info_count,
     VkAccelerationStructureBuildGeometryInfoKHR*                  geometry_infos,
     VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
@@ -100,14 +99,11 @@ void VulkanAccelerationStructureBuilder::ProcessInitVulkanAccelerationStructures
     static const VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                             VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     // Retrieve / initialize the command executable structures or reuse the capture command buffer
-    if (command_buffer == VK_NULL_HANDLE)
+    if (!cmd_execute_obj_)
     {
-        if (!cmd_execute_obj_)
-        {
-            InitializeInternalExecObjects();
-        }
-        command_buffer = cmd_execute_obj_->command_buffer_;
+        InitializeInternalExecObjects();
     }
+    VkCommandBuffer command_buffer = cmd_execute_obj_->command_buffer_;
 
     BeginCommandBuffer();
 
@@ -135,6 +131,23 @@ void VulkanAccelerationStructureBuilder::ProcessInitVulkanAccelerationStructures
 
     CmdBuildAccelerationStructures(command_buffer, info_count, geometry_infos, range_infos);
 
+    ExecuteCommandBuffer();
+}
+
+void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructuresMetaCommand(
+    uint32_t info_count, VkCopyAccelerationStructureInfoKHR* copy_infos)
+{
+    if (!cmd_execute_obj_)
+    {
+        InitializeInternalExecObjects();
+    }
+    VkCommandBuffer command_buffer = cmd_execute_obj_->command_buffer_;
+    BeginCommandBuffer();
+
+    for (uint32_t i = 0; i < info_count; ++i)
+    {
+        CmdCopyAccelerationStructure(command_buffer, &copy_infos[i]);
+    }
     ExecuteCommandBuffer();
 }
 

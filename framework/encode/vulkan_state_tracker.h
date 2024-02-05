@@ -416,6 +416,9 @@ class VulkanStateTracker
 
     void SetExperimentalRaytracingFastforwarding(bool value) { experimental_raytracing_fastforwarding = value; };
 
+    void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
+                                               const VkCopyAccelerationStructureInfoKHR* info);
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                  parent_handle,

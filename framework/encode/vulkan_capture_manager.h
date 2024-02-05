@@ -356,6 +356,8 @@ class VulkanCaptureManager : public CaptureManager
                                             VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
                                             VkDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData);
+    void OverrideCmdCopyAccelerationStructureKHR(VkCommandBuffer                           command_buffer,
+                                                 const VkCopyAccelerationStructureInfoKHR* pInfo);
 
     void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
                                           VkDevice                        device,

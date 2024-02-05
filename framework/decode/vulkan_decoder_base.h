@@ -195,8 +195,10 @@ class VulkanDecoderBase : public ApiDecoder
 
     virtual void DispatchExeFileInfo(format::ThreadId thread_id, format::ExeFileInfoBlock& info) override {}
 
-    virtual void DispatchInitVulkanAccelerationStructuresCommand(const uint8_t* parameter_buffer,
-                                                                 size_t         buffer_size) override;
+    virtual void DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
+                                                                      size_t         buffer_size) override;
+    virtual void DispatchVulkanAccelerationStructuresCopyMetaCommand(const uint8_t* parameter_buffer,
+                                                                     size_t         buffer_size) override;
 
   protected:
     const std::vector<VulkanConsumer*>& GetConsumers() const { return consumers_; }

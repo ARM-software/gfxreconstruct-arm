@@ -512,12 +512,11 @@ void VulkanDecoderBase::DispatchSetTlasToBlasDependencyCommand(format::HandleId 
     }
 }
 
-void VulkanDecoderBase::DispatchInitVulkanAccelerationStructuresCommand(const uint8_t* parameter_buffer,
-                                                                        size_t         buffer_size)
+void VulkanDecoderBase::DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
+                                                                             size_t         buffer_size)
 {
 
     format::HandleId                                                          device_id;
-    format::HandleId                                                          command_buffer_id;
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR> pInfos;
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>   ppRangeInfos;
 
@@ -540,8 +539,23 @@ void VulkanDecoderBase::DispatchInitVulkanAccelerationStructuresCommand(const ui
 
     for (auto consumer : consumers_)
     {
-        consumer->ProcessInitVulkanAccelerationStructuresCommand(
-            device_id, command_buffer_id, pInfos.GetLength(), &pInfos, &ppRangeInfos, instance_buffers);
+        consumer->ProcessBuildVulkanAccelerationStructuresMetaCommand(
+            device_id, pInfos.GetLength(), &pInfos, &ppRangeInfos, instance_buffers);
+    }
+}
+
+void VulkanDecoderBase::DispatchVulkanAccelerationStructuresCopyMetaCommand(const uint8_t* parameter_buffer,
+                                                                            size_t         buffer_size)
+{
+    format::HandleId                                                 device_id;
+    StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR> pInfos;
+
+    std::size_t bytes_read = ValueDecoder::DecodeHandleIdValue(parameter_buffer, buffer_size, &device_id);
+    bytes_read += pInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
+
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessCopyVulkanAccelerationStructuresMetaCommand(device_id, &pInfos);
     }
 }
 
