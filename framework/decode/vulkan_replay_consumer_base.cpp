@@ -2860,7 +2860,6 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .cmd_write_acceleration_structures_properties =
                         device_table->CmdWriteAccelerationStructuresPropertiesKHR,
                     .destroy_acceleration_structure = device_table->DestroyAccelerationStructureKHR,
-                    .destroy_buffer                 = device_table->DestroyBuffer,
                     .create_command_pool            = device_table->CreateCommandPool,
                     .destroy_command_pool           = device_table->DestroyCommandPool,
                     .allocate_command_buffers       = device_table->AllocateCommandBuffers,

@@ -70,20 +70,6 @@ void VulkanAccelerationStructureBuilder::UntrackAccelerationStructure(
     if (result->get()->replacement_acceleration_struct_)
     {
         const auto& real_as = result->get()->replacement_acceleration_struct_;
-        if (real_as->storage_)
-        {
-            buffers_.erase(std::remove_if(buffers_.begin(),
-                                          buffers_.end(),
-                                          [&real_as](const auto& entry) { return entry.get() == real_as->storage_; }),
-                           buffers_.end());
-        }
-        if (real_as->scratch_)
-        {
-            buffers_.erase(std::remove_if(buffers_.begin(),
-                                          buffers_.end(),
-                                          [&real_as](const auto& entry) { return entry.get() == real_as->scratch_; }),
-                           buffers_.end());
-        }
         functions_.destroy_acceleration_structure(device_, real_as->handle_, nullptr);
     }
 
@@ -125,7 +111,7 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
             state_recreation_buffer_entries.back()->original_address_ =
                 geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
             state_recreation_buffer_entries.back()->new_address_ =
-                GetBufferDeviceAddress(state_recreation_buffer_entries.back()->buffer_info_->handle);
+                GetBufferDeviceAddress(state_recreation_buffer_entries.back()->handle_);
         }
     }
 
@@ -148,6 +134,7 @@ void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructures
     {
         CmdCopyAccelerationStructure(command_buffer, &copy_infos[i]);
     }
+
     ExecuteCommandBuffer();
 }
 
@@ -159,9 +146,8 @@ void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo*     buffer_in
     {
         new_address = GetBufferDeviceAddress(buffer_info->handle);
     }
-    auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-        return entry->buffer_info_->handle == buffer_info->handle;
-    });
+    auto existing_buffer = std::find_if(
+        buffers_.begin(), buffers_.end(), [&](const auto& entry) { return entry->handle_ == buffer_info->handle; });
     if (existing_buffer != buffers_.end())
     {
         if ((*existing_buffer)->original_address_ == 0)
@@ -172,14 +158,22 @@ void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo*     buffer_in
         {
             (*existing_buffer)->new_address_ = new_address;
         }
-        if ((*existing_buffer)->buffer_info_ == nullptr)
+        if ((*existing_buffer)->capture_id_ == format::kNullHandleId)
         {
-            (*existing_buffer)->buffer_info_ = buffer_info;
+            (*existing_buffer)->capture_id_ = buffer_info->capture_id;
+        }
+        if ((*existing_buffer)->handle_ == VK_NULL_HANDLE)
+        {
+            (*existing_buffer)->handle_ = buffer_info->handle;
+        }
+        if ((*existing_buffer)->allocator_data_ == 0)
+        {
+            (*existing_buffer)->allocator_data_ = buffer_info->allocator_data;
         }
     }
     else
     {
-        buffers_.push_back(std::make_unique<BufferEntry>(original_address, new_address, buffer_info, allocator_));
+        buffers_.push_back(std::make_unique<BufferEntry>(original_address, new_address, allocator_, buffer_info));
     }
 }
 
@@ -188,7 +182,7 @@ void VulkanAccelerationStructureBuilder::UntrackBufferInfo(const BufferInfo* buf
     buffers_.erase(std::remove_if(buffers_.begin(),
                                   buffers_.end(),
                                   [&buffer_info](const std::unique_ptr<BufferEntry>& entry) {
-                                      return entry->buffer_info_->capture_id == buffer_info->capture_id;
+                                      return entry->capture_id_ == buffer_info->capture_id;
                                   }),
                    buffers_.end());
 }
@@ -208,7 +202,7 @@ VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsag
     create_info.pQueueFamilyIndices   = nullptr;
 
     VulkanResourceAllocator::ResourceData buffer_allocator_data;
-    allocator_->CreateBufferDirect(&create_info, nullptr, &buffer, &buffer_allocator_data);
+    allocator_->CreateBuffer(&create_info, nullptr, format::kNullHandleId, &buffer, &buffer_allocator_data);
 
     VkMemoryRequirements requirements{};
     functions_.get_buffer_memory_requirements(device_, buffer, &requirements);
@@ -230,9 +224,9 @@ VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsag
 
     VkDeviceMemory                      memory{};
     VulkanResourceAllocator::MemoryData memory_allocator_data{};
-    allocator_->AllocateMemoryDirect(&allocate_info, nullptr, &memory, &memory_allocator_data);
+    allocator_->AllocateMemory(&allocate_info, nullptr, format::kNullHandleId, &memory, &memory_allocator_data);
 
-    allocator_->BindBufferMemoryDirect(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
+    allocator_->BindBufferMemory(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
 
     if (initial_data)
     {
@@ -242,15 +236,9 @@ VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsag
         allocator_->UnmapResourceMemoryDirect(buffer_allocator_data);
     }
 
-    auto entry = std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), new BufferInfo(), allocator_);
-
-    entry->buffer_info_->allocator_data        = buffer_allocator_data;
-    entry->buffer_info_->capture_id            = format::kNullHandleId;
-    entry->buffer_info_->parent_id             = format::kNullHandleId;
-    entry->buffer_info_->handle                = buffer;
-    entry->buffer_info_->memory_property_flags = found_flags;
-    entry->buffer_info_->queue_family_index    = 0;
-    entry->buffer_info_->usage                 = create_info.usage;
+    auto entry             = std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), allocator_);
+    entry->allocator_data_ = buffer_allocator_data;
+    entry->handle_         = buffer;
 
     return entry;
 }
@@ -313,7 +301,7 @@ void VulkanAccelerationStructureBuilder::UpdateBufferDeviceAddress(VkDeviceAddre
     {
         VkDeviceSize offset;
         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-            auto buffer_size = allocator_->GetBufferSize(entry->buffer_info_->allocator_data);
+            auto buffer_size = allocator_->GetBufferSize(entry->allocator_data_);
             return entry->original_address_ < address && (entry->original_address_ + buffer_size) > address;
         });
         GFXRECON_ASSERT(buffer != buffers_.end());
@@ -330,7 +318,7 @@ VulkanAccelerationStructureBuilder::GetBufferByRuntimeDeviceAddress(VkDeviceAddr
     if (buffer == buffers_.end())
     {
         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-            auto buffer_size = allocator_->GetBufferSize(entry->buffer_info_->allocator_data);
+            auto buffer_size = allocator_->GetBufferSize(entry->allocator_data_);
             return entry->new_address_ < runtime_address && (entry->new_address_ + buffer_size) > runtime_address;
         });
     }
@@ -440,22 +428,25 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
     // update device address of the instance buffer
     UpdateBufferDeviceAddress(instances.data.deviceAddress);
     // find buffer by device address
-    BufferInfo*  instance_buffer = GetBufferByRuntimeDeviceAddress(instances.data.deviceAddress)->buffer_info_;
-    VkDeviceSize offset          = instances.data.deviceAddress - GetBufferDeviceAddress(instance_buffer->handle);
+    auto         instance_buffer = GetBufferByRuntimeDeviceAddress(instances.data.deviceAddress);
+    VkDeviceSize offset          = instances.data.deviceAddress - GetBufferDeviceAddress(instance_buffer->handle_);
 
     // store information on instance buffer content to be updated before VkQueueSubmit
-    instance_buffer_updates_[command_buffer].push_back(std::make_tuple(instance_buffer, offset, build_range));
+    instance_buffer_updates_[command_buffer].push_back(
+        std::make_tuple(instance_buffer->allocator_data_, offset, build_range));
 }
 
 // Map provided instance buffer, update acceleration structure references inside
 void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
-    BufferInfo* instance_buffer, VkDeviceSize offset, VkAccelerationStructureBuildRangeInfoKHR build_range)
+    VulkanResourceAllocator::ResourceData    instance_buffer_allocator_data,
+    VkDeviceSize                             offset,
+    VkAccelerationStructureBuildRangeInfoKHR build_range)
 {
     uint8_t* data;
     allocator_->MapResourceMemoryDirect(sizeof(VkAccelerationStructureInstanceKHR) * build_range.primitiveCount,
                                         0,
                                         (void**)&data,
-                                        instance_buffer->allocator_data);
+                                        instance_buffer_allocator_data);
     data += offset + build_range.primitiveOffset;
 
     VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
@@ -463,7 +454,7 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     {
         UpdateAccelerationStructDeviceAddress(instance_data[instance_index].accelerationStructureReference);
     }
-    allocator_->UnmapResourceMemoryDirect(instance_buffer->allocator_data);
+    allocator_->UnmapResourceMemoryDirect(instance_buffer_allocator_data);
 }
 
 void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
@@ -473,7 +464,6 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
 
     cmd_execute_obj_ = std::make_unique<CommandExecuteObjects>(device_, functions_.destroy_command_pool);
 
-    // Create the command pool
     VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };
     create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     create_info.queueFamilyIndex        = 0;
@@ -539,22 +529,23 @@ void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
     {
         auto& geometry_data =
             const_cast<VkAccelerationStructureGeometryKHR*>(build_geometry.pGeometries)[geometry_index];
-        if (geometry_data.sType == VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
+        if (geometry_data.sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
         {
-            if (geometry_data.geometryType == VK_GEOMETRY_TYPE_TRIANGLES_KHR)
-            {
-                auto& triangles = geometry_data.geometry.triangles;
-                UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
-                UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
-                UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
-            }
-            else if (geometry_data.geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
-            {
-                // instance data - find the instance buffer by device address, map it, update referenced bottom level AS
-                // address
-                auto& instances = geometry_data.geometry.instances;
-                UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
-            }
+            continue;
+        }
+        if (geometry_data.geometryType == VK_GEOMETRY_TYPE_TRIANGLES_KHR)
+        {
+            auto& triangles = geometry_data.geometry.triangles;
+            UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
+            UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
+            UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
+        }
+        else if (geometry_data.geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
+        {
+            // instance data - find the instance buffer by device address, map it, update referenced bottom level AS
+            // address
+            auto& instances = geometry_data.geometry.instances;
+            UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
         }
     }
 }
@@ -596,16 +587,16 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             // Create new acceleration structure and scratch of required size
             if (!dst_entry->replacement_acceleration_struct_)
             {
-                auto&                      storage        = buffers_.emplace_back(CreateBuffer(
-                    size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR));
-                VkAccelerationStructureKHR replacement_as = CreateAccelerationStructure(
-                    geometry_infos[i], range_infos[i], size_info, storage->buffer_info_->handle);
+                std::unique_ptr<BufferEntry> storage = CreateBuffer(
+                    size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+                VkAccelerationStructureKHR replacement_as =
+                    CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
 
                 // Store acceleration structure data
                 auto replacement_as_address = GetAccelerationStructureDeviceAddress(replacement_as);
                 dst_entry->replacement_acceleration_struct_ =
                     std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
-                dst_entry->replacement_acceleration_struct_->storage_ = storage.get();
+                dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
                 dst_entry->new_address_ = replacement_as_address;
             }
@@ -640,7 +631,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             scratch_size = size_info.updateScratchSize;
         }
 
-        BufferEntry** target_scratch;
+        std::unique_ptr<BufferEntry>* target_scratch;
         if (dst_entry->replacement_acceleration_struct_)
         {
             target_scratch = &dst_entry->replacement_acceleration_struct_->scratch_;
@@ -652,30 +643,16 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
 
         if (!(*target_scratch))
         {
-            *target_scratch =
-                buffers_
-                    .emplace_back(CreateBuffer(
-                        scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
-                    .get();
+            (*target_scratch) = CreateBuffer(
+                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
         }
 
-        else if (allocator_->GetBufferSize((*target_scratch)->buffer_info_->allocator_data) != scratch_size)
+        else if (allocator_->GetBufferSize((*target_scratch)->allocator_data_) != scratch_size)
         {
-            buffers_.erase(std::remove_if(buffers_.begin(),
-                                          buffers_.end(),
-                                          [&dst_entry](const auto& entry) {
-                                              return entry.get() ==
-                                                     dst_entry->replacement_acceleration_struct_->scratch_;
-                                          }),
-                           buffers_.end());
-            *target_scratch =
-                buffers_
-                    .emplace_back(CreateBuffer(
-                        scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
-                    .get();
+            *target_scratch = CreateBuffer(
+                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
         }
-
-        geometry_infos[i].scratchData.deviceAddress = GetBufferDeviceAddress((*target_scratch)->buffer_info_->handle);
+        geometry_infos[i].scratchData.deviceAddress = (*target_scratch)->new_address_;
         UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
     functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);

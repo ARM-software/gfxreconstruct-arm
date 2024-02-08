@@ -24,9 +24,9 @@
 #define GFXRECON_DECODE_VULKAN_ACCELERATION_STRUCTURE_BUILDER_H
 
 #include "decode/vulkan_resource_allocator.h"
-#include "util/defines.h"
-#include "decode/vulkan_object_info.h"
 #include "decode/descriptor_update_template_decoder.h"
+#include "decode/vulkan_object_info_table.h"
+#include "util/defines.h"
 
 #include <limits>
 #include <memory>
@@ -52,7 +52,6 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCmdCopyAccelerationStructureKHR             cmd_copy_acceleration_structure{ nullptr };
         PFN_vkCmdWriteAccelerationStructuresPropertiesKHR cmd_write_acceleration_structures_properties{ nullptr };
         PFN_vkDestroyAccelerationStructureKHR             destroy_acceleration_structure{ nullptr };
-        PFN_vkDestroyBuffer                               destroy_buffer{ nullptr };
         PFN_vkCreateCommandPool                           create_command_pool{ nullptr };
         PFN_vkDestroyCommandPool                          destroy_command_pool{ nullptr };
         PFN_vkAllocateCommandBuffers                      allocate_command_buffers{ nullptr };
@@ -108,25 +107,33 @@ class VulkanAccelerationStructureBuilder
   private:
     struct BufferEntry
     {
-        VkDeviceAddress          original_address_;
-        VkDeviceAddress          new_address_;
-        BufferInfo*              buffer_info_;
-        VulkanResourceAllocator* allocator_;
+        VkDeviceAddress                       original_address_;
+        VkDeviceAddress                       new_address_;
+        format::HandleId                      capture_id_{ format::kNullHandleId };
+        VkBuffer                              handle_{ VK_NULL_HANDLE };
+        VulkanResourceAllocator::ResourceData allocator_data_{ 0 };
+        VulkanResourceAllocator*              allocator_;
 
         BufferEntry(VkDeviceAddress          original_address,
                     VkDeviceAddress          new_address,
-                    BufferInfo*              buffer_info,
-                    VulkanResourceAllocator* allocator) :
+                    VulkanResourceAllocator* allocator,
+                    BufferInfo*              buffer_info) :
             original_address_(original_address),
-            new_address_(new_address), buffer_info_(buffer_info), allocator_(allocator)
+            new_address_(new_address), allocator_(allocator), capture_id_(buffer_info->capture_id),
+            handle_(buffer_info->handle), allocator_data_(buffer_info->allocator_data)
         {}
+
+        BufferEntry(VkDeviceAddress original_address, VkDeviceAddress new_address, VulkanResourceAllocator* allocator) :
+
+            original_address_(original_address), new_address_(new_address), allocator_(allocator)
+        {}
+
         ~BufferEntry()
         {
             // We own the data if buffer is internal
-            if (buffer_info_->capture_id == format::kNullHandleId && buffer_info_->parent_id == format::kNullHandleId)
+            if (capture_id_ == format::kNullHandleId)
             {
-                allocator_->DestroyBufferDirect(buffer_info_->handle, nullptr, buffer_info_->allocator_data);
-                delete buffer_info_;
+                allocator_->DestroyBuffer(handle_, nullptr, allocator_data_);
             }
         }
     };
@@ -139,9 +146,8 @@ class VulkanAccelerationStructureBuilder
         VkAccelerationStructureBuildSizesInfoKHR    size_info_;
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
 
-        BufferEntry* storage_{ nullptr };
-        BufferEntry* scratch_{ nullptr };
-        VkDeviceSize scratch_size{ 0 };
+        std::unique_ptr<BufferEntry> storage_;
+        std::unique_ptr<BufferEntry> scratch_;
 
         AccelerationStructureEntry(VkDeviceAddress                          original_address,
                                    VkDeviceAddress                          new_address,
@@ -160,8 +166,10 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    std::unordered_map<VkCommandBuffer,
-                       std::vector<std::tuple<BufferInfo*, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
+    std::unordered_map<
+        VkCommandBuffer,
+        std::vector<
+            std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
         instance_buffer_updates_;
 
     struct DescriptorWriteData
@@ -220,7 +228,7 @@ class VulkanAccelerationStructureBuilder
                               VkAccelerationStructureGeometryInstancesDataKHR& instances,
                               const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
 
-    void UpdateInstanceBufferContent(BufferInfo*                              instance_buffer,
+    void UpdateInstanceBufferContent(VulkanResourceAllocator::ResourceData    instance_buffer_allocator_data,
                                      VkDeviceSize                             offset,
                                      VkAccelerationStructureBuildRangeInfoKHR build_range);
 
@@ -242,6 +250,8 @@ class VulkanAccelerationStructureBuilder
     };
 
     std::unique_ptr<CommandExecuteObjects> cmd_execute_obj_;
+
+    bool enable_debug_log = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)
