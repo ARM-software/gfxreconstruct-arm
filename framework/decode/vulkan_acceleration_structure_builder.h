@@ -62,6 +62,9 @@ class VulkanAccelerationStructureBuilder
         PFN_vkQueueSubmit                                 queue_submit{ nullptr };
         PFN_vkQueueWaitIdle                               queue_wait_idle{ nullptr };
         PFN_vkUpdateDescriptorSets                        update_descriptor_sets{ nullptr };
+        PFN_vkGetQueryPoolResults                         get_query_pool_results{ nullptr };
+        PFN_vkCmdCopyQueryPoolResults                     cmd_copy_query_pool_results{ nullptr };
+        PFN_vkCmdPipelineBarrier                          cmd_pipeline_barrier{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions                               functions,
@@ -91,7 +94,9 @@ class VulkanAccelerationStructureBuilder
 
     void SetBufferInfo(BufferInfo* buffer_info, VkDeviceAddress original_address, VkDeviceAddress new_address);
     void UntrackBufferInfo(const BufferInfo* buffer_info);
-    void RegisterAccelerationStructure(VkAccelerationStructureKHR handle, VkDeviceAddress device_address);
+    void RegisterAccelerationStructure(VkAccelerationStructureKHR     handle,
+                                       VkDeviceAddress                device_address,
+                                       VkAccelerationStructureTypeKHR type);
     void UntrackAccelerationStructure(const AccelerationStructureKHRInfo* acceleration_structure_info);
 
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
@@ -103,6 +108,15 @@ class VulkanAccelerationStructureBuilder
     void ProcessCopyVulkanAccelerationStructuresMetaCommand(uint32_t                            info_count,
                                                             VkCopyAccelerationStructureInfoKHR* copy_infos);
     void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
+
+    // called before command gets executed
+    // the query pool results contain the AS compacted sizes
+    // inject duplicate of this command that puts the results in internal buffer
+    void OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info, const QueryPoolInfo* query_pool_info);
+
+    // called before command gets executed
+    // inject duplicate of this command to retrieve compact sizes
+    void OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info);
 
   private:
     struct BufferEntry
@@ -143,6 +157,7 @@ class VulkanAccelerationStructureBuilder
         VkDeviceAddress                             original_address_;
         VkDeviceAddress                             new_address_;
         VkAccelerationStructureKHR                  handle_;
+        VkAccelerationStructureTypeKHR              type_;
         VkAccelerationStructureBuildSizesInfoKHR    size_info_;
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
 
@@ -152,9 +167,10 @@ class VulkanAccelerationStructureBuilder
         AccelerationStructureEntry(VkDeviceAddress                          original_address,
                                    VkDeviceAddress                          new_address,
                                    VkAccelerationStructureKHR               handle,
+                                   VkAccelerationStructureTypeKHR           type,
                                    VkAccelerationStructureBuildSizesInfoKHR size_info) :
             original_address_(original_address),
-            new_address_(new_address), handle_(handle), size_info_(size_info)
+            new_address_(new_address), handle_(handle), type_(type), size_info_(size_info)
         {}
     };
 
@@ -171,6 +187,15 @@ class VulkanAccelerationStructureBuilder
         std::vector<
             std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
         instance_buffer_updates_;
+
+    // holds information gathered during vkCmdCopyQueryPoolResults that needs to be processed before
+    // vkCmdCopyAccelerationStructureKHR in order to know replacement AS compressed sizes
+    std::unordered_map<
+        VkQueryPool,
+        std::vector<std::tuple<uint32_t, std::unique_ptr<BufferEntry>, std::vector<VkAccelerationStructureKHR>>>>
+        compacted_sizes_unprocessed;
+    // map containing relation between uncompacted AS capture id and the size of compacted AS
+    std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> compacted_sizes_processed;
 
     struct DescriptorWriteData
     {
@@ -201,8 +226,10 @@ class VulkanAccelerationStructureBuilder
     };
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
 
-    std::unique_ptr<BufferEntry>
-    CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data = nullptr);
+    std::unique_ptr<BufferEntry> CreateBuffer(VkDeviceSize          size,
+                                              VkBufferUsageFlags    usage,
+                                              void*                 initial_data   = nullptr,
+                                              VkMemoryPropertyFlags mem_prop_flags = {});
 
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);

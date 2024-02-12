@@ -48,11 +48,12 @@ VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
     }
 }
 
-void VulkanAccelerationStructureBuilder::RegisterAccelerationStructure(VkAccelerationStructureKHR handle,
-                                                                       VkDeviceAddress            device_address)
+void VulkanAccelerationStructureBuilder::RegisterAccelerationStructure(VkAccelerationStructureKHR     handle,
+                                                                       VkDeviceAddress                device_address,
+                                                                       VkAccelerationStructureTypeKHR type)
 {
     acceleration_structures_.emplace_back(std::make_unique<AccelerationStructureEntry>(
-        device_address, 0, handle, VkAccelerationStructureBuildSizesInfoKHR()));
+        device_address, 0, handle, type, VkAccelerationStructureBuildSizesInfoKHR()));
 }
 
 void VulkanAccelerationStructureBuilder::UntrackAccelerationStructure(
@@ -187,8 +188,8 @@ void VulkanAccelerationStructureBuilder::UntrackBufferInfo(const BufferInfo* buf
                    buffers_.end());
 }
 
-std::unique_ptr<VulkanAccelerationStructureBuilder::BufferEntry>
-VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data)
+std::unique_ptr<VulkanAccelerationStructureBuilder::BufferEntry> VulkanAccelerationStructureBuilder::CreateBuffer(
+    VkDeviceSize size, VkBufferUsageFlags usage, void* initial_data, VkMemoryPropertyFlags mem_prop_flags)
 {
     VkBuffer buffer;
 
@@ -208,11 +209,11 @@ VulkanAccelerationStructureBuilder::CreateBuffer(VkDeviceSize size, VkBufferUsag
     functions_.get_buffer_memory_requirements(device_, buffer, &requirements);
 
     uint32_t              mem_type_index = 1;
-    VkMemoryPropertyFlags desired_flags{};
+    VkMemoryPropertyFlags desired_flags{ mem_prop_flags };
     VkMemoryPropertyFlags found_flags{};
     if (initial_data)
     {
-        desired_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        desired_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }
 
     graphics::FindMemoryTypeIndex(
@@ -593,9 +594,9 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
 
                 // Store acceleration structure data
-                auto replacement_as_address = GetAccelerationStructureDeviceAddress(replacement_as);
-                dst_entry->replacement_acceleration_struct_ =
-                    std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
+                auto replacement_as_address                 = GetAccelerationStructureDeviceAddress(replacement_as);
+                dst_entry->replacement_acceleration_struct_ = std::make_unique<AccelerationStructureEntry>(
+                    0, replacement_as_address, replacement_as, geometry_infos[i].type, size_info);
                 dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
                 dst_entry->new_address_ = replacement_as_address;
@@ -628,9 +629,9 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
 
                 // Store acceleration structure data
-                auto replacement_as_address = GetAccelerationStructureDeviceAddress(replacement_as);
-                dst_entry->replacement_acceleration_struct_ =
-                    std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
+                auto replacement_as_address                 = GetAccelerationStructureDeviceAddress(replacement_as);
+                dst_entry->replacement_acceleration_struct_ = std::make_unique<AccelerationStructureEntry>(
+                    0, replacement_as_address, replacement_as, geometry_infos[i].type, size_info);
                 dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
                 dst_entry->new_address_ = replacement_as_address;
@@ -676,24 +677,78 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
 
     if (VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR == modified_info.mode)
     {
-        // First, get the replay device address of the destination structure and store it
+        // Replace the handle to be of the real built structure
+        auto original_entry  = GetAccelerationStructureEntry(modified_info.src);
         auto compacted_entry = GetAccelerationStructureEntry(modified_info.dst);
 
-        // clang-format off
-        // TODO: Similarly to the build destination, copy destination should be recreated here to adjust
-        // the AS size on replay. Compacting copy destination is typically created by commands:
-        // vkCmdWriteAccelerationStructuresPropertiesKHR(VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
-        // vkCreateAccelerationStructureKHR(...compacted-size...)
-        // vkCmdCopyAccelerationStructureKHR(...dst: compacted-as...)
-        // The compacted size can be different on each device, so the destination AS needs a
-        // replacement of size calculated at runtime.
-        // clang-format on
+        // Handling for results (only in case of vkCmdCopyQueryPoolResults)
+        if (!compacted_sizes_unprocessed.empty())
+        {
+            for (auto it = compacted_sizes_unprocessed.begin(); it != compacted_sizes_unprocessed.end(); ++it)
+            {
+                auto& unprocessed = it->second;
 
-        compacted_entry->new_address_ = GetAccelerationStructureDeviceAddress(modified_info.dst);
+                for (uint64_t i = 0; i < unprocessed.size(); i++)
+                {
+                    auto& [compacted_first_query, buffer, vector_of_acc_str]{ unprocessed[i] };
 
-        // Replace the handle to be of the real built structure
-        auto original_entry = GetAccelerationStructureEntry(modified_info.src);
-        modified_info.src   = original_entry->replacement_acceleration_struct_->handle_;
+                    std::vector<uint64_t> vector_of_acc_str_sizes(vector_of_acc_str.size(), 0);
+                    uint64_t              buffer_size = vector_of_acc_str_sizes.size() * sizeof(uint64_t);
+
+                    void* mapped;
+
+                    allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->allocator_data_);
+
+                    util::platform::MemoryCopy(vector_of_acc_str_sizes.data(), buffer_size, mapped, buffer_size);
+
+                    allocator_->UnmapResourceMemoryDirect(buffer->allocator_data_);
+
+                    assert(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
+
+                    // add results to compacted_sizes_processed map
+                    std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> processing_result;
+                    std::transform(vector_of_acc_str.begin(),
+                                   vector_of_acc_str.end(),
+                                   vector_of_acc_str_sizes.begin(),
+                                   std::inserter(processing_result, processing_result.end()),
+                                   [](VkAccelerationStructureKHR acc_str, uint64_t acc_str_size) {
+                                       return std::make_pair(acc_str, acc_str_size);
+                                   });
+                    compacted_sizes_processed.insert(processing_result.begin(), processing_result.end());
+                }
+            }
+            compacted_sizes_unprocessed.clear();
+        }
+
+        // create replacement acceleration structure for dst with previously determined compacted size
+        if (!compacted_entry->replacement_acceleration_struct_)
+        {
+            assert(compacted_sizes_processed.count(original_entry->handle_));
+            VkDeviceSize size_of_acc{ compacted_sizes_processed[original_entry->handle_] };
+            compacted_sizes_processed.erase(original_entry->handle_);
+
+            std::unique_ptr<BufferEntry> storage =
+                CreateBuffer(size_of_acc, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+            VkAccelerationStructureBuildSizesInfoKHR size_info{};
+            size_info.accelerationStructureSize = size_of_acc;
+
+            VkAccelerationStructureBuildGeometryInfoKHR geometry{};
+            geometry.type = compacted_entry->type_;
+
+            VkAccelerationStructureKHR replacement_as =
+                CreateAccelerationStructure(geometry, nullptr, size_info, storage->handle_);
+
+            // Store acceleration structure data
+            auto replacement_as_address                       = GetAccelerationStructureDeviceAddress(replacement_as);
+            compacted_entry->replacement_acceleration_struct_ = std::make_unique<AccelerationStructureEntry>(
+                0, replacement_as_address, replacement_as, compacted_entry->type_, size_info);
+            compacted_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
+
+            compacted_entry->new_address_ = replacement_as_address;
+        }
+
+        modified_info.src = original_entry->replacement_acceleration_struct_->handle_;
+        modified_info.dst = compacted_entry->replacement_acceleration_struct_->handle_;
     }
     // TODO: non-compacting copy
     functions_.cmd_copy_acceleration_structure(command_buffer, &modified_info);
@@ -707,22 +762,36 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
     VkQueryPool                 pool,
     uint32_t                    first_query)
 {
+    std::vector<VkAccelerationStructureKHR> acc_str_to_process{};
+
     for (uint32_t index = 0; index < count; ++index)
     {
         VkAccelerationStructureKHR capture_handle = acceleration_structures[index];
         auto                       entry          = GetAccelerationStructureEntry(capture_handle);
-        if (entry->replacement_acceleration_struct_)
-        {
-            acceleration_structures[index] = entry->replacement_acceleration_struct_->handle_;
-        }
-        else
-        {
-            acceleration_structures[index] = entry->handle_;
-        }
+        assert(entry->replacement_acceleration_struct_);
+
+        acceleration_structures[index] = entry->replacement_acceleration_struct_->handle_;
+        acc_str_to_process.push_back(capture_handle);
     }
 
     functions_.cmd_write_acceleration_structures_properties(
         command_buffer, count, acceleration_structures, query_type, pool, first_query);
+
+    if (VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR == query_type)
+    {
+        std::unique_ptr<BufferEntry> stagging_buffer_entry =
+            CreateBuffer(sizeof(uint64_t) * count,
+                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         nullptr,
+                         (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+
+        // keep track of relation between AS to be compacted and the query pool that handles the results (the order of
+        // AS is also important)
+        auto [it, inserted] = compacted_sizes_unprocessed.emplace(
+            pool,
+            std::vector<std::tuple<uint32_t, std::unique_ptr<BufferEntry>, std::vector<VkAccelerationStructureKHR>>>());
+        it->second.push_back({ first_query, std::move(stagging_buffer_entry), acc_str_to_process });
+    }
 }
 
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetAccelerationStructureDeviceAddress(
@@ -766,6 +835,97 @@ VkAccelerationStructureBuildSizesInfoKHR VulkanAccelerationStructureBuilder::Get
     functions_.get_acceleration_structure_build_sizes(
         device_, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, geometry_info, primitive_counts.data(), &size_info);
     return size_info;
+}
+
+// inject vkCmdCopyQueryPoolResults command that copies the results to internal buffer in the expected format
+// processing of the results happens in CmdCopyAccelerationStructure
+void VulkanAccelerationStructureBuilder::OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info,
+                                                                   const QueryPoolInfo*     query_pool_info)
+{
+    if (!compacted_sizes_unprocessed.count(query_pool_info->handle))
+    {
+        return;
+    }
+
+    std::vector<std::tuple<uint32_t, std::unique_ptr<BufferEntry>, std::vector<VkAccelerationStructureKHR>>>&
+        unprocessed = compacted_sizes_unprocessed[query_pool_info->handle];
+
+    for (uint64_t i = 0; i < unprocessed.size(); i++)
+    {
+        auto& [compacted_first_query, buffer, vector_of_acc_str]{ unprocessed[i] };
+
+        functions_.cmd_copy_query_pool_results(command_buffer_info->handle,
+                                               query_pool_info->handle,
+                                               compacted_first_query,
+                                               vector_of_acc_str.size(),
+                                               buffer->handle_,
+                                               0,
+                                               8,
+                                               VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+
+        VkBufferMemoryBarrier buffer_memory_barrier{};
+        buffer_memory_barrier.sType         = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        buffer_memory_barrier.pNext         = nullptr;
+        buffer_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        buffer_memory_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        buffer_memory_barrier.buffer        = buffer->handle_;
+        buffer_memory_barrier.offset        = 0;
+        buffer_memory_barrier.size          = vector_of_acc_str.size();
+
+        functions_.cmd_pipeline_barrier(command_buffer_info->handle,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        VK_PIPELINE_STAGE_HOST_BIT,
+                                        0,
+                                        0,
+                                        nullptr,
+                                        1,
+                                        &buffer_memory_barrier,
+                                        0,
+                                        nullptr);
+    }
+}
+
+// inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
+// processed map
+void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const DeviceInfo*    device_info,
+                                                               const QueryPoolInfo* query_pool_info)
+{
+    if (!compacted_sizes_unprocessed.count(query_pool_info->handle))
+    {
+        return;
+    }
+
+    auto& unprocessed = compacted_sizes_unprocessed[query_pool_info->handle];
+
+    for (uint64_t i = 0; i < unprocessed.size(); i++)
+    {
+        auto& [compacted_first_query, buffer, vector_of_acc_str]{ unprocessed[i] };
+
+        std::vector<uint64_t> vector_of_acc_str_sizes(vector_of_acc_str.size(), 0);
+        auto                  buffer_size = vector_of_acc_str_sizes.size() * sizeof(uint64_t);
+
+        functions_.get_query_pool_results(device_info->handle,
+                                          query_pool_info->handle,
+                                          compacted_first_query,
+                                          vector_of_acc_str.size(),
+                                          vector_of_acc_str_sizes.size() * sizeof(uint64_t),
+                                          vector_of_acc_str_sizes.data(),
+                                          8,
+                                          VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+
+        assert(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
+
+        // add results to compacted_sizes_processed map
+        std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> processing_result;
+        std::transform(vector_of_acc_str.begin(),
+                       vector_of_acc_str.end(),
+                       vector_of_acc_str_sizes.begin(),
+                       std::inserter(processing_result, processing_result.end()),
+                       [](VkAccelerationStructureKHR acc_str, uint64_t acc_str_size) {
+                           return std::make_pair(acc_str, acc_str_size);
+                       });
+        compacted_sizes_processed.insert(processing_result.begin(), processing_result.end());
+    }
 }
 
 // For each submitted buffer, if it contains a TLAS build command, update its instance buffer

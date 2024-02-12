@@ -2869,7 +2869,10 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .reset_command_buffer           = device_table->ResetCommandBuffer,
                     .queue_submit                   = device_table->QueueSubmit,
                     .queue_wait_idle                = device_table->QueueWaitIdle,
-                    .update_descriptor_sets         = device_table->UpdateDescriptorSets
+                    .update_descriptor_sets         = device_table->UpdateDescriptorSets,
+                    .get_query_pool_results         = device_table->GetQueryPoolResults,
+                    .cmd_copy_query_pool_results    = device_table->CmdCopyQueryPoolResults,
+                    .cmd_pipeline_barrier           = device_table->CmdPipelineBarrier,
                 };
                 acceleration_structure_builders_[*pDevice->GetPointer()] =
                     std::make_unique<VulkanAccelerationStructureBuilder>(
@@ -3443,6 +3446,31 @@ VkResult VulkanReplayConsumerBase::OverrideGetEventStatus(PFN_vkGetEventStatus f
     return result;
 }
 
+void VulkanReplayConsumerBase::OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults func,
+                                                               const CommandBufferInfo*      command_buffer_info,
+                                                               const QueryPoolInfo*          query_pool_info,
+                                                               uint32_t                      firstQuery,
+                                                               uint32_t                      queryCount,
+                                                               BufferInfo*                   dst_buffer_info,
+                                                               VkDeviceSize                  dstOffset,
+                                                               VkDeviceSize                  stride,
+                                                               VkQueryResultFlags            flags)
+{
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+
+    VkCommandBuffer command_buffer = command_buffer_info->handle;
+    VkQueryPool     query_pool     = query_pool_info->handle;
+    VkBuffer        dst_buffer     = dst_buffer_info->handle;
+
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->OnCmdCopyQueryPoolResults(command_buffer_info,
+                                                                                                    query_pool_info);
+    }
+
+    func(command_buffer, query_pool, firstQuery, queryCount, dst_buffer, dstOffset, stride, flags);
+}
+
 VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoolResults func,
                                                                VkResult                  original_result,
                                                                const DeviceInfo*         device_info,
@@ -3469,6 +3497,10 @@ VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoo
               ((original_result == VK_NOT_READY) && (result == VK_SUCCESS))) &&
              (++retries <= kMaxQueryPoolResultsRetries));
 
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device_info->capture_id]->OnGetQueryPoolResults(device_info, query_pool_info);
+    }
     return result;
 }
 
@@ -7227,8 +7259,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
 
     if (result == VK_SUCCESS && !device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device_info->capture_id]->RegisterAccelerationStructure(*replay_accel_struct,
-                                                                                                 device_address);
+        acceleration_structure_builders_[device_info->capture_id]->RegisterAccelerationStructure(
+            *replay_accel_struct, device_address, modified_create_info.type);
     }
 
     return result;

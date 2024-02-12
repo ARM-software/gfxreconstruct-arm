@@ -118,10 +118,11 @@
     "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
     "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
     "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",
-    "vkCmdCopyAccelerationStructureKHR" : "OverrideCmdCopyAccelerationStructureKHR",
-    "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
+    "vkCmdCopyAccelerationStructureKHR": "OverrideCmdCopyAccelerationStructureKHR",
+    "vkCmdWriteAccelerationStructuresPropertiesKHR": "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
     "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
-    "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets"
+    "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets",
+    "vkCmdCopyQueryPoolResults": "OverrideCmdCopyQueryPoolResults"
   }
 }
