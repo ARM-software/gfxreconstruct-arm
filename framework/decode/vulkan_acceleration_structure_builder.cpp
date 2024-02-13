@@ -611,24 +611,33 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             GFXRECON_ASSERT(src_entry);
             GFXRECON_ASSERT(src_entry->replacement_acceleration_struct_.get() != nullptr);
             GFXRECON_ASSERT(src_entry->replacement_acceleration_struct_->handle_ != 0);
-            geometry_infos[i].srcAccelerationStructure = src_entry->replacement_acceleration_struct_->handle_;
 
             // update dstAccelerationStructure handle
             if (dst_entry->replacement_acceleration_struct_)
             {
                 // dst AS was built before
                 GFXRECON_ASSERT(dst_entry->replacement_acceleration_struct_->handle_ != 0);
-                geometry_infos[i].dstAccelerationStructure = dst_entry->replacement_acceleration_struct_->handle_;
                 dst_entry->new_address_ =
                     GetAccelerationStructureDeviceAddress(dst_entry->replacement_acceleration_struct_->handle_);
             }
             else
             {
-                // dst AS was created but not built, record new device address
-                dst_entry->new_address_ =
-                    GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
+                std::unique_ptr<BufferEntry> storage = CreateBuffer(
+                    size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+                VkAccelerationStructureKHR replacement_as =
+                    CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
+
+                // Store acceleration structure data
+                auto replacement_as_address = GetAccelerationStructureDeviceAddress(replacement_as);
+                dst_entry->replacement_acceleration_struct_ =
+                    std::make_unique<AccelerationStructureEntry>(0, replacement_as_address, replacement_as, size_info);
+                dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
+
+                dst_entry->new_address_ = replacement_as_address;
             }
-            scratch_size = size_info.updateScratchSize;
+            geometry_infos[i].srcAccelerationStructure = src_entry->replacement_acceleration_struct_->handle_;
+            geometry_infos[i].dstAccelerationStructure = dst_entry->replacement_acceleration_struct_->handle_;
+            scratch_size                               = size_info.updateScratchSize;
         }
 
         std::unique_ptr<BufferEntry>* target_scratch;
