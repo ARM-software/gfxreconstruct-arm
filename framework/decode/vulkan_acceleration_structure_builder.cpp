@@ -22,6 +22,7 @@
 #include "graphics/vulkan_resources_util.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
 #include <algorithm>
+#include <set>
 #include <map>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -94,7 +95,7 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 
     BeginCommandBuffer();
 
-    std::vector<std::unique_ptr<BufferEntry>> state_recreation_buffer_entries;
+    std::set<VkDeviceAddress> state_recreation_device_addresses;
 
     for (uint32_t i = 0; i < info_count; ++i)
     {
@@ -107,18 +108,30 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 
             VkDeviceSize buffer_size = range_infos[i][g].primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
 
-            state_recreation_buffer_entries.push_back(
-                CreateBuffer(buffer_size, usage, instance_buffers_data[i].data()));
-            state_recreation_buffer_entries.back()->original_address_ =
-                geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
-            state_recreation_buffer_entries.back()->new_address_ =
-                GetBufferDeviceAddress(state_recreation_buffer_entries.back()->handle_);
+            auto entry = CreateBuffer(buffer_size, usage, instance_buffers_data[i].data());
+
+            entry->original_address_ = geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
+            entry->new_address_      = GetBufferDeviceAddress(entry->handle_);
+
+            // We add their original device address, that remains unchanged to the set, to delete them right after we
+            // finished building
+            state_recreation_device_addresses.insert(entry->original_address_);
+            // We still need to add them to the global tracking so that builder finds them later
+            buffers_.push_back(std::move(entry));
         }
     }
 
     CmdBuildAccelerationStructures(command_buffer, info_count, geometry_infos, range_infos);
 
     ExecuteCommandBuffer();
+
+    // After
+    buffers_.erase(std::remove_if(buffers_.begin(),
+                                  buffers_.end(),
+                                  [&state_recreation_device_addresses](const std::unique_ptr<BufferEntry>& entry) {
+                                      return state_recreation_device_addresses.count(entry->original_address_) != 0;
+                                  }),
+                   buffers_.end());
 }
 
 void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructuresMetaCommand(
