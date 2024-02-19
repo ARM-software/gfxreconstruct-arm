@@ -1210,6 +1210,11 @@ void CaptureManager::WriteCaptureOptions(std::string& operation_annotation)
         buffer += "\n    \"queue-zero-only\": ";
         buffer += queue_zero_only_ ? "true," : "false,";
     }
+    if (experimental_raytracing_fastforwarding_ != default_settings.experimental_raytracing_fastforwarding)
+    {
+        buffer += "\n    \"experimental-raytracing-fastforwarding\": ";
+        buffer += experimental_raytracing_fastforwarding_ ? "true," : "false,";
+    }
 
     if (buffer.empty())
     {
