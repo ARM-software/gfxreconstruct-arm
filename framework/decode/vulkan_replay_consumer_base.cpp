@@ -4871,7 +4871,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
 
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device_info->capture_id]->UntrackBufferInfo(buffer_info);
+        acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
     }
 
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
@@ -5212,6 +5212,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
 
         // Track descriptor image type.
         std::vector<VkDescriptorType> image_types;
+        VkDescriptorUpdateTemplateEntryKHR acceleration_structure_entry;
 
         for (auto entry = entries.begin(); entry != entries.end(); ++entry)
         {
@@ -5244,6 +5245,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
             }
             else if (type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
             {
+                acceleration_structure_entry = (*entry);
                 entry->stride = sizeof(VkAccelerationStructureKHR);
                 entry->offset = accel_struct_offset;
                 accel_struct_offset += entry->descriptorCount * sizeof(VkAccelerationStructureKHR);
@@ -5268,6 +5270,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
             assert(update_template_info != nullptr);
 
             update_template_info->descriptor_image_types = std::move(image_types);
+            update_template_info->acceleration_structure_template_entry = acceleration_structure_entry;
         }
 
         return result;
@@ -7276,7 +7279,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
 
     if (result == VK_SUCCESS && !device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device_info->capture_id]->RegisterAccelerationStructure(
+        acceleration_structure_builders_[device_info->capture_id]->OnCreateAccelerationStructure(
             *replay_accel_struct, device_address, modified_create_info.type);
     }
 
@@ -7998,7 +8001,7 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
 
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device_info->capture_id]->UntrackAccelerationStructure(
+        acceleration_structure_builders_[device_info->capture_id]->OnDestroyAccelerationStructure(
             acceleration_structure_info);
     }
 
@@ -8545,7 +8548,8 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
     }
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(pData);
+        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(
+            in_descriptorSet, update_template_info->acceleration_structure_template_entry, pData);
     }
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplate(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
@@ -8602,7 +8606,8 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
 
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(pData);
+        acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(
+            in_descriptorSet, update_template_info->acceleration_structure_template_entry, pData);
     }
     GetDeviceTable(in_device)->UpdateDescriptorSetWithTemplateKHR(
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
