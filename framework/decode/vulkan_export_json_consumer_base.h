@@ -208,6 +208,9 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer, public AnnotationHan
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
 
+    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+        format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
+
   private:
     // Delete the in-memory JSON tree from the last line and count the new object.
     // Putting it in one non-inline function allows all the JSON deletion work

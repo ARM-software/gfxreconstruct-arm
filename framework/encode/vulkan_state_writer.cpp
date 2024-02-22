@@ -155,7 +155,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     WritePipelineState(state_table);
     WriteAccelerationStructureKHRState(state_table);
     WriteTlasToBlasDependenciesMetadata(state_table);
-    WriteAccelerationStructureBuildMetaCommand(state_table);
+    WriteAccelerationStructureStateMetaCommands(state_table);
     StandardCreateWrite<AccelerationStructureNVWrapper>(state_table);
 
     // Descriptor creation.
@@ -1115,13 +1115,14 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
 }
 
 // Rename this to represent the whole acc structure prepare process
-void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanStateTable& state_table)
+void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const VulkanStateTable& state_table)
 {
-    AccelerationStructureBuildCommandsContainer blas_build_commands;
-    AccelerationStructureBuildCommandsContainer blas_update_commands;
-    AccelerationStructureCopyCommandsContainer  copy_commands;
-    AccelerationStructureBuildCommandsContainer tlas_build_commands;
-    AccelerationStructureBuildCommandsContainer tlas_update_commands;
+    AccelerationStructureBuildCommandsContainer           blas_build_commands;
+    AccelerationStructureBuildCommandsContainer           blas_update_commands;
+    AccelerationStructureCopyCommandsContainer            copy_commands;
+    AccelerationStructureWritePropertiesCommandsContainer write_properties_command;
+    AccelerationStructureBuildCommandsContainer           tlas_build_commands;
+    AccelerationStructureBuildCommandsContainer           tlas_update_commands;
 
     state_table.VisitWrappers([&](const AccelerationStructureKHRWrapper* wrapper) {
         assert(wrapper != nullptr);
@@ -1142,7 +1143,7 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
 
         if (wrapper->latest_build_command_)
         {
-            const auto& latest_build_command = wrapper->latest_build_command_.value();
+            auto& latest_build_command = wrapper->latest_build_command_.value();
 
             auto result = build_container->find(wrapper->device_id);
             if (result == build_container->end())
@@ -1161,7 +1162,7 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
 
         if (wrapper->latest_update_command_)
         {
-            const auto& latest_update_command = wrapper->latest_update_command_.value();
+            auto& latest_update_command = wrapper->latest_update_command_.value();
 
             auto result = update_container->find(wrapper->device_id);
             if (result == update_container->end())
@@ -1178,10 +1179,10 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
                                                        latest_update_command.instance_buffer_data });
         }
 
-        if (wrapper->latest_copy_command)
+        if (wrapper->latest_copy_command_)
         {
-            const auto& latest_copy_command = wrapper->latest_copy_command.value();
-            auto        result              = copy_commands.find(wrapper->device_id);
+            auto& latest_copy_command = wrapper->latest_copy_command_.value();
+            auto  result              = copy_commands.find(wrapper->device_id);
             if (result == copy_commands.end())
             {
                 auto [it, inserted] = copy_commands.emplace(wrapper->device_id, AccelerationStructureCopyCommandData{});
@@ -1190,6 +1191,20 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
             result->second.device = wrapper->device_id;
             result->second.infos.push_back(latest_copy_command.info);
         }
+
+        if (wrapper->latest_write_properties_command_)
+        {
+            auto& latest_write_properties_command = wrapper->latest_write_properties_command_.value();
+            auto  result                          = write_properties_command.find(wrapper->device_id);
+            if (result == write_properties_command.end())
+            {
+                auto [it, inserted] = write_properties_command.emplace(
+                    wrapper->device_id, std::vector<AccelerationStructureWritePropertiesCommandData>());
+                result = it;
+            }
+            result->second.push_back(AccelerationStructureWritePropertiesCommandData{
+                wrapper->device_id, latest_write_properties_command.query_type, wrapper->handle_id });
+        }
     });
 
     for (const auto& [device, commands] : blas_build_commands)
@@ -1197,6 +1212,14 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
         for (const auto& command : commands)
         {
             EncodeAccelerationStructureBuildMetaCommand(command);
+        }
+    }
+
+    for (const auto& [device, commands] : write_properties_command)
+    {
+        for (const auto& command : commands)
+        {
+            EncodeAccelerationStructureWritePropertiesCommand(command);
         }
     }
 
@@ -1237,16 +1260,17 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 
-    header.meta_header.block_header.size +=
-        command.instance_buffers_data.size() * sizeof(VkAccelerationStructureInstanceKHR);
-
+    for (const auto& instance_buffer : command.instance_buffers_data)
+    {
+        header.meta_header.block_header.size += instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR);
+    }
     output_stream_->Write(&header, sizeof(header));
     output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
 
-    if (!command.instance_buffers_data.empty())
+    for (const auto& instance_buffer : command.instance_buffers_data)
     {
-        output_stream_->Write(command.instance_buffers_data.data(),
-                              command.instance_buffers_data.size() * sizeof(VkAccelerationStructureInstanceKHR));
+        output_stream_->Write(instance_buffer.data(),
+                              instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR));
     }
 
     parameter_stream_.Reset();
@@ -1266,6 +1290,33 @@ void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(const Acceler
 
     encoder_.EncodeHandleIdValue(command.device);
     EncodeStructArray(&encoder_, command.infos.data(), command.infos.size());
+
+    header.meta_header.block_header.size += parameter_stream_.GetDataSize();
+
+    output_stream_->Write(&header, sizeof(header));
+    output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
+
+    parameter_stream_.Reset();
+
+    ++blocks_written_;
+}
+
+void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
+    const AccelerationStructureWritePropertiesCommandData& command)
+{
+    parameter_stream_.Reset();
+
+    format::VulkanWriteAccelerationStructuresPropertiesCommandHeader header;
+
+    header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+    header.meta_header.block_header.size = GetMetaDataBlockBaseSize(header);
+    header.meta_header.meta_data_id =
+        format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
+                               format::MetaDataType::kVulkanWriteAccelerationStructuresPropertiesCommand);
+
+    encoder_.EncodeHandleIdValue(command.device);
+    encoder_.EncodeEnumValue(command.query_type);
+    encoder_.EncodeHandleIdValue(command.acceleration_structure);
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 

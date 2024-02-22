@@ -117,36 +117,37 @@ enum AdapterType
 
 enum class MetaDataType : uint16_t
 {
-    kUnknownMetaDataType                      = 0,
-    kDisplayMessageCommand                    = 1,
-    kFillMemoryCommand                        = 2,
-    kResizeWindowCommand                      = 3,
-    kSetSwapchainImageStateCommand            = 4,
-    kBeginResourceInitCommand                 = 5,
-    kEndResourceInitCommand                   = 6,
-    kInitBufferCommand                        = 7,
-    kInitImageCommand                         = 8,
-    kCreateHardwareBufferCommand_deprecated   = 9,
-    kDestroyHardwareBufferCommand             = 10,
-    kSetDevicePropertiesCommand               = 11,
-    kSetDeviceMemoryPropertiesCommand         = 12,
-    kResizeWindowCommand2                     = 13,
-    kSetOpaqueAddressCommand                  = 14,
-    kSetRayTracingShaderGroupHandlesCommand   = 15,
-    kCreateHeapAllocationCommand              = 16,
-    kInitSubresourceCommand                   = 17,
-    kExeFileInfoCommand                       = 18,
-    kInitDx12AccelerationStructureCommand     = 19,
-    kFillMemoryResourceValueCommand           = 20,
-    kDxgiAdapterInfoCommand                   = 21,
-    kDriverInfoCommand                        = 22,
-    kReserved23                               = 23,
-    kCreateHardwareBufferCommand              = 24,
-    kReserved25                               = 25,
-    kDx12RuntimeInfoCommand                   = 26,
-    kParentToChildDependency                  = 27,
-    kVulkanBuildAccelerationStructuresCommand = 28,
-    kVulkanCopyAccelerationStructuresCommand  = 29
+    kUnknownMetaDataType                                = 0,
+    kDisplayMessageCommand                              = 1,
+    kFillMemoryCommand                                  = 2,
+    kResizeWindowCommand                                = 3,
+    kSetSwapchainImageStateCommand                      = 4,
+    kBeginResourceInitCommand                           = 5,
+    kEndResourceInitCommand                             = 6,
+    kInitBufferCommand                                  = 7,
+    kInitImageCommand                                   = 8,
+    kCreateHardwareBufferCommand_deprecated             = 9,
+    kDestroyHardwareBufferCommand                       = 10,
+    kSetDevicePropertiesCommand                         = 11,
+    kSetDeviceMemoryPropertiesCommand                   = 12,
+    kResizeWindowCommand2                               = 13,
+    kSetOpaqueAddressCommand                            = 14,
+    kSetRayTracingShaderGroupHandlesCommand             = 15,
+    kCreateHeapAllocationCommand                        = 16,
+    kInitSubresourceCommand                             = 17,
+    kExeFileInfoCommand                                 = 18,
+    kInitDx12AccelerationStructureCommand               = 19,
+    kFillMemoryResourceValueCommand                     = 20,
+    kDxgiAdapterInfoCommand                             = 21,
+    kDriverInfoCommand                                  = 22,
+    kReserved23                                         = 23,
+    kCreateHardwareBufferCommand                        = 24,
+    kReserved25                                         = 25,
+    kDx12RuntimeInfoCommand                             = 26,
+    kParentToChildDependency                            = 27,
+    kVulkanBuildAccelerationStructuresCommand           = 28,
+    kVulkanCopyAccelerationStructuresCommand            = 29,
+    kVulkanWriteAccelerationStructuresPropertiesCommand = 30
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -643,6 +644,11 @@ struct ParentToChildDependencyHeader
 };
 
 struct VulkanMetaBuildAccelerationStructuresHeader
+{
+    format::MetaDataHeader meta_header;
+};
+
+struct VulkanWriteAccelerationStructuresPropertiesCommandHeader
 {
     format::MetaDataHeader meta_header;
 };

@@ -120,7 +120,7 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 
             void* mapped;
             allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, entry->allocator_data_);
-            util::platform::MemoryCopy(mapped, buffer_size, instance_buffers_data[i].data(), buffer_size);
+            util::platform::MemoryCopy(mapped, buffer_size, instance_buffers_data[g].data(), buffer_size);
             allocator_->UnmapResourceMemoryDirect(entry->allocator_data_);
 
             // We add their original device address, that remains unchanged to the set, to delete them right after we
@@ -150,7 +150,7 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructuresMetaCommand(
     uint32_t info_count, VkCopyAccelerationStructureInfoKHR* copy_infos)
 {
-    if (cmd_execute_obj_.initialized_)
+    if (!cmd_execute_obj_.initialized_)
     {
         InitializeInternalExecObjects();
     }
@@ -163,6 +163,40 @@ void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructures
     }
 
     ExecuteCommandBuffer();
+}
+
+void VulkanAccelerationStructureBuilder::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+    VkQueryType query_type, VkAccelerationStructureKHR acceleration_structure)
+{
+    if (!cmd_execute_obj_.initialized_)
+    {
+        InitializeInternalExecObjects();
+    }
+    VkCommandBuffer command_buffer = cmd_execute_obj_.command_buffer_;
+
+    BeginCommandBuffer();
+
+    VkQueryPool query_pool;
+
+    VkQueryPoolCreateInfo pool_info{};
+    pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    pool_info.flags              = 0;
+    pool_info.queryType          = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+    pool_info.queryCount         = 1;
+    pool_info.pipelineStatistics = 0;
+    pool_info.pNext              = nullptr;
+
+    functions_.create_query_pool(cmd_execute_obj_.device_, &pool_info, nullptr, &query_pool);
+
+    CmdWriteAccelerationStructuresProperties(command_buffer, 1, &acceleration_structure, query_type, query_pool, 0);
+
+    ExecuteCommandBuffer();
+
+    DeviceInfo device_info;
+    device_info.handle = cmd_execute_obj_.device_;
+    QueryPoolInfo query_pool_info;
+    query_pool_info.handle = query_pool;
+    OnGetQueryPoolResults(&device_info, &query_pool_info);
 }
 
 void VulkanAccelerationStructureBuilder::SetBufferInfo(BufferInfo*     buffer_info,
@@ -625,7 +659,8 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             {
                 // Create the replacement entry and link it to original one
                 std::unique_ptr<BufferEntry> storage = CreateBuffer(
-                    size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+                    size_info.accelerationStructureSize,
+                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
                 VkAccelerationStructureKHR replacement_as =
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
 
@@ -654,7 +689,8 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             if (!dst_entry->replacement_acceleration_struct_)
             {
                 std::unique_ptr<BufferEntry> storage = CreateBuffer(
-                    size_info.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+                    size_info.accelerationStructureSize,
+                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
                 VkAccelerationStructureKHR replacement_as =
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->handle_);
 
@@ -768,8 +804,9 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
             VkDeviceSize size_of_acc{ compacted_sizes_processed[original_entry->handle_] };
             compacted_sizes_processed.erase(original_entry->handle_);
 
-            std::unique_ptr<BufferEntry> storage =
-                CreateBuffer(size_of_acc, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
+            std::unique_ptr<BufferEntry>             storage = CreateBuffer(size_of_acc,
+                                                                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                                                                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
             VkAccelerationStructureBuildSizesInfoKHR size_info{};
             size_info.accelerationStructureSize = size_of_acc;
 
@@ -942,7 +979,6 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const DeviceInfo*
         auto& [compacted_first_query, buffer, vector_of_acc_str]{ unprocessed[i] };
 
         std::vector<uint64_t> vector_of_acc_str_sizes(vector_of_acc_str.size(), 0);
-        auto                  buffer_size = vector_of_acc_str_sizes.size() * sizeof(uint64_t);
 
         functions_.get_query_pool_results(device_info->handle,
                                           query_pool_info->handle,
@@ -966,6 +1002,7 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const DeviceInfo*
                        });
         compacted_sizes_processed.insert(processing_result.begin(), processing_result.end());
     }
+    compacted_sizes_unprocessed.erase(query_pool_info->handle);
 }
 
 void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits)

@@ -421,6 +421,13 @@ class VulkanStateTracker
 
     void CreateResourceUtil(const DeviceWrapper* wrapper);
 
+    void TrackWriteAccelerationStructuresPropertiesCommand(VkCommandBuffer                   commandBuffer,
+                                                           uint32_t                          accelerationStructureCount,
+                                                           const VkAccelerationStructureKHR* pAccelerationStructures,
+                                                           VkQueryType                       queryType,
+                                                           VkQueryPool                       queryPool,
+                                                           uint32_t                          firstQuery);
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                  parent_handle,

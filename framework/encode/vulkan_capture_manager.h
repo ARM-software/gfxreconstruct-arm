@@ -359,6 +359,13 @@ class VulkanCaptureManager : public CaptureManager
     void OverrideCmdCopyAccelerationStructureKHR(VkCommandBuffer                           command_buffer,
                                                  const VkCopyAccelerationStructureInfoKHR* pInfo);
 
+    void OverrideCmdWriteAccelerationStructuresPropertiesKHR(VkCommandBuffer commandBuffer,
+                                                             uint32_t        accelerationStructureCount,
+                                                             const VkAccelerationStructureKHR* pAccelerationStructures,
+                                                             VkQueryType                       queryType,
+                                                             VkQueryPool                       queryPool,
+                                                             uint32_t                          firstQuery);
+
     void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
                                           VkDevice                        device,
                                           const VkSwapchainCreateInfoKHR* pCreateInfo,

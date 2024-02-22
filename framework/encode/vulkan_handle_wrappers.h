@@ -181,9 +181,9 @@ struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
     format::HandleId hardware_buffer_memory_id{ format::kNullHandleId };
 
     // State tracking info for memory with device addresses.
-    format::HandleId                                    device_id{ format::kNullHandleId };
-    VkDeviceAddress                                     address{ 0 };
-    std::vector<BufferWrapper*>                         bound_buffers;
+    format::HandleId         device_id{ format::kNullHandleId };
+    VkDeviceAddress          address{ 0 };
+    std::set<BufferWrapper*> bound_buffers;
 };
 
 struct BufferWrapper : public HandleWrapper<VkBuffer>
@@ -494,11 +494,11 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     // Only used when tracking
     struct AccelerationStructureKHRBuildCommandData
     {
-        format::HandleId                                      device;
-        VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
-        HandleUnwrapMemory                                    geometry_info_memory;
-        std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
-        std::vector<VkAccelerationStructureInstanceKHR>       instance_buffer_data;
+        format::HandleId                                             device;
+        VkAccelerationStructureBuildGeometryInfoKHR                  geometry_info;
+        HandleUnwrapMemory                                           geometry_info_memory;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR>        build_range_infos;
+        std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffer_data;
     };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_build_command_{ std::nullopt };
@@ -507,9 +507,15 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     {
         format::HandleId                   device;
         VkCopyAccelerationStructureInfoKHR info;
-        HandleUnwrapMemory                 p_next_memory;
     };
-    std::optional<AccelerationStructureCopyCommandData> latest_copy_command{ std::nullopt };
+    std::optional<AccelerationStructureCopyCommandData> latest_copy_command_{ std::nullopt };
+
+    struct AccelerationStructureWritePropertiesCommandData
+    {
+        format::HandleId device;
+        VkQueryType      query_type;
+    };
+    std::optional<AccelerationStructureWritePropertiesCommandData> latest_write_properties_command_{ std::nullopt };
 };
 
 struct AccelerationStructureNVWrapper : public HandleWrapper<VkAccelerationStructureNV>

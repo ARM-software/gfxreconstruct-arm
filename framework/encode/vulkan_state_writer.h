@@ -332,15 +332,15 @@ class VulkanStateWriter
 
     void WriteTlasToBlasDependenciesMetadata(const VulkanStateTable& state_table);
 
-    void WriteAccelerationStructureBuildMetaCommand(const VulkanStateTable& state_table);
+    void WriteAccelerationStructureStateMetaCommands(const VulkanStateTable& state_table);
 
     struct AccelerationStructureBuildCommandData
     {
-        format::HandleId                                                   device;
-        VkAccelerationStructureBuildGeometryInfoKHR                        geometry_info;
-        HandleUnwrapMemory                                                 geometry_info_memory;
-        std::vector<VkAccelerationStructureBuildRangeInfoKHR>              build_range_infos;
-        std::vector<VkAccelerationStructureInstanceKHR>                    instance_buffers_data;
+        format::HandleId                                             device;
+        VkAccelerationStructureBuildGeometryInfoKHR                  geometry_info;
+        HandleUnwrapMemory                                           geometry_info_memory;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR>        build_range_infos;
+        std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffers_data;
     };
     using AccelerationStructureBuildCommandsContainer =
         std::unordered_map<format::HandleId, std::vector<AccelerationStructureBuildCommandData>>;
@@ -354,6 +354,17 @@ class VulkanStateWriter
     using AccelerationStructureCopyCommandsContainer =
         std::unordered_map<format::HandleId, AccelerationStructureCopyCommandData>;
     void EncodeAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command);
+
+    struct AccelerationStructureWritePropertiesCommandData
+    {
+        format::HandleId device;
+        VkQueryType      query_type;
+        format::HandleId acceleration_structure;
+    };
+    using AccelerationStructureWritePropertiesCommandsContainer =
+        std::unordered_map<format::HandleId, std::vector<AccelerationStructureWritePropertiesCommandData>>;
+    void
+    EncodeAccelerationStructureWritePropertiesCommand(const AccelerationStructureWritePropertiesCommandData& command);
 
   private:
     util::FileOutputStream*  output_stream_;

@@ -67,6 +67,7 @@ class VulkanAccelerationStructureBuilder
         PFN_vkGetQueryPoolResults                         get_query_pool_results{ nullptr };
         PFN_vkCmdCopyQueryPoolResults                     cmd_copy_query_pool_results{ nullptr };
         PFN_vkCmdPipelineBarrier                          cmd_pipeline_barrier{ nullptr };
+        PFN_vkCreateQueryPool                             create_query_pool{ nullptr };
     };
 
     VulkanAccelerationStructureBuilder(Functions                               functions,
@@ -111,6 +112,10 @@ class VulkanAccelerationStructureBuilder
 
     void ProcessCopyVulkanAccelerationStructuresMetaCommand(uint32_t                            info_count,
                                                             VkCopyAccelerationStructureInfoKHR* copy_infos);
+
+    void
+    ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(VkQueryType                query_type,
+                                                                  VkAccelerationStructureKHR acceleration_structure);
 
     // For each submitted buffer, if it contains a TLAS build command, update its instance buffer
     // with replacement BLAS address
@@ -272,10 +277,10 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    std::vector<std::unique_ptr<AccelerationStructureEntry>>            acceleration_structures_;
-    std::vector<std::unique_ptr<BufferEntry>>                           buffers_;
+    std::vector<std::unique_ptr<AccelerationStructureEntry>>                       acceleration_structures_;
+    std::vector<std::unique_ptr<BufferEntry>>                                      buffers_;
     std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
-    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
+    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData>            cached_descriptor_write;
 
     std::unordered_map<
         VkCommandBuffer,
@@ -295,9 +300,8 @@ class VulkanAccelerationStructureBuilder
     CommandExecuteObjects cmd_execute_obj_;
 
   private:
-    std::unique_ptr<BufferEntry> CreateBuffer(VkDeviceSize          size,
-                                              VkBufferUsageFlags    usage,
-                                              VkMemoryPropertyFlags mem_prop_flags = {});
+    std::unique_ptr<BufferEntry>
+    CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags mem_prop_flags = {});
 
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);

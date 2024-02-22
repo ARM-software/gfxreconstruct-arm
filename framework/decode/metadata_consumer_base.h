@@ -119,6 +119,9 @@ class MetadataConsumerBase
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
     {}
+    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+        format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+    {}
 };
 
 GFXRECON_END_NAMESPACE(decode)

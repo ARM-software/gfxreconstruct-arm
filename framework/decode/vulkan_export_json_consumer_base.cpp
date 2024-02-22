@@ -746,5 +746,16 @@ void VulkanExportJsonConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaCo
         FieldToJson(jdata["pInfos"], copy_infos, json_options_);
     });
 }
+
+void VulkanExportJsonConsumerBase::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+{
+    WriteMetaCommandToFile("VulkanAccelerationStructuresWritePropertiesMetaCommand", [&](auto& jdata) {
+        HandleToJson(jdata["device"], device_id, json_options_);
+        FieldToJson(jdata["query_type"], query_type, json_options_);
+        FieldToJson(jdata["acceleration_structure"], acceleration_structure_id, json_options_);
+    });
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

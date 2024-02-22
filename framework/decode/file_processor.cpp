@@ -274,6 +274,7 @@ bool FileProcessor::ProcessBlocks()
 
     while (success)
     {
+
         success = ContinueDecoding();
 
         if (success)
@@ -1881,6 +1882,28 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
 
                     decoder->DispatchVulkanAccelerationStructuresCopyMetaCommand(parameter_buffer_.data(),
                                                                                  parameter_buffer_size);
+
+                    DecodeAllocator::End();
+                }
+            }
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanWriteAccelerationStructuresPropertiesCommand)
+    {
+        format::VulkanCopyAccelerationStructuresCommandHeader header;
+        size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success                      = ReadParameterBuffer(parameter_buffer_size);
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    DecodeAllocator::Begin();
+
+                    decoder->DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(parameter_buffer_.data(),
+                                                                                            parameter_buffer_size);
 
                     DecodeAllocator::End();
                 }

@@ -24,7 +24,7 @@
         "vkSetDebugUtilsObjectTagEXT": "manager->OverrideSetDebugUtilsObjectTagEXT",
         "vkSubmitDebugUtilsMessageEXT": "manager->OverrideSubmitDebugUtilsMessageEXT",
         "vkCmdBuildAccelerationStructuresKHR": "manager->OverrideCmdBuildAccelerationStructuresKHR",
-        "vkCmdCopyAccelerationStructureKHR": "manager->OverrideCmdCopyAccelerationStructureKHR"
-
+        "vkCmdCopyAccelerationStructureKHR": "manager->OverrideCmdCopyAccelerationStructureKHR",
+        "vkCmdWriteAccelerationStructuresPropertiesKHR": "manager->OverrideCmdWriteAccelerationStructuresPropertiesKHR"
     }
 }

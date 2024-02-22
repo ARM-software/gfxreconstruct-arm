@@ -2873,6 +2873,7 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                     .get_query_pool_results         = device_table->GetQueryPoolResults,
                     .cmd_copy_query_pool_results    = device_table->CmdCopyQueryPoolResults,
                     .cmd_pipeline_barrier           = device_table->CmdPipelineBarrier,
+                    .create_query_pool              = device_table->CreateQueryPool
                 };
                 acceleration_structure_builders_[*pDevice->GetPointer()] =
                     std::make_unique<VulkanAccelerationStructureBuilder>(
@@ -7354,7 +7355,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
         VkQueryPool                       query_pool           = query_pool_info->handle;
         func(command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
     }
-    else
+    else if (!loading_trim_state_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdWriteAccelerationStructuresProperties(
             command_buffer_info->handle,
@@ -8640,6 +8641,27 @@ void VulkanReplayConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaComman
 
     acceleration_structure_builders_[device]->ProcessCopyVulkanAccelerationStructuresMetaCommand(
         copy_infos->GetLength(), copy_infos->GetPointer());
+}
+
+void VulkanReplayConsumerBase::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+{
+    DeviceInfo* device_info = GetObjectInfoTable().GetDeviceInfo(device_id);
+    GFXRECON_ASSERT(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    {
+        return;
+    }
+
+    VkAccelerationStructureKHR acceleration_structure = MapHandle<AccelerationStructureKHRInfo>(
+        acceleration_structure_id, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
+
+    acceleration_structure_builders_[device_id]->ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+        query_type, acceleration_structure);
 }
 
 void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaCommand(

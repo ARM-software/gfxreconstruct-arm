@@ -191,6 +191,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
 
+    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+        format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
+
   protected:
     const VulkanObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
 
