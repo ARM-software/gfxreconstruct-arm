@@ -362,7 +362,7 @@ void VulkanStateTracker::TrackBufferMemoryBinding(
     wrapper->bind_pnext_memory.Reset();
 
     DeviceMemoryWrapper* memory_wrapper                                   = GetWrapper<DeviceMemoryWrapper>(memory);
-    memory_wrapper->bound_buffers[memory_wrapper->address + memoryOffset] = wrapper;
+    memory_wrapper->bound_buffers.push_back(wrapper);
 
     if (bind_info_pnext != nullptr)
     {
@@ -402,37 +402,33 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
         if (experimental_raytracing_fastforwarding)
         {
             // First, differentiate where do we want to write
-            std::unique_ptr<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>*
-                dst_command_ptr = nullptr;
+            std::optional<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>* dst_command =
+                nullptr;
             if (infos[i].mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR)
             {
-                dst_command_ptr = &wrappers[i]->latest_build_command_;
+                dst_command = &wrappers[i]->latest_build_command_;
             }
             else if (infos[i].mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
             {
-                dst_command_ptr = &wrappers[i]->latest_update_command_;
+                dst_command = &wrappers[i]->latest_update_command_;
             }
 
-            // If there is no information stored - make storage
-            if (!(*dst_command_ptr))
-            {
-                *(dst_command_ptr) =
-                    std::make_unique<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>();
-            }
+            // Always replace the data (consider removing unique ptr)
+            *dst_command = AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData{};
 
             // Extract command information for 1 AccelerationStructure
-            (*dst_command_ptr)->device        = wrappers[i]->device_id;
-            (*dst_command_ptr)->geometry_info = infos[i];
-            (*dst_command_ptr)->geometry_info_memory.Reset();
+            dst_command->value().device        = wrappers[i]->device_id;
+            dst_command->value().geometry_info = infos[i];
+            dst_command->value().geometry_info_memory.Reset();
             auto unwrapped = MakeUnwrapStructs(
-                infos[i].pGeometries, infos[i].geometryCount, &(*dst_command_ptr)->geometry_info_memory);
-            unwrapped->pNext = TrackStruct(unwrapped->pNext, &(*dst_command_ptr)->geometry_info_memory);
-            (*dst_command_ptr)->geometry_info.pGeometries = unwrapped;
+                infos[i].pGeometries, infos[i].geometryCount, &dst_command->value().geometry_info_memory);
+            unwrapped->pNext = TrackStruct(unwrapped->pNext, &dst_command->value().geometry_info_memory);
+            dst_command->value().geometry_info.pGeometries = unwrapped;
 
-            (*dst_command_ptr)->build_range_infos.reserve(infos[i].geometryCount);
+            dst_command->value().build_range_infos.reserve(infos[i].geometryCount);
             std::copy(pp_buildRange_infos[i],
                       pp_buildRange_infos[i] + infos[i].geometryCount,
-                      std::back_inserter((*dst_command_ptr)->build_range_infos));
+                      std::back_inserter(dst_command->value().build_range_infos));
 
             // Extract the instance buffer data - relevant only for top level structures
             if (infos[i].type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
@@ -443,7 +439,7 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                 const VkDeviceAddress address = infos[i].pGeometries[0].geometry.instances.data.deviceAddress;
 
                 std::size_t data_size =
-                    sizeof(VkAccelerationStructureInstanceKHR) * pp_buildRange_infos[i]->primitiveCount;
+                    sizeof(VkAccelerationStructureInstanceKHR) * pp_buildRange_infos[i][0].primitiveCount;
 
                 // Find in which memory the device address is contained
                 auto memory_wrapper = std::find_if(
@@ -455,29 +451,43 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
                 GFXRECON_ASSERT(memory_wrapper != device_memory_addresses_map.end());
 
+                auto device_handle = memory_wrapper->second->map_device->handle;
+                auto device_table  = GetDeviceTable(device_handle);
+
                 // Find the buffer, which contains this address
-                auto instance_buffer_wrapper = std::find_if(
-                    memory_wrapper->second->bound_buffers.begin(),
-                    memory_wrapper->second->bound_buffers.end(),
-                    [address](const std::pair<VkDeviceAddress, const BufferWrapper*>& entry) {
-                        return (entry.first <= address) && ((entry.first + entry.second->created_size) > address);
-                    });
-                GFXRECON_ASSERT(instance_buffer_wrapper != memory_wrapper->second->bound_buffers.end());
+                BufferWrapper*  instance_buffer_wrapper = nullptr;
+                VkDeviceAddress buffer_address;
+                for (const auto& entry : memory_wrapper->second->bound_buffers)
+                {
+                    VkBufferDeviceAddressInfoKHR info{ .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+                                                       .pNext  = nullptr,
+                                                       .buffer = entry->handle };
+                    buffer_address = device_table->GetBufferDeviceAddressKHR(device_handle, &info);
+                    if ((buffer_address <= address) && ((buffer_address + entry->created_size) > address))
+                    {
+                        instance_buffer_wrapper = entry;
+                        break;
+                    }
+                };
+                GFXRECON_ASSERT(instance_buffer_wrapper != nullptr);
 
-                VkDeviceSize offset = address - instance_buffer_wrapper->first;
+                VkDeviceSize offset = address - buffer_address;
                 GFXRECON_ASSERT(offset >= 0);
-                // Pull the instance buffer data from device
-                (*dst_command_ptr)->instance_buffer_data.resize(pp_buildRange_infos[i]->primitiveCount);
+                dst_command->value().command_buffer = GetWrapper<CommandBufferWrapper>(command_buffer);
+                dst_command->value().wrapper        = instance_buffer_wrapper;
+                dst_command->value().data_size      = data_size;
+                dst_command->value().offset         = offset + pp_buildRange_infos[i]->primitiveOffset;
 
-                void* mapped;
-                auto  device_handle = instance_buffer_wrapper->second->bind_device->handle;
-                auto  device_table  = GetDeviceTable(device_handle);
-                auto  data_offset   = instance_buffer_wrapper->second->bind_offset + offset;
-
-                device_table->MapMemory(
-                    device_handle, memory_wrapper->second->handle, data_offset, data_size, 0, &mapped);
-                std::memcpy((*dst_command_ptr)->instance_buffer_data.data(), mapped, data_size);
-                device_table->UnmapMemory(device_handle, memory_wrapper->second->handle);
+                auto cmd_search = queued_instance_buffer_reads.find(command_buffer);
+                if (cmd_search == queued_instance_buffer_reads.end())
+                {
+                    queued_instance_buffer_reads.emplace(
+                        command_buffer, std::vector<AccelerationStructureKHRWrapper*>({ wrappers[i] }));
+                }
+                else
+                {
+                    cmd_search->second.emplace_back(wrappers[i]);
+                }
             }
         }
 
@@ -1745,12 +1755,50 @@ void VulkanStateTracker::TrackAccelerationStructureCopyCommand(VkCommandBuffer  
     auto wrapper = GetWrapper<AccelerationStructureKHRWrapper>(info->dst);
     if (!wrapper->latest_copy_command)
     {
-        wrapper->latest_copy_command =
-            std::make_unique<AccelerationStructureKHRWrapper::AccelerationStructureCopyCommandData>();
+        wrapper->latest_copy_command = AccelerationStructureKHRWrapper::AccelerationStructureCopyCommandData{};
     }
     wrapper->latest_copy_command->device     = wrapper->device_id;
     wrapper->latest_copy_command->info       = *info;
     wrapper->latest_copy_command->info.pNext = TrackStruct(info->pNext, &wrapper->latest_copy_command->p_next_memory);
+}
+
+void VulkanStateTracker::PullInstanceBuffersData(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers)
+{
+    for (uint32_t i = 0; i < command_buffer_count; ++i)
+    {
+        auto it = queued_instance_buffer_reads.find(command_buffers[i]);
+        if (it == queued_instance_buffer_reads.end())
+        {
+            return;
+        }
+
+        auto                          device_wrapper = it->second.front()->device;
+        graphics::VulkanResourcesUtil util(
+            device_wrapper->handle, device_wrapper->layer_table, device_wrapper->physical_device->memory_properties);
+
+        uint64_t max = 0;
+        for (auto& wrapper : it->second)
+        {
+            max = std::max(wrapper->latest_build_command_->data_size, max);
+        }
+        std::vector<uint8_t> bytes;
+        bytes.reserve(max);
+        util.CreateStagingBuffer(max);
+
+        for (auto& wrapper_data : it->second)
+        {
+            util.ReadFromBufferResource(wrapper_data->latest_build_command_->wrapper->handle,
+                                        wrapper_data->latest_build_command_->wrapper->created_size,
+                                        wrapper_data->latest_build_command_->wrapper->queue_family_index,
+                                        bytes);
+            GFXRECON_ASSERT(!bytes.empty());
+            wrapper_data->latest_build_command_->instance_buffer_data.resize(
+                wrapper_data->latest_build_command_->data_size / sizeof(VkAccelerationStructureInstanceKHR));
+            std::memcpy(wrapper_data->latest_build_command_->instance_buffer_data.data(),
+                        bytes.data() + wrapper_data->latest_build_command_->offset,
+                        wrapper_data->latest_build_command_->data_size);
+        }
+    }
 }
 
 GFXRECON_END_NAMESPACE(encode)

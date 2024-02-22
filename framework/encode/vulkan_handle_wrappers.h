@@ -40,6 +40,7 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
+#include <optional>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -182,7 +183,7 @@ struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
     // State tracking info for memory with device addresses.
     format::HandleId                                    device_id{ format::kNullHandleId };
     VkDeviceAddress                                     address{ 0 };
-    std::unordered_map<VkDeviceAddress, BufferWrapper*> bound_buffers;
+    std::vector<BufferWrapper*>                         bound_buffers;
 };
 
 struct BufferWrapper : public HandleWrapper<VkBuffer>
@@ -482,6 +483,7 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
 struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStructureKHR>
 {
     // State tracking info for buffers with device addresses.
+    DeviceWrapper*   device;
     format::HandleId device_id{ format::kNullHandleId };
     VkDeviceAddress  address{ 0 };
 
@@ -495,10 +497,15 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
         VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
         HandleUnwrapMemory                                    geometry_info_memory;
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
+
+        CommandBufferWrapper*                                 command_buffer;
+        BufferWrapper*                                        wrapper;
+        VkDeviceSize                                          offset;
+        uint64_t                                              data_size;
         std::vector<VkAccelerationStructureInstanceKHR>       instance_buffer_data;
     };
-    std::unique_ptr<AccelerationStructureKHRBuildCommandData> latest_update_command_;
-    std::unique_ptr<AccelerationStructureKHRBuildCommandData> latest_build_command_;
+    std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };
+    std::optional<AccelerationStructureKHRBuildCommandData> latest_build_command_{ std::nullopt };
 
     struct AccelerationStructureCopyCommandData
     {
@@ -506,7 +513,7 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
         VkCopyAccelerationStructureInfoKHR info;
         HandleUnwrapMemory                 p_next_memory;
     };
-    std::unique_ptr<AccelerationStructureCopyCommandData> latest_copy_command;
+    std::optional<AccelerationStructureCopyCommandData> latest_copy_command{ std::nullopt };
 };
 
 struct AccelerationStructureNVWrapper : public HandleWrapper<VkAccelerationStructureNV>

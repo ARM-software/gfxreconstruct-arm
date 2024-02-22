@@ -899,11 +899,9 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
     {
         CreateWrappedHandle<DeviceWrapper, NoParentWrapper, AccelerationStructureKHRWrapper>(
             device, NoParentWrapper::kHandleValue, pAccelerationStructureKHR, GetUniqueId);
-
+        auto accel_struct_wrapper = GetWrapper<AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
         if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
         {
-            auto accel_struct_wrapper = GetWrapper<AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
-
             VkAccelerationStructureDeviceAddressInfoKHR address_info{
                 VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
             };
@@ -919,6 +917,7 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
                 state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
             }
         }
+        accel_struct_wrapper->device = device_wrapper;
     }
 
     return result;
@@ -2363,6 +2362,7 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(VkQueue             queue,
             {
                 state_tracker_->TrackTlasToBlasDependencies(pSubmits[s].commandBufferCount,
                                                             pSubmits[s].pCommandBuffers);
+                state_tracker_->PullInstanceBuffersData(pSubmits[s].commandBufferCount, pSubmits[s].pCommandBuffers);
             }
         }
     }

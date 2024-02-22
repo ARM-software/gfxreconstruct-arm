@@ -1128,12 +1128,13 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
 
         if (wrapper->latest_build_command_)
         {
+            const auto&                                  latest_build_command = wrapper->latest_build_command_.value();
             AccelerationStructureBuildCommandsContainer* build_container = nullptr;
-            if (wrapper->latest_build_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+            if (latest_build_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
             {
                 build_container = &merged_blas_build_commands;
             }
-            else if (wrapper->latest_build_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+            else if (latest_build_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
             {
                 build_container = &merged_tlas_build_commands;
             }
@@ -1146,23 +1147,26 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
                 result = it;
             }
 
-            result->second.device = wrapper->latest_build_command_->device;
-            result->second.geometry_infos.push_back(wrapper->latest_build_command_->geometry_info);
+            result->second.device = latest_build_command.device;
+            result->second.geometry_infos.push_back(latest_build_command.geometry_info);
 
-            result->second.build_range_infos.push_back(wrapper->latest_build_command_->build_range_infos);
-            result->second.instance_buffers_data.push_back(wrapper->latest_build_command_->instance_buffer_data);
+            result->second.build_range_infos.push_back(latest_build_command.build_range_infos);
+            if (!latest_build_command.instance_buffer_data.empty())
+            {
+                result->second.instance_buffers_data.push_back(latest_build_command.instance_buffer_data);
+            }
         }
 
         if (wrapper->latest_update_command_)
         {
+            const auto& latest_update_command                             = wrapper->latest_update_command_.value();
             AccelerationStructureBuildCommandsContainer* update_container = nullptr;
 
-            if (wrapper->latest_update_command_->geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+            if (latest_update_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
             {
                 update_container = &merged_blas_update_commands;
             }
-            else if (wrapper->latest_update_command_->geometry_info.type ==
-                     VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+            else if (latest_update_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
             {
                 update_container = &merged_tlas_update_commands;
             }
@@ -1174,15 +1178,16 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
                 result = it;
             }
 
-            result->second.device = wrapper->latest_update_command_->device;
-            result->second.geometry_infos.push_back(wrapper->latest_update_command_->geometry_info);
+            result->second.device = latest_update_command.device;
+            result->second.geometry_infos.push_back(latest_update_command.geometry_info);
 
-            result->second.build_range_infos.push_back(wrapper->latest_update_command_->build_range_infos);
-            result->second.instance_buffers_data.push_back(wrapper->latest_update_command_->instance_buffer_data);
+            result->second.build_range_infos.push_back(latest_update_command.build_range_infos);
+            result->second.instance_buffers_data.push_back(latest_update_command.instance_buffer_data);
         }
 
         if (wrapper->latest_copy_command)
         {
+            const auto& latest_copy_command = wrapper->latest_copy_command.value();
             auto result = merged_copy_commands.find(wrapper->device_id);
             if (result == merged_copy_commands.end())
             {
@@ -1191,7 +1196,7 @@ void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanS
                 result = it;
             }
             result->second.device = wrapper->device_id;
-            result->second.infos.push_back(wrapper->latest_copy_command->info);
+            result->second.infos.push_back(latest_copy_command.info);
         }
     });
 

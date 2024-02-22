@@ -418,6 +418,7 @@ class VulkanStateTracker
 
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
+    void PullInstanceBuffersData(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
@@ -495,7 +496,9 @@ class VulkanStateTracker
     // Keeps track of acceleration structures' device addresses
     std::unordered_map<VkDeviceAddress, AccelerationStructureKHRWrapper*> as_device_addresses_map;
 
-    bool experimental_raytracing_fastforwarding{ false };
+    bool experimental_raytracing_fastforwarding{ true };
+
+    std::map<VkCommandBuffer, std::vector<AccelerationStructureKHRWrapper*>> queued_instance_buffer_reads;
 };
 
 GFXRECON_END_NAMESPACE(encode)
