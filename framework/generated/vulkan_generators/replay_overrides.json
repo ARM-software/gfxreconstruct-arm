@@ -123,6 +123,7 @@
     "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets",
-    "vkCmdCopyQueryPoolResults": "OverrideCmdCopyQueryPoolResults"
+    "vkCmdCopyQueryPoolResults": "OverrideCmdCopyQueryPoolResults",
+    "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR"
   }
 }

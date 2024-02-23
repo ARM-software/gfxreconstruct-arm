@@ -990,5 +990,16 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
     }
 }
 
+void VulkanAccelerationStructureBuilder::OnCmdTraceRaysKHR(VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+                                                           VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+                                                           VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+                                                           VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable)
+{
+    UpdateBufferDeviceAddress(pRaygenShaderBindingTable->deviceAddress);
+    UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
+    UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
+    UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

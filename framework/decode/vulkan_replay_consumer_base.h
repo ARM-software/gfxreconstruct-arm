@@ -1156,6 +1156,17 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       uint32_t                                            descriptor_copy_count,
                                       StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  descriptor_copies_decoder);
 
+    void
+    OverrideCmdTraceRaysKHR(PFN_vkCmdTraceRaysKHR                                          func,
+                            CommandBufferInfo*                                             in_commandBuffer,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
+                            uint32_t                                                       width,
+                            uint32_t                                                       height,
+                            uint32_t                                                       depth);
+
     const VulkanReplayOptions options_;
 
   private:
