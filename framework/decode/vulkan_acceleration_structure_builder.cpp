@@ -125,7 +125,7 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 
             // We add their original device address, that remains unchanged to the set, to delete them right after we
             // finished building
-            state_recreation_device_addresses.insert(entry->original_address_);
+            state_recreation_device_addresses.insert(entry->new_address_);
             // We still need to add them to the global tracking so that builder finds them later
             buffers_.push_back(std::move(entry));
         }
@@ -139,9 +139,12 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
     buffers_.erase(std::remove_if(buffers_.begin(),
                                   buffers_.end(),
                                   [&state_recreation_device_addresses](const std::unique_ptr<BufferEntry>& entry) {
-                                      return state_recreation_device_addresses.count(entry->original_address_) != 0;
+                                      return entry->capture_id_ == format::kNullHandleId &&
+                                             state_recreation_device_addresses.count(entry->new_address_) != 0;
                                   }),
                    buffers_.end());
+
+    scratches_.clear();
 }
 
 void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructuresMetaCommand(
@@ -668,22 +671,39 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             scratch_size                               = size_info.updateScratchSize;
         }
 
-        // If there is no scratch - create one
-        if (!dst_entry->replacement_acceleration_struct_->scratch_)
+        // Check whether the scratch with this original device address is already allocated and fits the size
+        VkDeviceAddress capture_scratch_address = geometry_infos[i].scratchData.deviceAddress;
+        auto            scratch_entries         = scratches_.find(capture_scratch_address);
+
+        if (scratch_entries != scratches_.end())
         {
-            dst_entry->replacement_acceleration_struct_->scratch_ = CreateBuffer(
-                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+            auto scratch_entry =
+                std::find_if(scratch_entries->second.begin(),
+                             scratch_entries->second.end(),
+                             [scratch_size](const std::unique_ptr<BufferEntry>& entry) {
+                                 return entry->allocator_->GetBufferSize(entry->allocator_data_) >= scratch_size;
+                             });
+            if (scratch_entry != scratch_entries->second.end())
+            {
+                geometry_infos[i].scratchData.deviceAddress = (*scratch_entry)->new_address_;
+            }
+            else
+            {
+                const auto& new_scratch                     = scratch_entries->second.emplace_back(CreateBuffer(
+                    scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+                new_scratch->original_address_              = geometry_infos[i].scratchData.deviceAddress;
+                geometry_infos[i].scratchData.deviceAddress = new_scratch->new_address_;
+            }
         }
-        // If there is a scratch, but size will not fit into existing scratch, recreate
-        else if (allocator_->GetBufferSize(dst_entry->replacement_acceleration_struct_->scratch_->allocator_data_) <
-                 scratch_size)
+        else
         {
-            dst_entry->replacement_acceleration_struct_->scratch_ = CreateBuffer(
-                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+            auto [it, inserted] =
+                scratches_.emplace(capture_scratch_address, std::vector<std::unique_ptr<BufferEntry>>());
+            auto& new_scratch                           = it->second.emplace_back(CreateBuffer(
+                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+            new_scratch->original_address_              = geometry_infos[i].scratchData.deviceAddress;
+            geometry_infos[i].scratchData.deviceAddress = new_scratch->new_address_;
         }
-        // Put the actual scratch address into geometry info, and update other geometry buffers addresses
-        geometry_infos[i].scratchData.deviceAddress =
-            (dst_entry->replacement_acceleration_struct_->scratch_)->new_address_;
         UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
     functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
@@ -999,6 +1019,11 @@ void VulkanAccelerationStructureBuilder::OnCmdTraceRaysKHR(VkStridedDeviceAddres
     UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
     UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
     UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
+}
+
+void VulkanAccelerationStructureBuilder::PostQueuePresent()
+{
+    scratches_.clear();
 }
 
 GFXRECON_END_NAMESPACE(decode)

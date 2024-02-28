@@ -385,7 +385,6 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
     CommandBufferWrapper*                           cmd_buf_wrapper = GetWrapper<CommandBufferWrapper>(command_buffer);
     std::vector<AccelerationStructureKHRWrapper*>   wrappers(info_count);
-    std::vector<VkAccelerationStructureInstanceKHR> instance_buffer_data;
     for (uint32_t i = 0; i < info_count; ++i)
     {
         if (infos[i].dstAccelerationStructure == VK_NULL_HANDLE)
@@ -399,7 +398,7 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
         wrappers[i] = GetWrapper<AccelerationStructureKHRWrapper>(infos[i].dstAccelerationStructure);
 
-        if (experimental_raytracing_fastforwarding)
+        if (experimental_raytracing_fastforwarding_)
         {
             // First, differentiate where do we want to write
             std::optional<AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData>* dst_command =
@@ -473,21 +472,23 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
                 VkDeviceSize offset = address - buffer_address;
                 GFXRECON_ASSERT(offset >= 0);
-                dst_command->value().command_buffer = GetWrapper<CommandBufferWrapper>(command_buffer);
-                dst_command->value().wrapper        = instance_buffer_wrapper;
-                dst_command->value().data_size      = data_size;
-                dst_command->value().offset         = offset + pp_buildRange_infos[i]->primitiveOffset;
 
-                auto cmd_search = queued_instance_buffer_reads.find(command_buffer);
-                if (cmd_search == queued_instance_buffer_reads.end())
+                std::vector<uint8_t> bytes;
+                if (!resource_util_)
                 {
-                    queued_instance_buffer_reads.emplace(
-                        command_buffer, std::vector<AccelerationStructureKHRWrapper*>({ wrappers[i] }));
+                    CreateResourceUtil(GetWrapper<DeviceWrapper>(device_handle));
                 }
-                else
-                {
-                    cmd_search->second.emplace_back(wrappers[i]);
-                }
+                resource_util_->ReadFromBufferResource(instance_buffer_wrapper->handle,
+                                                       instance_buffer_wrapper->created_size,
+                                                       instance_buffer_wrapper->queue_family_index,
+                                                       bytes);
+                GFXRECON_ASSERT(!bytes.empty());
+
+                dst_command->value().instance_buffer_data.resize(data_size /
+                                                                 sizeof(VkAccelerationStructureInstanceKHR));
+                std::memcpy(dst_command->value().instance_buffer_data.data(),
+                            bytes.data() + offset + pp_buildRange_infos[i]->primitiveOffset,
+                            data_size);
             }
         }
 
@@ -1762,43 +1763,24 @@ void VulkanStateTracker::TrackAccelerationStructureCopyCommand(VkCommandBuffer  
     wrapper->latest_copy_command->info.pNext = TrackStruct(info->pNext, &wrapper->latest_copy_command->p_next_memory);
 }
 
-void VulkanStateTracker::PullInstanceBuffersData(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers)
+void gfxrecon::encode::VulkanStateTracker::DestroyState(gfxrecon::encode::BufferWrapper* wrapper)
 {
-    for (uint32_t i = 0; i < command_buffer_count; ++i)
+    assert(wrapper != nullptr);
+    auto memory_wrapper = this->state_table_.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+    if (memory_wrapper)
     {
-        auto it = queued_instance_buffer_reads.find(command_buffers[i]);
-        if (it == queued_instance_buffer_reads.end())
-        {
-            return;
-        }
-
-        auto                          device_wrapper = it->second.front()->device;
-        graphics::VulkanResourcesUtil util(
-            device_wrapper->handle, device_wrapper->layer_table, device_wrapper->physical_device->memory_properties);
-
-        uint64_t max = 0;
-        for (auto& wrapper : it->second)
-        {
-            max = std::max(wrapper->latest_build_command_->data_size, max);
-        }
-        std::vector<uint8_t> bytes;
-        bytes.reserve(max);
-        util.CreateStagingBuffer(max);
-
-        for (auto& wrapper_data : it->second)
-        {
-            util.ReadFromBufferResource(wrapper_data->latest_build_command_->wrapper->handle,
-                                        wrapper_data->latest_build_command_->wrapper->created_size,
-                                        wrapper_data->latest_build_command_->wrapper->queue_family_index,
-                                        bytes);
-            GFXRECON_ASSERT(!bytes.empty());
-            wrapper_data->latest_build_command_->instance_buffer_data.resize(
-                wrapper_data->latest_build_command_->data_size / sizeof(VkAccelerationStructureInstanceKHR));
-            std::memcpy(wrapper_data->latest_build_command_->instance_buffer_data.data(),
-                        bytes.data() + wrapper_data->latest_build_command_->offset,
-                        wrapper_data->latest_build_command_->data_size);
-        }
+        memory_wrapper->bound_buffers.erase(
+            std::remove_if(memory_wrapper->bound_buffers.begin(),
+                           memory_wrapper->bound_buffers.end(),
+                           [&wrapper](const BufferWrapper* entry) { return entry->handle_id == wrapper->handle_id; }),
+            memory_wrapper->bound_buffers.end());
     }
+}
+
+void VulkanStateTracker::CreateResourceUtil(const DeviceWrapper* device_wrapper)
+{
+    this->resource_util_ = std::make_unique<graphics::VulkanResourcesUtil>(
+        device_wrapper->handle, device_wrapper->layer_table, device_wrapper->physical_device->memory_properties);
 }
 
 GFXRECON_END_NAMESPACE(encode)

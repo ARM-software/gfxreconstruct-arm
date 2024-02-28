@@ -918,6 +918,7 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
             }
         }
         accel_struct_wrapper->device = device_wrapper;
+        accel_struct_wrapper->type_  = pCreateInfo_unwrapped->type;
     }
 
     return result;
@@ -2362,7 +2363,6 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(VkQueue             queue,
             {
                 state_tracker_->TrackTlasToBlasDependencies(pSubmits[s].commandBufferCount,
                                                             pSubmits[s].pCommandBuffers);
-                state_tracker_->PullInstanceBuffersData(pSubmits[s].commandBufferCount, pSubmits[s].pCommandBuffers);
             }
         }
     }

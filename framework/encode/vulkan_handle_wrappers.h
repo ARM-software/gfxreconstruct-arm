@@ -490,6 +490,7 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     // List of BLASes this AS references. Used only while tracking.
     std::vector<AccelerationStructureKHRWrapper*> blas;
 
+    VkAccelerationStructureTypeKHR type_;
     // Only used when tracking
     struct AccelerationStructureKHRBuildCommandData
     {
@@ -497,11 +498,6 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
         VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
         HandleUnwrapMemory                                    geometry_info_memory;
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
-
-        CommandBufferWrapper*                                 command_buffer;
-        BufferWrapper*                                        wrapper;
-        VkDeviceSize                                          offset;
-        uint64_t                                              data_size;
         std::vector<VkAccelerationStructureInstanceKHR>       instance_buffer_data;
     };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };

@@ -414,11 +414,12 @@ class VulkanStateTracker
 
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
-    void SetExperimentalRaytracingFastforwarding(bool value) { experimental_raytracing_fastforwarding = value; };
+    void SetExperimentalRaytracingFastforwarding(bool value) { experimental_raytracing_fastforwarding_ = value; };
 
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
-    void PullInstanceBuffersData(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
+
+    void CreateResourceUtil(const DeviceWrapper* wrapper);
 
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
@@ -485,6 +486,8 @@ class VulkanStateTracker
 
     void DestroyState(AccelerationStructureKHRWrapper* wrapper);
 
+    void DestroyState(BufferWrapper* wrapper);
+
     void TrackQuerySubmissions(CommandBufferWrapper* command_wrapper);
 
     std::mutex       state_table_mutex_;
@@ -496,9 +499,9 @@ class VulkanStateTracker
     // Keeps track of acceleration structures' device addresses
     std::unordered_map<VkDeviceAddress, AccelerationStructureKHRWrapper*> as_device_addresses_map;
 
-    bool experimental_raytracing_fastforwarding{ true };
+    bool experimental_raytracing_fastforwarding_{ true };
 
-    std::map<VkCommandBuffer, std::vector<AccelerationStructureKHRWrapper*>> queued_instance_buffer_reads;
+    std::unique_ptr<graphics::VulkanResourcesUtil> resource_util_;
 };
 
 GFXRECON_END_NAMESPACE(encode)

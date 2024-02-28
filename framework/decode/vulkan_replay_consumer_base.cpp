@@ -5211,7 +5211,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
         size_t accel_struct_offset      = texel_buffer_view_offset + (texel_buffer_view_count * sizeof(VkBufferView));
 
         // Track descriptor image type.
-        std::vector<VkDescriptorType> image_types;
+        std::vector<VkDescriptorType>      image_types;
         VkDescriptorUpdateTemplateEntryKHR acceleration_structure_entry;
 
         for (auto entry = entries.begin(); entry != entries.end(); ++entry)
@@ -5246,8 +5246,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
             else if (type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
             {
                 acceleration_structure_entry = (*entry);
-                entry->stride = sizeof(VkAccelerationStructureKHR);
-                entry->offset = accel_struct_offset;
+                entry->stride                = sizeof(VkAccelerationStructureKHR);
+                entry->offset                = accel_struct_offset;
                 accel_struct_offset += entry->descriptorCount * sizeof(VkAccelerationStructureKHR);
             }
             else
@@ -5269,7 +5269,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
                 reinterpret_cast<DescriptorUpdateTemplateInfo*>(pDescriptorUpdateTemplate->GetConsumerData(0));
             assert(update_template_info != nullptr);
 
-            update_template_info->descriptor_image_types = std::move(image_types);
+            update_template_info->descriptor_image_types                = std::move(image_types);
             update_template_info->acceleration_structure_template_entry = acceleration_structure_entry;
         }
 
@@ -6786,6 +6786,15 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
     if (screenshot_handler_ != nullptr)
     {
         screenshot_handler_->EndFrame();
+    }
+
+    auto device_info = GetObjectInfoTable().GetDeviceInfo(queue_info->parent_id);
+    GFXRECON_ASSERT(device_info != nullptr);
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[device_info->capture_id]->PostQueuePresent();
     }
 
     LogFrameDebugInfo();

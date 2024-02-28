@@ -1117,112 +1117,102 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
 // Rename this to represent the whole acc structure prepare process
 void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const VulkanStateTable& state_table)
 {
-    AccelerationStructureBuildCommandsContainer merged_blas_build_commands;
-    AccelerationStructureBuildCommandsContainer merged_blas_update_commands;
-    AccelerationStructureCopyCommandsContainer  merged_copy_commands;
-    AccelerationStructureBuildCommandsContainer merged_tlas_build_commands;
-    AccelerationStructureBuildCommandsContainer merged_tlas_update_commands;
+    AccelerationStructureBuildCommandsContainer blas_build_commands;
+    AccelerationStructureBuildCommandsContainer blas_update_commands;
+    AccelerationStructureCopyCommandsContainer  copy_commands;
+    AccelerationStructureBuildCommandsContainer tlas_build_commands;
+    AccelerationStructureBuildCommandsContainer tlas_update_commands;
 
     state_table.VisitWrappers([&](const AccelerationStructureKHRWrapper* wrapper) {
         assert(wrapper != nullptr);
 
+        AccelerationStructureBuildCommandsContainer* build_container  = nullptr;
+        AccelerationStructureBuildCommandsContainer* update_container = nullptr;
+
+        if (wrapper->type_ == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+        {
+            build_container  = &blas_build_commands;
+            update_container = &blas_update_commands;
+        }
+        else if (wrapper->type_ == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+        {
+            build_container  = &tlas_build_commands;
+            update_container = &tlas_update_commands;
+        }
+
         if (wrapper->latest_build_command_)
         {
-            const auto&                                  latest_build_command = wrapper->latest_build_command_.value();
-            AccelerationStructureBuildCommandsContainer* build_container = nullptr;
-            if (latest_build_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
-            {
-                build_container = &merged_blas_build_commands;
-            }
-            else if (latest_build_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
-            {
-                build_container = &merged_tlas_build_commands;
-            }
+            const auto& latest_build_command = wrapper->latest_build_command_.value();
 
             auto result = build_container->find(wrapper->device_id);
             if (result == build_container->end())
             {
-                auto [it, inserted] = build_container->insert(
-                    std::make_pair(wrapper->device_id, AccelerationStructureBuildCommandData{}));
+                auto [it, inserted] =
+                    build_container->emplace(wrapper->device_id, std::vector<AccelerationStructureBuildCommandData>());
                 result = it;
             }
-
-            result->second.device = latest_build_command.device;
-            result->second.geometry_infos.push_back(latest_build_command.geometry_info);
-
-            result->second.build_range_infos.push_back(latest_build_command.build_range_infos);
-            if (!latest_build_command.instance_buffer_data.empty())
-            {
-                result->second.instance_buffers_data.push_back(latest_build_command.instance_buffer_data);
-            }
+            result->second.push_back(
+                AccelerationStructureBuildCommandData{ latest_build_command.device,
+                                                       latest_build_command.geometry_info,
+                                                       latest_build_command.geometry_info_memory,
+                                                       latest_build_command.build_range_infos,
+                                                       latest_build_command.instance_buffer_data });
         }
 
         if (wrapper->latest_update_command_)
         {
-            const auto& latest_update_command                             = wrapper->latest_update_command_.value();
-            AccelerationStructureBuildCommandsContainer* update_container = nullptr;
+            const auto& latest_update_command = wrapper->latest_update_command_.value();
 
-            if (latest_update_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
-            {
-                update_container = &merged_blas_update_commands;
-            }
-            else if (latest_update_command.geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
-            {
-                update_container = &merged_tlas_update_commands;
-            }
             auto result = update_container->find(wrapper->device_id);
             if (result == update_container->end())
             {
-                auto [it, inserted] = update_container->insert(
-                    std::make_pair(wrapper->device_id, AccelerationStructureBuildCommandData{}));
+                auto [it, inserted] =
+                    update_container->emplace(wrapper->device_id, std::vector<AccelerationStructureBuildCommandData>());
                 result = it;
             }
-
-            result->second.device = latest_update_command.device;
-            result->second.geometry_infos.push_back(latest_update_command.geometry_info);
-
-            result->second.build_range_infos.push_back(latest_update_command.build_range_infos);
-            result->second.instance_buffers_data.push_back(latest_update_command.instance_buffer_data);
+            result->second.push_back(
+                AccelerationStructureBuildCommandData{ latest_update_command.device,
+                                                       latest_update_command.geometry_info,
+                                                       latest_update_command.geometry_info_memory,
+                                                       latest_update_command.build_range_infos,
+                                                       latest_update_command.instance_buffer_data });
         }
 
         if (wrapper->latest_copy_command)
         {
             const auto& latest_copy_command = wrapper->latest_copy_command.value();
-            auto result = merged_copy_commands.find(wrapper->device_id);
-            if (result == merged_copy_commands.end())
+            auto        result              = copy_commands.find(wrapper->device_id);
+            if (result == copy_commands.end())
             {
-                auto [it, inserted] = merged_copy_commands.insert(
-                    std::make_pair(wrapper->device_id, AccelerationStructureCopyCommandData{}));
-                result = it;
+                auto [it, inserted] = copy_commands.emplace(wrapper->device_id, AccelerationStructureCopyCommandData{});
+                result              = it;
             }
             result->second.device = wrapper->device_id;
             result->second.infos.push_back(latest_copy_command.info);
         }
     });
 
-    std::vector<AccelerationStructureBuildCommandsContainer> command_containers = { merged_blas_build_commands,
-                                                                                    merged_tlas_build_commands };
-    for (const auto& [device, command] : merged_blas_build_commands)
+    for (const auto& [device, commands] : blas_build_commands)
     {
-        EncodeAccelerationStructureBuildMetaCommand(command);
+        for (const auto& command : commands)
+        {
+            EncodeAccelerationStructureBuildMetaCommand(command);
+        }
     }
 
-    for (const auto& [device, command] : merged_copy_commands)
+    for (const auto& [device, command] : copy_commands)
     {
         EncodeAccelerationStructureCopyMetaCommand(command);
     }
 
-    for (const auto& [device, command] : merged_tlas_build_commands)
+    for (const auto& command_container : { tlas_build_commands, blas_update_commands, tlas_update_commands })
     {
-        EncodeAccelerationStructureBuildMetaCommand(command);
-    }
-    command_containers = { merged_blas_update_commands, merged_tlas_update_commands };
-
-    for (const auto& command_container : command_containers)
-    {
-        for (const auto& [device, command] : command_container)
+        for (const auto& [device, commands] : command_container)
         {
-            EncodeAccelerationStructureBuildMetaCommand(command);
+            for (const auto& command : commands)
+            {
+                EncodeAccelerationStructureBuildMetaCommand(command);
+            }
         }
     }
 }
@@ -1240,34 +1230,23 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
 
     encoder_.EncodeHandleIdValue(command.device);
 
-    EncodeStructArray(&encoder_, command.geometry_infos.data(), command.geometry_infos.size());
+    EncodeStructArray(&encoder_, &command.geometry_info, 1);
 
-    std::vector<VkAccelerationStructureBuildRangeInfoKHR*> c_interface_array;
-    for (const auto& v : command.build_range_infos)
-    {
-        c_interface_array.push_back(const_cast<VkAccelerationStructureBuildRangeInfoKHR*>(v.data()));
-    }
-
-    EncodeStructArray2D(
-        &encoder_,
-        c_interface_array.data(),
-        RangeInfoArraySize(
-            VK_NULL_HANDLE, command.geometry_infos.size(), command.geometry_infos.data(), c_interface_array.data()));
+    auto ptr = command.build_range_infos.data();
+    EncodeStructArray2D(&encoder_, &ptr, RangeInfoArraySize(VK_NULL_HANDLE, 1, &command.geometry_info, &ptr));
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 
-    for (const auto& instance_buffer : command.instance_buffers_data)
-    {
-        header.meta_header.block_header.size += instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR);
-    }
+    header.meta_header.block_header.size +=
+        command.instance_buffers_data.size() * sizeof(VkAccelerationStructureInstanceKHR);
 
     output_stream_->Write(&header, sizeof(header));
     output_stream_->Write(parameter_stream_.GetData(), parameter_stream_.GetDataSize());
 
-    for (const auto& instance_buffer : command.instance_buffers_data)
+    if (!command.instance_buffers_data.empty())
     {
-        output_stream_->Write(instance_buffer.data(),
-                              instance_buffer.size() * sizeof(VkAccelerationStructureInstanceKHR));
+        output_stream_->Write(command.instance_buffers_data.data(),
+                              command.instance_buffers_data.size() * sizeof(VkAccelerationStructureInstanceKHR));
     }
 
     parameter_stream_.Reset();

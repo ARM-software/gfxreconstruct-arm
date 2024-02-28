@@ -337,13 +337,13 @@ class VulkanStateWriter
     struct AccelerationStructureBuildCommandData
     {
         format::HandleId                                                   device;
-        std::vector<VkAccelerationStructureBuildGeometryInfoKHR>           geometry_infos;
-        std::vector<HandleUnwrapMemory>                                    geometry_info_memory;
-        std::vector<std::vector<VkAccelerationStructureBuildRangeInfoKHR>> build_range_infos;
-        std::vector<std::vector<VkAccelerationStructureInstanceKHR>>       instance_buffers_data;
+        VkAccelerationStructureBuildGeometryInfoKHR                        geometry_info;
+        HandleUnwrapMemory                                                 geometry_info_memory;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR>              build_range_infos;
+        std::vector<VkAccelerationStructureInstanceKHR>                    instance_buffers_data;
     };
     using AccelerationStructureBuildCommandsContainer =
-        std::unordered_map<format::HandleId, AccelerationStructureBuildCommandData>;
+        std::unordered_map<format::HandleId, std::vector<AccelerationStructureBuildCommandData>>;
     void EncodeAccelerationStructureBuildMetaCommand(const AccelerationStructureBuildCommandData& command);
 
     struct AccelerationStructureCopyCommandData

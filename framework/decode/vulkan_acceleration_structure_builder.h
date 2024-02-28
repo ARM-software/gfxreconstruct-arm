@@ -117,6 +117,9 @@ class VulkanAccelerationStructureBuilder
     // Also check whether there are descriptor sets the needs the acceleration structure handle replaced
     void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
 
+    // Execute actions post queue present
+    void PostQueuePresent();
+
     // Update VkStridedDeviceAddressRegionKHR:
     // pRaygenShaderBindingTable, pMissShaderBindingTable, pHitShaderBindingTable, pCallableShaderBindingTable
     // Updates buffer device addresses
@@ -180,7 +183,6 @@ class VulkanAccelerationStructureBuilder
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
 
         std::unique_ptr<BufferEntry> storage_;
-        std::unique_ptr<BufferEntry> scratch_;
 
         AccelerationStructureEntry(VkDeviceAddress                          original_address,
                                    VkDeviceAddress                          new_address,
@@ -272,6 +274,7 @@ class VulkanAccelerationStructureBuilder
 
     std::vector<std::unique_ptr<AccelerationStructureEntry>>            acceleration_structures_;
     std::vector<std::unique_ptr<BufferEntry>>                           buffers_;
+    std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
 
     std::unordered_map<
