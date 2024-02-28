@@ -1292,8 +1292,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void ProcessSwapchainFullScreenExclusiveInfo(const Decoded_VkSwapchainCreateInfoKHR* swapchain_info);
 
-    void ProcessImportAndroidHardwareBufferInfo(const Decoded_VkMemoryAllocateInfo* allocate_info);
-
     void SetSwapchainWindowSize(const Decoded_VkSwapchainCreateInfoKHR* swapchain_info);
 
     void InitializeScreenshotHandler();
@@ -1327,32 +1325,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     GetImageAttachments(StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder);
 
   private:
-    struct HardwareBufferInfo
-    {
-        format::HandleId memory_id;
-        AHardwareBuffer* hardware_buffer;
-    };
-
-    struct HardwareBufferPlaneInfo
-    {
-        uint64_t capture_offset;
-        uint64_t replay_offset;
-        uint32_t capture_row_pitch;
-        uint32_t replay_row_pitch;
-        uint32_t height;
-    };
-
-    struct HardwareBufferMemoryInfo
-    {
-        AHardwareBuffer*                     hardware_buffer;
-        bool                                 compatible_strides;
-        std::vector<HardwareBufferPlaneInfo> plane_info;
-    };
-
-    typedef std::unordered_map<uint64_t, HardwareBufferInfo>               HardwareBufferMap;
-    typedef std::unordered_map<format::HandleId, HardwareBufferMemoryInfo> HardwareBufferMemoryMap;
-
-  private:
     util::platform::LibraryHandle                                    loader_handle_;
     PFN_vkGetInstanceProcAddr                                        get_instance_proc_addr_;
     PFN_vkCreateInstance                                             create_instance_proc_;
@@ -1366,8 +1338,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool                                                             loading_trim_state_;
     bool                                                             replaying_trimmed_capture_;
     SwapchainImageTracker                                            swapchain_image_tracker_;
-    HardwareBufferMap                                                hardware_buffers_;
-    HardwareBufferMemoryMap                                          hardware_buffer_memory_info_;
     std::unique_ptr<ScreenshotHandler>                               screenshot_handler_;
     std::unique_ptr<VulkanSwapchain>                                 swapchain_;
     std::string                                                      screenshot_file_prefix_;
@@ -1384,8 +1354,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_set<VkSemaphore> shadow_semaphores_;
     std::unordered_set<VkFence>     shadow_fences_;
 
-    // Used to track allocated external memory if replay uses VkImportMemoryHostPointerInfoEXT
-    std::unordered_map<VkDeviceMemory, std::pair<void*, size_t>> external_memory_;
+    // Used to track allocated external memory
+    std::unordered_map<format::HandleId, uint64_t>          android_hardware_buffer_ids_;
+    std::unordered_map<uint64_t, AndroidHardwareBufferInfo> android_hardware_buffers_;
+    std::unordered_map<uint64_t, HostMemoryPointerInfo>     host_memory_pointers_;
 
     // Temporary data used by OverrideQueuePresentKHR
     std::vector<VkSwapchainKHR>       valid_swapchains_;
