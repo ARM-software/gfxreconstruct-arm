@@ -1376,15 +1376,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
-
-    /*
-    Set command pool to NULL at init
-    At each frameBoundaryANDROID:
-        - Create command pool if needed (the first time)
-        - Go through the map and remove executed command buffers
-        - Create command buffer
-        - Submit it
-    */
 };
 
 GFXRECON_END_NAMESPACE(decode)
