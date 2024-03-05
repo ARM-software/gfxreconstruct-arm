@@ -8794,5 +8794,41 @@ void VulkanReplayConsumerBase::TrackNewPipelineCache(const DeviceInfo* device_in
     }
 }
 
+void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
+    PFN_vkCmdTraceRaysKHR                                          func,
+    CommandBufferInfo*                                             in_commandBuffer,
+    StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
+    StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
+    StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
+    StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
+    uint32_t                                                       width,
+    uint32_t                                                       height,
+    uint32_t                                                       depth)
+{
+    DeviceInfo* device_info = GetObjectInfoTable().GetDeviceInfo(in_commandBuffer->parent_id);
+    GFXRECON_ASSERT(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        acceleration_structure_builders_[in_commandBuffer->parent_id]->OnCmdTraceRaysKHR(
+            pRaygenShaderBindingTable->GetPointer(),
+            pMissShaderBindingTable->GetPointer(),
+            pHitShaderBindingTable->GetPointer(),
+            pCallableShaderBindingTable->GetPointer());
+    }
+
+    func(in_commandBuffer->handle,
+         pRaygenShaderBindingTable->GetPointer(),
+         pMissShaderBindingTable->GetPointer(),
+         pHitShaderBindingTable->GetPointer(),
+         pCallableShaderBindingTable->GetPointer(),
+         width,
+         height,
+         depth);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

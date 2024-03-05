@@ -117,6 +117,15 @@ class VulkanAccelerationStructureBuilder
     // Also check whether there are descriptor sets the needs the acceleration structure handle replaced
     void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
 
+    // Update VkStridedDeviceAddressRegionKHR:
+    // pRaygenShaderBindingTable, pMissShaderBindingTable, pHitShaderBindingTable, pCallableShaderBindingTable
+    // Updates buffer device addresses
+    // TODO: strides and offsets
+    void OnCmdTraceRaysKHR(VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+                           VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+                           VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+                           VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable);
+
     // called before command gets executed
     // the query pool results contain the AS compacted sizes
     // inject duplicate of this command that puts the results in internal buffer
