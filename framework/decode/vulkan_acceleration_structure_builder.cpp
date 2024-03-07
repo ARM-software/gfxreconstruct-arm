@@ -491,6 +491,11 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
     // Update the device address of the buffer itself in the geometry info
     UpdateBufferDeviceAddress(instances.data.deviceAddress);
 
+    if (build_range.primitiveCount == 0)
+    {
+        return;
+    }
+
     // Find the buffer by updated address, and record offset if any
     auto         instance_buffer = GetBufferByRuntimeDeviceAddress(instances.data.deviceAddress);
     VkDeviceSize offset          = instances.data.deviceAddress - GetBufferDeviceAddress(instance_buffer->handle_);
@@ -601,17 +606,33 @@ void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
         {
             continue;
         }
-        if (geometry_data.geometryType == VK_GEOMETRY_TYPE_TRIANGLES_KHR)
+        switch (geometry_data.geometryType)
         {
-            auto& triangles = geometry_data.geometry.triangles;
-            UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
-            UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
-            UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
-        }
-        else if (geometry_data.geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
-        {
-            auto& instances = geometry_data.geometry.instances;
-            UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
+            case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
+            {
+                auto& triangles = geometry_data.geometry.triangles;
+                UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
+                UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
+                UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
+                break;
+            }
+            case VK_GEOMETRY_TYPE_INSTANCES_KHR:
+            {
+                auto& instances = geometry_data.geometry.instances;
+                UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
+                break;
+            }
+            case VK_GEOMETRY_TYPE_AABBS_KHR:
+            {
+                auto& aabbs = geometry_data.geometry.aabbs;
+                UpdateBufferDeviceAddress(aabbs.data.deviceAddress);
+                break;
+            }
+            default:
+            {
+                GFXRECON_LOG_DEBUG("Unexpected geometry type");
+                break;
+            }
         }
     }
 }
@@ -748,8 +769,6 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
 void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandBuffer command_buffer,
                                                                       VkCopyAccelerationStructureInfoKHR* copy_info)
 {
-    // In the typical compaction scenario, we copy the built acceleration structure to a smaller storage,
-    // which is only created but not built
     VkCopyAccelerationStructureInfoKHR modified_info = *copy_info;
 
     if (VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR == modified_info.mode)
