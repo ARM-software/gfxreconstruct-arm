@@ -27,7 +27,6 @@
 #include "util/logging.h"
 #include "util/platform.h"
 #include "nlohmann/json.hpp"
-#include "decode/vulkan_export_json_consumer_base.h"
 #include "util/json_util.h"
 
 #include <cinttypes>

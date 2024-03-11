@@ -27,13 +27,13 @@
 #define GFXRECON_REPLAY_SETTINGS_H
 
 const char kOptions[] =
-    "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--"
-    "opcd|--omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
-    "screenshot-all,--onhb|--omit-null-hardware-buffers,--vssb|--virtual-swapchain-skip-blit,--preload-measurement-range,"
-    "--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--onhb|--omit-null-hardware-buffers,"
-    "--qamr|--quit-after-measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-range,"
-    "--use-captured-swapchain-indices,--dcp,--discard-cached-psos,--use-colorspace-fallback,--use-cached-psos,"
-    "--dx12-override-object-names,--offscreen-swapchain-frame-boundary";
+    "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--opcd|--"
+    "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
+    "screenshot-all,--onhb|--omit-null-hardware-buffers,--vssb|--virtual-swapchain-skip-blit,--preload-measurement-"
+    "range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--onhb|--omit-null-"
+    "hardware-buffers,--qamr|--quit-after-measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-"
+    "range,--use-captured-swapchain-indices,--dcp,--discard-cached-psos,--use-colorspace-fallback,--use-cached-psos,--"
+    "dx12-override-object-names,--offscreen-swapchain-frame-boundary";
 const char kArguments[] =
     "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"

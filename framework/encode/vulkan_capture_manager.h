@@ -1503,8 +1503,6 @@ class VulkanCaptureManager : public CaptureManager
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
 
-    bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
-
   private:
     void QueueSubmitWriteFillMemoryCmd();
 

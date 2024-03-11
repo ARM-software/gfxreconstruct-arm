@@ -97,6 +97,12 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
 
+    virtual void Process_vkUpdateDescriptorSetWithTemplate(const ApiCallInfo&               call_info,
+                                                           format::HandleId                 device,
+                                                           format::HandleId                 descriptorSet,
+                                                           format::HandleId                 descriptorUpdateTemplate,
+                                                           DescriptorUpdateTemplateDecoder* pData) override;
+
   protected:
     const util::JsonOptions& GetJsonOptions() const { return writer_->GetOptions(); }
 
@@ -156,6 +162,13 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer
     }
 
     void ResetCommandBufferRecordIndex(format::HandleId command_buffer) { rec_cmd_index_[command_buffer] = 0; }
+
+    void ProcessUpdateDescriptorSetWithTemplate(std::string                      function_name,
+                                                const ApiCallInfo&               call_info,
+                                                format::HandleId                 device,
+                                                format::HandleId                 descriptorSet,
+                                                format::HandleId                 descriptorUpdateTemplate,
+                                                DescriptorUpdateTemplateDecoder* pData);
 
     uint32_t                                       submit_index_{ 0 }; // index of submissions across the trace
     std::unordered_map<format::HandleId, uint32_t> rec_cmd_index_;

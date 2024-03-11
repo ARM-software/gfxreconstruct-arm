@@ -177,6 +177,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/window.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.cpp
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_consumer.h
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.h
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.cpp

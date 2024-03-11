@@ -1098,9 +1098,10 @@ bool IsDepthStencilFormat(const DXGI_FORMAT format)
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
         case DXGI_FORMAT_D16_UNORM:
-        return true;
+            return true;
 
-        // Assumed colour formats listed explicitly so a new format added to the enum would trigger a compiler warning to update this:
+        // Assumed colour formats listed explicitly so a new format added to the enum would trigger a compiler warning
+        // to update this:
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
         case DXGI_FORMAT_R32G32B32A32_FLOAT:
         case DXGI_FORMAT_R32G32B32A32_UINT:
@@ -1217,7 +1218,7 @@ bool IsDepthStencilFormat(const DXGI_FORMAT format)
         case DXGI_FORMAT_V408:
         case DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE:
         case DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE:
-        return false;
+            return false;
     }
     // Log the error if a new format shows up but on balance of probabilities assume it isn't depth:
     GFXRECON_LOG_ERROR("Unknown DXGI_FORMAT value: %u.", static_cast<unsigned>(format));

@@ -324,12 +324,14 @@ int main(int argc, const char** argv)
                 }
                 if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
                 {
-                    json_consumer.SetFile(out_file_handle);
+                    // TODO: Reimplement this!
+                    // json_consumer.SetFile(out_file_handle);
                     frame_indices.pop_back();
                 }
                 else
                 {
-                    json_consumer.SetFile(tmp_file_handle);
+                    // TODO: Reimplement this!
+                    // json_consumer.SetFile(tmp_file_handle);
                 }
             }
             // If CONVERT_EXPERIMENTAL_D3D12 was set, then add DX12 consumer/decoder
@@ -356,14 +358,16 @@ int main(int argc, const char** argv)
 
                     if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
                     {
-                        json_consumer.SetFile(out_file_handle);
+                        // TODO: Reimplement this!
+                        // json_consumer.SetFile(out_file_handle);
                         json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
                             output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
                         frame_indices.pop_back();
                     }
                     else
                     {
-                        json_consumer.SetFile(tmp_file_handle);
+                        // TODO: Reimplement this!
+                        // json_consumer.SetFile(tmp_file_handle);
                         continue;
                     }
                 }

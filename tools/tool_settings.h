@@ -915,7 +915,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     {
         replay_options.use_ext_frame_boundary = true;
     }
-    
+
     if (arg_parser.IsOptionSet(kColorspaceFallback))
     {
         replay_options.use_colorspace_fallback = true;

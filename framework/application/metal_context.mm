@@ -52,8 +52,8 @@ void MetalContext::ProcessEvents(bool wait_for_input)
     {
         while (true)
         {
-            NSDate* timeout = wait_for_input ? [NSDate distantFuture] : nil;
-            NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            NSDate*  timeout = wait_for_input ? [NSDate distantFuture] : nil;
+            NSEvent* event   = [NSApp nextEventMatchingMask:NSEventMaskAny
                                                 untilDate:timeout
                                                    inMode:NSDefaultRunLoopMode
                                                   dequeue:YES];

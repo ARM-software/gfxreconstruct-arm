@@ -64,8 +64,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateInstance(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateInstance>::Dispatch(VulkanCaptureManager::Get(), pCreateInfo, pAllocator, pInstance);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<InstanceWrapper>());
     VkResult result = VulkanCaptureManager::OverrideCreateInstance(pCreateInfo, pAllocator, pInstance);
     if (result < 0)
     {
@@ -417,8 +415,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDevice>::Dispatch(manager, physicalDevice, pCreateInfo, pAllocator, pDevice);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeviceWrapper>());
     VkResult result = manager->OverrideCreateDevice(physicalDevice, pCreateInfo, pAllocator, pDevice);
     if (result < 0)
     {
@@ -651,8 +647,6 @@ VKAPI_ATTR VkResult VKAPI_CALL AllocateMemory(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkAllocateMemory>::Dispatch(manager, device, pAllocateInfo, pAllocator, pMemory);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeviceMemoryWrapper>());
     VkResult result = manager->OverrideAllocateMemory(device, pAllocateInfo, pAllocator, pMemory);
     if (result < 0)
     {
@@ -1212,8 +1206,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateFence(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateFence>::Dispatch(manager, device, pCreateInfo, pAllocator, pFence);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<FenceWrapper>());
     VkResult result = GetDeviceTable(device)->CreateFence(device, pCreateInfo, pAllocator, pFence);
 
     if (result >= 0)
@@ -1419,8 +1411,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSemaphore(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSemaphore>::Dispatch(manager, device, pCreateInfo, pAllocator, pSemaphore);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SemaphoreWrapper>());
     VkResult result = GetDeviceTable(device)->CreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 
     if (result >= 0)
@@ -1510,8 +1500,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateEvent(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateEvent>::Dispatch(manager, device, pCreateInfo, pAllocator, pEvent);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<EventWrapper>());
     VkResult result = GetDeviceTable(device)->CreateEvent(device, pCreateInfo, pAllocator, pEvent);
 
     if (result >= 0)
@@ -1709,8 +1697,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateQueryPool(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateQueryPool>::Dispatch(manager, device, pCreateInfo, pAllocator, pQueryPool);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<QueryPoolWrapper>());
     VkResult result = GetDeviceTable(device)->CreateQueryPool(device, pCreateInfo, pAllocator, pQueryPool);
 
     if (result >= 0)
@@ -1854,8 +1840,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateBuffer(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateBuffer>::Dispatch(manager, device, pCreateInfo, pAllocator, pBuffer);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<BufferWrapper>());
     VkResult result = manager->OverrideCreateBuffer(device, pCreateInfo, pAllocator, pBuffer);
     if (result < 0)
     {
@@ -1940,8 +1924,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateBufferView(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateBufferView>::Dispatch(manager, device, pCreateInfo, pAllocator, pView);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<BufferViewWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkBufferViewCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2034,8 +2016,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateImage(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateImage>::Dispatch(manager, device, pCreateInfo, pAllocator, pImage);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ImageWrapper>());
     VkResult result = manager->OverrideCreateImage(device, pCreateInfo, pAllocator, pImage);
     if (result < 0)
     {
@@ -2157,8 +2137,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateImageView(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateImageView>::Dispatch(manager, device, pCreateInfo, pAllocator, pView);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ImageViewWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkImageViewCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2251,8 +2229,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateShaderModule(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateShaderModule>::Dispatch(manager, device, pCreateInfo, pAllocator, pShaderModule);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ShaderModuleWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkShaderModuleCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2345,8 +2321,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreatePipelineCache(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreatePipelineCache>::Dispatch(manager, device, pCreateInfo, pAllocator, pPipelineCache);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PipelineCacheWrapper>());
     VkResult result = GetDeviceTable(device)->CreatePipelineCache(device, pCreateInfo, pAllocator, pPipelineCache);
 
     if (result >= 0)
@@ -2560,8 +2534,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreatePipelineLayout(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreatePipelineLayout>::Dispatch(manager, device, pCreateInfo, pAllocator, pPipelineLayout);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PipelineLayoutWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkPipelineLayoutCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2654,8 +2626,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSampler(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSampler>::Dispatch(manager, device, pCreateInfo, pAllocator, pSampler);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkSamplerCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2748,8 +2718,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDescriptorSetLayout(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDescriptorSetLayout>::Dispatch(manager, device, pCreateInfo, pAllocator, pSetLayout);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorSetLayoutWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkDescriptorSetLayoutCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -2842,8 +2810,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDescriptorPool(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDescriptorPool>::Dispatch(manager, device, pCreateInfo, pAllocator, pDescriptorPool);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorPoolWrapper>());
     VkResult result = GetDeviceTable(device)->CreateDescriptorPool(device, pCreateInfo, pAllocator, pDescriptorPool);
 
     if (result >= 0)
@@ -2971,8 +2937,6 @@ VKAPI_ATTR VkResult VKAPI_CALL AllocateDescriptorSets(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkAllocateDescriptorSets>::Dispatch(manager, device, pAllocateInfo, pDescriptorSets);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorSetWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkDescriptorSetAllocateInfo* pAllocateInfo_unwrapped = UnwrapStructPtrHandles(pAllocateInfo, handle_unwrap_memory);
 
@@ -3112,8 +3076,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateFramebuffer(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateFramebuffer>::Dispatch(manager, device, pCreateInfo, pAllocator, pFramebuffer);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<FramebufferWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkFramebufferCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -3206,8 +3168,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateRenderPass(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateRenderPass>::Dispatch(manager, device, pCreateInfo, pAllocator, pRenderPass);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<RenderPassWrapper>());
     VkResult result = GetDeviceTable(device)->CreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
 
     if (result >= 0)
@@ -3332,8 +3292,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateCommandPool(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateCommandPool>::Dispatch(manager, device, pCreateInfo, pAllocator, pCommandPool);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<CommandPoolWrapper>());
     VkResult result = GetDeviceTable(device)->CreateCommandPool(device, pCreateInfo, pAllocator, pCommandPool);
 
     if (result >= 0)
@@ -3460,8 +3418,6 @@ VKAPI_ATTR VkResult VKAPI_CALL AllocateCommandBuffers(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkAllocateCommandBuffers>::Dispatch(manager, device, pAllocateInfo, pCommandBuffers);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<CommandBufferWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkCommandBufferAllocateInfo* pAllocateInfo_unwrapped = UnwrapStructPtrHandles(pAllocateInfo, handle_unwrap_memory);
 
@@ -6049,8 +6005,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSamplerYcbcrConversion(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSamplerYcbcrConversion>::Dispatch(manager, device, pCreateInfo, pAllocator, pYcbcrConversion);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerYcbcrConversionWrapper>());
     VkResult result = GetDeviceTable(device)->CreateSamplerYcbcrConversion(device, pCreateInfo, pAllocator, pYcbcrConversion);
 
     if (result >= 0)
@@ -6140,8 +6094,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDescriptorUpdateTemplate(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDescriptorUpdateTemplate>::Dispatch(manager, device, pCreateInfo, pAllocator, pDescriptorUpdateTemplate);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorUpdateTemplateWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -6463,8 +6415,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateRenderPass2(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateRenderPass2>::Dispatch(manager, device, pCreateInfo, pAllocator, pRenderPass);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<RenderPassWrapper>());
     VkResult result = GetDeviceTable(device)->CreateRenderPass2(device, pCreateInfo, pAllocator, pRenderPass);
 
     if (result >= 0)
@@ -6944,8 +6894,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreatePrivateDataSlot(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreatePrivateDataSlot>::Dispatch(manager, device, pCreateInfo, pAllocator, pPrivateDataSlot);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PrivateDataSlotWrapper>());
     VkResult result = GetDeviceTable(device)->CreatePrivateDataSlot(device, pCreateInfo, pAllocator, pPrivateDataSlot);
 
     if (result >= 0)
@@ -8478,8 +8426,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSwapchainKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pSwapchain);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SwapchainKHRWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkSwapchainCreateInfoKHR* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -9082,8 +9028,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDisplayModeKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDisplayModeKHR>::Dispatch(manager, physicalDevice, display, pCreateInfo, pAllocator, pMode);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DisplayModeKHRWrapper>());
     VkResult result = GetInstanceTable(physicalDevice)->CreateDisplayModeKHR(physicalDevice, display, pCreateInfo, pAllocator, pMode);
 
     if (result >= 0)
@@ -9182,8 +9126,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDisplayPlaneSurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDisplayPlaneSurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkDisplaySurfaceCreateInfoKHR* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -9239,8 +9181,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSharedSwapchainsKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSharedSwapchainsKHR>::Dispatch(manager, device, swapchainCount, pCreateInfos, pAllocator, pSwapchains);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SwapchainKHRWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkSwapchainCreateInfoKHR* pCreateInfos_unwrapped = UnwrapStructArrayHandles(pCreateInfos, swapchainCount, handle_unwrap_memory);
 
@@ -9296,8 +9236,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateXlibSurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateXlibSurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateXlibSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -9389,8 +9327,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateXcbSurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateXcbSurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateXcbSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -9482,8 +9418,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateWaylandSurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateWaylandSurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateWaylandSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -9573,8 +9507,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateAndroidSurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateAndroidSurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateAndroidSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -9626,8 +9558,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateWin32SurfaceKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateWin32SurfaceKHR>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateWin32SurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -9805,8 +9735,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateVideoSessionKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateVideoSessionKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pVideoSession);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<VideoSessionKHRWrapper>());
     VkResult result = GetDeviceTable(device)->CreateVideoSessionKHR(device, pCreateInfo, pAllocator, pVideoSession);
 
     if (result >= 0)
@@ -9985,8 +9913,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateVideoSessionParametersKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateVideoSessionParametersKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pVideoSessionParameters);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<VideoSessionParametersKHRWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkVideoSessionParametersCreateInfoKHR* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -11243,8 +11169,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDescriptorUpdateTemplateKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDescriptorUpdateTemplateKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pDescriptorUpdateTemplate);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorUpdateTemplateWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -11337,8 +11261,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateRenderPass2KHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateRenderPass2KHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pRenderPass);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<RenderPassWrapper>());
     VkResult result = GetDeviceTable(device)->CreateRenderPass2KHR(device, pCreateInfo, pAllocator, pRenderPass);
 
     if (result >= 0)
@@ -12297,8 +12219,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSamplerYcbcrConversionKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSamplerYcbcrConversionKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pYcbcrConversion);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerYcbcrConversionWrapper>());
     VkResult result = GetDeviceTable(device)->CreateSamplerYcbcrConversionKHR(device, pCreateInfo, pAllocator, pYcbcrConversion);
 
     if (result >= 0)
@@ -13019,8 +12939,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDeferredOperationKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDeferredOperationKHR>::Dispatch(manager, device, pAllocator, pDeferredOperation);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeferredOperationKHRWrapper>());
     VkResult result = GetDeviceTable(device)->CreateDeferredOperationKHR(device, pAllocator, pDeferredOperation);
 
     if (result >= 0)
@@ -14817,8 +14735,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDebugReportCallbackEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDebugReportCallbackEXT>::Dispatch(manager, instance, pCreateInfo, pAllocator, pCallback);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DebugReportCallbackEXTWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateDebugReportCallbackEXT(instance, pCreateInfo, pAllocator, pCallback);
 
     if (result >= 0)
@@ -15585,8 +15501,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateStreamDescriptorSurfaceGGP(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateStreamDescriptorSurfaceGGP>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateStreamDescriptorSurfaceGGP(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -15738,8 +15652,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateViSurfaceNN(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateViSurfaceNN>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateViSurfaceNN(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -16482,8 +16394,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateIOSSurfaceMVK(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateIOSSurfaceMVK>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateIOSSurfaceMVK(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -16535,8 +16445,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateMacOSSurfaceMVK(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateMacOSSurfaceMVK>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateMacOSSurfaceMVK(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -16854,8 +16762,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDebugUtilsMessengerEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDebugUtilsMessengerEXT>::Dispatch(manager, instance, pCreateInfo, pAllocator, pMessenger);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DebugUtilsMessengerEXTWrapper>());
     VkResult result = manager->OverrideCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
     if (result < 0)
     {
@@ -16908,8 +16814,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDebugUtilsMessengerEXT(
         manager->EndDestroyApiCallCapture<DebugUtilsMessengerEXTWrapper>(messenger);
     }
 
-    ScopedDestroyLock exclusive_scoped_lock;
-    GetInstanceTable(instance)->DestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    manager->OverrideDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDebugUtilsMessengerEXT>::Dispatch(manager, instance, messenger, pAllocator);
 
@@ -17180,8 +17085,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateValidationCacheEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateValidationCacheEXT>::Dispatch(manager, device, pCreateInfo, pAllocator, pValidationCache);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ValidationCacheEXTWrapper>());
     VkResult result = GetDeviceTable(device)->CreateValidationCacheEXT(device, pCreateInfo, pAllocator, pValidationCache);
 
     if (result >= 0)
@@ -17466,8 +17369,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateAccelerationStructureNV(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateAccelerationStructureNV>::Dispatch(manager, device, pCreateInfo, pAllocator, pAccelerationStructure);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<AccelerationStructureNVWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkAccelerationStructureCreateInfoNV* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -18824,8 +18725,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateImagePipeSurfaceFUCHSIA(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateImagePipeSurfaceFUCHSIA>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateImagePipeSurfaceFUCHSIA(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -18877,8 +18776,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateMetalSurfaceEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateMetalSurfaceEXT>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateMetalSurfaceEXT(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -19269,8 +19166,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateHeadlessSurfaceEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateHeadlessSurfaceEXT>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateHeadlessSurfaceEXT(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -20195,8 +20090,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateIndirectCommandsLayoutNV(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateIndirectCommandsLayoutNV>::Dispatch(manager, device, pCreateInfo, pAllocator, pIndirectCommandsLayout);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<IndirectCommandsLayoutNVWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkIndirectCommandsLayoutCreateInfoNV* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -20411,8 +20304,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreatePrivateDataSlotEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreatePrivateDataSlotEXT>::Dispatch(manager, device, pCreateInfo, pAllocator, pPrivateDataSlot);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PrivateDataSlotWrapper>());
     VkResult result = GetDeviceTable(device)->CreatePrivateDataSlotEXT(device, pCreateInfo, pAllocator, pPrivateDataSlot);
 
     if (result >= 0)
@@ -20747,8 +20638,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDirectFBSurfaceEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateDirectFBSurfaceEXT>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateDirectFBSurfaceEXT(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -21303,8 +21192,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateScreenSurfaceQNX(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateScreenSurfaceQNX>::Dispatch(manager, instance, pCreateInfo, pAllocator, pSurface);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
     VkResult result = GetInstanceTable(instance)->CreateScreenSurfaceQNX(instance, pCreateInfo, pAllocator, pSurface);
 
     if (result >= 0)
@@ -21513,8 +21400,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateMicromapEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateMicromapEXT>::Dispatch(manager, device, pCreateInfo, pAllocator, pMicromap);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<MicromapEXTWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkMicromapCreateInfoEXT* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
@@ -23545,8 +23430,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateOpticalFlowSessionNV(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateOpticalFlowSessionNV>::Dispatch(manager, device, pCreateInfo, pAllocator, pSession);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<OpticalFlowSessionNVWrapper>());
     VkResult result = GetDeviceTable(device)->CreateOpticalFlowSessionNV(device, pCreateInfo, pAllocator, pSession);
 
     if (result >= 0)
@@ -23714,8 +23597,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateShadersEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateShadersEXT>::Dispatch(manager, device, createInfoCount, pCreateInfos, pAllocator, pShaders);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ShaderEXTWrapper>());
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
     const VkShaderCreateInfoEXT* pCreateInfos_unwrapped = UnwrapStructArrayHandles(pCreateInfos, createInfoCount, handle_unwrap_memory);
 
@@ -24018,8 +23899,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateAccelerationStructureKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateAccelerationStructureKHR>::Dispatch(manager, device, pCreateInfo, pAllocator, pAccelerationStructure);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<AccelerationStructureKHRWrapper>());
     VkResult result = manager->OverrideCreateAccelerationStructureKHR(device, pCreateInfo, pAllocator, pAccelerationStructure);
     if (result < 0)
     {

@@ -36,7 +36,7 @@ GFXRECON_BEGIN_NAMESPACE(application)
 class MetalContext;
 class MetalWindow : public decode::Window
 {
-public:
+  public:
     MetalWindow(MetalContext* metal_context);
 
     ~MetalWindow() override;
@@ -72,18 +72,18 @@ public:
 
     void DestroySurface(const encode::InstanceTable* table, VkInstance instance, VkSurfaceKHR surface) override;
 
-private:
+  private:
     GFXReconWindowDelegate* window_delegate_;
-    MetalContext* metal_context_;
-    NSWindow*     window_;
-    CAMetalLayer* layer_;
-    uint32_t      width_;
-    uint32_t      height_;
+    MetalContext*           metal_context_;
+    NSWindow*               window_;
+    CAMetalLayer*           layer_;
+    uint32_t                width_;
+    uint32_t                height_;
 };
 
 class MetalWindowFactory : public decode::WindowFactory
 {
-public:
+  public:
     MetalWindowFactory(MetalContext* metal_context);
 
     const char* GetSurfaceExtensionName() const override { return VK_EXT_METAL_SURFACE_EXTENSION_NAME; }
@@ -95,7 +95,8 @@ public:
     VkBool32 GetPhysicalDevicePresentationSupport(const encode::InstanceTable* table,
                                                   VkPhysicalDevice             physical_device,
                                                   uint32_t                     queue_family_index) override;
-private:
+
+  private:
     MetalContext* metal_context_;
 };
 

@@ -595,6 +595,5 @@ void VulkanDecoderBase::SetCurrentBlockIndex(uint64_t block_index)
     }
 }
 
-
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
