@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2019-2020 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -575,6 +576,7 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
     std::unordered_map<format::HandleId, const util::MemoryOutputStream*> temp_layouts;
     std::unordered_map<format::HandleId, const util::MemoryOutputStream*> temp_ds_layouts;
     std::unordered_map<format::HandleId, const util::MemoryOutputStream*> temp_deferred_operations;
+    std::unordered_map<format::HandleId, format::HandleId>                temp_deferred_operation_join_command;
 
     // First pass over pipeline table to sort pipelines by type and determine which dependencies need to be created
     // temporarily.
@@ -653,6 +655,12 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
                 if (inserted.second)
                 {
                     WriteFunctionCall(wrapper->deferred_operation.create_call_id, create_parameters);
+
+                    // If a raytracing pipeline was created with a deferred operation object, we also need to generate a
+                    // deferred operation join command, so the deferred command can finish. These join commands must be
+                    // after calling vkCreateRayTracingPipelinesKHR. Here we record these deferred operations and their
+                    // related device id to generate the join command later.
+                    temp_deferred_operation_join_command[wrapper->deferred_operation.handle_id] = wrapper->device_id;
                 }
                 // TODO: It shouldn't destroy VkDeferredOperation after vkCreateRayTracingPipelinesKHR because it will
                 // run vkDeferredOperationJoinKHR and vkGetDeferredOperationResultKHR after
@@ -736,6 +744,11 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
     for (const auto& entry : ray_tracing_pipelines_khr)
     {
         WriteFunctionCall(format::ApiCall_vkCreateRayTracingPipelinesKHR, entry);
+    }
+
+    for (const auto& entry : temp_deferred_operation_join_command)
+    {
+        WriteDeferredOperationJoinCommand(entry.second, entry.first);
     }
 
     // Temporary object destruction.
@@ -1343,6 +1356,19 @@ void VulkanStateWriter::WriteAccelerationStructureKHRState(const VulkanStateTabl
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());
     });
+}
+
+void VulkanStateWriter::WriteDeferredOperationJoinCommand(format::HandleId device_id,
+                                                          format::HandleId deferred_operation_id)
+{
+    const VkResult result = VK_SUCCESS;
+
+    encoder_.EncodeHandleIdValue(device_id);
+    encoder_.EncodeHandleIdValue(deferred_operation_id);
+    encoder_.EncodeEnumValue(result);
+
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkDeferredOperationJoinKHR, &parameter_stream_);
+    parameter_stream_.Reset();
 }
 
 void VulkanStateWriter::ProcessHardwareBuffer(format::HandleId memory_id,
@@ -2013,7 +2039,7 @@ void VulkanStateWriter::WriteMappedMemoryState(const VulkanStateTable& state_tab
         if (wrapper->mapped_data != nullptr)
         {
             const VkResult result         = VK_SUCCESS;
-            const auto     device_wrapper = wrapper->map_device;
+            const auto     device_wrapper = wrapper->parent_device;
 
             // Map the replay memory.
             encoder_.EncodeHandleIdValue(device_wrapper->handle_id);

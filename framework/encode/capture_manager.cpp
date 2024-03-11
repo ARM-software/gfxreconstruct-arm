@@ -1226,7 +1226,7 @@ void CaptureManager::WriteCaptureOptions(std::string& operation_annotation)
 
     // Add the comma after the vulkan version only if there is something more to write
     operation_annotation += ",\n    \"";
-    operation_annotation += gfxrecon::format::kOperationAnnotationCaptureOptions;
+    operation_annotation += gfxrecon::format::kOperationAnnotationCaptureParameters;
     operation_annotation += "\": \n    {";
     operation_annotation += buffer;
     operation_annotation += "\n    }";

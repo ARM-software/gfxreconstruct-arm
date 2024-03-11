@@ -354,8 +354,7 @@ void Dx12ReplayConsumerBase::ApplyBatchedResourceInitInfo(
                                                      resource_info.second.data,
                                                      resource_info.second.subresource_offsets,
                                                      resource_info.second.subresource_sizes,
-                                                     resource_info.second.staging_resource,
-                                                     true);
+                                                     resource_info.second.staging_resource);
             }
         }
         resource_data_util_->CloseCommandList();
@@ -394,8 +393,6 @@ void Dx12ReplayConsumerBase::ProcessInitSubresourceCommand(const format::InitSub
 
     GFXRECON_ASSERT(MapObject<ID3D12Resource>(command_header.resource_id) == resource);
 
-    uint64_t total_size_in_bytes = graphics::dx12::GetResourceSizeInBytes(device, &resource->GetDesc());
-
     // System has enough memory to batch the next Copy()
     ResourceInitInfo resource_init_info = {};
     resource_init_info.resource         = resource;
@@ -418,15 +415,7 @@ void Dx12ReplayConsumerBase::ProcessInitSubresourceCommand(const format::InitSub
         // If no entry exists in resource_init_infos_, this is the first subresource of a new resource.
         GFXRECON_ASSERT(command_header.subresource == 0);
 
-        const double max_mem_usage = static_cast<double>(options_.memory_usage) / 100.0;
-        if (!graphics::dx12::IsMemoryAvailable(
-                total_size_in_bytes, extra_device_info->adapter3, max_mem_usage, extra_device_info->is_uma))
-        {
-            // If neither system memory or GPU memory are able to accommodate next resource,
-            // execute the Copy() calls and release temp buffer to free memory
-            ApplyBatchedResourceInitInfo(resource_init_infos_);
-        }
-        // Prepare Staging buffer for next resource
+        // Query staging buffer size info.
         size_t                                          subresource_count;
         uint64_t                                        required_data_size;
         std::vector<uint64_t>                           subresource_offsets;
@@ -438,8 +427,18 @@ void Dx12ReplayConsumerBase::ProcessInitSubresourceCommand(const format::InitSub
                                                  subresource_sizes,
                                                  temp_subresource_layouts,
                                                  required_data_size);
-        resource_init_info.subresource_sizes = subresource_sizes;
-        resource_init_info.staging_resource  = resource_data_util_->CreateStagingBuffer(
+
+        const double max_mem_usage = static_cast<double>(options_.memory_usage) / 100.0;
+        if (!graphics::dx12::IsMemoryAvailable(
+                required_data_size, extra_device_info->adapter3, max_mem_usage, extra_device_info->is_uma))
+        {
+            // If neither system memory or GPU memory are able to accommodate next resource,
+            // execute the Copy() calls and release temp buffer to free memory
+            ApplyBatchedResourceInitInfo(resource_init_infos_);
+        }
+
+        // Prepare Staging buffer for next resource
+        resource_init_info.staging_resource = resource_data_util_->CreateStagingBuffer(
             graphics::Dx12ResourceDataUtil::CopyType::kCopyTypeWrite, required_data_size);
         SetResourceInitInfoState(resource_init_info, command_header, data);
 
@@ -1450,6 +1449,82 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource2(
                                                                  InitialResourceState,
                                                                  clear_value_pointer,
                                                                  protected_session,
+                                                                 *riid.decoded_value,
+                                                                 resource->GetHandlePointer());
+
+    // Release the temporary dummy resource
+    if (options_.create_dummy_allocations)
+    {
+        if (SUCCEEDED(dummy_result))
+        {
+            dummy_resource->Release();
+        }
+    }
+
+    return replay_result;
+}
+
+HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource3(
+    DxObjectInfo*                                        replay_object_info,
+    HRESULT                                              original_result,
+    StructPointerDecoder<Decoded_D3D12_HEAP_PROPERTIES>* pHeapProperties,
+    D3D12_HEAP_FLAGS                                     HeapFlags,
+    StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC1>*  pDesc,
+    D3D12_BARRIER_LAYOUT                                 InitialLayout,
+    StructPointerDecoder<Decoded_D3D12_CLEAR_VALUE>*     pOptimizedClearValue,
+    DxObjectInfo*                                        protected_session_object_info,
+    UINT32                                               NumCastableFormats,
+    PointerDecoder<DXGI_FORMAT>*                         pCastableFormats,
+    Decoded_GUID                                         riid,
+    HandlePointerDecoder<void*>*                         resource)
+{
+    GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (pDesc != nullptr));
+
+    auto replay_object = static_cast<ID3D12Device10*>(replay_object_info->object);
+
+    ID3D12ProtectedResourceSession* protected_session = nullptr;
+    if (protected_session_object_info != nullptr)
+    {
+        protected_session = static_cast<ID3D12ProtectedResourceSession*>(protected_session_object_info->object);
+    }
+
+    auto heap_properties_pointer = pHeapProperties->GetPointer();
+
+    auto desc_pointer = pDesc->GetPointer();
+
+    auto clear_value_pointer = pOptimizedClearValue->GetPointer();
+
+    // Create an equivalent but temporary dummy resource
+    // This allows us to further validate GFXR, since playback will now use a resource located at a different address
+    HRESULT         dummy_result   = E_FAIL;
+    ID3D12Resource* dummy_resource = nullptr;
+    if (options_.create_dummy_allocations)
+    {
+        dummy_result = replay_object->CreateCommittedResource3(heap_properties_pointer,
+                                                               HeapFlags,
+                                                               desc_pointer,
+                                                               InitialLayout,
+                                                               clear_value_pointer,
+                                                               protected_session,
+                                                               NumCastableFormats,
+                                                               pCastableFormats->GetPointer(),
+                                                               IID_PPV_ARGS(&dummy_resource));
+
+        if (!SUCCEEDED(dummy_result))
+        {
+            GFXRECON_LOG_WARNING("Failed to create dummy committed resource");
+        }
+    }
+
+    // Playback will use this resource
+    auto replay_result = replay_object->CreateCommittedResource3(heap_properties_pointer,
+                                                                 HeapFlags,
+                                                                 desc_pointer,
+                                                                 InitialLayout,
+                                                                 clear_value_pointer,
+                                                                 protected_session,
+                                                                 NumCastableFormats,
+                                                                 pCastableFormats->GetPointer(),
                                                                  *riid.decoded_value,
                                                                  resource->GetHandlePointer());
 
@@ -3083,6 +3158,47 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateReservedResource1(
                                                              protected_session,
                                                              *riid.decoded_value,
                                                              resource->GetHandlePointer());
+
+    if (SUCCEEDED(replay_result))
+    {
+        SetIsReservedResource(resource);
+    }
+
+    return replay_result;
+}
+
+HRESULT Dx12ReplayConsumerBase::OverrideCreateReservedResource2(
+    DxObjectInfo*                                      device_object_info,
+    HRESULT                                            original_result,
+    StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC>* desc,
+    D3D12_BARRIER_LAYOUT                               initial_layout,
+    StructPointerDecoder<Decoded_D3D12_CLEAR_VALUE>*   optimized_clear_value,
+    DxObjectInfo*                                      protected_session_object_info,
+    UINT32                                             num_castable_formats,
+    PointerDecoder<DXGI_FORMAT>*                       castable_formats,
+    Decoded_GUID                                       riid,
+    HandlePointerDecoder<void*>*                       resource)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    GFXRECON_ASSERT(device_object_info != nullptr);
+    GFXRECON_ASSERT(device_object_info->object != nullptr);
+
+    auto                            device10          = static_cast<ID3D12Device10*>(device_object_info->object);
+    ID3D12ProtectedResourceSession* protected_session = nullptr;
+    if (protected_session_object_info != nullptr)
+    {
+        protected_session = static_cast<ID3D12ProtectedResourceSession*>(protected_session_object_info->object);
+    }
+
+    HRESULT replay_result = device10->CreateReservedResource2(desc->GetPointer(),
+                                                              initial_layout,
+                                                              optimized_clear_value->GetPointer(),
+                                                              protected_session,
+                                                              num_castable_formats,
+                                                              castable_formats->GetPointer(),
+                                                              *riid.decoded_value,
+                                                              resource->GetHandlePointer());
 
     if (SUCCEEDED(replay_result))
     {

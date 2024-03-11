@@ -71,7 +71,7 @@ const char* const kAnnotationLabelReplayOptions = "replayopts";
 const char* const kOperationAnnotationGfxreconstructVersion = "gfxrecon-version";
 const char* const kOperationAnnotationVulkanVersion         = "vulkan-version";
 const char* const kOperationAnnotationTimestamp             = "timestamp";
-const char* const kOperationAnnotationCaptureOptions        = "capture-parameters";
+const char* const kOperationAnnotationCaptureParameters     = "capture-parameters";
 
 constexpr uint32_t MakeCompressedBlockType(uint32_t block_type)
 {

@@ -203,7 +203,7 @@ Page Guard Copy on Map | GFXRECON_PAGE_GUARD_COPY_ON_MAP | BOOL | When the `page
 Page Guard Separate Read Tracking | GFXRECON_PAGE_GUARD_SEPARATE_READ | BOOL | When the `page_guard` memory tracking mode is enabled, copies the content of pages accessed for read from mapped memory to shadow memory on each read. Can overwrite unprocessed shadow memory content when an application is reading from and writing to the same page. Default is: `true`
 Page Guard External Memory | GFXRECON_PAGE_GUARD_EXTERNAL_MEMORY | BOOL | When the `page_guard` memory tracking mode is enabled, use the VK_EXT_external_memory_host extension to eliminate the need for shadow memory allocations. For each memory allocation from a host visible memory type, the capture layer will create an allocation from system memory, which it can monitor for write access, and provide that allocation to vkAllocateMemory as external memory. Only available on Windows. Default is `false`
 Page Guard Persistent Memory | GFXRECON_PAGE_GUARD_PERSISTENT_MEMORY | BOOL | When the `page_guard` memory tracking mode is enabled, this option changes the way that the shadow memory used to detect modifications to mapped memory is allocated. The default behavior is to allocate and copy the mapped memory range on map and free the allocation on unmap. When this option is enabled, an allocation with a size equal to that of the object being mapped is made once on the first map and is not freed until the object is destroyed.  This option is intended to be used with applications that frequently map and unmap large memory ranges, to avoid frequent allocation and copy operations that can have a negative impact on performance.  This option is ignored when GFXRECON_PAGE_GUARD_EXTERNAL_MEMORY is enabled. Default is `false`
-Page Guard Align Buffer Sizes | GFXRECON_PAGE_GUARD_ALIGN_BUFFER_SIZES | BOOL | When the `page_guard` memory tracking mode is enabled, this option overrides the Vulkan API calls that report buffer memory properties to report that buffer sizes and alignments must be a multiple of the system page size.  This option is intended to be used with applications that perform CPU writes and GPU writes/copies to different buffers that are bound to the same page of mapped memory, which may result in data being lost when copying pages from the `page_guard` shadow allocation to the real allocation.  This data loss can result in visible corruption during capture.  Forcing buffer sizes and alignments to a multiple of the system page size prevents multiple buffers from being bound to the same page, avoiding data loss from simultaneous CPU writes to the shadow allocation and GPU writes to the real allocation for different buffers bound to the same page.  This option is only available for the Vulkan API.  Default is `false`
+Page Guard Align Buffer Sizes | GFXRECON_PAGE_GUARD_ALIGN_BUFFER_SIZES | BOOL | When the `page_guard` memory tracking mode is enabled, this option overrides the Vulkan API calls that report buffer memory properties to report that buffer sizes and alignments must be a multiple of the system page size.  This option is intended to be used with applications that perform CPU writes and GPU writes/copies to different buffers that are bound to the same page of mapped memory, which may result in data being lost when copying pages from the `page_guard` shadow allocation to the real allocation.  This data loss can result in visible corruption during capture.  Forcing buffer sizes and alignments to a multiple of the system page size prevents multiple buffers from being bound to the same page, avoiding data loss from simultaneous CPU writes to the shadow allocation and GPU writes to the real allocation for different buffers bound to the same page.  This option is only available for the Vulkan API.  Default is `true`
 Page Guard Unblock SIGSEGV | GFXRECON_PAGE_GUARD_UNBLOCK_SIGSEGV | BOOL | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this enviroment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`
 Page Guard Signal Handler Watcher | GFXRECON_PAGE_GUARD_SIGNAL_HANDLER_WATCHER | BOOL | When the `page_guard` memory tracking mode is enabled, setting this enviroment variable to `true` will spawn a thread which will will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`
 Page Guard Signal Handler Watcher Max Restores | GFXRECON_PAGE_GUARD_SIGNAL_HANDLER_WATCHER_MAX_RESTORES | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative will make the watcher thread run indefinitely. Default is `1`
@@ -414,7 +414,7 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--flush-measurement-range]
                         [--log-level <level>] [--log-file <file>] [--log-debugview]
                         [--api <api>] [--no-debug-popup] <file>
-                        [--colorspace-fallback]
+                        [--use-colorspace-fallback]
 
 Required arguments:
   <file>                Path to the capture file to replay.
@@ -457,6 +457,7 @@ Optional arguments:
                         Image file format to use for screenshot generation.
                         Available formats are:
                             bmp         Bitmap file format.  This is the default format.
+                            png         Portable Network Graphics file format.
   --screenshot-dir <dir>
                         Directory to write screenshots.  Default is the current
                         working directory.
@@ -556,14 +557,6 @@ Optional arguments:
   --use-ext-frame-boundary
                         Convert all offscreen frame boundaries to `VK_EXT_frame_boundary`
                         frame boundaries.
-  --offscreen-swapchain-frame-boundary
-                        Should only be used with offscreen swapchain.
-                        Activate the extension VK_EXT_frame_boundary (always supported if
-                        trimming, check for driver support otherwise) and insert command
-                        buffer submission with VkFrameBoundaryEXT where vkQueuePresentKHR
-                        was called in the original capture.
-                        This allows to preserve frames when capturing a replay that uses.
-                        offscreen swapchain.
   --save-pipeline-cache <cache-file>
                         If set, produces pipeline caches at replay time instead of using
                         the one saved at capture time and save those caches in <cache-file>.
@@ -576,10 +569,22 @@ Optional arguments:
                         when it encounters a pipeline created without cache. This option can
                         be used in coordination with `--save-pipeline-cache` and
                         `--load-pipeline-cache`.
-  --colorspace-fallback
+  --flush-inside-measurement-range
+                        If this is specified the replayer will flush and wait
+                        for all current GPU work to finish at the end of each
+                        frame inside the measurement range.
+  --use-colorspace-fallback
                         Swap the swapchain color space if unsupported by replay device.
-                        Check if color space is not supported by replay device and 
+                        Check if color space is not supported by replay device and
                         fallback to VK_COLOR_SPACE_SRGB_NONLINEAR_KHR.
+  --offscreen-swapchain-frame-boundary
+                        Should only be used with offscreen swapchain.
+                        Activates the extension VK_EXT_frame_boundary (always supported if
+                        trimming, checks for driver support otherwise) and inserts command
+                        buffer submission with VkFrameBoundaryEXT where vkQueuePresentKHR
+                        was called in the original capture.
+                        This allows preserving frames when capturing a replay that uses.
+                        offscreen swapchain.
 ```
 
 ### Key Controls

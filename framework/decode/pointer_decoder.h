@@ -113,6 +113,7 @@ class PointerDecoder : public PointerDecoderBase
 
     // clang-format off
     size_t DecodeInt8(const uint8_t* buffer, size_t buffer_size)         { return DecodeFrom<int8_t>(buffer, buffer_size); }
+    size_t DecodeInt16(const uint8_t* buffer, size_t buffer_size)        { return DecodeFrom<int16_t>(buffer, buffer_size); }
     size_t DecodeUInt16(const uint8_t* buffer, size_t buffer_size)       { return DecodeFrom<uint16_t>(buffer, buffer_size); }
     size_t DecodeInt32(const uint8_t* buffer, size_t buffer_size)        { return DecodeFrom<int32_t>(buffer, buffer_size); }
     size_t DecodeUInt32(const uint8_t* buffer, size_t buffer_size)       { return DecodeFrom<uint32_t>(buffer, buffer_size); }
@@ -244,7 +245,7 @@ class PointerDecoder<T*> : public PointerDecoderBase
 
     T** GetPointer() { return data_; }
 
-    const T** GetPointer() const { return data_; }
+    const T* const* GetPointer() const { return data_; }
 
     size_t GetInnerLength(size_t i) const
     {

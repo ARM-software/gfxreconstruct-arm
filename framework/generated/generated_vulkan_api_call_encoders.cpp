@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2023 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -114,8 +115,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyInstance(
         manager->EndDestroyApiCallCapture<InstanceWrapper>(instance);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<InstanceWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetInstanceTable(instance)->DestroyInstance(instance, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyInstance>::Dispatch(manager, instance, pAllocator);
@@ -469,8 +469,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDevice(
         manager->EndDestroyApiCallCapture<DeviceWrapper>(device);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeviceWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDevice(device, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDevice>::Dispatch(manager, device, pAllocator);
@@ -706,8 +705,7 @@ VKAPI_ATTR void VKAPI_CALL FreeMemory(
         manager->EndDestroyApiCallCapture<DeviceMemoryWrapper>(memory);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeviceMemoryWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->FreeMemory(device, memory, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkFreeMemory>::Dispatch(manager, device, memory, pAllocator);
@@ -1273,8 +1271,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyFence(
         manager->EndDestroyApiCallCapture<FenceWrapper>(fence);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<FenceWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyFence(device, fence, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyFence>::Dispatch(manager, device, fence, pAllocator);
@@ -1481,8 +1478,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySemaphore(
         manager->EndDestroyApiCallCapture<SemaphoreWrapper>(semaphore);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SemaphoreWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroySemaphore(device, semaphore, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySemaphore>::Dispatch(manager, device, semaphore, pAllocator);
@@ -1573,8 +1569,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyEvent(
         manager->EndDestroyApiCallCapture<EventWrapper>(event);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<EventWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyEvent(device, event, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyEvent>::Dispatch(manager, device, event, pAllocator);
@@ -1773,8 +1768,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyQueryPool(
         manager->EndDestroyApiCallCapture<QueryPoolWrapper>(queryPool);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<QueryPoolWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyQueryPool(device, queryPool, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyQueryPool>::Dispatch(manager, device, queryPool, pAllocator);
@@ -1914,8 +1908,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyBuffer(
         manager->EndDestroyApiCallCapture<BufferWrapper>(buffer);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<BufferWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyBuffer(device, buffer, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyBuffer>::Dispatch(manager, device, buffer, pAllocator);
@@ -2009,8 +2002,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyBufferView(
         manager->EndDestroyApiCallCapture<BufferViewWrapper>(bufferView);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<BufferViewWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyBufferView(device, bufferView, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyBufferView>::Dispatch(manager, device, bufferView, pAllocator);
@@ -2096,8 +2088,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyImage(
         manager->EndDestroyApiCallCapture<ImageWrapper>(image);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ImageWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyImage(device, image, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyImage>::Dispatch(manager, device, image, pAllocator);
@@ -2228,8 +2219,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyImageView(
         manager->EndDestroyApiCallCapture<ImageViewWrapper>(imageView);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ImageViewWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyImageView(device, imageView, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyImageView>::Dispatch(manager, device, imageView, pAllocator);
@@ -2323,8 +2313,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyShaderModule(
         manager->EndDestroyApiCallCapture<ShaderModuleWrapper>(shaderModule);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ShaderModuleWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyShaderModule(device, shaderModule, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyShaderModule>::Dispatch(manager, device, shaderModule, pAllocator);
@@ -2415,8 +2404,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyPipelineCache(
         manager->EndDestroyApiCallCapture<PipelineCacheWrapper>(pipelineCache);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PipelineCacheWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyPipelineCache(device, pipelineCache, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyPipelineCache>::Dispatch(manager, device, pipelineCache, pAllocator);
@@ -2540,8 +2528,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyPipeline(
         manager->EndDestroyApiCallCapture<PipelineWrapper>(pipeline);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PipelineWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyPipeline(device, pipeline, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyPipeline>::Dispatch(manager, device, pipeline, pAllocator);
@@ -2635,8 +2622,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyPipelineLayout(
         manager->EndDestroyApiCallCapture<PipelineLayoutWrapper>(pipelineLayout);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PipelineLayoutWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyPipelineLayout(device, pipelineLayout, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyPipelineLayout>::Dispatch(manager, device, pipelineLayout, pAllocator);
@@ -2730,8 +2716,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySampler(
         manager->EndDestroyApiCallCapture<SamplerWrapper>(sampler);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroySampler(device, sampler, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySampler>::Dispatch(manager, device, sampler, pAllocator);
@@ -2825,8 +2810,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDescriptorSetLayout(
         manager->EndDestroyApiCallCapture<DescriptorSetLayoutWrapper>(descriptorSetLayout);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorSetLayoutWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDescriptorSetLayout(device, descriptorSetLayout, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDescriptorSetLayout>::Dispatch(manager, device, descriptorSetLayout, pAllocator);
@@ -2917,8 +2901,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDescriptorPool(
         manager->EndDestroyApiCallCapture<DescriptorPoolWrapper>(descriptorPool);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorPoolWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDescriptorPool(device, descriptorPool, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDescriptorPool>::Dispatch(manager, device, descriptorPool, pAllocator);
@@ -2947,6 +2930,7 @@ VKAPI_ATTR VkResult VKAPI_CALL ResetDescriptorPool(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkResetDescriptorPool>::Dispatch(manager, device, descriptorPool, flags);
 
+    ScopedDestroyLock exclusive_scoped_lock;
     VkResult result = GetDeviceTable(device)->ResetDescriptorPool(device, descriptorPool, flags);
 
     auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkResetDescriptorPool);
@@ -3040,8 +3024,7 @@ VKAPI_ATTR VkResult VKAPI_CALL FreeDescriptorSets(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkFreeDescriptorSets>::Dispatch(manager, device, descriptorPool, descriptorSetCount, pDescriptorSets);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorSetWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     VkResult result = GetDeviceTable(device)->FreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
 
     auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkFreeDescriptorSets);
@@ -3191,8 +3174,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyFramebuffer(
         manager->EndDestroyApiCallCapture<FramebufferWrapper>(framebuffer);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<FramebufferWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyFramebuffer(device, framebuffer, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyFramebuffer>::Dispatch(manager, device, framebuffer, pAllocator);
@@ -3283,8 +3265,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyRenderPass(
         manager->EndDestroyApiCallCapture<RenderPassWrapper>(renderPass);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<RenderPassWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyRenderPass(device, renderPass, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyRenderPass>::Dispatch(manager, device, renderPass, pAllocator);
@@ -3410,8 +3391,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyCommandPool(
         manager->EndDestroyApiCallCapture<CommandPoolWrapper>(commandPool);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<CommandPoolWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyCommandPool(device, commandPool, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyCommandPool>::Dispatch(manager, device, commandPool, pAllocator);
@@ -3543,8 +3523,7 @@ VKAPI_ATTR void VKAPI_CALL FreeCommandBuffers(
         manager->EndDestroyApiCallCapture<CommandBufferWrapper>(commandBufferCount, pCommandBuffers);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<CommandBufferWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->FreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkFreeCommandBuffers>::Dispatch(manager, device, commandPool, commandBufferCount, pCommandBuffers);
@@ -6129,8 +6108,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySamplerYcbcrConversion(
         manager->EndDestroyApiCallCapture<SamplerYcbcrConversionWrapper>(ycbcrConversion);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerYcbcrConversionWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroySamplerYcbcrConversion(device, ycbcrConversion, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySamplerYcbcrConversion>::Dispatch(manager, device, ycbcrConversion, pAllocator);
@@ -6224,8 +6202,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDescriptorUpdateTemplate(
         manager->EndDestroyApiCallCapture<DescriptorUpdateTemplateWrapper>(descriptorUpdateTemplate);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorUpdateTemplateWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDescriptorUpdateTemplate(device, descriptorUpdateTemplate, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDescriptorUpdateTemplate>::Dispatch(manager, device, descriptorUpdateTemplate, pAllocator);
@@ -7026,8 +7003,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyPrivateDataSlot(
         manager->EndDestroyApiCallCapture<PrivateDataSlotWrapper>(privateDataSlot);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PrivateDataSlotWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyPrivateDataSlot(device, privateDataSlot, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyPrivateDataSlot>::Dispatch(manager, device, privateDataSlot, pAllocator);
@@ -8288,8 +8264,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySurfaceKHR(
         manager->EndDestroyApiCallCapture<SurfaceKHRWrapper>(surface);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SurfaceKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetInstanceTable(instance)->DestroySurfaceKHR(instance, surface, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySurfaceKHR>::Dispatch(manager, instance, surface, pAllocator);
@@ -8565,8 +8540,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySwapchainKHR(
         manager->EndDestroyApiCallCapture<SwapchainKHRWrapper>(swapchain);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SwapchainKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroySwapchainKHR(device, swapchain, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySwapchainKHR>::Dispatch(manager, device, swapchain, pAllocator);
@@ -9890,8 +9864,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyVideoSessionKHR(
         manager->EndDestroyApiCallCapture<VideoSessionKHRWrapper>(videoSession);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<VideoSessionKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyVideoSessionKHR(device, videoSession, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyVideoSessionKHR>::Dispatch(manager, device, videoSession, pAllocator);
@@ -10112,8 +10085,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyVideoSessionParametersKHR(
         manager->EndDestroyApiCallCapture<VideoSessionParametersKHRWrapper>(videoSessionParameters);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<VideoSessionParametersKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyVideoSessionParametersKHR(device, videoSessionParameters, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyVideoSessionParametersKHR>::Dispatch(manager, device, videoSessionParameters, pAllocator);
@@ -11333,8 +11305,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDescriptorUpdateTemplateKHR(
         manager->EndDestroyApiCallCapture<DescriptorUpdateTemplateWrapper>(descriptorUpdateTemplate);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DescriptorUpdateTemplateWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDescriptorUpdateTemplateKHR(device, descriptorUpdateTemplate, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDescriptorUpdateTemplateKHR>::Dispatch(manager, device, descriptorUpdateTemplate, pAllocator);
@@ -12385,8 +12356,7 @@ VKAPI_ATTR void VKAPI_CALL DestroySamplerYcbcrConversionKHR(
         manager->EndDestroyApiCallCapture<SamplerYcbcrConversionWrapper>(ycbcrConversion);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<SamplerYcbcrConversionWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroySamplerYcbcrConversionKHR(device, ycbcrConversion, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroySamplerYcbcrConversionKHR>::Dispatch(manager, device, ycbcrConversion, pAllocator);
@@ -12803,6 +12773,72 @@ VKAPI_ATTR void VKAPI_CALL CmdSetFragmentShadingRateKHR(
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetFragmentShadingRateKHR>::Dispatch(manager, commandBuffer, pFragmentSize, combinerOps);
 }
 
+VKAPI_ATTR void VKAPI_CALL CmdSetRenderingAttachmentLocationsKHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderingAttachmentLocationInfoKHR* pLocationInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocationsKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocationsKHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pLocationInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
+    }
+
+    GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(commandBuffer, pLocationInfo);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocationsKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndicesKHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pLocationInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
+    }
+
+    GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pLocationInfo);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+}
+
 VKAPI_ATTR VkResult VKAPI_CALL WaitForPresentKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
@@ -13041,8 +13077,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDeferredOperationKHR(
         manager->EndDestroyApiCallCapture<DeferredOperationKHRWrapper>(operation);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DeferredOperationKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyDeferredOperationKHR(device, operation, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDeferredOperationKHR>::Dispatch(manager, device, operation, pAllocator);
@@ -13106,7 +13141,7 @@ VKAPI_ATTR VkResult VKAPI_CALL GetDeferredOperationResultKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetDeferredOperationResultKHR>::Dispatch(manager, device, operation);
 
-    VkResult result = GetDeviceTable(device)->GetDeferredOperationResultKHR(device, operation);
+    VkResult result = manager->OverrideGetDeferredOperationResultKHR(device, operation);
 
     auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetDeferredOperationResultKHR);
     if (encoder)
@@ -13142,7 +13177,7 @@ VKAPI_ATTR VkResult VKAPI_CALL DeferredOperationJoinKHR(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkDeferredOperationJoinKHR>::Dispatch(manager, device, operation);
 
-    VkResult result = GetDeviceTable(device)->DeferredOperationJoinKHR(device, operation);
+    VkResult result = manager->OverrideDeferredOperationJoinKHR(device, operation);
 
     auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkDeferredOperationJoinKHR);
     if (encoder)
@@ -14380,6 +14415,349 @@ VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCooperativeMatrixPropertiesKHR(
     return result;
 }
 
+VKAPI_ATTR void VKAPI_CALL CmdSetLineStippleKHR(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    lineStippleFactor,
+    uint16_t                                    lineStipplePattern)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetLineStippleKHR>::Dispatch(manager, commandBuffer, lineStippleFactor, lineStipplePattern);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetLineStippleKHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        encoder->EncodeUInt32Value(lineStippleFactor);
+        encoder->EncodeUInt16Value(lineStipplePattern);
+        manager->EndCommandApiCallCapture(commandBuffer);
+    }
+
+    GetDeviceTable(commandBuffer)->CmdSetLineStippleKHR(commandBuffer, lineStippleFactor, lineStipplePattern);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetLineStippleKHR>::Dispatch(manager, commandBuffer, lineStippleFactor, lineStipplePattern);
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCalibrateableTimeDomainsKHR(
+    VkPhysicalDevice                            physicalDevice,
+    uint32_t*                                   pTimeDomainCount,
+    VkTimeDomainKHR*                            pTimeDomains)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    bool omit_output_data = false;
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR>::Dispatch(manager, physicalDevice, pTimeDomainCount, pTimeDomains);
+
+    VkResult result = GetInstanceTable(physicalDevice)->GetPhysicalDeviceCalibrateableTimeDomainsKHR(physicalDevice, pTimeDomainCount, pTimeDomains);
+    if (result < 0)
+    {
+        omit_output_data = true;
+    }
+
+    auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<PhysicalDeviceWrapper>(physicalDevice);
+        encoder->EncodeUInt32Ptr(pTimeDomainCount, omit_output_data);
+        encoder->EncodeEnumArray(pTimeDomains, (pTimeDomainCount != nullptr) ? (*pTimeDomainCount) : 0, omit_output_data);
+        encoder->EncodeEnumValue(result);
+        manager->EndApiCallCapture();
+    }
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR>::Dispatch(manager, result, physicalDevice, pTimeDomainCount, pTimeDomains);
+
+    return result;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL GetCalibratedTimestampsKHR(
+    VkDevice                                    device,
+    uint32_t                                    timestampCount,
+    const VkCalibratedTimestampInfoKHR*         pTimestampInfos,
+    uint64_t*                                   pTimestamps,
+    uint64_t*                                   pMaxDeviation)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    bool omit_output_data = false;
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetCalibratedTimestampsKHR>::Dispatch(manager, device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+
+    VkResult result = GetDeviceTable(device)->GetCalibratedTimestampsKHR(device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+    if (result < 0)
+    {
+        omit_output_data = true;
+    }
+
+    auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetCalibratedTimestampsKHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<DeviceWrapper>(device);
+        encoder->EncodeUInt32Value(timestampCount);
+        EncodeStructArray(encoder, pTimestampInfos, timestampCount);
+        encoder->EncodeUInt64Array(pTimestamps, timestampCount, omit_output_data);
+        encoder->EncodeUInt64Ptr(pMaxDeviation, omit_output_data);
+        encoder->EncodeEnumValue(result);
+        manager->EndApiCallCapture();
+    }
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetCalibratedTimestampsKHR>::Dispatch(manager, result, device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+
+    return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdBindDescriptorSets2KHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkBindDescriptorSetsInfoKHR*          pBindDescriptorSetsInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdBindDescriptorSets2KHR>::Dispatch(manager, commandBuffer, pBindDescriptorSetsInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdBindDescriptorSets2KHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pBindDescriptorSetsInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdBindDescriptorSets2KHRHandles, pBindDescriptorSetsInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkBindDescriptorSetsInfoKHR* pBindDescriptorSetsInfo_unwrapped = UnwrapStructPtrHandles(pBindDescriptorSetsInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdBindDescriptorSets2KHR(commandBuffer, pBindDescriptorSetsInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBindDescriptorSets2KHR>::Dispatch(manager, commandBuffer, pBindDescriptorSetsInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdPushConstants2KHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkPushConstantsInfoKHR*               pPushConstantsInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushConstants2KHR>::Dispatch(manager, commandBuffer, pPushConstantsInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdPushConstants2KHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pPushConstantsInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdPushConstants2KHRHandles, pPushConstantsInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkPushConstantsInfoKHR* pPushConstantsInfo_unwrapped = UnwrapStructPtrHandles(pPushConstantsInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdPushConstants2KHR(commandBuffer, pPushConstantsInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushConstants2KHR>::Dispatch(manager, commandBuffer, pPushConstantsInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdPushDescriptorSet2KHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkPushDescriptorSetInfoKHR*           pPushDescriptorSetInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSet2KHR>::Dispatch(manager, commandBuffer, pPushDescriptorSetInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdPushDescriptorSet2KHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pPushDescriptorSetInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdPushDescriptorSet2KHRHandles, pPushDescriptorSetInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkPushDescriptorSetInfoKHR* pPushDescriptorSetInfo_unwrapped = UnwrapStructPtrHandles(pPushDescriptorSetInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdPushDescriptorSet2KHR(commandBuffer, pPushDescriptorSetInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSet2KHR>::Dispatch(manager, commandBuffer, pPushDescriptorSetInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdPushDescriptorSetWithTemplate2KHR(
+    VkCommandBuffer                             commandBuffer,
+    const VkPushDescriptorSetWithTemplateInfoKHR* pPushDescriptorSetWithTemplateInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSetWithTemplate2KHR>::Dispatch(manager, commandBuffer, pPushDescriptorSetWithTemplateInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdPushDescriptorSetWithTemplate2KHR);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pPushDescriptorSetWithTemplateInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdPushDescriptorSetWithTemplate2KHRHandles, pPushDescriptorSetWithTemplateInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkPushDescriptorSetWithTemplateInfoKHR* pPushDescriptorSetWithTemplateInfo_unwrapped = UnwrapStructPtrHandles(pPushDescriptorSetWithTemplateInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdPushDescriptorSetWithTemplate2KHR(commandBuffer, pPushDescriptorSetWithTemplateInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSetWithTemplate2KHR>::Dispatch(manager, commandBuffer, pPushDescriptorSetWithTemplateInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdSetDescriptorBufferOffsets2EXT(
+    VkCommandBuffer                             commandBuffer,
+    const VkSetDescriptorBufferOffsetsInfoEXT*  pSetDescriptorBufferOffsetsInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetDescriptorBufferOffsets2EXT>::Dispatch(manager, commandBuffer, pSetDescriptorBufferOffsetsInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetDescriptorBufferOffsets2EXT);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pSetDescriptorBufferOffsetsInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetDescriptorBufferOffsets2EXTHandles, pSetDescriptorBufferOffsetsInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkSetDescriptorBufferOffsetsInfoEXT* pSetDescriptorBufferOffsetsInfo_unwrapped = UnwrapStructPtrHandles(pSetDescriptorBufferOffsetsInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdSetDescriptorBufferOffsets2EXT(commandBuffer, pSetDescriptorBufferOffsetsInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetDescriptorBufferOffsets2EXT>::Dispatch(manager, commandBuffer, pSetDescriptorBufferOffsetsInfo);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdBindDescriptorBufferEmbeddedSamplers2EXT(
+    VkCommandBuffer                             commandBuffer,
+    const VkBindDescriptorBufferEmbeddedSamplersInfoEXT* pBindDescriptorBufferEmbeddedSamplersInfo)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT>::Dispatch(manager, commandBuffer, pBindDescriptorBufferEmbeddedSamplersInfo);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        EncodeStructPtr(encoder, pBindDescriptorBufferEmbeddedSamplersInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdBindDescriptorBufferEmbeddedSamplers2EXTHandles, pBindDescriptorBufferEmbeddedSamplersInfo);
+    }
+
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkBindDescriptorBufferEmbeddedSamplersInfoEXT* pBindDescriptorBufferEmbeddedSamplersInfo_unwrapped = UnwrapStructPtrHandles(pBindDescriptorBufferEmbeddedSamplersInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdBindDescriptorBufferEmbeddedSamplers2EXT(commandBuffer, pBindDescriptorBufferEmbeddedSamplersInfo_unwrapped);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBindDescriptorBufferEmbeddedSamplers2EXT>::Dispatch(manager, commandBuffer, pBindDescriptorBufferEmbeddedSamplersInfo);
+}
+
 VKAPI_ATTR void VKAPI_CALL FrameBoundaryANDROID(
     VkDevice                                    device,
     VkSemaphore                                 semaphore,
@@ -14498,8 +14876,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDebugReportCallbackEXT(
         manager->EndDestroyApiCallCapture<DebugReportCallbackEXTWrapper>(callback);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DebugReportCallbackEXTWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetInstanceTable(instance)->DestroyDebugReportCallbackEXT(instance, callback, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDebugReportCallbackEXT>::Dispatch(manager, instance, callback, pAllocator);
@@ -16531,9 +16908,8 @@ VKAPI_ATTR void VKAPI_CALL DestroyDebugUtilsMessengerEXT(
         manager->EndDestroyApiCallCapture<DebugUtilsMessengerEXTWrapper>(messenger);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<DebugUtilsMessengerEXTWrapper>());
-    manager->OverrideDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    ScopedDestroyLock exclusive_scoped_lock;
+    GetInstanceTable(instance)->DestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDebugUtilsMessengerEXT>::Dispatch(manager, instance, messenger, pAllocator);
 
@@ -16863,8 +17239,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyValidationCacheEXT(
         manager->EndDestroyApiCallCapture<ValidationCacheEXTWrapper>(validationCache);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ValidationCacheEXTWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyValidationCacheEXT(device, validationCache, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyValidationCacheEXT>::Dispatch(manager, device, validationCache, pAllocator);
@@ -17153,8 +17528,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyAccelerationStructureNV(
         manager->EndDestroyApiCallCapture<AccelerationStructureNVWrapper>(accelerationStructure);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<AccelerationStructureNVWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyAccelerationStructureNV(device, accelerationStructure, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyAccelerationStructureNV>::Dispatch(manager, device, accelerationStructure, pAllocator);
@@ -17700,7 +18074,7 @@ VKAPI_ATTR void VKAPI_CALL CmdWriteBufferMarkerAMD(
 VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCalibrateableTimeDomainsEXT(
     VkPhysicalDevice                            physicalDevice,
     uint32_t*                                   pTimeDomainCount,
-    VkTimeDomainEXT*                            pTimeDomains)
+    VkTimeDomainKHR*                            pTimeDomains)
 {
     VulkanCaptureManager* manager = VulkanCaptureManager::Get();
     GFXRECON_ASSERT(manager != nullptr);
@@ -17744,7 +18118,7 @@ VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCalibrateableTimeDomainsEXT(
 VKAPI_ATTR VkResult VKAPI_CALL GetCalibratedTimestampsEXT(
     VkDevice                                    device,
     uint32_t                                    timestampCount,
-    const VkCalibratedTimestampInfoEXT*         pTimestampInfos,
+    const VkCalibratedTimestampInfoKHR*         pTimestampInfos,
     uint64_t*                                   pTimestamps,
     uint64_t*                                   pMaxDeviation)
 {
@@ -18292,8 +18666,7 @@ VKAPI_ATTR VkResult VKAPI_CALL ReleasePerformanceConfigurationINTEL(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkReleasePerformanceConfigurationINTEL>::Dispatch(manager, device, configuration);
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PerformanceConfigurationINTELWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     VkResult result = GetDeviceTable(device)->ReleasePerformanceConfigurationINTEL(device, configuration);
 
     auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkReleasePerformanceConfigurationINTEL);
@@ -19884,8 +20257,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyIndirectCommandsLayoutNV(
         manager->EndDestroyApiCallCapture<IndirectCommandsLayoutNVWrapper>(indirectCommandsLayout);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<IndirectCommandsLayoutNVWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyIndirectCommandsLayoutNV(device, indirectCommandsLayout, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyIndirectCommandsLayoutNV>::Dispatch(manager, device, indirectCommandsLayout, pAllocator);
@@ -20098,8 +20470,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyPrivateDataSlotEXT(
         manager->EndDestroyApiCallCapture<PrivateDataSlotWrapper>(privateDataSlot);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<PrivateDataSlotWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyPrivateDataSlotEXT(device, privateDataSlot, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyPrivateDataSlotEXT>::Dispatch(manager, device, privateDataSlot, pAllocator);
@@ -21204,8 +21575,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyMicromapEXT(
         manager->EndDestroyApiCallCapture<MicromapEXTWrapper>(micromap);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<MicromapEXTWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyMicromapEXT(device, micromap, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyMicromapEXT>::Dispatch(manager, device, micromap, pAllocator);
@@ -21985,39 +22355,6 @@ VKAPI_ATTR VkDeviceAddress VKAPI_CALL GetPipelineIndirectDeviceAddressNV(
     return result;
 }
 
-VKAPI_ATTR void VKAPI_CALL CmdSetTessellationDomainOriginEXT(
-    VkCommandBuffer                             commandBuffer,
-    VkTessellationDomainOrigin                  domainOrigin)
-{
-    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
-    GFXRECON_ASSERT(manager != nullptr);
-    auto force_command_serialization = manager->GetForceCommandSerialization();
-    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
-    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
-    if (force_command_serialization)
-    {
-        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
-    }
-    else
-    {
-        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
-    }
-
-    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT>::Dispatch(manager, commandBuffer, domainOrigin);
-
-    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT);
-    if (encoder)
-    {
-        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
-        encoder->EncodeEnumValue(domainOrigin);
-        manager->EndCommandApiCallCapture(commandBuffer);
-    }
-
-    GetDeviceTable(commandBuffer)->CmdSetTessellationDomainOriginEXT(commandBuffer, domainOrigin);
-
-    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT>::Dispatch(manager, commandBuffer, domainOrigin);
-}
-
 VKAPI_ATTR void VKAPI_CALL CmdSetDepthClampEnableEXT(
     VkCommandBuffer                             commandBuffer,
     VkBool32                                    depthClampEnable)
@@ -22360,6 +22697,39 @@ VKAPI_ATTR void VKAPI_CALL CmdSetColorWriteMaskEXT(
     GetDeviceTable(commandBuffer)->CmdSetColorWriteMaskEXT(commandBuffer, firstAttachment, attachmentCount, pColorWriteMasks);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetColorWriteMaskEXT>::Dispatch(manager, commandBuffer, firstAttachment, attachmentCount, pColorWriteMasks);
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdSetTessellationDomainOriginEXT(
+    VkCommandBuffer                             commandBuffer,
+    VkTessellationDomainOrigin                  domainOrigin)
+{
+    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
+    GFXRECON_ASSERT(manager != nullptr);
+    auto force_command_serialization = manager->GetForceCommandSerialization();
+    std::shared_lock<CaptureManager::ApiCallMutexT> shared_api_call_lock;
+    std::unique_lock<CaptureManager::ApiCallMutexT> exclusive_api_call_lock;
+    if (force_command_serialization)
+    {
+        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
+    }
+    else
+    {
+        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
+    }
+
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT>::Dispatch(manager, commandBuffer, domainOrigin);
+
+    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT);
+    if (encoder)
+    {
+        encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
+        encoder->EncodeEnumValue(domainOrigin);
+        manager->EndCommandApiCallCapture(commandBuffer);
+    }
+
+    GetDeviceTable(commandBuffer)->CmdSetTessellationDomainOriginEXT(commandBuffer, domainOrigin);
+
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetTessellationDomainOriginEXT>::Dispatch(manager, commandBuffer, domainOrigin);
 }
 
 VKAPI_ATTR void VKAPI_CALL CmdSetRasterizationStreamEXT(
@@ -23234,8 +23604,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyOpticalFlowSessionNV(
         manager->EndDestroyApiCallCapture<OpticalFlowSessionNVWrapper>(session);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<OpticalFlowSessionNVWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyOpticalFlowSessionNV(device, session, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyOpticalFlowSessionNV>::Dispatch(manager, device, session, pAllocator);
@@ -23408,8 +23777,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyShaderEXT(
         manager->EndDestroyApiCallCapture<ShaderEXTWrapper>(shader);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<ShaderEXTWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyShaderEXT(device, shader, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyShaderEXT>::Dispatch(manager, device, shader, pAllocator);
@@ -23704,8 +24072,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyAccelerationStructureKHR(
         manager->EndDestroyApiCallCapture<AccelerationStructureKHRWrapper>(accelerationStructure);
     }
 
-
-    std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<AccelerationStructureKHRWrapper>());
+    ScopedDestroyLock exclusive_scoped_lock;
     GetDeviceTable(device)->DestroyAccelerationStructureKHR(device, accelerationStructure, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyAccelerationStructureKHR>::Dispatch(manager, device, accelerationStructure, pAllocator);

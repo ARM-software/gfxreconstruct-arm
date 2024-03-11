@@ -477,6 +477,19 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                     if (!resource_util_)
                     {
                         CreateResourceUtil(GetWrapper<DeviceWrapper>(device_handle));
+                        const VkDeviceAddress address = infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
+                        const uint32_t        primitive_count = pp_buildRange_infos[i]->primitiveCount;
+                        // According to spec both address and primitiveCount can be 0.
+                        // Nothing to handle in these cases.
+                        if (address && primitive_count)
+                        {
+                            const CommandBufferWrapper::tlas_build_info tlas_info = {
+                                address, primitive_count, pp_buildRange_infos[i]->primitiveOffset
+                            };
+
+                            buf_wrapper->tlas_build_info_map.emplace_back(
+                                std::make_pair(tlas_wrapper, std::move(tlas_info)));
+                        }
                     }
                     resource_util_->ReadFromBufferResource((*instance_buffer_wrapper)->handle,
                                                            (*instance_buffer_wrapper)->created_size,
@@ -539,7 +552,6 @@ void VulkanStateTracker::TrackMappedMemory(VkDevice         device,
     assert((device != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
 
     auto wrapper           = GetWrapper<DeviceMemoryWrapper>(memory);
-    wrapper->map_device    = GetWrapper<DeviceWrapper>(device);
     wrapper->mapped_data   = mapped_data;
     wrapper->mapped_offset = mapped_offset;
     wrapper->mapped_size   = mapped_size;
@@ -1643,6 +1655,10 @@ void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               comm
 
         for (const auto& tlas_build_info : cmd_buf_wrapper->tlas_build_info_map)
         {
+            // Sanity checks. Build infos with one of these 0 should not be inserted in the map
+            assert(tlas_build_info.second.address);
+            assert(tlas_build_info.second.blas_count);
+
             // Find to which device memory this address belongs
             const VkDeviceAddress      address         = tlas_build_info.second.address;
             const DeviceMemoryWrapper* dev_mem_wrapper = nullptr;
@@ -1679,6 +1695,8 @@ void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               comm
             const VkAccelerationStructureInstanceKHR* instances = nullptr;
             const util::PageGuardManager*             manager   = util::PageGuardManager::Get();
 
+            // Check with page guard manager first. The memory might be already and the
+            // PageGuardManager can provide the pointer
             if (manager)
             {
                 const void* mapped_memory = manager->GetMappedMemory(dev_mem_wrapper->handle_id);
@@ -1690,14 +1708,12 @@ void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               comm
             }
 
             const uint32_t blas_count = tlas_build_info.second.blas_count;
-            assert(blas_count);
-
             bool needs_unmapping = false;
             if (!instances)
             {
                 // If PageGuardManager is not used or if it couldn't find the memory id it means that
                 // we need to map the memory.
-                VkDevice           device        = dev_mem_wrapper->map_device->handle;
+                VkDevice           device        = dev_mem_wrapper->parent_device->handle;
                 const DeviceTable* device_table  = GetDeviceTable(device);
                 const VkDeviceSize map_size      = sizeof(VkAccelerationStructureInstanceKHR) * blas_count;
                 void*              mapped_memory = nullptr;
@@ -1732,7 +1748,7 @@ void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               comm
                 // If we had to map the device memory unmap it now
                 if (needs_unmapping)
                 {
-                    VkDevice           device       = dev_mem_wrapper->map_device->handle;
+                    VkDevice           device       = dev_mem_wrapper->parent_device->handle;
                     const DeviceTable* device_table = GetDeviceTable(device);
                     device_table->UnmapMemory(device, dev_mem_wrapper->handle);
                 }

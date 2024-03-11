@@ -227,19 +227,20 @@ void GatherApiAgnosticStats(ApiAgnosticStats&                api_agnostic_stats,
 
 std::string GetJsonValue(const nlohmann::json& json_obj, const std::string& key)
 {
-    std::string out = "";
-
-    if (json_obj.contains(key))
+    std::string out                    = "";
+    auto        search_result_iterator = json_obj.find(key);
+    if (search_result_iterator != json_obj.end())
     {
-        try
+        const nlohmann::json& value = *search_result_iterator;
+        if (value.is_object())
         {
-            out = json_obj.at(key).get<std::string>();
-        }
-        catch (const nlohmann::json::type_error& te)
-        {
-            out += "\n\t" + json_obj.at(key).dump(kDefaultIndent);
+            out += "\n\t" + value.dump(kDefaultIndent);
             out.pop_back();
             out += "\t}";
+        }
+        else
+        {
+            out = value;
         }
     }
 
@@ -455,7 +456,7 @@ void PrintVulkanStats(const gfxrecon::decode::VulkanStatsConsumer& vulkan_stats_
             { "Vulkan version", gfxrecon::format::kOperationAnnotationVulkanVersion },
             { "Capture timestamp", gfxrecon::format::kOperationAnnotationTimestamp },
             { "Default replay options", gfxrecon::format::kAnnotationLabelReplayOptions },
-            { "Non-default capture options", gfxrecon::format::kOperationAnnotationCaptureOptions }
+            { "Non-default capture options", gfxrecon::format::kOperationAnnotationCaptureParameters }
         };
 
         GFXRECON_WRITE_CONSOLE("");

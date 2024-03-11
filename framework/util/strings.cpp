@@ -57,7 +57,6 @@ std::vector<std::string> SplitString(const std::string_view compound, const char
         else
         {
             // Split string on separator.
-            bool               invalid = false;
             std::istringstream range_input;
             range_input.str(std::string{ compound });
 
@@ -77,6 +76,12 @@ void RemoveWhitespace(std::string& str)
 {
     const auto new_end{ std::remove_if(str.begin(), str.end(), [](const unsigned char c) { return std::isspace(c); }) };
     str.erase(new_end, str.end());
+}
+
+std::string_view ViewOfCharArray(const char* array, const size_t capacity)
+{
+    const char* zero_end = std::find(array, array + capacity, 0);
+    return std::string_view(array, zero_end - array);
 }
 
 GFXRECON_END_NAMESPACE(strings)

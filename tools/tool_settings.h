@@ -103,13 +103,14 @@ const char kMeasurementRangeArgument[]           = "--measurement-frame-range";
 const char kMeasurementFileArgument[]            = "--measurement-file";
 const char kQuitAfterMeasurementRangeOption[]    = "--quit-after-measurement-range";
 const char kFlushMeasurementRangeOption[]        = "--flush-measurement-range";
+const char kFlushInsideMeasurementRangeOption[]  = "--flush-inside-measurement-range";
 const char kSwapchainOption[]                    = "--swapchain";
 const char kEnableUseCapturedSwapchainIndices[] =
     "--use-captured-swapchain-indices"; // The same: util::SwapchainOption::kCaptured
 const char kVirtualSwapchainSkipBlit[]        = "--vssb";
 const char kUseExtFrameBoundaryOption[]       = "--use-ext-frame-boundary";
 const char kOffscreenSwapchainFrameBoundary[] = "--offscreen-swapchain-frame-boundary";
-const char kColorspaceFallback[]              = "--colorspace-fallback";
+const char kColorspaceFallback[]              = "--use-colorspace-fallback";
 const char kFormatArgument[]                  = "--format";
 const char kIncludeBinariesOption[]           = "--include-binaries";
 const char kExpandFlagsOption[]               = "--expand-flags";
@@ -123,7 +124,6 @@ const char kDisableSubpassFusionOption[]      = "--dsf";
 const char kSavePipelineCacheArgument[]       = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]       = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]    = "--add-new-pipeline-caches";
-const char kFlushInsideMeasurementRangeOption[] = "--flush-inside-measurement-range";
 #if defined(WIN32)
 const char kApiFamilyOption[]             = "--api";
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
@@ -138,6 +138,7 @@ enum class WsiPlatform
     kXlib,
     kXcb,
     kWayland,
+    kMetal,
     kDisplay,
     kHeadless
 };
@@ -147,6 +148,7 @@ const char kWsiPlatformWin32[]    = "win32";
 const char kWsiPlatformXlib[]     = "xlib";
 const char kWsiPlatformXcb[]      = "xcb";
 const char kWsiPlatformWayland[]  = "wayland";
+const char kWsiPlatformMetal[]    = "metal";
 const char kWsiPlatformDisplay[]  = "display";
 const char kWsiPlatformHeadless[] = "headless";
 
@@ -334,6 +336,14 @@ static WsiPlatform GetWsiPlatform(const gfxrecon::util::ArgumentParser& arg_pars
             GFXRECON_LOG_WARNING("Ignoring wsi option \"%s\", which is not enabled on this system", value.c_str());
 #endif
         }
+        else if (gfxrecon::util::platform::StringCompareNoCase(kWsiPlatformMetal, value.c_str()) == 0)
+        {
+#if defined(VK_USE_PLATFORM_METAL_EXT)
+            wsi_platform = WsiPlatform::kMetal;
+#else
+            GFXRECON_LOG_WARNING("Ignoring wsi option \"%s\", which is not enabled on this system", value.c_str());
+#endif
+        }
         else if (gfxrecon::util::platform::StringCompareNoCase(kWsiPlatformDisplay, value.c_str()) == 0)
         {
 #if defined(VK_USE_PLATFORM_DISPLAY_KHR)
@@ -387,6 +397,12 @@ static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
             return VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
         }
 #endif
+#if defined(VK_USE_PLATFORM_METAL_EXT)
+        case WsiPlatform::kMetal:
+        {
+            return VK_EXT_METAL_SURFACE_EXTENSION_NAME;
+        }
+#endif
 #if defined(VK_USE_PLATFORM_HEADLESS)
         case WsiPlatform::kHeadless:
         {
@@ -418,6 +434,10 @@ static std::string GetWsiArgString()
 #if defined(VK_USE_PLATFORM_WAYLAND_KHR)
     wsi_args += ',';
     wsi_args += kWsiPlatformWayland;
+#endif
+#if defined(VK_USE_PLATFORM_METAL_EXT)
+    wsi_args += ',';
+    wsi_args += kWsiPlatformMetal;
 #endif
 #if defined(VK_USE_PLATFORM_DISPLAY_KHR)
     wsi_args += ',';
@@ -895,15 +915,15 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     {
         replay_options.use_ext_frame_boundary = true;
     }
+    
+    if (arg_parser.IsOptionSet(kColorspaceFallback))
+    {
+        replay_options.use_colorspace_fallback = true;
+    }
 
     if (arg_parser.IsOptionSet(kOffscreenSwapchainFrameBoundary))
     {
         replay_options.offscreen_swapchain_frame_boundary = true;
-    }
-
-    if (arg_parser.IsOptionSet(kColorspaceFallback))
-    {
-        replay_options.colorspace_fallback = true;
     }
 
     replay_options.replace_dir = arg_parser.GetArgumentValue(kShaderReplaceArgument);

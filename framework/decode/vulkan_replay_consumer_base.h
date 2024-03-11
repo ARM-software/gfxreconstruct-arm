@@ -180,6 +180,16 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorSet,
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
+    virtual void Process_vkCreateRayTracingPipelinesKHR(
+        const ApiCallInfo&                                               call_info,
+        VkResult                                                         returnValue,
+        format::HandleId                                                 device,
+        format::HandleId                                                 deferredOperation,
+        format::HandleId                                                 pipelineCache,
+        uint32_t                                                         createInfoCount,
+        StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoKHR>* pCreateInfos,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+        HandlePointerDecoder<VkPipeline>*                                pPipelines) override;
 
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
@@ -1001,6 +1011,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                            const PhysicalDeviceInfo* physical_device_info,
                                                            uint32_t                  queueFamilyIndex,
                                                            struct wl_display*        display);
+
+    VkResult OverrideCreateMetalSurfaceEXT(PFN_vkCreateMetalSurfaceEXT func,
+                                           VkResult                    original_result,
+                                           InstanceInfo*               instance_info,
+                                           const StructPointerDecoder<Decoded_VkMetalSurfaceCreateInfoEXT>* pCreateInfo,
+                                           const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                           HandlePointerDecoder<VkSurfaceKHR>*                              pSurface);
 
     void OverrideDestroySurfaceKHR(PFN_vkDestroySurfaceKHR                                    func,
                                    InstanceInfo*                                              instance_info,

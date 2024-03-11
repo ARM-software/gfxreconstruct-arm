@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2019 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -25,6 +26,7 @@
 
 #include "encode/handle_unwrap_memory.h"
 #include "encode/vulkan_handle_wrappers.h"
+#include "vulkan_scoped_destroy_lock.h"
 #include "format/format.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_dispatch_table.h"
@@ -52,7 +54,6 @@ static const VkCommandPool    kTempCommandPool =
     UINT64_TO_VK_HANDLE(VkCommandPool, std::numeric_limits<uint64_t>::max() - 2);
 static const format::HandleId kTempCommandPoolId   = std::numeric_limits<format::HandleId>::max() - 2;
 static const format::HandleId kTempCommandBufferId = std::numeric_limits<format::HandleId>::max() - 3;
-
 typedef format::HandleId (*PFN_GetHandleId)();
 
 extern VulkanStateHandleTable state_handle_table_;
@@ -186,6 +187,7 @@ void CreateWrappedDispatchHandle(typename ParentWrapper::HandleType parent,
                                  typename Wrapper::HandleType*      handle,
                                  PFN_GetHandleId                    get_id)
 {
+    ScopedDestroyLock shared_scoped_lock(true);
     assert(handle != nullptr);
     if ((*handle) != VK_NULL_HANDLE)
     {
@@ -223,6 +225,7 @@ void CreateWrappedDispatchHandle(typename ParentWrapper::HandleType parent,
 template <typename Wrapper>
 void CreateWrappedNonDispatchHandle(typename Wrapper::HandleType* handle, PFN_GetHandleId get_id)
 {
+    ScopedDestroyLock shared_scoped_lock(false);
     assert(handle != nullptr);
     if ((*handle) != VK_NULL_HANDLE)
     {
@@ -306,6 +309,17 @@ inline void CreateWrappedHandle<PhysicalDeviceWrapper, NoParentWrapper, DeviceWr
     PFN_GetHandleId get_id)
 {
     CreateWrappedDispatchHandle<PhysicalDeviceWrapper, DeviceWrapper>(VK_NULL_HANDLE, handle, get_id);
+}
+
+template <>
+inline void CreateWrappedHandle<DeviceWrapper, NoParentWrapper, DeviceMemoryWrapper>(VkDevice device,
+                                                                                     NoParentWrapper::HandleType,
+                                                                                     VkDeviceMemory* handle,
+                                                                                     PFN_GetHandleId get_id)
+{
+    CreateWrappedNonDispatchHandle<DeviceMemoryWrapper>(handle, get_id);
+    auto memory_wrapper           = GetWrapper<DeviceMemoryWrapper>(*handle);
+    memory_wrapper->parent_device = GetWrapper<DeviceWrapper>(device);
 }
 
 template <>
@@ -464,6 +478,7 @@ CreateWrappedHandle<DeviceWrapper, SwapchainKHRWrapper, ImageWrapper>(VkDevice, 
         CreateWrappedNonDispatchHandle<ImageWrapper>(handle, get_id);
         wrapper                     = GetWrapper<ImageWrapper>(*handle);
         wrapper->is_swapchain_image = true;
+        wrapper->parent_swapchains.insert(co_parent);
         parent_wrapper->child_images.push_back(wrapper);
     }
 }
@@ -654,24 +669,12 @@ inline void DestroyWrappedHandle<SwapchainKHRWrapper>(VkSwapchainKHR handle)
 
         for (auto image_wrapper : wrapper->child_images)
         {
-            if (wrapper->new_swapchain != nullptr)
+            image_wrapper->parent_swapchains.erase(handle);
+            if (image_wrapper->parent_swapchains.empty())
             {
-                bool found_old_image = false;
-                for (auto new_image_wrapper : wrapper->new_swapchain->child_images)
-                {
-                    if (new_image_wrapper->handle == image_wrapper->handle)
-                    {
-                        found_old_image = true;
-                        break;
-                    }
-                }
-                if (found_old_image)
-                {
-                    continue;
-                }
+                RemoveWrapper<ImageWrapper>(image_wrapper);
+                delete image_wrapper;
             }
-            RemoveWrapper<ImageWrapper>(image_wrapper);
-            delete image_wrapper;
         }
 
         RemoveWrapper<SwapchainKHRWrapper>(wrapper);

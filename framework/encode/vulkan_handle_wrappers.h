@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2019-2020 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -168,9 +169,14 @@ struct EventWrapper : public HandleWrapper<VkEvent>
 class BufferWrapper;
 struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
 {
-    uint32_t         memory_type_index{ std::numeric_limits<uint32_t>::max() };
-    VkDeviceSize     allocation_size{ 0 };
-    DeviceWrapper*   map_device{ nullptr };
+    uint32_t     memory_type_index{ std::numeric_limits<uint32_t>::max() };
+    VkDeviceSize allocation_size{ 0 };
+    // This is the device which was used to allocate the memory.
+    // Spec states if the memory can be mapped, the mapping device must be this device.
+    // The device wrapper will be initialized when allocating the memory. Some handling
+    // like VulkanStateTracker::TrackTlasToBlasDependencies may use it before mapping
+    // the memory.
+    DeviceWrapper*   parent_device{ nullptr };
     const void*      mapped_data{ nullptr };
     VkDeviceSize     mapped_offset{ 0 };
     VkDeviceSize     mapped_size{ 0 };
@@ -208,18 +214,19 @@ struct ImageWrapper : public HandleWrapper<VkImage>
     const void*        bind_pnext{ nullptr };
     HandleUnwrapMemory bind_pnext_memory; // Global HandleUnwrapMemory could be reset anytime, so it should have its own
                                           // HandleUnwrapMemory.
-    format::HandleId      bind_memory_id{ format::kNullHandleId };
-    VkDeviceSize          bind_offset{ 0 };
-    uint32_t              queue_family_index{ 0 };
-    VkImageType           image_type{ VK_IMAGE_TYPE_2D };
-    VkFormat              format{ VK_FORMAT_UNDEFINED };
-    VkExtent3D            extent{ 0, 0, 0 };
-    uint32_t              mip_levels{ 0 };
-    uint32_t              array_layers{ 0 };
-    VkSampleCountFlagBits samples{};
-    VkImageTiling         tiling{};
-    VkImageLayout         current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
-    bool                  is_swapchain_image{ false };
+    format::HandleId         bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize             bind_offset{ 0 };
+    uint32_t                 queue_family_index{ 0 };
+    VkImageType              image_type{ VK_IMAGE_TYPE_2D };
+    VkFormat                 format{ VK_FORMAT_UNDEFINED };
+    VkExtent3D               extent{ 0, 0, 0 };
+    uint32_t                 mip_levels{ 0 };
+    uint32_t                 array_layers{ 0 };
+    VkSampleCountFlagBits    samples{};
+    VkImageTiling            tiling{};
+    VkImageLayout            current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+    bool                     is_swapchain_image{ false };
+    std::set<VkSwapchainKHR> parent_swapchains;
 };
 
 struct BufferViewWrapper : public HandleWrapper<VkBufferView>
@@ -354,6 +361,9 @@ struct DeferredOperationKHRWrapper : public HandleWrapper<VkDeferredOperationKHR
     VkAllocationCallbacks                          allocator{};
     VkAllocationCallbacks*                         p_allocator{ nullptr };
     std::vector<VkPipeline>                        pipelines;
+    VkPipeline*                                    pPipelines;
+    VkPipelineCache                                pipelineCache;
+    bool                                           pending_state = false;
 };
 
 struct DescriptorUpdateTemplateWrapper : public HandleWrapper<VkDescriptorUpdateTemplate>

@@ -64,7 +64,8 @@ const char kValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
 const std::unordered_set<std::string> kSurfaceExtensions = {
     VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, VK_MVK_IOS_SURFACE_EXTENSION_NAME, VK_MVK_MACOS_SURFACE_EXTENSION_NAME,
     VK_KHR_MIR_SURFACE_EXTENSION_NAME,     VK_NN_VI_SURFACE_EXTENSION_NAME,   VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
-    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,   VK_KHR_XCB_SURFACE_EXTENSION_NAME, VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,   VK_KHR_XCB_SURFACE_EXTENSION_NAME, VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+    VK_EXT_METAL_SURFACE_EXTENSION_NAME,
 };
 
 // Device extensions to enable for trimming state setup, when available.
@@ -2080,6 +2081,25 @@ void VulkanReplayConsumerBase::InitializeScreenshotHandler()
 
     if (!options_.screenshot_dir.empty())
     {
+        if (util::filepath::Exists(options_.screenshot_dir))
+        {
+            if (!util::filepath::IsDirectory(options_.screenshot_dir))
+            {
+                GFXRECON_WRITE_CONSOLE("Error while creating directory %s: Already exists as file",
+                                       options_.screenshot_dir.c_str());
+                exit(-1);
+            }
+        }
+        else
+        {
+            int32_t result = gfxrecon::util::platform::MakeDirectory(options_.screenshot_dir.c_str());
+            if (result < 0)
+            {
+                GFXRECON_WRITE_CONSOLE("Error while creating directory %s: Could not open",
+                                       options_.screenshot_dir.c_str());
+                exit(-1);
+            }
+        }
         screenshot_file_prefix_ = util::filepath::Join(options_.screenshot_dir, screenshot_file_prefix_);
     }
 
@@ -2425,7 +2445,12 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
                 const auto current_extension = replay_create_info->ppEnabledExtensionNames[i];
                 const bool is_surface_extension =
                     kSurfaceExtensions.find(current_extension) != kSurfaceExtensions.end();
-                if (is_surface_extension)
+                if (!util::platform::StringCompare(current_extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
+                {
+                    // Will always be added
+                    continue;
+                }
+                else if (is_surface_extension)
                 {
                     if (!override_wsi_extensions)
                     {
@@ -2461,7 +2486,7 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
                     // Remove enabled extensions that are not available from the replay instance.
                     feature_util::RemoveUnsupportedExtensions(available_extensions, &filtered_extensions);
                 }
-                else if (options_.colorspace_fallback)
+                else if (options_.use_colorspace_fallback)
                 {
                     for (auto& extension_name : kColorSpaceExtensionNames)
                     {
@@ -2479,6 +2504,17 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
             {
                 GFXRECON_LOG_WARNING("Failed to get instance extensions. Cannot perform sanity checks or filters for "
                                      "extension availability.");
+            }
+        }
+
+        // Always enable portability enumeration
+        modified_create_info.flags &= ~VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+        for (const VkExtensionProperties& extension : available_extensions)
+        {
+            if (!util::platform::StringCompare(extension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
+            {
+                filtered_extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+                modified_create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
             }
         }
 
@@ -4232,8 +4268,7 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         bool                address_override_found = false;
         bool                uses_import_memory     = false;
         uint64_t            opaque_address         = 0;
-        VkBaseOutStructure* current_struct =
-            const_cast<VkBaseOutStructure*>(reinterpret_cast<const VkBaseOutStructure*>(replay_allocate_info));
+        VkBaseOutStructure* current_struct = reinterpret_cast<const VkBaseOutStructure*>(replay_allocate_info)->pNext;
 
         size_t                                            host_pointer_size = 0;
         std::unique_ptr<void, std::function<void(void*)>> external_memory_guard(
@@ -4290,17 +4325,6 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
             else if (current_struct->sType == VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO)
             {
                 address_override_found = true;
-            }
-
-            // Skip unwanted extensions to AllocateInfo
-            if (current_struct->pNext)
-            {
-                // Skip android hardware buffer allocation if unsupported in the allocator
-                if (current_struct->pNext->sType == VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID &&
-                    !allocator->SupportsExternalMemory())
-                {
-                    current_struct->pNext = current_struct->pNext->pNext;
-                }
             }
 
             current_struct = current_struct->pNext;
@@ -5885,11 +5909,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
 
         ProcessSwapchainFullScreenExclusiveInfo(pCreateInfo->GetMetaStructPointer());
 
-        VkPhysicalDevice             physical_device = device_info->parent;
-        const encode::InstanceTable* instance_table  = GetInstanceTable(physical_device);
-        VkDevice                     device          = device_info->handle;
-        const encode::DeviceTable*   device_table    = GetDeviceTable(device);
-
         VkSwapchainCreateInfoKHR modified_create_info = (*replay_create_info);
 
         if (screenshot_handler_ != nullptr)
@@ -5914,7 +5933,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
 
         if (colorspace_extension_used_unsupported)
         {
-            if (options_.colorspace_fallback)
+            if (options_.use_colorspace_fallback)
             {
                 modified_create_info.imageColorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
                 GFXRECON_LOG_INFO("Forcing supported color space for swapchain (ID = %" PRIu64 ")",
@@ -5936,9 +5955,29 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
                 const VkImageCompressionControlEXT* compression_control =
                     reinterpret_cast<const VkImageCompressionControlEXT*>(current);
 
-                swapchain_info->compression_control.emplace(*compression_control);
-                swapchain_info->compression_control->pNext = nullptr;
+                swapchain_info->compression_control =
+                    std::make_shared<VkImageCompressionControlEXT>(*compression_control);
+                VkImageCompressionControlEXT* copy_target = swapchain_info->compression_control.get();
 
+                // If the fixed rate flags are present, then create a copy for the internal version of
+                // the structure used to pass to swapchain image creation.
+                if (compression_control->compressionControlPlaneCount > 0 &&
+                    compression_control->pFixedRateFlags != nullptr)
+                {
+                    std::copy(compression_control->pFixedRateFlags,
+                              compression_control->pFixedRateFlags + compression_control->compressionControlPlaneCount,
+                              std::back_inserter(swapchain_info->compression_fixed_rate_flags));
+                    copy_target->pFixedRateFlags = swapchain_info->compression_fixed_rate_flags.data();
+                }
+                else
+                {
+                    // Set everything as if the count was 0 because it could only get here if there was
+                    // nothing in it already, or there was no valid data.
+                    copy_target->compressionControlPlaneCount = 0;
+                    copy_target->pFixedRateFlags              = nullptr;
+                    swapchain_info->compression_fixed_rate_flags.clear();
+                }
+                copy_target->pNext = nullptr;
                 break;
             }
 
@@ -7225,6 +7264,34 @@ VkBool32 VulkanReplayConsumerBase::OverrideGetPhysicalDeviceWaylandPresentationS
                           : false;
 }
 
+VkResult VulkanReplayConsumerBase::OverrideCreateMetalSurfaceEXT(
+    PFN_vkCreateMetalSurfaceEXT                                      func,
+    VkResult                                                         original_result,
+    InstanceInfo*                                                    instance_info,
+    const StructPointerDecoder<Decoded_VkMetalSurfaceCreateInfoEXT>* pCreateInfo,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+    HandlePointerDecoder<VkSurfaceKHR>*                              pSurface)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(func);
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    GFXRECON_UNREFERENCED_PARAMETER(pAllocator);
+
+    assert((instance_info != nullptr) && (pCreateInfo != nullptr));
+
+    auto replay_create_info = pCreateInfo->GetPointer();
+
+    assert((replay_create_info != nullptr) && (pSurface != nullptr) && (pSurface->GetHandlePointer() != nullptr));
+
+    return swapchain_->CreateSurface(original_result,
+                                     instance_info,
+                                     VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+                                     replay_create_info->flags,
+                                     pSurface,
+                                     GetInstanceTable(instance_info->handle),
+                                     application_.get(),
+                                     options_);
+}
+
 void VulkanReplayConsumerBase::OverrideDestroySurfaceKHR(
     PFN_vkDestroySurfaceKHR                                    func,
     InstanceInfo*                                              instance_info,
@@ -7403,9 +7470,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
 
     if (deferred_operation_info)
     {
-        deferred_operation_info->join_state = VK_NOT_READY;
+        deferred_operation_info->pending_state = true;
         deferred_operation_info->record_modified_create_infos.clear();
         deferred_operation_info->record_modified_pgroups.clear();
+        deferred_operation_info->replayPipelines.resize(createInfoCount);
+        deferred_operation_info->capturePipelines.clear();
+        deferred_operation_info->capturePipelines.insert(deferred_operation_info->capturePipelines.end(),
+                                                         &pPipelines->GetPointer()[0],
+                                                         &pPipelines->GetPointer()[createInfoCount]);
     }
 
     if (device_info->property_feature_info.feature_rayTracingPipelineShaderGroupHandleCaptureReplay)
@@ -7464,13 +7536,52 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
             // Use modified shader group infos.
             modified_create_infos[create_info_i].pGroups = modified_group_infos.data();
         }
+
+        VkPipeline* created_pipelines = nullptr;
+
+        if (deferred_operation_info)
+        {
+            created_pipelines = deferred_operation_info->replayPipelines.data();
+        }
+        else
+        {
+            created_pipelines = out_pPipelines;
+        }
+
         result = device_table->CreateRayTracingPipelinesKHR(device,
                                                             in_deferredOperation,
                                                             overridePipelineCache,
                                                             createInfoCount,
                                                             modified_create_infos.data(),
                                                             in_pAllocator,
-                                                            out_pPipelines);
+                                                            created_pipelines);
+
+        if ((result == VK_SUCCESS) || (result == VK_OPERATION_NOT_DEFERRED_KHR) ||
+            (result == VK_PIPELINE_COMPILE_REQUIRED_EXT))
+        {
+            // The above return values mean the command is not deferred and driver will finish all workload in current
+            // thread. Therefore the created pipelines can be read and copied to out_pPipelines which will be
+            // referenced later.
+            //
+            // Note:
+            //     Some pipelines might actually fail creation if the return value is VK_PIPELINE_COMPILE_REQUIRED_EXT.
+            //     These failed pipelines will generate VK_NULL_HANDLE.
+            //
+            //     If the return value is VK_OPERATION_DEFERRED_KHR, it means the command is deferred, and thus pipeline
+            //     creation is not finished. Subsequent handling will be done by
+            //     vkDeferredOperationJoinKHR/vkGetDeferredOperationResultKHR after pipeline creation is finished.
+
+            if (deferred_operation_info)
+            {
+                memcpy(out_pPipelines, created_pipelines, createInfoCount * sizeof(VkPipeline));
+
+                // Eventhough vkCreateRayTracingPipelinesKHR was called with a valid deferred operation object, the
+                // driver may opt to not defer the command. In this case, set pending_state flag to false to skip
+                // vkDeferredOperationJoinKHR handling.
+                deferred_operation_info->pending_state = false;
+            }
+        }
+
         if (deferred_operation_info)
         {
             deferred_operation_info->record_modified_create_infos = std::move(modified_create_infos);
@@ -7483,13 +7594,35 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
                                 "rayTracingPipelineShaderGroupHandleCaptureReplay feature for accurate capture and "
                                 "replay. The replay device does not support this feature, so replay may fail.");
 
+        VkPipeline* created_pipelines = nullptr;
+
+        if (deferred_operation_info)
+        {
+            created_pipelines = deferred_operation_info->replayPipelines.data();
+        }
+        else
+        {
+            created_pipelines = out_pPipelines;
+        }
+
         result = device_table->CreateRayTracingPipelinesKHR(device,
                                                             in_deferredOperation,
                                                             overridePipelineCache,
                                                             createInfoCount,
                                                             in_pCreateInfos,
                                                             in_pAllocator,
-                                                            out_pPipelines);
+                                                            created_pipelines);
+
+        if ((result == VK_SUCCESS) || (result == VK_OPERATION_NOT_DEFERRED_KHR) ||
+            (result == VK_PIPELINE_COMPILE_REQUIRED_EXT))
+        {
+
+            if (deferred_operation_info)
+            {
+                memcpy(out_pPipelines, created_pipelines, createInfoCount * sizeof(VkPipeline));
+                deferred_operation_info->pending_state = false;
+            }
+        }
     }
 
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
@@ -7511,8 +7644,9 @@ VkResult VulkanReplayConsumerBase::OverrideDeferredOperationJoinKHR(PFN_vkDeferr
                                                                     const DeviceInfo*              device_info,
                                                                     DeferredOperationKHRInfo* deferred_operation_info)
 {
-    if (deferred_operation_info->join_state == VK_SUCCESS)
+    if (deferred_operation_info->pending_state == false)
     {
+        // The deferred operation object has no deferred command or its deferred command has been finished.
         return VK_SUCCESS;
     }
 
@@ -7550,9 +7684,19 @@ VkResult VulkanReplayConsumerBase::OverrideDeferredOperationJoinKHR(PFN_vkDeferr
         j.get();
     }
 
-    deferred_operation_info->join_state = VK_SUCCESS;
+    AddHandles<PipelineInfo>(device_info->capture_id,
+                             deferred_operation_info->capturePipelines.data(),
+                             deferred_operation_info->capturePipelines.size(),
+                             deferred_operation_info->replayPipelines.data(),
+                             deferred_operation_info->replayPipelines.size(),
+                             &VulkanObjectInfoTable::AddPipelineInfo);
+
+    deferred_operation_info->pending_state = false;
     deferred_operation_info->record_modified_create_infos.clear();
     deferred_operation_info->record_modified_pgroups.clear();
+    deferred_operation_info->capturePipelines.clear();
+    deferred_operation_info->replayPipelines.clear();
+
     return VK_SUCCESS;
 }
 
@@ -8859,6 +9003,59 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
          width,
          height,
          depth);
+}
+
+void VulkanReplayConsumerBase::Process_vkCreateRayTracingPipelinesKHR(
+    const ApiCallInfo&                                               call_info,
+    VkResult                                                         returnValue,
+    format::HandleId                                                 device,
+    format::HandleId                                                 deferredOperation,
+    format::HandleId                                                 pipelineCache,
+    uint32_t                                                         createInfoCount,
+    StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoKHR>* pCreateInfos,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+    HandlePointerDecoder<VkPipeline>*                                pPipelines)
+{
+    auto in_device            = GetObjectInfoTable().GetDeviceInfo(device);
+    auto in_deferredOperation = GetObjectInfoTable().GetDeferredOperationKHRInfo(deferredOperation);
+    auto in_pipelineCache     = GetObjectInfoTable().GetPipelineCacheInfo(pipelineCache);
+    MapStructArrayHandles(pCreateInfos->GetMetaStructPointer(), pCreateInfos->GetLength(), GetObjectInfoTable());
+
+    if (!pPipelines->IsNull())
+    {
+        pPipelines->SetHandleLength(createInfoCount);
+    }
+
+    std::vector<PipelineInfo> handle_info(createInfoCount);
+
+    for (size_t i = 0; i < createInfoCount; ++i)
+    {
+        pPipelines->SetConsumerData(i, &handle_info[i]);
+    }
+
+    VkResult replay_result =
+        OverrideCreateRayTracingPipelinesKHR(GetDeviceTable(in_device->handle)->CreateRayTracingPipelinesKHR,
+                                             returnValue,
+                                             in_device,
+                                             in_deferredOperation,
+                                             in_pipelineCache,
+                                             createInfoCount,
+                                             pCreateInfos,
+                                             pAllocator,
+                                             pPipelines);
+    CheckResult("vkCreateRayTracingPipelinesKHR", returnValue, replay_result, call_info);
+
+    if ((replay_result == VK_SUCCESS) || (replay_result == VK_OPERATION_NOT_DEFERRED_KHR) ||
+        (replay_result == VK_PIPELINE_COMPILE_REQUIRED_EXT))
+    {
+        AddHandles<PipelineInfo>(device,
+                                 pPipelines->GetPointer(),
+                                 pPipelines->GetLength(),
+                                 pPipelines->GetHandlePointer(),
+                                 createInfoCount,
+                                 std::move(handle_info),
+                                 &VulkanObjectInfoTable::AddPipelineInfo);
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

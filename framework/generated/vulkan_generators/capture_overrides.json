@@ -8,6 +8,8 @@
         "vkGetPhysicalDeviceToolPropertiesEXT": "manager->OverrideGetPhysicalDeviceToolPropertiesEXT",
         "vkCreateAccelerationStructureKHR": "manager->OverrideCreateAccelerationStructureKHR",
         "vkCreateRayTracingPipelinesKHR": "manager->OverrideCreateRayTracingPipelinesKHR",
+        "vkGetDeferredOperationResultKHR": "manager->OverrideGetDeferredOperationResultKHR",
+        "vkDeferredOperationJoinKHR": "manager->OverrideDeferredOperationJoinKHR",
         "vkGetPhysicalDeviceQueueFamilyProperties": "manager->OverrideGetPhysicalDeviceQueueFamilyProperties",
         "vkGetPhysicalDeviceQueueFamilyProperties2": "manager->OverrideGetPhysicalDeviceQueueFamilyProperties2",
         "vkGetPhysicalDeviceQueueFamilyProperties2KHR": "manager->OverrideGetPhysicalDeviceQueueFamilyProperties2KHR",

@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2023 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -370,6 +371,8 @@ const std::unordered_map<std::string, PFN_vkVoidFunction> func_table = {
     { "vkSignalSemaphoreKHR",                                                                                reinterpret_cast<PFN_vkVoidFunction>(encode::SignalSemaphoreKHR) },
     { "vkGetPhysicalDeviceFragmentShadingRatesKHR",                                                          reinterpret_cast<PFN_vkVoidFunction>(encode::GetPhysicalDeviceFragmentShadingRatesKHR) },
     { "vkCmdSetFragmentShadingRateKHR",                                                                      reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetFragmentShadingRateKHR) },
+    { "vkCmdSetRenderingAttachmentLocationsKHR",                                                             reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetRenderingAttachmentLocationsKHR) },
+    { "vkCmdSetRenderingInputAttachmentIndicesKHR",                                                          reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetRenderingInputAttachmentIndicesKHR) },
     { "vkWaitForPresentKHR",                                                                                 reinterpret_cast<PFN_vkVoidFunction>(encode::WaitForPresentKHR) },
     { "vkGetBufferDeviceAddressKHR",                                                                         reinterpret_cast<PFN_vkVoidFunction>(encode::GetBufferDeviceAddressKHR) },
     { "vkGetBufferOpaqueCaptureAddressKHR",                                                                  reinterpret_cast<PFN_vkVoidFunction>(encode::GetBufferOpaqueCaptureAddressKHR) },
@@ -410,6 +413,15 @@ const std::unordered_map<std::string, PFN_vkVoidFunction> func_table = {
     { "vkGetDeviceImageSubresourceLayoutKHR",                                                                reinterpret_cast<PFN_vkVoidFunction>(encode::GetDeviceImageSubresourceLayoutKHR) },
     { "vkGetImageSubresourceLayout2KHR",                                                                     reinterpret_cast<PFN_vkVoidFunction>(encode::GetImageSubresourceLayout2KHR) },
     { "vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR",                                                   reinterpret_cast<PFN_vkVoidFunction>(encode::GetPhysicalDeviceCooperativeMatrixPropertiesKHR) },
+    { "vkCmdSetLineStippleKHR",                                                                              reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetLineStippleKHR) },
+    { "vkGetPhysicalDeviceCalibrateableTimeDomainsKHR",                                                      reinterpret_cast<PFN_vkVoidFunction>(encode::GetPhysicalDeviceCalibrateableTimeDomainsKHR) },
+    { "vkGetCalibratedTimestampsKHR",                                                                        reinterpret_cast<PFN_vkVoidFunction>(encode::GetCalibratedTimestampsKHR) },
+    { "vkCmdBindDescriptorSets2KHR",                                                                         reinterpret_cast<PFN_vkVoidFunction>(encode::CmdBindDescriptorSets2KHR) },
+    { "vkCmdPushConstants2KHR",                                                                              reinterpret_cast<PFN_vkVoidFunction>(encode::CmdPushConstants2KHR) },
+    { "vkCmdPushDescriptorSet2KHR",                                                                          reinterpret_cast<PFN_vkVoidFunction>(encode::CmdPushDescriptorSet2KHR) },
+    { "vkCmdPushDescriptorSetWithTemplate2KHR",                                                              reinterpret_cast<PFN_vkVoidFunction>(encode::CmdPushDescriptorSetWithTemplate2KHR) },
+    { "vkCmdSetDescriptorBufferOffsets2EXT",                                                                 reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetDescriptorBufferOffsets2EXT) },
+    { "vkCmdBindDescriptorBufferEmbeddedSamplers2EXT",                                                       reinterpret_cast<PFN_vkVoidFunction>(encode::CmdBindDescriptorBufferEmbeddedSamplers2EXT) },
     { "vkFrameBoundaryANDROID",                                                                              reinterpret_cast<PFN_vkVoidFunction>(encode::FrameBoundaryANDROID) },
     { "vkCreateDebugReportCallbackEXT",                                                                      reinterpret_cast<PFN_vkVoidFunction>(encode::CreateDebugReportCallbackEXT) },
     { "vkDestroyDebugReportCallbackEXT",                                                                     reinterpret_cast<PFN_vkVoidFunction>(encode::DestroyDebugReportCallbackEXT) },
@@ -599,7 +611,6 @@ const std::unordered_map<std::string, PFN_vkVoidFunction> func_table = {
     { "vkGetPipelineIndirectMemoryRequirementsNV",                                                           reinterpret_cast<PFN_vkVoidFunction>(encode::GetPipelineIndirectMemoryRequirementsNV) },
     { "vkCmdUpdatePipelineIndirectBufferNV",                                                                 reinterpret_cast<PFN_vkVoidFunction>(encode::CmdUpdatePipelineIndirectBufferNV) },
     { "vkGetPipelineIndirectDeviceAddressNV",                                                                reinterpret_cast<PFN_vkVoidFunction>(encode::GetPipelineIndirectDeviceAddressNV) },
-    { "vkCmdSetTessellationDomainOriginEXT",                                                                 reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetTessellationDomainOriginEXT) },
     { "vkCmdSetDepthClampEnableEXT",                                                                         reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetDepthClampEnableEXT) },
     { "vkCmdSetPolygonModeEXT",                                                                              reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetPolygonModeEXT) },
     { "vkCmdSetRasterizationSamplesEXT",                                                                     reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetRasterizationSamplesEXT) },
@@ -610,6 +621,7 @@ const std::unordered_map<std::string, PFN_vkVoidFunction> func_table = {
     { "vkCmdSetColorBlendEnableEXT",                                                                         reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetColorBlendEnableEXT) },
     { "vkCmdSetColorBlendEquationEXT",                                                                       reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetColorBlendEquationEXT) },
     { "vkCmdSetColorWriteMaskEXT",                                                                           reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetColorWriteMaskEXT) },
+    { "vkCmdSetTessellationDomainOriginEXT",                                                                 reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetTessellationDomainOriginEXT) },
     { "vkCmdSetRasterizationStreamEXT",                                                                      reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetRasterizationStreamEXT) },
     { "vkCmdSetConservativeRasterizationModeEXT",                                                            reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetConservativeRasterizationModeEXT) },
     { "vkCmdSetExtraPrimitiveOverestimationSizeEXT",                                                         reinterpret_cast<PFN_vkVoidFunction>(encode::CmdSetExtraPrimitiveOverestimationSizeEXT) },

@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -778,8 +778,10 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
     temp_subresource_sizes_.clear();
     temp_subresource_offsets_.clear();
 
-    bool is_reserved_resouce = (resource_info->create_call_id == format::ApiCall_ID3D12Device_CreateReservedResource) ||
-                               (resource_info->create_call_id == format::ApiCall_ID3D12Device4_CreateReservedResource1);
+    bool is_reserved_resouce =
+        (resource_info->create_call_id == format::ApiCall_ID3D12Device_CreateReservedResource) ||
+        (resource_info->create_call_id == format::ApiCall_ID3D12Device4_CreateReservedResource1) ||
+        (resource_info->create_call_id == format::ApiCall_ID3D12Device10_CreateReservedResource2);
     bool is_texture_with_unknown_layout =
         graphics::dx12::IsTextureWithUnknownLayout(resource_info->dimension, resource_info->layout);
 
@@ -1639,6 +1641,7 @@ void Dx12StateWriter::WriteStateObjectsState(const Dx12StateTable& state_table)
 
         WriteStateObjectAndDependency(
             state_object_wrapper->GetCaptureId(), state_object_wrapper->GetObjectInfo().get(), written_objs);
+        WriteAddRefAndReleaseCommands(state_object_wrapper);
     });
 }
 

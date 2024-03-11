@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2021 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
-** Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -311,6 +311,14 @@ class VulkanCaptureManager : public CaptureManager
                                                   const VkRayTracingPipelineCreateInfoKHR* pCreateInfos,
                                                   const VkAllocationCallbacks*             pAllocator,
                                                   VkPipeline*                              pPipelines);
+
+    VkResult OverrideDeferredOperationJoinKHR(VkDevice device, VkDeferredOperationKHR operation);
+
+    VkResult OverrideGetDeferredOperationResultKHR(VkDevice device, VkDeferredOperationKHR operation);
+
+    void DeferredOperationPostProcess(VkDevice               device,
+                                      VkDeferredOperationKHR deferredOperation,
+                                      bool                   capture_manager_tracking);
 
     void OverrideGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice         physicalDevice,
                                                         uint32_t*                pQueueFamilyPropertyCount,
@@ -1495,6 +1503,8 @@ class VulkanCaptureManager : public CaptureManager
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
 
+    bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
+
   private:
     void QueueSubmitWriteFillMemoryCmd();
 
@@ -1504,6 +1514,7 @@ class VulkanCaptureManager : public CaptureManager
     std::unique_ptr<VulkanStateTracker> state_tracker_;
     HardwareBufferMap                   hardware_buffers_;
     std::vector<const char*>            faked_extensions_;
+    std::mutex                          deferred_operation_mutex;
 };
 
 GFXRECON_END_NAMESPACE(encode)

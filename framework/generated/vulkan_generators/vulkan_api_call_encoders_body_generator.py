@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2018-2019 Valve Corporation
 # Copyright (c) 2018-2019 LunarG, Inc.
+# Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -270,10 +271,6 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             )
 
         body += '\n'
-        lock_expr = self.make_handle_lock(name, values, indent)
-        if lock_expr:
-            body += '\n'
-            body += lock_expr
 
         if is_override:
             # Capture overrides simply call the override function without handle unwrap/wrap
@@ -303,6 +300,9 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
                     body += indent + f'auto handle_unwrap_memory = {capture_manager}->GetHandleUnwrapMemory();\n'
                 body += unwrap_expr
                 body += '\n'
+
+            if self.lock_for_destroy_handle_is_needed(name):
+                body += indent + 'ScopedDestroyLock exclusive_scoped_lock;\n'
 
             # Construct the function call to dispatch to the next layer.
             (call_setup_expr, call_expr) = self.make_layer_dispatch_call(
@@ -678,26 +678,13 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             args.append(arg_name)
         return expr, ', '.join(args), need_unwrap_memory
 
-    def make_handle_lock(self, name, values, indent):
-        expr = ''
-        isDestroyCall = name.startswith('vkDestroy') or name.startswith('vkFree') or (
+    def lock_for_destroy_handle_is_needed(self, name):
+        if name.startswith('vkDestroy') or name.startswith('vkFree') or (
             name == 'vkReleasePerformanceConfigurationINTEL'
-        )
-        isCreateCall = name.startswith('vkCreate') or name.startswith('vkAllocate') 
-        if isDestroyCall:
-            if name in ['vkDestroyInstance', 'vkDestroyDevice']:
-                # Instance/device destroy calls are special case where the target handle is the first parameter
-                handle = values[0]
-            else:
-                # The destroy target is the second parameter, except for pool based allocations where it is the last parameter.
-                handle = values[1]
-                if ("Pool" in handle.base_type) and name.startswith('vkFree'):
-                    handle = values[3]
-        if isCreateCall:
-            handle = values[-1]
-        if isDestroyCall or isCreateCall:
-            expr += indent + 'std::lock_guard<std::recursive_mutex> handle_map_lock(GetMapMutex<{}Wrapper>());\n'.format(handle.base_type[2:])
-        return expr
+        ) or (name == 'vkResetDescriptorPool'):
+            return True
+        else:
+            return False
 
     def make_handle_cleanup(self, name, values, indent):
         expr = ''

@@ -238,6 +238,8 @@ uint64_t GetResourceSizeInBytes(ID3D12Device8* device, const D3D12_RESOURCE_DESC
 
 bool IsSoftwareAdapter(const format::DxgiAdapterDesc& adapter_desc);
 
+bool IsDepthStencilFormat(const DXGI_FORMAT format);
+
 bool IsTextureWithUnknownLayout(D3D12_RESOURCE_DIMENSION dimension, D3D12_TEXTURE_LAYOUT layout);
 
 bool VerifyAgilitySDKRuntime();
@@ -263,6 +265,17 @@ inline format::AdapterType ExtractAdapterType(uint32_t extra_info)
 {
     return static_cast<format::AdapterType>((extra_info & kAdapterTypeMask));
 }
+
+void RobustGetCopyableFootprint(ID3D12Device*                       device,
+                                ID3D12Resource*                     resource,
+                                const D3D12_RESOURCE_DESC*          pResourceDesc,
+                                UINT                                FirstSubresource,
+                                UINT                                NumSubresources,
+                                UINT64                              BaseOffset,
+                                D3D12_PLACED_SUBRESOURCE_FOOTPRINT* pLayouts,
+                                UINT*                               pNumRows,
+                                UINT64*                             pRowSizeInBytes,
+                                UINT64*                             pTotalBytes);
 
 GFXRECON_END_NAMESPACE(dx12)
 GFXRECON_END_NAMESPACE(graphics)

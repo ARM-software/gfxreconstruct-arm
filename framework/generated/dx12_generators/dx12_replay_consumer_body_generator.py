@@ -22,6 +22,7 @@
 
 import json
 import sys
+import re
 from base_generator import write
 from dx12_base_generator import Dx12BaseGenerator, Dx12GeneratorOptions
 from dx12_replay_consumer_header_generator import Dx12ReplayConsumerHeaderGenerator, Dx12ReplayConsumerHeaderGeneratorOptions
@@ -85,7 +86,7 @@ class Dx12ReplayConsumerBodyGenerator(
             self.__load_replay_overrides(gen_opts.replay_overrides)
 
     def write_include(self):
-        """Methond override."""
+        """Method override."""
         write(
             '#include "generated/generated_dx12_replay_consumer.h"',
             file=self.outFile
@@ -112,7 +113,7 @@ class Dx12ReplayConsumerBodyGenerator(
                 )
 
     def generate_feature(self):
-        """Methond override."""
+        """Method override."""
         header_dict = self.source_dict['header_dict']
         self.structs_with_objects = self.collect_struct_with_objects(
             header_dict
@@ -168,7 +169,7 @@ class Dx12ReplayConsumerBodyGenerator(
             first = False
 
     def make_consumer_func_body(self, return_type, name, values):
-        """Methond override."""
+        """Method override."""
         code = ''
         arg_list = []
         add_object_list = []
@@ -185,8 +186,7 @@ class Dx12ReplayConsumerBodyGenerator(
             if class_name in self.REPLAY_OVERRIDES['classmethods']:
                 is_override = method_name in self.REPLAY_OVERRIDES[
                     'classmethods'][class_name]
-            resource_creation_methods = ["CreateCommittedResource", "CreatePlacedResource", "CreateReservedResource", "CreateCommittedResource1", "CreateReservedResource1", "CreateCommittedResource2", "CreatePlacedResource1"]
-            if method_name in resource_creation_methods:
+            if re.search("^Create.+Resource[0-9]*$", method_name) is not None:
                 is_resource_creation_methods = True
         else:
             is_override = name in self.REPLAY_OVERRIDES['functions']

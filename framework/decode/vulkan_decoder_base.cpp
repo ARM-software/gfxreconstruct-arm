@@ -294,6 +294,9 @@ void VulkanDecoderBase::DispatchInitImageCommand(format::ThreadId             th
     }
 }
 
+/// @note Dead code, never called.
+/// @note The Vulkan Layer does not encode this and no Vulkan consumers process it. It is one of several DX12-specific
+/// metablocks which could have stubbed ({}) versions of their dispatch functions in ApiDecoder.
 void VulkanDecoderBase::DispatchInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                        const uint8_t*                              data)
 {
@@ -583,6 +586,15 @@ void VulkanDecoderBase::DispatchVulkanAccelerationStructuresWritePropertiesMetaC
             device_id, query_type, acceleration_structure_id);
     }
 }
+
+void VulkanDecoderBase::SetCurrentBlockIndex(uint64_t block_index)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->SetCurrentBlockIndex(block_index);
+    }
+}
+
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

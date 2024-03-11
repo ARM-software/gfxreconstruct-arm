@@ -171,6 +171,7 @@ int main(int argc, const char** argv)
                 quit_after_measurement_frame_range = vulkan_replay_options.quit_after_measurement_frame_range;
                 flush_measurement_frame_range      = vulkan_replay_options.flush_measurement_frame_range;
                 preload_measurement_frame_range    = vulkan_replay_options.preload_measurement_range;
+                flush_inside_measurement_range     = vulkan_replay_options.flush_inside_measurement_range;
             }
 
             if (has_mfr)

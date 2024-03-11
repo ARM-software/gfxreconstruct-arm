@@ -106,9 +106,6 @@ class MetadataConsumerBase
                                                const uint8_t*                              data)
     {}
 
-    virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId tlas, const std::vector<format::HandleId>& blases)
-    {}
-
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
         uint32_t                                                                   info_count,
@@ -122,6 +119,10 @@ class MetadataConsumerBase
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
     {}
+    virtual void SetCurrentBlockIndex(uint64_t block_index) {}
+
+  protected:
+    uint64_t block_index_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
