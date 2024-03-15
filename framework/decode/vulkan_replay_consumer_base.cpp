@@ -2577,7 +2577,7 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
         GFXRECON_LOG_WARNING("The vkCreateInstance parameter pCreateInfo is NULL.");
     }
 
-    if (options_.offscreen_swapchain_frame_boundary)
+    if (options_.offscreen_swapchain_frame_boundary || options_.use_ext_frame_boundary)
     {
         bool frameBoundaryExtensionFound = false;
 
@@ -2591,24 +2591,6 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
         }
 
         if (!frameBoundaryExtensionFound)
-        {
-            filtered_extensions.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
-        }
-    }
-
-    if (options_.use_ext_frame_boundary)
-    {
-        bool frame_boundary_extension_found = false;
-        for (const char* extension_name : filtered_extensions)
-        {
-            if (gfxrecon::util::platform::StringCompareNoCase(extension_name, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
-            {
-                frame_boundary_extension_found = true;
-                break;
-            }
-        }
-
-        if (!frame_boundary_extension_found)
         {
             filtered_extensions.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
         }
