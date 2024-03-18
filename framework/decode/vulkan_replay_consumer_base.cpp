@@ -3639,7 +3639,8 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
 
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        acceleration_structure_builders_[device_info->capture_id]->OnQueueSubmit(submitCount, pSubmits->GetPointer());
+        acceleration_structure_builders_[device_info->capture_id]->OnQueueSubmit(
+            queue_info->handle, submitCount, pSubmits->GetPointer());
     }
 
     // Only attempt to filter imported semaphores if we know at least one has been imported.

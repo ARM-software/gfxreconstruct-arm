@@ -611,7 +611,7 @@ void VulkanAccelerationStructureBuilder::ExecuteCommandBuffer()
     submit_info.signalSemaphoreCount = 0;
     submit_info.pSignalSemaphores    = nullptr;
 
-    OnQueueSubmit(1, &submit_info);
+    OnQueueSubmit(cmd_execute_obj_.queue_, 1, &submit_info);
     VkResult result = functions_.queue_submit(cmd_execute_obj_.queue_, 1, &submit_info, VK_NULL_HANDLE);
     GFXRECON_ASSERT(result == VK_SUCCESS);
     result = functions_.queue_wait_idle(cmd_execute_obj_.queue_);
@@ -656,7 +656,7 @@ void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
             }
             default:
             {
-                GFXRECON_LOG_DEBUG("Unexpected geometry type");
+                GFXRECON_LOG_ERROR("Unexpected geometry type");
                 break;
             }
         }
@@ -1050,7 +1050,9 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const DeviceInfo*
     compacted_sizes_unprocessed.erase(query_pool_info->handle);
 }
 
-void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits)
+void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue,
+                                                       uint32_t            submitCount,
+                                                       const VkSubmitInfo* pSubmits)
 {
     // Perform the actual update of the bottom level acceleration structures in the instance buffers
     for (int i = 0; i < submitCount; ++i)
@@ -1073,6 +1075,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
         }
     }
 
+    bool wait = false;
     for (const auto& descriptor_update_buffers : deferred_inspection_buffers)
     {
         bool should_inspect = false;
@@ -1129,6 +1132,11 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
             {
                 continue;
             }
+            if (queue_with_deffered_buffer_write != VK_NULL_HANDLE)
+            {
+                functions_.queue_wait_idle(queue_with_deffered_buffer_write);
+                queue_with_deffered_buffer_write = VK_NULL_HANDLE;
+            }
 
             // Otherwise, iterate over this buffer and replace device addresses
             for (uint32_t i = 0; i < descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress); ++i)
@@ -1137,9 +1145,14 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
             }
 
             allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.allocation_data_[buffer_idx]);
+            wait = true;
         }
     }
     instance_buffer_entries.clear();
+    if (wait)
+    {
+        queue_with_deffered_buffer_write = queue;
+    }
     deferred_inspection_buffers.clear();
 
     // Update the descriptor set with the actual handle, if any such update is stored
