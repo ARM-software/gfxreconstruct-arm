@@ -1165,12 +1165,21 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
                     build_container->emplace(wrapper->device_id, std::vector<AccelerationStructureBuildCommandData>());
                 result = it;
             }
-            result->second.push_back(
+            auto& build_command_data = result->second.emplace_back(
                 AccelerationStructureBuildCommandData{ latest_build_command.device,
                                                        latest_build_command.geometry_info,
                                                        latest_build_command.geometry_info_memory,
                                                        latest_build_command.build_range_infos,
-                                                       latest_build_command.instance_buffer_data });
+                                                       {} });
+            // Write this data to state recreation if the buffer was destroyed prior to state write
+            for (uint32_t buffer_index = 0; buffer_index < latest_build_command.instance_buffers.size(); ++buffer_index)
+            {
+                const auto& buffer = latest_build_command.instance_buffers[buffer_index];
+                if (buffer.destroyed)
+                {
+                    build_command_data.instance_buffers_data.push_back(buffer.instances);
+                }
+            }
         }
 
         if (wrapper->latest_update_command_)
@@ -1184,12 +1193,24 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
                     update_container->emplace(wrapper->device_id, std::vector<AccelerationStructureBuildCommandData>());
                 result = it;
             }
-            result->second.push_back(
+
+            auto& update_command_data = result->second.emplace_back(
                 AccelerationStructureBuildCommandData{ latest_update_command.device,
                                                        latest_update_command.geometry_info,
                                                        latest_update_command.geometry_info_memory,
                                                        latest_update_command.build_range_infos,
-                                                       latest_update_command.instance_buffer_data });
+                                                       {} });
+
+            // Write this data to state recreation if the buffer was destroyed prior to state write
+            for (uint32_t buffer_index = 0; buffer_index < latest_update_command.instance_buffers.size();
+                 ++buffer_index)
+            {
+                const auto& buffer = latest_update_command.instance_buffers[buffer_index];
+                if (buffer.destroyed)
+                {
+                    update_command_data.instance_buffers_data.push_back(buffer.instances);
+                }
+            }
         }
 
         if (wrapper->latest_copy_command_)
@@ -1222,17 +1243,17 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
 
     for (const auto& [device, commands] : blas_build_commands)
     {
-        for (const auto& command : commands)
+        for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
         {
-            EncodeAccelerationStructureBuildMetaCommand(command);
+            EncodeAccelerationStructureBuildMetaCommand(commands[cmd_index]);
         }
     }
 
     for (const auto& [device, commands] : write_properties_command)
     {
-        for (const auto& command : commands)
+        for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
         {
-            EncodeAccelerationStructureWritePropertiesCommand(command);
+            EncodeAccelerationStructureWritePropertiesCommand(commands[cmd_index]);
         }
     }
 
@@ -1245,9 +1266,9 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
     {
         for (const auto& [device, commands] : command_container)
         {
-            for (const auto& command : commands)
+            for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
             {
-                EncodeAccelerationStructureBuildMetaCommand(command);
+                EncodeAccelerationStructureBuildMetaCommand(commands[cmd_index]);
             }
         }
     }

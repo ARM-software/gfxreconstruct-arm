@@ -419,8 +419,6 @@ class VulkanStateTracker
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
 
-    void CreateResourceUtil(const DeviceWrapper* wrapper);
-
     void TrackWriteAccelerationStructuresPropertiesCommand(VkCommandBuffer                   commandBuffer,
                                                            uint32_t                          accelerationStructureCount,
                                                            const VkAccelerationStructureKHR* pAccelerationStructures,
@@ -507,8 +505,6 @@ class VulkanStateTracker
     std::unordered_map<VkDeviceAddress, AccelerationStructureKHRWrapper*> as_device_addresses_map;
 
     bool experimental_raytracing_fastforwarding_{ true };
-
-    std::unique_ptr<graphics::VulkanResourcesUtil> resource_util_;
 };
 
 GFXRECON_END_NAMESPACE(encode)

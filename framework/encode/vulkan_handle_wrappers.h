@@ -502,13 +502,19 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
 
     VkAccelerationStructureTypeKHR type_;
     // Only used when tracking
+    struct InstanceBufferData
+    {
+        format::HandleId                                handle_id;
+        bool                                            destroyed{ false };
+        std::vector<VkAccelerationStructureInstanceKHR> instances;
+    };
     struct AccelerationStructureKHRBuildCommandData
     {
         format::HandleId                                             device;
         VkAccelerationStructureBuildGeometryInfoKHR                  geometry_info;
         HandleUnwrapMemory                                           geometry_info_memory;
         std::vector<VkAccelerationStructureBuildRangeInfoKHR>        build_range_infos;
-        std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffer_data;
+        std::vector<InstanceBufferData>                              instance_buffers;
     };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_build_command_{ std::nullopt };

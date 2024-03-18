@@ -528,22 +528,26 @@ void VulkanDecoderBase::DispatchVulkanAccelerationStructuresBuildMetaCommand(con
     bytes_read += ppRangeInfos.Decode(parameter_buffer + bytes_read, buffer_size - bytes_read);
 
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>> instance_buffers;
-    for (uint32_t i = 0; i < pInfos.GetLength(); ++i)
+    if (bytes_read < buffer_size)
     {
-        if (pInfos.GetPointer()[i].type != VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+        for (uint32_t i = 0; i < pInfos.GetLength(); ++i)
         {
-            continue;
-        }
+            if (pInfos.GetPointer()[i].type != VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
+            {
+                continue;
+            }
 
-        uint32_t geometry_count = pInfos.GetPointer()[i].geometryCount;
-        for (uint32_t g = 0; g < geometry_count; ++g)
-        {
-            instance_buffers.emplace_back(
-                std::vector<VkAccelerationStructureInstanceKHR>(ppRangeInfos.GetPointer()[g]->primitiveCount));
-            std::memcpy(instance_buffers.back().data(),
-                        parameter_buffer + bytes_read,
-                        instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR));
-            bytes_read += instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR);
+            uint32_t geometry_count = pInfos.GetPointer()[i].geometryCount;
+            for (uint32_t g = 0; g < geometry_count; ++g)
+            {
+                instance_buffers.emplace_back(
+                    std::vector<VkAccelerationStructureInstanceKHR>(ppRangeInfos.GetPointer()[g]->primitiveCount));
+                util::platform::MemoryCopy(instance_buffers.back().data(),
+                                           instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR),
+                                           parameter_buffer + bytes_read,
+                                           instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR));
+                bytes_read += instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR);
+            }
         }
     }
 
