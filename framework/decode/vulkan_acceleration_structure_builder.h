@@ -70,10 +70,13 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCreateQueryPool                             create_query_pool{ nullptr };
     };
 
-    VulkanAccelerationStructureBuilder(Functions                               functions,
-                                       VkDevice                                device,
-                                       VulkanResourceAllocator*                allocator,
-                                       const VkPhysicalDeviceMemoryProperties& properties);
+    VulkanAccelerationStructureBuilder(
+        Functions                                        functions,
+        VkDevice                                         device,
+        VulkanResourceAllocator*                         allocator,
+        const VkPhysicalDeviceMemoryProperties&          properties,
+        VkPhysicalDeviceRayTracingPipelinePropertiesKHR  ray_tracing_pipeline_properties,
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features);
 
     ~VulkanAccelerationStructureBuilder();
     void UpdateDescriptorSets(uint32_t              descriptor_write_count,
@@ -129,7 +132,8 @@ class VulkanAccelerationStructureBuilder
     // pRaygenShaderBindingTable, pMissShaderBindingTable, pHitShaderBindingTable, pCallableShaderBindingTable
     // Updates buffer device addresses
     // TODO: strides and offsets
-    void OnCmdTraceRaysKHR(VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+    void OnCmdTraceRaysKHR(VkCommandBuffer                  command_buffer,
+                           VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
                            VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
                            VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
                            VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable);
@@ -143,7 +147,22 @@ class VulkanAccelerationStructureBuilder
     // inject duplicate of this command to retrieve compact sizes
     void OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info);
 
+    void RegisterShaderGroupHandleEntry(uint32_t group_count,
+                                        size_t   data_size,
+                                        uint8_t* original_data,
+                                        uint8_t* runtime_data);
+
   private:
+    struct ShaderGroupHandleEntry
+    {
+        std::vector<uint8_t> original_data_;
+        std::vector<uint8_t> runtime_data_;
+        ShaderGroupHandleEntry(uint8_t* original_data, uint8_t* runtime_data, size_t size) :
+            original_data_(original_data, original_data + size), runtime_data_(runtime_data, runtime_data + size)
+        {}
+    };
+    std::vector<ShaderGroupHandleEntry> shader_group_handle_entries_;
+
     // Tracking buffers and acceleration structures is required to correctly replace the device addresses and handles
     struct BufferEntry
     {
@@ -282,6 +301,27 @@ class VulkanAccelerationStructureBuilder
     std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData>            cached_descriptor_write;
 
+    struct RaytracingPipelineProperties
+    {
+        const uint32_t shader_group_handle_size;
+        const uint32_t shader_group_handle_alignment;
+        const uint32_t shader_group_handle_size_aligned;
+        RaytracingPipelineProperties(const uint32_t handle_size, const uint32_t handle_alignment) :
+            shader_group_handle_size(handle_size), shader_group_handle_alignment(handle_alignment),
+            shader_group_handle_size_aligned((shader_group_handle_size + shader_group_handle_alignment - 1) &
+                                             ~(shader_group_handle_alignment - 1))
+        {}
+    } raytracing_pipeline_properties_;
+
+    struct CmdTraceRaysEntry
+    {
+        VkStridedDeviceAddressRegionKHR raygen;
+        VkStridedDeviceAddressRegionKHR miss;
+        VkStridedDeviceAddressRegionKHR hit;
+        VkStridedDeviceAddressRegionKHR callable;
+    };
+    std::unordered_map<VkCommandBuffer, std::vector<CmdTraceRaysEntry>> trace_rays_;
+
     std::unordered_map<
         VkCommandBuffer,
         std::vector<
@@ -298,6 +338,9 @@ class VulkanAccelerationStructureBuilder
     std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> compacted_sizes_processed;
 
     CommandExecuteObjects cmd_execute_obj_;
+
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR  ray_tracing_pipeline_properties_;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features_;
 
   private:
     std::unique_ptr<BufferEntry>
@@ -334,6 +377,7 @@ class VulkanAccelerationStructureBuilder
     void InitializeInternalExecObjects();
     void BeginCommandBuffer();
     void ExecuteCommandBuffer();
+    void UpdateShaderBindingTable(const VkStridedDeviceAddressRegionKHR& sbt_entry);
 };
 
 GFXRECON_END_NAMESPACE(decode)
