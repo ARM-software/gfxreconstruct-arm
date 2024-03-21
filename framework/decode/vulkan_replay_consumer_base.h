@@ -223,6 +223,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void CheckResult(const char* func_name, VkResult original, VkResult replay, const decode::ApiCallInfo& call_info);
 
+    void CheckResult(const char*                 func_name,
+                     VkResult                    original,
+                     VkResult                    replay,
+                     const decode::ApiCallInfo&  call_info,
+                     VkDevice                    lost_device,
+                     PFN_vkGetDeviceFaultInfoEXT func);
+
     template <typename T>
     typename T::HandleType MapHandle(format::HandleId id,
                                      const T* (VulkanObjectInfoTable::*MapFunc)(format::HandleId) const) const
@@ -1407,6 +1414,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
+
+    bool device_fault_supported{ false };
+    bool device_fault_vendor_data_supported{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -32,6 +32,7 @@
 #include "decode/vulkan_enum_util.h"
 #include "decode/vulkan_object_cleanup_util.h"
 #include "format/format_util.h"
+#include "generated/generated_vulkan_enum_to_string.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "generated/generated_vulkan_constant_maps.h"
 #include "graphics/vulkan_device_util.h"
@@ -1191,6 +1192,38 @@ void VulkanReplayConsumerBase::CheckResult(const char*                func_name,
                 util::ToString<VkResult>(original).c_str());
         }
     }
+}
+
+void VulkanReplayConsumerBase::CheckResult(const char*                 func_name,
+                                           VkResult                    original,
+                                           VkResult                    replay,
+                                           const decode::ApiCallInfo&  call_info,
+                                           VkDevice                    lost_device,
+                                           PFN_vkGetDeviceFaultInfoEXT func)
+{
+    if (replay == VK_ERROR_DEVICE_LOST && device_fault_supported)
+    {
+        graphics::DeviceFaultData device_fault_info = graphics::QueryDeviceFaultData(func, lost_device);
+        for (const auto& address_info : device_fault_info.address_infos_)
+        {
+            GFXRECON_LOG_ERROR("Address type: %s",
+                               util::ToString<VkDeviceFaultAddressTypeEXT>(address_info.addressType).c_str());
+            GFXRECON_LOG_ERROR("Reported address: %" PRIu64, address_info.reportedAddress);
+            GFXRECON_LOG_ERROR("Address precision: %" PRIu64, address_info.addressPrecision);
+        }
+
+        for (const auto& vendor_info : device_fault_info.vendor_infos_)
+        {
+            GFXRECON_LOG_ERROR("Vendor description: %s", vendor_info.description);
+            GFXRECON_LOG_ERROR("Vendor fault code: %" PRIu64, vendor_info.vendorFaultCode);
+            GFXRECON_LOG_ERROR("Vendor fault data: %" PRIu64, vendor_info.vendorFaultData);
+        }
+        if (device_fault_vendor_data_supported && !device_fault_info.vendor_binary_data_.empty())
+        {
+            GFXRECON_LOG_ERROR("Vendor binary data size: %" PRIu64, device_fault_info.vendor_binary_data_.size());
+        }
+    }
+    CheckResult(func_name, original, replay, call_info);
 }
 
 void VulkanReplayConsumerBase::SetInstancePhysicalDeviceEntries(InstanceInfo*           instance_info,
@@ -2789,6 +2822,19 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                                                    modified_create_info.pNext,
                                                    modified_create_info.pEnabledFeatures,
                                                    options_.remove_unsupported_features);
+
+            if (feature_util::IsSupportedExtension(properties, VK_EXT_DEVICE_FAULT_EXTENSION_NAME))
+            {
+                modified_extensions.emplace_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+                VkPhysicalDeviceFaultFeaturesEXT device_fault_features{
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT, nullptr
+                };
+                VkPhysicalDeviceFeatures2KHR features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR,
+                                                       &device_fault_features };
+                table->GetPhysicalDeviceFeatures2(physical_device, &features);
+                device_fault_supported             = device_fault_features.deviceFault;
+                device_fault_vendor_data_supported = device_fault_features.deviceFaultVendorBinary;
+            }
         }
 
         modified_create_info.enabledExtensionCount   = static_cast<uint32_t>(modified_extensions.size());
