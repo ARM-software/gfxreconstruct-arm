@@ -1184,7 +1184,20 @@ void VulkanAccelerationStructureBuilder::RegisterShaderGroupHandleEntry(uint32_t
 
 void VulkanAccelerationStructureBuilder::PostQueuePresent()
 {
-    scratches_.clear();
+    for (auto& [address, scratches] : scratches_)
+    {
+        size_t max_size = 0;
+        for (const auto& scratch : scratches)
+        {
+            max_size = std::max(max_size, allocator_->GetBufferSize(scratch->allocator_data_));
+        }
+        scratches.erase(std::remove_if(scratches.begin(),
+                                       scratches.end(),
+                                       [this, max_size](const std::unique_ptr<BufferEntry>& entry) {
+                                           return allocator_->GetBufferSize(entry->allocator_data_) != max_size;
+                                       }),
+                        scratches.end());
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)
