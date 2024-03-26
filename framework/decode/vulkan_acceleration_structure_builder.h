@@ -34,6 +34,7 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <set>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -83,6 +84,10 @@ class VulkanAccelerationStructureBuilder
                               VkWriteDescriptorSet* descriptor_writes,
                               uint32_t              descriptor_copy_count,
                               VkCopyDescriptorSet*  descriptor_copies);
+
+    void
+    StoreDeferredDeviceAddressBufferUpdates(const std::vector<VulkanResourceAllocator::ResourceData>& resource_data,
+                                            const std::vector<const VkDescriptorBufferInfo*>&         buffer_infos);
     void UpdateDescriptorSetWithTemplateKHR(VkDescriptorSet                                    descriptor_set,
                                             const VkDescriptorUpdateTemplateEntryKHR&          entry,
                                             gfxrecon::decode::DescriptorUpdateTemplateDecoder* data);
@@ -201,7 +206,7 @@ class VulkanAccelerationStructureBuilder
     {
         VkDeviceAddress                             original_address_;
         VkDeviceAddress                             new_address_;
-        VkAccelerationStructureKHR                  handle_;
+        std::set<VkAccelerationStructureKHR>        handles_;
         VkAccelerationStructureTypeKHR              type_;
         VkAccelerationStructureBuildSizesInfoKHR    size_info_;
         std::unique_ptr<AccelerationStructureEntry> replacement_acceleration_struct_;
@@ -214,8 +219,12 @@ class VulkanAccelerationStructureBuilder
                                    VkAccelerationStructureTypeKHR           type,
                                    VkAccelerationStructureBuildSizesInfoKHR size_info) :
             original_address_(original_address),
-            new_address_(new_address), handle_(handle), type_(type), size_info_(size_info)
-        {}
+            new_address_(new_address), type_(type), size_info_(size_info)
+        {
+            handles_.insert(handle);
+        }
+
+        bool IsAlias(VkAccelerationStructureKHR handle) { return handles_.count(handle) > 0; }
     };
 
     // Store the minimum required data to perform vkUpdateDescriptorSets with correct acceleration
@@ -270,6 +279,20 @@ class VulkanAccelerationStructureBuilder
         }
     };
 
+    struct DescriptorUpdateBufferEntries
+    {
+        DescriptorUpdateBufferEntries() = default;
+        DescriptorUpdateBufferEntries(uint32_t size) :
+            size_(size), buffer_handles(size), allocation_data_(size), offsets_(size), ranges_(size)
+        {}
+
+        uint32_t                                           size_{};
+        std::vector<VkBuffer>                              buffer_handles;
+        std::vector<VulkanResourceAllocator::ResourceData> allocation_data_;
+        std::vector<VkDeviceSize>                          offsets_;
+        std::vector<VkDeviceSize>                          ranges_;
+    };
+
     // This objects are internal and responsible for executing the state recreation meta commands
     struct CommandExecuteObjects
     {
@@ -300,6 +323,8 @@ class VulkanAccelerationStructureBuilder
     std::vector<std::unique_ptr<BufferEntry>>                                      buffers_;
     std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData>            cached_descriptor_write;
+    std::vector<DescriptorUpdateBufferEntries>                                     deferred_inspection_buffers;
+    std::vector<BufferEntry*>                                                      instance_buffer_entries;
 
     struct RaytracingPipelineProperties
     {

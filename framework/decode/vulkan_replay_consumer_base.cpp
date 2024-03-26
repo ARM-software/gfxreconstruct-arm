@@ -8293,6 +8293,31 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
 
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
+        // Store the information about buffers that are to be used as Storage Buffers
+        std::vector<VulkanResourceAllocator::ResourceData> resource_data;
+        std::vector<const VkDescriptorBufferInfo*>         buffer_infos;
+        for (uint32_t i = 0; i < descriptor_write_count; ++i)
+        {
+            auto& descriptor_write = descriptor_writes_decoder->GetPointer()[i];
+            if (descriptor_write.descriptorType != VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+            {
+                continue;
+            }
+
+            auto& descriptor_write_meta = descriptor_writes_decoder->GetMetaStructPointer()[i];
+            for (uint32_t j = 0; j < descriptor_write.descriptorCount; ++j)
+            {
+                // To map the buffers later, we need their allocator data
+                resource_data.emplace_back(
+                    GetObjectInfoTable()
+                        .GetBufferInfo(descriptor_write_meta.pBufferInfo->GetMetaStructPointer()[j].buffer)
+                        ->allocator_data);
+                buffer_infos.emplace_back(descriptor_write.pBufferInfo);
+            }
+        }
+        acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
+            resource_data, buffer_infos);
+
         acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
             descriptor_write_count,
             descriptor_writes_decoder->GetPointer(),

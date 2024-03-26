@@ -51,7 +51,7 @@ VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
         if (entry->replacement_acceleration_struct_)
         {
             functions_.destroy_acceleration_structure(
-                device_, entry->replacement_acceleration_struct_->handle_, nullptr);
+                device_, *entry->replacement_acceleration_struct_->handles_.begin(), nullptr);
         }
     }
 }
@@ -61,8 +61,20 @@ void VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(VkAcceler
                                                                        VkDeviceAddress                device_address,
                                                                        VkAccelerationStructureTypeKHR type)
 {
-    acceleration_structures_.emplace_back(std::make_unique<AccelerationStructureEntry>(
-        device_address, 0, handle, type, VkAccelerationStructureBuildSizesInfoKHR()));
+    auto result = std::find_if(acceleration_structures_.begin(),
+                               acceleration_structures_.end(),
+                               [&device_address](const std::unique_ptr<AccelerationStructureEntry>& entry) {
+                                   return entry->original_address_ == device_address;
+                               });
+    if (result == acceleration_structures_.end())
+    {
+        acceleration_structures_.emplace_back(std::make_unique<AccelerationStructureEntry>(
+            device_address, 0, handle, type, VkAccelerationStructureBuildSizesInfoKHR()));
+    }
+    else
+    {
+        result->get()->handles_.insert(handle);
+    }
 }
 
 // On destroy acceleration structure, clean up the internal replacement structure
@@ -73,18 +85,21 @@ void VulkanAccelerationStructureBuilder::OnDestroyAccelerationStructure(
         std::find_if(acceleration_structures_.begin(),
                      acceleration_structures_.end(),
                      [&acceleration_structure_info](const std::unique_ptr<AccelerationStructureEntry>& entry) {
-                         return acceleration_structure_info->handle == entry->handle_;
+                         return entry->IsAlias(acceleration_structure_info->handle);
                      });
 
     GFXRECON_ASSERT(result != acceleration_structures_.end());
 
-    if (result->get()->replacement_acceleration_struct_)
+    if (result->get()->replacement_acceleration_struct_ && result->get()->handles_.size() == 1)
     {
         const auto& real_as = result->get()->replacement_acceleration_struct_;
-        functions_.destroy_acceleration_structure(device_, real_as->handle_, nullptr);
+        functions_.destroy_acceleration_structure(device_, *real_as->handles_.begin(), nullptr);
+        acceleration_structures_.erase(result);
     }
-
-    acceleration_structures_.erase(result);
+    else
+    {
+        result->get()->handles_.erase(acceleration_structure_info->handle);
+    }
 }
 
 void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructuresMetaCommand(
@@ -329,8 +344,7 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
     // If we are updating the instance buffer that was already updated, we would find the new
     // device addresses instead of old
     as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
-        return entry->replacement_acceleration_struct_ &&
-               entry->replacement_acceleration_struct_->new_address_ == address;
+        return entry->replacement_acceleration_struct_->new_address_ == address;
     });
     if (as == acceleration_structures_.end())
     {
@@ -446,14 +460,14 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(uint32_t          
         {
             // Replace the handle with the actual handle, in which the built structure is
             const_cast<VkAccelerationStructureKHR*>(acceleration_structure_write->pAccelerationStructures)[i] =
-                entry->replacement_acceleration_struct_->handle_;
+                *entry->replacement_acceleration_struct_->handles_.begin();
         }
         else if (entry->new_address_ == 0)
         {
             // In case the handle is written to shader before the acceleration structure is built
             // We will store the data we need to update, and do it on queue submit
             // This way, the handle would be replaced by actual
-            cached_descriptor_write.emplace(entry->handle_, descriptor_writes[index]);
+            cached_descriptor_write.emplace(*entry->handles_.begin(), descriptor_writes[index]);
         }
     }
 }
@@ -477,7 +491,7 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
         if (entry->replacement_acceleration_struct_)
         {
             // Replace the handle with the actual handle, in which the built structure is
-            accel_struct = entry->replacement_acceleration_struct_->handle_;
+            accel_struct = *entry->replacement_acceleration_struct_->handles_.begin();
         }
         else if (entry->new_address_ == 0)
         {
@@ -485,7 +499,7 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
             // We will store the data we need to update, and do it on queue submit
             // This way, the handle would be replaced by actual
             cached_descriptor_write.emplace(std::piecewise_construct,
-                                            std::forward_as_tuple(entry->handle_),
+                                            std::forward_as_tuple(*entry->handles_.begin()),
                                             std::forward_as_tuple(descriptor_set, template_update_entry, data));
         }
     }
@@ -518,6 +532,8 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
     // FillMemory command
     instance_buffer_updates_[command_buffer].push_back(
         std::make_tuple(instance_buffer->allocator_data_, offset, build_range));
+
+    instance_buffer_entries.emplace_back(instance_buffer);
 }
 
 // Perform the actual update of the BLAS device addresses
@@ -651,7 +667,7 @@ VulkanAccelerationStructureBuilder::AccelerationStructureEntry*
 VulkanAccelerationStructureBuilder::GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct)
 {
     auto entry = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](auto& entry) {
-        return entry->handle_ == acceleration_struct;
+        return entry->IsAlias(acceleration_struct);
     });
     if (entry != acceleration_structures_.end())
     {
@@ -704,7 +720,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                 dst_entry->new_address_ = replacement_as_address;
             }
             // Update the handle in the geometry info to point to actual structure
-            geometry_infos[i].dstAccelerationStructure = dst_entry->replacement_acceleration_struct_->handle_;
+            geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
             scratch_size                               = size_info.buildScratchSize;
         }
         else if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
@@ -714,7 +730,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             auto src_entry = GetAccelerationStructureEntry(geometry_infos[i].srcAccelerationStructure);
             GFXRECON_ASSERT(src_entry);
             GFXRECON_ASSERT(src_entry->replacement_acceleration_struct_.get() != nullptr);
-            GFXRECON_ASSERT(src_entry->replacement_acceleration_struct_->handle_ != 0);
+            GFXRECON_ASSERT(*src_entry->replacement_acceleration_struct_->handles_.begin() != 0);
 
             // Build the destination structure, if not already built
             if (!dst_entry->replacement_acceleration_struct_)
@@ -733,8 +749,8 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
 
                 dst_entry->new_address_ = replacement_as_address;
             }
-            geometry_infos[i].srcAccelerationStructure = src_entry->replacement_acceleration_struct_->handle_;
-            geometry_infos[i].dstAccelerationStructure = dst_entry->replacement_acceleration_struct_->handle_;
+            geometry_infos[i].srcAccelerationStructure = *src_entry->replacement_acceleration_struct_->handles_.begin();
+            geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
             scratch_size                               = size_info.updateScratchSize;
         }
 
@@ -829,9 +845,9 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         // create replacement acceleration structure for dst with previously determined compacted size
         if (!compacted_entry->replacement_acceleration_struct_)
         {
-            assert(compacted_sizes_processed.count(original_entry->handle_));
-            VkDeviceSize size_of_acc{ compacted_sizes_processed[original_entry->handle_] };
-            compacted_sizes_processed.erase(original_entry->handle_);
+            assert(compacted_sizes_processed.count(*original_entry->handles_.begin()));
+            VkDeviceSize size_of_acc{ compacted_sizes_processed[*original_entry->handles_.begin()] };
+            compacted_sizes_processed.erase(*original_entry->handles_.begin());
 
             std::unique_ptr<BufferEntry>             storage = CreateBuffer(size_of_acc,
                                                                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
@@ -854,8 +870,8 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
             compacted_entry->new_address_ = replacement_as_address;
         }
 
-        modified_info.src = original_entry->replacement_acceleration_struct_->handle_;
-        modified_info.dst = compacted_entry->replacement_acceleration_struct_->handle_;
+        modified_info.src = *original_entry->replacement_acceleration_struct_->handles_.begin();
+        modified_info.dst = *compacted_entry->replacement_acceleration_struct_->handles_.begin();
     }
     // TODO: non-compacting copy
     functions_.cmd_copy_acceleration_structure(command_buffer, &modified_info);
@@ -877,7 +893,7 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
         auto                       entry          = GetAccelerationStructureEntry(capture_handle);
         assert(entry->replacement_acceleration_struct_);
 
-        acceleration_structures[index] = entry->replacement_acceleration_struct_->handle_;
+        acceleration_structures[index] = *entry->replacement_acceleration_struct_->handles_.begin();
         acc_str_to_process.push_back(capture_handle);
     }
 
@@ -1057,15 +1073,84 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t submitCount, con
         }
     }
 
+    for (const auto& descriptor_update_buffers : deferred_inspection_buffers)
+    {
+        bool should_inspect = false;
+        // Check that this descriptor update had any buffer we consider an instance buffer
+        for (const auto& instance_buffer_entry : instance_buffer_entries)
+        {
+            if (std::any_of(
+                    descriptor_update_buffers.buffer_handles.begin(),
+                    descriptor_update_buffers.buffer_handles.end(),
+                    [&instance_buffer_entry](VkBuffer handle) { return handle == instance_buffer_entry->handle_; }))
+            {
+                should_inspect = true;
+                break;
+            }
+        }
+
+        if (!should_inspect)
+        {
+            continue;
+        }
+
+        for (uint32_t buffer_idx = 0; buffer_idx < descriptor_update_buffers.size_; ++buffer_idx)
+        {
+            if (!descriptor_update_buffers.allocation_data_[buffer_idx])
+            {
+                continue;
+            }
+
+            uint8_t* data;
+            allocator_->MapResourceMemoryDirect(
+                allocator_->GetBufferSize(descriptor_update_buffers.allocation_data_[buffer_idx]),
+                0,
+                (void**)&data,
+                descriptor_update_buffers.allocation_data_[buffer_idx]);
+            data += descriptor_update_buffers.offsets_[buffer_idx];
+
+            // Try to interpret whatever is inside the buffer as VkDeviceAddress
+            VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
+
+            if (!device_addresses)
+            {
+                continue;
+            }
+
+            auto acceleration_structure =
+                std::find_if(acceleration_structures_.begin(),
+                             acceleration_structures_.end(),
+                             [&device_addresses](const std::unique_ptr<AccelerationStructureEntry>& entry) {
+                                 return entry->original_address_ == *device_addresses;
+                             });
+            // If we have not found an acceleration structure with such device address
+            // then probably it is not the correct buffer to go into
+            if (acceleration_structure == acceleration_structures_.end())
+            {
+                continue;
+            }
+
+            // Otherwise, iterate over this buffer and replace device addresses
+            for (uint32_t i = 0; i < descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress); ++i)
+            {
+                UpdateAccelerationStructDeviceAddress(device_addresses[i]);
+            }
+
+            allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.allocation_data_[buffer_idx]);
+        }
+    }
+    instance_buffer_entries.clear();
+    deferred_inspection_buffers.clear();
+
     // Update the descriptor set with the actual handle, if any such update is stored
     for (auto it = cached_descriptor_write.begin(); it != cached_descriptor_write.end();)
     {
         auto entry = GetAccelerationStructureEntry(it->first);
         if (entry->replacement_acceleration_struct_)
         {
-            auto handle =
-                std::find(it->second.acc_structs_data.begin(), it->second.acc_structs_data.end(), entry->handle_);
-            *handle = entry->replacement_acceleration_struct_->handle_;
+            auto handle = std::find(
+                it->second.acc_structs_data.begin(), it->second.acc_structs_data.end(), *entry->handles_.begin());
+            *handle = *entry->replacement_acceleration_struct_->handles_.begin();
             functions_.update_descriptor_sets(device_, 1, &it->second.write_, 0, nullptr);
             it = cached_descriptor_write.erase(it);
         }
@@ -1185,6 +1270,25 @@ void VulkanAccelerationStructureBuilder::RegisterShaderGroupHandleEntry(uint32_t
 void VulkanAccelerationStructureBuilder::PostQueuePresent()
 {
     scratches_.clear();
+}
+
+void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates(
+    const std::vector<VulkanResourceAllocator::ResourceData>& resource_data,
+    const std::vector<const VkDescriptorBufferInfo*>&         pBufferInfos)
+{
+    if (resource_data.empty())
+    {
+        return;
+    }
+    auto& buffers = deferred_inspection_buffers.emplace_back(resource_data.size());
+
+    for (uint32_t i = 0; i < resource_data.size(); ++i)
+    {
+        buffers.buffer_handles[i]   = pBufferInfos[i]->buffer;
+        buffers.allocation_data_[i] = resource_data[i];
+        buffers.offsets_[i]         = pBufferInfos[i]->offset;
+        buffers.ranges_[i]          = pBufferInfos[i]->range;
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)
