@@ -464,7 +464,7 @@ CreateWrappedHandle<DeviceWrapper, SwapchainKHRWrapper, ImageWrapper>(VkDevice, 
     {
         for (auto old_image : parent_wrapper->old_swapchain->child_images)
         {
-            if (*handle == old_image->handle)
+            if ((old_image != nullptr) && (*handle == old_image->handle))
             {
                 wrapper = old_image;
                 parent_wrapper->child_images.push_back(wrapper);
