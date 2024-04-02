@@ -128,7 +128,7 @@ class VulkanAccelerationStructureBuilder
     // For each submitted buffer, if it contains a TLAS build command, update its instance buffer
     // with replacement BLAS address
     // Also check whether there are descriptor sets the needs the acceleration structure handle replaced
-    void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits);
+    void OnQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits);
 
     // Execute actions post queue present
     void PostQueuePresent();
@@ -319,8 +319,9 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    std::vector<std::unique_ptr<AccelerationStructureEntry>>                       acceleration_structures_;
-    std::vector<std::unique_ptr<BufferEntry>>                                      buffers_;
+    VkQueue                                                  queue_with_deffered_buffer_write = VK_NULL_HANDLE;
+    std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
+    std::vector<std::unique_ptr<BufferEntry>>                buffers_;
     std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData>            cached_descriptor_write;
     std::vector<DescriptorUpdateBufferEntries>                                     deferred_inspection_buffers;
