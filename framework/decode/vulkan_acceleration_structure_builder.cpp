@@ -1221,8 +1221,8 @@ void VulkanAccelerationStructureBuilder::UpdateShaderBindingTable(const VkStride
         {
             // Assume shaderGroupHandleSize and shaderGroupHandleAlignment are the same - verified on rtuv0,rtuv1,rtuv2
             // TODO: shader group size/alignment might change on different platforms
-            assert(entry.original_data_.size() == entry.runtime_data_.size() ==
-                   raytracing_pipeline_properties_.shader_group_handle_size_aligned);
+            assert(entry.original_data_.size() == entry.runtime_data_.size());
+            assert(entry.original_data_.size() == raytracing_pipeline_properties_.shader_group_handle_size_aligned);
             if (0 == memcmp(entry.original_data_.data(), handle_address, entry.original_data_.size()))
             {
                 memcpy(handle_address, entry.runtime_data_.data(), entry.original_data_.size());
