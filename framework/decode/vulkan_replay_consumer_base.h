@@ -1333,6 +1333,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::vector<format::HandleId>
     GetImageAttachments(StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder);
 
+    void ConsumeVendorBinaryDataHeader(const uint8_t*                                vendor_binary_data,
+                                       VkDeviceFaultVendorBinaryHeaderVersionOneEXT& header);
+
   private:
     struct HardwareBufferInfo
     {
@@ -1415,8 +1418,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
 
-    bool device_fault_supported{ false };
-    bool device_fault_vendor_data_supported{ false };
+    bool           device_fault_supported_;
+    bool           device_fault_vendor_data_supported_;
+    const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
