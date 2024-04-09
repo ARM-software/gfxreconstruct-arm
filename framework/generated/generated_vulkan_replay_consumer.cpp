@@ -1695,12 +1695,11 @@ void VulkanReplayConsumer::Process_vkCmdCopyBuffer(
     uint32_t                                    regionCount,
     StructPointerDecoder<Decoded_VkBufferCopy>* pRegions)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    VkBuffer in_srcBuffer = MapHandle<BufferInfo>(srcBuffer, &VulkanObjectInfoTable::GetBufferInfo);
-    VkBuffer in_dstBuffer = MapHandle<BufferInfo>(dstBuffer, &VulkanObjectInfoTable::GetBufferInfo);
-    const VkBufferCopy* in_pRegions = pRegions->GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
+    auto in_srcBuffer = GetObjectInfoTable().GetBufferInfo(srcBuffer);
+    auto in_dstBuffer = GetObjectInfoTable().GetBufferInfo(dstBuffer);
 
-    GetDeviceTable(in_commandBuffer)->CmdCopyBuffer(in_commandBuffer, in_srcBuffer, in_dstBuffer, regionCount, in_pRegions);
+    OverrideCmdCopyBuffer(GetDeviceTable(in_commandBuffer->handle)->CmdCopyBuffer, in_commandBuffer, in_srcBuffer, in_dstBuffer, regionCount, pRegions);
 }
 
 void VulkanReplayConsumer::Process_vkCmdCopyImage(

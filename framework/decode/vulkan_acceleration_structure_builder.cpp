@@ -548,6 +548,31 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
         std::make_tuple(instance_buffer->allocator_data_, offset, build_range));
 
     instance_buffer_entries.emplace_back(instance_buffer);
+
+    auto instance_buffers_staging_update_itr = instance_buffer_staging_updates_.find(command_buffer);
+
+    if (instance_buffers_staging_update_itr != instance_buffer_staging_updates_.end())
+    {
+        auto& staging_update_vector = instance_buffers_staging_update_itr->second;
+
+        for (auto it = staging_update_vector.begin(); it != staging_update_vector.end(); it++)
+        {
+            VkBuffer dst_buffer = std::get<2>(*it);
+            if (dst_buffer == instance_buffer->handle_)
+            {
+                GFXRECON_LOG_WARNING("Stagging write of instance buffer has been detected");
+                VulkanResourceAllocator::ResourceData src_buffer_allocator_data = std::get<0>(*it);
+                VkDeviceSize                          src_offset                = std::get<1>(*it);
+
+                instance_buffer_updates_[command_buffer].pop_back();
+                instance_buffer_updates_[command_buffer].push_back(
+                    std::make_tuple(src_buffer_allocator_data, src_offset, build_range));
+
+                staging_update_vector.erase(it);
+                break;
+            }
+        }
+    }
 }
 
 // Perform the actual update of the BLAS device addresses
@@ -923,7 +948,7 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
 
     if (VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR == query_type)
     {
-        std::unique_ptr<BufferEntry> stagging_buffer_entry =
+        std::unique_ptr<BufferEntry> staging_buffer_entry =
             CreateBuffer(sizeof(uint64_t) * count,
                          VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                          (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
@@ -933,7 +958,7 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
         auto [it, inserted] = compacted_sizes_unprocessed.emplace(
             pool,
             std::vector<std::tuple<uint32_t, std::unique_ptr<BufferEntry>, std::vector<VkAccelerationStructureKHR>>>());
-        it->second.push_back({ first_query, std::move(stagging_buffer_entry), acc_str_to_process });
+        it->second.push_back({ first_query, std::move(staging_buffer_entry), acc_str_to_process });
     }
 }
 VkDeviceAddress
@@ -1091,6 +1116,15 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
         for (int cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
         {
             auto submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
+
+            // if instance_buffer_staging_updates_ for this command buffer is not empty it means that the staging
+            // instance buffer write was referring to an acceleration structure meant to be built at a later time,
+            // therefore no action needed for it
+            auto instance_buffer_staging_update_it = instance_buffer_staging_updates_.find(submitted_buffer);
+            if (instance_buffer_staging_update_it != instance_buffer_staging_updates_.end())
+            {
+                instance_buffer_staging_updates_.erase(instance_buffer_staging_update_it);
+            }
 
             auto instance_buffers_update_itr = instance_buffer_updates_.find(submitted_buffer);
             if (instance_buffers_update_itr != instance_buffer_updates_.end())
@@ -1308,6 +1342,16 @@ void VulkanAccelerationStructureBuilder::RegisterShaderGroupHandleEntry(uint32_t
                                                   runtime_data + (single_entry_size * group_index),
                                                   single_entry_size);
     }
+}
+
+void VulkanAccelerationStructureBuilder::RegisterInstanceBufferStagingUpdate(
+    VkCommandBuffer                       command_buffer,
+    VulkanResourceAllocator::ResourceData src_buffer_allocator_data,
+    VkDeviceSize                          src_offset,
+    VkBuffer                              dst_buffer)
+{
+    instance_buffer_staging_updates_[command_buffer].push_back(
+        std::make_tuple(src_buffer_allocator_data, src_offset, dst_buffer));
 }
 
 void VulkanAccelerationStructureBuilder::PostQueuePresent()

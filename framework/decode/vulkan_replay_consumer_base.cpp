@@ -3678,6 +3678,37 @@ void VulkanReplayConsumerBase::OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQuer
     func(command_buffer, query_pool, firstQuery, queryCount, dst_buffer, dstOffset, stride, flags);
 }
 
+void VulkanReplayConsumerBase::OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer                         func,
+                                                     const CommandBufferInfo*                    command_buffer_info,
+                                                     const BufferInfo*                           src_buffer,
+                                                     const BufferInfo*                           dst_buffer,
+                                                     uint32_t                                    regionCount,
+                                                     StructPointerDecoder<Decoded_VkBufferCopy>* pRegions)
+{
+
+    VkCommandBuffer     in_commandBuffer = command_buffer_info->handle;
+    VkBuffer            in_srcBuffer     = src_buffer->handle;
+    VkBuffer            in_dstBuffer     = dst_buffer->handle;
+    const VkBufferCopy* in_pRegions      = pRegions->GetPointer();
+
+    auto device_info = GetObjectInfoTable().GetDeviceInfo(command_buffer_info->parent_id);
+    GFXRECON_ASSERT(device_info != nullptr);
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        if (dst_buffer->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+        {
+            // Register potential staging write to instance buffer data
+            acceleration_structure_builders_[device_info->capture_id]->RegisterInstanceBufferStagingUpdate(
+                command_buffer_info->handle, src_buffer->allocator_data, in_pRegions->srcOffset, dst_buffer->handle);
+        }
+    }
+
+    func(in_commandBuffer, in_srcBuffer, in_dstBuffer, regionCount, in_pRegions);
+}
+
 VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoolResults func,
                                                                VkResult                  original_result,
                                                                const DeviceInfo*         device_info,
