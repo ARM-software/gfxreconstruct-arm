@@ -764,6 +764,23 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read fill memory meta-data block header");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kFixDeviceAddressCommand)
+    {
+        format::FixDeviceAddressCommandHeader header;
+        success        = ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success        = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+        auto locations = new format::AddressLocationInfo[header.num_of_locations];
+        success        = ReadBytes(locations, header.num_of_locations * sizeof(format::AddressLocationInfo));
+
+        for (auto decoder : decoders_)
+        {
+            if (decoder->SupportsMetaDataId(meta_data_id))
+            {
+                decoder->DispatchFixDeviceAddresCommand(header, locations);
+            }
+        }
+        delete[] locations;
+    }
     else if (meta_data_type == format::MetaDataType::kFillMemoryResourceValueCommand)
     {
         format::FillMemoryResourceValueCommandHeader header;

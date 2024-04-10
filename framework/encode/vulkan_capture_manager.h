@@ -34,6 +34,7 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_tracker.h"
+#include "encode/vulkan_device_address_tracker.h"
 #include "format/api_call_id.h"
 #include "format/format.h"
 #include "format/platform_types.h"
@@ -843,6 +844,9 @@ class VulkanCaptureManager : public CaptureManager
     void PostProcess_vkBindBufferMemory(
         VkResult result, VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset)
     {
+        auto wrapper            = GetWrapper<BufferWrapper>(buffer);
+        wrapper->bind_memory_id = GetWrappedId<DeviceMemoryWrapper>(memory);
+        wrapper->bind_offset    = memoryOffset;
         if (((GetCaptureMode() & kModeTrack) == kModeTrack) && (result == VK_SUCCESS))
         {
             assert(state_tracker_ != nullptr);
@@ -855,6 +859,12 @@ class VulkanCaptureManager : public CaptureManager
                                          uint32_t                      bindInfoCount,
                                          const VkBindBufferMemoryInfo* pBindInfos)
     {
+        for (uint32_t i = 0; i < bindInfoCount; ++i)
+        {
+            auto wrapper            = GetWrapper<BufferWrapper>(pBindInfos[i].buffer);
+            wrapper->bind_memory_id = GetWrappedId<DeviceMemoryWrapper>(pBindInfos[i].memory);
+            wrapper->bind_offset    = pBindInfos[i].memoryOffset;
+        }
         if (((GetCaptureMode() & kModeTrack) == kModeTrack) && (result == VK_SUCCESS) && (pBindInfos != nullptr))
         {
             assert(state_tracker_ != nullptr);
@@ -1298,8 +1308,14 @@ class VulkanCaptureManager : public CaptureManager
                                                           const VkDeviceMemoryOpaqueCaptureAddressInfo* pInfo);
 
     void
-    PreProcess_vkGetAccelerationStructureDeviceAddressKHR(VkDevice                                           device,
-                                                          const VkAccelerationStructureDeviceAddressInfoKHR* pInfo);
+         PreProcess_vkGetAccelerationStructureDeviceAddressKHR(VkDevice                                           device,
+                                                               const VkAccelerationStructureDeviceAddressInfoKHR* pInfo);
+    void PostProcess_vkGetAccelerationStructureDeviceAddressKHR(
+        VkDeviceAddress result, VkDevice device, const VkAccelerationStructureDeviceAddressInfoKHR* pInfo)
+    {
+        auto id = GetWrappedId<AccelerationStructureKHRWrapper>(pInfo->accelerationStructure);
+        address_tracker.TrackAccelerationStructureDeviceAddress(id, result);
+    }
 
     void PreProcess_vkGetRayTracingShaderGroupHandlesKHR(
         VkDevice device, VkPipeline pipeline, uint32_t firstGroup, uint32_t groupCount, size_t dataSize, void* pData);
@@ -1430,9 +1446,23 @@ class VulkanCaptureManager : public CaptureManager
         EndFrame();
     }
 
+    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress addr, const VkBufferDeviceAddressInfo* pInfo)
+    {
+        if (addr != 0)
+        {
+            BufferWrapper* wrapper = GetWrapper<BufferWrapper>(pInfo->buffer);
+            address_tracker.TrackBufferDeviceAddress(wrapper->handle_id, wrapper->created_size, addr);
+        }
+    }
+
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
 #endif
+    DeviceMemoryWrapper* GetMemory(format::HandleId id)
+    {
+        std::lock_guard<std::mutex> lock(mapped_memory_lock_);
+        return memories[id];
+    }
 
   protected:
     VulkanCaptureManager() : CaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
@@ -1513,6 +1543,9 @@ class VulkanCaptureManager : public CaptureManager
     HardwareBufferMap                   hardware_buffers_;
     std::vector<const char*>            faked_extensions_;
     std::mutex                          deferred_operation_mutex;
+    VulkanDeviceAddressTracker          address_tracker;
+
+    std::unordered_map<format::HandleId, DeviceMemoryWrapper*> memories;
 };
 
 GFXRECON_END_NAMESPACE(encode)

@@ -42,6 +42,8 @@
 #include "util/hash.h"
 #include "util/platform.h"
 #include "util/logging.h"
+//#include "decode/vulkan_rebind_allocator.h"
+#include "format/format.h"
 
 #include "generated/generated_vulkan_enum_to_string.h"
 
@@ -264,10 +266,10 @@ void VulkanReplayConsumerBase::ProcessDisplayMessageCommand(const std::string& m
     GFXRECON_LOG_INFO("Trace Message: %s", message.c_str());
 }
 
-void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id,
-                                                        uint64_t       offset,
-                                                        uint64_t       size,
-                                                        const uint8_t* data)
+void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t memory_id,
+                                                        uint64_t offset,
+                                                        uint64_t size,
+                                                        uint8_t* data)
 {
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
@@ -280,6 +282,18 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
 
         if (allocator != nullptr)
         {
+            if (locations.find(memory_id) != locations.end())
+            {
+                std::vector<format::AddressLocationInfo>& locs = locations[memory_id];
+                for (format::AddressLocationInfo& location : locs)
+                {
+                    auto old_value_ptr = (uint64_t*)(data + location.offset_in_memory);
+                    auto ov            = *old_value_ptr;
+                    GFXRECON_ASSERT(ov == location.adjusted_address);
+                    *old_value_ptr = location.new_address;
+                }
+                locations.erase(memory_id);
+            }
             result = allocator->WriteMappedMemoryRange(memory_info->allocator_data, offset, size, data);
         }
         else
@@ -380,6 +394,47 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
     {
         GFXRECON_LOG_WARNING("Skipping memory fill for unrecognized VkDeviceMemory object (ID = %" PRIu64 ")",
                              memory_id);
+    }
+}
+
+void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                             const format::AddressLocationInfo*           infos)
+{
+    const DeviceMemoryInfo* memory_info = object_info_table_.GetDeviceMemoryInfo(header.memory_id);
+    if (memory_info == nullptr)
+    {
+        return;
+    }
+    auto allocator = memory_info->allocator;
+    if (allocator == nullptr)
+    {
+        GFXRECON_LOG_WARNING("Skipping memory fix for VkDeviceMemory object (ID = %" PRIu64
+                             ") that is not associated with a resource allocator",
+                             header.memory_id);
+        return;
+    }
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        for (int i = 0; i < header.num_of_locations; i++)
+        {
+            if (tracked_addresses_.find(infos[i].id) != tracked_addresses_.end())
+            {
+                locations[header.memory_id].push_back(infos[i]);
+                uint64_t        offset  = infos[i].adjusted_address - infos[i].original_address;
+                VkDeviceAddress address = 0;
+                if (!tracked_addresses_[infos[i].id])
+                {
+                    address = acceleration_structure_builders_[memory_info->parent_id]
+                                  ->OnGetAccelerationStructureDeviceAddress(
+                                      object_info_table_.GetAccelerationStructureKHRInfo(infos[i].id)->handle);
+                }
+                else
+                {
+                    address = tracked_addresses_[infos[i].id].value();
+                }
+                locations[header.memory_id].back().new_address = address + offset;
+            }
+        }
     }
 }
 
@@ -1257,7 +1312,7 @@ void VulkanReplayConsumerBase::CheckResult(const char*                 func_name
         {
             GFXRECON_LOG_ERROR("Address type: %s",
                                util::ToString<VkDeviceFaultAddressTypeEXT>(address_info.addressType).c_str());
-            GFXRECON_LOG_ERROR("Reported address: 0x%" PRIx64, address_info.reportedAddress);
+            GFXRECON_LOG_ERROR("Reported address: %" PRIu64, address_info.reportedAddress);
             GFXRECON_LOG_ERROR("Address precision: %" PRIu64, address_info.addressPrecision);
         }
 
@@ -1265,7 +1320,7 @@ void VulkanReplayConsumerBase::CheckResult(const char*                 func_name
         {
             GFXRECON_LOG_ERROR("Vendor description: %s", vendor_info.description);
             GFXRECON_LOG_ERROR("Vendor fault code: %" PRIu64, vendor_info.vendorFaultCode);
-            GFXRECON_LOG_ERROR("Vendor fault data: 0x%" PRIx64, vendor_info.vendorFaultData);
+            GFXRECON_LOG_ERROR("Vendor fault data: %" PRIu64, vendor_info.vendorFaultData);
         }
         if (device_fault_vendor_data_supported_ && !device_fault_info.vendor_binary_data_.empty())
         {
@@ -3808,6 +3863,10 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
         }
     }
 
+    if ((options_.sync_queue_submissions) && (result == VK_SUCCESS))
+    {
+        result = GetDeviceTable(queue_info->handle)->QueueWaitIdle(queue_info->handle);
+    }
 
     if (screenshot_handler_ != nullptr)
     {
@@ -5058,11 +5117,9 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
             address_usage_flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
     }
-
+    VkBufferCreateInfo modified_create_info = (*replay_create_info);
     if (uses_address)
     {
-        VkBufferCreateInfo modified_create_info = (*replay_create_info);
-
         VkBufferOpaqueCaptureAddressCreateInfo address_info = {
             VK_STRUCTURE_TYPE_BUFFER_OPAQUE_CAPTURE_ADDRESS_CREATE_INFO
         };
@@ -5086,15 +5143,9 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
             GFXRECON_LOG_DEBUG("Opaque device address is not available for VkBuffer object (ID = %" PRIu64 ")",
                                capture_id);
         }
-
-        result = allocator->CreateBuffer(
-            &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_buffer, &allocator_data);
     }
-    else
-    {
-        result = allocator->CreateBuffer(
-            replay_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_buffer, &allocator_data);
-    }
+    result = allocator->CreateBuffer(
+        &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_buffer, &allocator_data);
 
     if ((result == VK_SUCCESS) && (replay_create_info != nullptr) && ((*replay_buffer) != VK_NULL_HANDLE))
     {
@@ -5103,7 +5154,7 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
 
         buffer_info->allocator_data = allocator_data;
         buffer_info->usage          = replay_create_info->usage;
-
+        buffer_info->size           = modified_create_info.size;
         if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
             (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))
         {
@@ -8012,6 +8063,7 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
         auto             buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
         acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
             buffer_data, original_result, new_device_address);
+        tracked_addresses_[buffer] = new_device_address;
     }
 
     return new_device_address;
@@ -8030,6 +8082,11 @@ void VulkanReplayConsumerBase::OverrideGetAccelerationStructureDeviceAddressKHR(
         GFXRECON_LOG_WARNING_ONCE("The captured application used vkGetAccelerationStructureDeviceAddressKHR, which may "
                                   "require the accelerationStructureCaptureReplay feature for accurate capture and "
                                   "replay. The replay device does not support this feature, so replay may fail.");
+    }
+    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        format::HandleId id    = pInfo->GetMetaStructPointer()->accelerationStructure;
+        tracked_addresses_[id] = std::nullopt;
     }
 }
 

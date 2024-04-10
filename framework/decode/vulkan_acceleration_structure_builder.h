@@ -157,6 +157,8 @@ class VulkanAccelerationStructureBuilder
                                         uint8_t* original_data,
                                         uint8_t* runtime_data);
 
+    VkDeviceAddress OnGetAccelerationStructureDeviceAddress(VkAccelerationStructureKHR hanle);
+
   private:
     struct ShaderGroupHandleEntry
     {

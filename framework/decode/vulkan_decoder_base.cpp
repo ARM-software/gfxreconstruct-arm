@@ -26,6 +26,7 @@
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/pointer_decoder.h"
 #include "decode/value_decoder.h"
+#include "format/format.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -73,13 +74,22 @@ void VulkanDecoderBase::DispatchDisplayMessageCommand(format::ThreadId thread_id
 }
 
 void VulkanDecoderBase::DispatchFillMemoryCommand(
-    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data)
+    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data)
 {
     GFXRECON_UNREFERENCED_PARAMETER(thread_id);
 
     for (auto consumer : consumers_)
     {
         consumer->ProcessFillMemoryCommand(memory_id, offset, size, data);
+    }
+}
+
+void VulkanDecoderBase::DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                       const format::AddressLocationInfo*           infos)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessFixDeviceAddresCommand(header, infos);
     }
 }
 

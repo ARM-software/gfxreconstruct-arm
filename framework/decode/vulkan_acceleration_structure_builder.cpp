@@ -341,6 +341,20 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
         return;
     }
 
+    // Instance updated by FixDeviceMemory metacommand will match the original AS runtime device address -
+    // change to replacement AS address if exists
+    as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
+        return entry->new_address_ == address;
+    });
+
+    if (as != acceleration_structures_.end())
+    {
+        if ((*as)->replacement_acceleration_struct_)
+        {
+            address = (*as)->replacement_acceleration_struct_->new_address_;
+        }
+    }
+
     // If we are updating the instance buffer that was already updated, we would find the new
     // device addresses instead of old
     as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
@@ -705,6 +719,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             if (!dst_entry->replacement_acceleration_struct_)
             {
                 // Create the replacement entry and link it to original one
+                // TODO: Create storage buffer with usage flags and sharing mode like the original storage buffer
                 std::unique_ptr<BufferEntry> storage = CreateBuffer(
                     size_info.accelerationStructureSize,
                     VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -717,7 +732,10 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                     0, replacement_as_address, replacement_as, geometry_infos[i].type, size_info);
                 dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
-                dst_entry->new_address_ = replacement_as_address;
+                // TODO: verify breaking change - original AS entry new_addres_ now contains its actual runtime device
+                // address instead of the address of its replacement
+                dst_entry->new_address_ =
+                    GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
             }
             // Update the handle in the geometry info to point to actual structure
             geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
@@ -747,7 +765,10 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
                     0, replacement_as_address, replacement_as, geometry_infos[i].type, size_info);
                 dst_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
-                dst_entry->new_address_ = replacement_as_address;
+                // TODO: verify breaking change - original AS entry new_addres_ now contains its actual runtime device
+                // address instead of the address of its replacement
+                dst_entry->new_address_ =
+                    GetAccelerationStructureDeviceAddress(geometry_infos[i].dstAccelerationStructure);
             }
             geometry_infos[i].srcAccelerationStructure = *src_entry->replacement_acceleration_struct_->handles_.begin();
             geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
@@ -867,7 +888,7 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
                 0, replacement_as_address, replacement_as, compacted_entry->type_, size_info);
             compacted_entry->replacement_acceleration_struct_->storage_ = std::move(storage);
 
-            compacted_entry->new_address_ = replacement_as_address;
+            compacted_entry->new_address_ = GetAccelerationStructureDeviceAddress(modified_info.dst);
         }
 
         modified_info.src = *original_entry->replacement_acceleration_struct_->handles_.begin();
@@ -915,7 +936,16 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
         it->second.push_back({ first_query, std::move(stagging_buffer_entry), acc_str_to_process });
     }
 }
-
+VkDeviceAddress
+VulkanAccelerationStructureBuilder::OnGetAccelerationStructureDeviceAddress(VkAccelerationStructureKHR handle)
+{
+    AccelerationStructureEntry* entry = GetAccelerationStructureEntry(handle);
+    if (entry->replacement_acceleration_struct_)
+    {
+        return entry->replacement_acceleration_struct_->new_address_;
+    }
+    return GetAccelerationStructureDeviceAddress(handle);
+}
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetAccelerationStructureDeviceAddress(
     VkAccelerationStructureKHR acceleration_structure)
 {
@@ -1120,12 +1150,12 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                 continue;
             }
 
-            auto acceleration_structure =
-                std::find_if(acceleration_structures_.begin(),
-                             acceleration_structures_.end(),
-                             [&device_addresses](const std::unique_ptr<AccelerationStructureEntry>& entry) {
-                                 return entry->original_address_ == *device_addresses;
-                             });
+            auto acceleration_structure = std::find_if(
+                acceleration_structures_.begin(),
+                acceleration_structures_.end(),
+                [&device_addresses](const std::unique_ptr<AccelerationStructureEntry>& entry) {
+                    return entry->original_address_ == *device_addresses || entry->new_address_ == *device_addresses;
+                });
             // If we have not found an acceleration structure with such device address
             // then probably it is not the correct buffer to go into
             if (acceleration_structure == acceleration_structures_.end())
@@ -1158,7 +1188,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
     // Update the descriptor set with the actual handle, if any such update is stored
     for (auto it = cached_descriptor_write.begin(); it != cached_descriptor_write.end();)
     {
-        auto entry = GetAccelerationStructureEntry(it->first);
+        AccelerationStructureEntry* entry = GetAccelerationStructureEntry(it->first);
         if (entry->replacement_acceleration_struct_)
         {
             auto handle = std::find(
@@ -1176,10 +1206,10 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
     // Update shader group handles if the submission contains vkCmdTraceRays command
     for (int i = 0; i < submitCount; ++i)
     {
-        auto submission = pSubmits[i];
+        VkSubmitInfo submission = pSubmits[i];
         for (int cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
         {
-            auto submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
+            VkCommandBuffer submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
 
             // Every command buffer containing CmdTraceRays has been recorded into trace_rays_ map along with the
             // shader binding table data. These SBTs will contain shader group handles that need an update

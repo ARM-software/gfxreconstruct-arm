@@ -731,10 +731,10 @@ void VulkanResourceTrackingConsumer::Process_vkDestroyImage(
     GetDeviceTable(in_device)->DestroyImage(in_device, in_image, nullptr);
 }
 
-void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t       memory_id,
-                                                              uint64_t       offset,
-                                                              uint64_t       size,
-                                                              const uint8_t* data)
+void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t memory_id,
+                                                              uint64_t offset,
+                                                              uint64_t size,
+                                                              uint8_t* data)
 {
     auto memory_info = GetTrackedObjectInfoTable()->GetTrackedDeviceMemoryInfo(memory_id);
 
@@ -743,6 +743,9 @@ void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t       mem
     memory_info->InsertFilledMemoryOffsetsList(offset);
     memory_info->InsertFilledMemorySizesList(size);
 }
+
+void VulkanResourceTrackingConsumer::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                                   const format::AddressLocationInfo* infos){};
 
 // Util function for sorting: compares two resources according to the trace binding offset number.
 bool CompareOffset(TrackedResourceInfo* resource1, TrackedResourceInfo* resource2)

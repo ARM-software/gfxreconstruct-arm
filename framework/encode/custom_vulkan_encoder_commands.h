@@ -1018,6 +1018,15 @@ struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetAccelerationStructur
         manager->PreProcess_vkGetAccelerationStructureDeviceAddressKHR(args...);
     }
 };
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetAccelerationStructureDeviceAddressKHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkGetAccelerationStructureDeviceAddressKHR(args...);
+    }
+};
 
 template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetRayTracingShaderGroupHandlesKHR>
@@ -1408,6 +1417,44 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateCommandPool>
     }
 };
 
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddress>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager*            manager,
+                         VkDeviceAddress                  result,
+                         VkDevice                         device,
+                         const VkBufferDeviceAddressInfo* pInfo)
+    {
+        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressKHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager*            manager,
+                         VkDeviceAddress                  result,
+                         VkDevice                         device,
+                         const VkBufferDeviceAddressInfo* pInfo)
+    {
+        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressEXT>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager*            manager,
+                         VkDeviceAddress                  result,
+                         VkDevice                         device,
+                         const VkBufferDeviceAddressInfo* pInfo)
+    {
+        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
+    }
+};
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

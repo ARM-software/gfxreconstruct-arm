@@ -92,8 +92,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     virtual void ProcessDisplayMessageCommand(const std::string& message) override;
 
-    virtual void
-    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
+    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+
+    virtual void ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                               const format::AddressLocationInfo*           infos) override;
 
     virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
 
@@ -1393,6 +1395,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_supported_;
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
+
+    std::unordered_map<format::HandleId, std::optional<VkDeviceAddress>>           tracked_addresses_;
+    std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -66,8 +66,7 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void
-    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override
+    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override
     {
         const util::JsonOptions& json_options = GetOptions();
         auto&                    jdata        = WriteMetaCommandStart("FillMemoryCommand");
@@ -75,6 +74,23 @@ class MetadataJsonConsumer : public Base
         FieldToJson(jdata["offset"], offset, json_options);
         FieldToJson(jdata["size"], size, json_options);
         RepresentBinaryFile(*(this->writer_), jdata[format::kNameData], "fill_memory.bin", size, data);
+        WriteBlockEnd();
+    }
+
+    virtual void ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                               const format::AddressLocationInfo*           infos) override
+    {
+        using namespace util;
+        const JsonOptions& json_options = GetOptions();
+        auto&              jdata        = WriteMetaCommandStart("FixDeviceAddresCommand");
+        HandleToJson(jdata["memory_id"], header.memory_id, json_options);
+        for (int i = 0; i < header.num_of_locations; i++)
+        {
+            HandleToJson(jdata["location"][i]["buffer_id"], infos[i].id, json_options);
+            FieldToJson(jdata["location"][i]["original_address"], infos[i].original_address, json_options);
+            FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
+            FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+        }
         WriteBlockEnd();
     }
 

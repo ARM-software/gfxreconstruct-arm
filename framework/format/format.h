@@ -147,7 +147,8 @@ enum class MetaDataType : uint16_t
     kParentToChildDependency                            = 27,
     kVulkanBuildAccelerationStructuresCommand           = 28,
     kVulkanCopyAccelerationStructuresCommand            = 29,
-    kVulkanWriteAccelerationStructuresPropertiesCommand = 30
+    kVulkanWriteAccelerationStructuresPropertiesCommand = 30,
+    kFixDeviceAddressCommand                            = 31
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -318,6 +319,23 @@ struct FillMemoryCommandHeader
     HandleId memory_id;
     uint64_t memory_offset; // Offset from the start of the mapped pointer, not the start of the memory object.
     uint64_t memory_size;   // Uncompressed size of the data encoded after the header.
+};
+
+struct FixDeviceAddressCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::HandleId memory_id;
+    uint64_t         num_of_locations;
+};
+
+struct AddressLocationInfo
+{
+    format::HandleId id;
+    uint64_t         size;
+    uint64_t         original_address; // Buffer start
+    uint64_t         adjusted_address; // Address found in memory
+    uint64_t         offset_in_memory;
+    uint64_t         new_address; // Set on replay
 };
 
 struct FillMemoryResourceValueCommandHeader

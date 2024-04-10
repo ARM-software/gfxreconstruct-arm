@@ -167,7 +167,10 @@ class VulkanResourceTrackingConsumer : public VulkanConsumer
                                         format::HandleId                                     image,
                                         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
-    void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
+    void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+
+    void ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                       const format::AddressLocationInfo*           infos) override;
 
     void SortMemoriesBoundResourcesByOffset();
 

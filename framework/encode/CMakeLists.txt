@@ -90,6 +90,8 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/struct_pointer_encoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrappers.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_scoped_destroy_lock.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_scoped_destroy_lock.cpp

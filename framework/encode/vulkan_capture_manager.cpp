@@ -811,16 +811,17 @@ VkResult VulkanCaptureManager::OverrideCreateBuffer(VkDevice                    
         CreateWrappedHandle<DeviceWrapper, NoParentWrapper, BufferWrapper>(
             device, NoParentWrapper::kHandleValue, pBuffer, GetUniqueId);
 
+        auto buffer_wrapper          = GetWrapper<BufferWrapper>(*pBuffer);
+        buffer_wrapper->created_size = modified_create_info.size;
         if (uses_address)
         {
             // If the buffer has a device address, write the 'set buffer address' command before writing the API call to
             // create the buffer.  The address will need to be passed to vkCreateBuffer through the pCreateInfo pNext
             // list.
-            auto                      buffer_wrapper = GetWrapper<BufferWrapper>(*pBuffer);
-            VkBufferDeviceAddressInfo info           = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
-            info.pNext                               = nullptr;
-            info.buffer                              = buffer_wrapper->handle;
-            uint64_t address                         = 0;
+            VkBufferDeviceAddressInfo info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
+            info.pNext                     = nullptr;
+            info.buffer                    = buffer_wrapper->handle;
+            uint64_t address               = 0;
 
             if (device_wrapper->physical_device->instance_api_version >= VK_MAKE_VERSION(1, 2, 0))
             {
@@ -901,16 +902,16 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
         CreateWrappedHandle<DeviceWrapper, NoParentWrapper, AccelerationStructureKHRWrapper>(
             device, NoParentWrapper::kHandleValue, pAccelerationStructureKHR, GetUniqueId);
         auto accel_struct_wrapper = GetWrapper<AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
+
+        VkAccelerationStructureDeviceAddressInfoKHR address_info{
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
+        };
+        VkDeviceAddress address =
+            device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
+
         if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
         {
-            VkAccelerationStructureDeviceAddressInfoKHR address_info{
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
-            };
-
             // save address to use as pCreateInfo->deviceAddress during replay
-            VkDeviceAddress address =
-                device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
-
             WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
 
             if ((GetCaptureMode() & kModeTrack) == kModeTrack)
@@ -1068,7 +1069,9 @@ VkResult VulkanCaptureManager::OverrideAllocateMemory(VkDevice                  
 
         assert(pMemory != nullptr);
         auto memory_wrapper = GetWrapper<DeviceMemoryWrapper>(*pMemory);
-
+        mapped_memory_lock_.lock();
+        memories[memory_wrapper->handle_id] = memory_wrapper;
+        mapped_memory_lock_.unlock();
         if (uses_address)
         {
             // Restore modified allocation flags
@@ -2293,6 +2296,11 @@ void VulkanCaptureManager::PreProcess_vkFlushMappedMemoryRanges(VkDevice        
                         manager->ProcessMemoryEntry(
                             current_memory_wrapper->handle_id,
                             [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+                                auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+                                if (locations.size())
+                                {
+                                    WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());
+                                }
                                 WriteFillMemoryCmd(memory_id, offset, size, start_address);
                             });
                     }
@@ -2346,10 +2354,15 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
             util::PageGuardManager* manager = util::PageGuardManager::Get();
             assert(manager != nullptr);
 
-            manager->ProcessMemoryEntry(wrapper->handle_id,
-                                        [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                                            WriteFillMemoryCmd(memory_id, offset, size, start_address);
-                                        });
+            manager->ProcessMemoryEntry(
+                wrapper->handle_id, [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+                    auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+                    if (locations.size())
+                    {
+                        WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());
+                    }
+                    WriteFillMemoryCmd(memory_id, offset, size, start_address);
+                });
 
             manager->RemoveTrackedMemory(wrapper->handle_id);
         }
@@ -2385,6 +2398,8 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
             wrapper->mapped_offset = 0;
             wrapper->mapped_size   = 0;
         }
+        std::lock_guard<std::mutex> lock(mapped_memory_lock_);
+        memories.erase(wrapper->handle_id);
     }
     else
     {
@@ -2627,6 +2642,11 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd()
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+            auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+            if (locations.size())
+            {
+                WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());
+            }
             WriteFillMemoryCmd(memory_id, offset, size, start_address);
         });
     }
