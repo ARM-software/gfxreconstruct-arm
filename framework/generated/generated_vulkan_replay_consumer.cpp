@@ -233,6 +233,11 @@ void VulkanReplayConsumer::Process_vkQueueSubmit(
     VkResult replay_result = OverrideQueueSubmit(GetDeviceTable(in_queue->handle)->QueueSubmit, returnValue, in_queue, submitCount, pSubmits, in_fence);
     auto in_device = GetObjectInfoTable().GetDeviceInfo(in_queue->parent_id);
     CheckResult("vkQueueSubmit", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    if ((options_.sync_queue_submissions) && (replay_result == VK_SUCCESS))
+    {
+        auto sync_result = GetDeviceTable(in_device->handle)->QueueWaitIdle(in_queue->handle);
+        CheckResult("(SYNC) vkQueueWaitIdle", VK_SUCCESS, sync_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    }
 }
 
 void VulkanReplayConsumer::Process_vkQueueWaitIdle(
@@ -2804,6 +2809,11 @@ void VulkanReplayConsumer::Process_vkQueueSubmit2(
     VkResult replay_result = OverrideQueueSubmit2(GetDeviceTable(in_queue->handle)->QueueSubmit2, returnValue, in_queue, submitCount, pSubmits, in_fence);
     auto in_device = GetObjectInfoTable().GetDeviceInfo(in_queue->parent_id);
     CheckResult("vkQueueSubmit2", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    if ((options_.sync_queue_submissions) && (replay_result == VK_SUCCESS))
+    {
+        auto sync_result = GetDeviceTable(in_device->handle)->QueueWaitIdle(in_queue->handle);
+        CheckResult("(SYNC) vkQueueWaitIdle", VK_SUCCESS, sync_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    }
 }
 
 void VulkanReplayConsumer::Process_vkCmdCopyBuffer2(
@@ -5237,6 +5247,11 @@ void VulkanReplayConsumer::Process_vkQueueSubmit2KHR(
     VkResult replay_result = OverrideQueueSubmit2(GetDeviceTable(in_queue->handle)->QueueSubmit2KHR, returnValue, in_queue, submitCount, pSubmits, in_fence);
     auto in_device = GetObjectInfoTable().GetDeviceInfo(in_queue->parent_id);
     CheckResult("vkQueueSubmit2KHR", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    if ((options_.sync_queue_submissions) && (replay_result == VK_SUCCESS))
+    {
+        auto sync_result = GetDeviceTable(in_device->handle)->QueueWaitIdle(in_queue->handle);
+        CheckResult("(SYNC) vkQueueWaitIdle", VK_SUCCESS, sync_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
+    }
 }
 
 void VulkanReplayConsumer::Process_vkCmdWriteBufferMarker2AMD(

@@ -336,6 +336,12 @@ class VulkanReplayConsumerBodyGenerator(
                     body += '    CheckResult("{}", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);\n'.format(
                         name
                     )
+                    if 'vkQueueSubmit' in name:
+                        body += '    if ((options_.sync_queue_submissions) && (replay_result == VK_SUCCESS))\n'
+                        body += '    {\n'
+                        body += '        auto sync_result = GetDeviceTable(in_device->handle)->QueueWaitIdle(in_queue->handle);\n'
+                        body += '        CheckResult("(SYNC) vkQueueWaitIdle", VK_SUCCESS, sync_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);\n'
+                        body += '    }\n'
                 else:
                     body += '    auto {}_info = GetObjectInfoTable().Get{}Info({});\n'.format(val.name, val.full_type[2:], val.name)
                     body += '    auto in_device = GetObjectInfoTable().GetDeviceInfo({}_info->parent_id);\n'.format(val.name)

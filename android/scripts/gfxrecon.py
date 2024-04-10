@@ -239,9 +239,6 @@ def MakeExtrasString(args):
     if args.offscreen_swapchain_frame_boundary:
         arg_list.append('--offscreen-swapchain-frame-boundary')
     
-    if args.colorspace_fallback:
-        arg_list.append('--colorspace-fallback')
-
     if args.sgfs:
         arg_list.append('--sgfs')
         arg_list.append('{}'.format(args.sgfs))

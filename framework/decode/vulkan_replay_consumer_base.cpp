@@ -1210,7 +1210,7 @@ void VulkanReplayConsumerBase::CheckResult(const char*                 func_name
         {
             GFXRECON_LOG_ERROR("Address type: %s",
                                util::ToString<VkDeviceFaultAddressTypeEXT>(address_info.addressType).c_str());
-            GFXRECON_LOG_ERROR("Reported address: %" PRIu64, address_info.reportedAddress);
+            GFXRECON_LOG_ERROR("Reported address: 0x%" PRIx64, address_info.reportedAddress);
             GFXRECON_LOG_ERROR("Address precision: %" PRIu64, address_info.addressPrecision);
         }
 
@@ -1218,7 +1218,7 @@ void VulkanReplayConsumerBase::CheckResult(const char*                 func_name
         {
             GFXRECON_LOG_ERROR("Vendor description: %s", vendor_info.description);
             GFXRECON_LOG_ERROR("Vendor fault code: %" PRIu64, vendor_info.vendorFaultCode);
-            GFXRECON_LOG_ERROR("Vendor fault data: %" PRIu64, vendor_info.vendorFaultData);
+            GFXRECON_LOG_ERROR("Vendor fault data: 0x%" PRIx64, vendor_info.vendorFaultData);
         }
         if (device_fault_vendor_data_supported_ && !device_fault_info.vendor_binary_data_.empty())
         {
@@ -3806,10 +3806,6 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
         }
     }
 
-    if ((options_.sync_queue_submissions) && (result == VK_SUCCESS))
-    {
-        GFXRECON_ASSERT(VK_SUCCESS == GetDeviceTable(queue_info->handle)->QueueWaitIdle(queue_info->handle));
-    }
 
     if (screenshot_handler_ != nullptr)
     {
