@@ -300,10 +300,51 @@ struct FenceInfo : public VulkanObjectInfo<VkFence>
     bool shadow_signaled{ false };
 };
 
+enum class ExternalMemoryType
+{
+    Undefined,
+    AndroidHardwareBuffer,
+    HostMemoryPointer
+};
+
+struct ExternalMemoryInfo
+{
+    ExternalMemoryType memory_type{ ExternalMemoryType::Undefined };
+    uint64_t           buffer_id{ 0 };
+
+    std::unordered_set<format::HandleId> bound_memories{};
+};
+
+struct AndroidHardwareBufferPlaneInfo
+{
+    uint64_t capture_offset{ 0 };
+    uint64_t replay_offset{ 0 };
+    uint32_t capture_row_pitch{ 0 };
+    uint32_t replay_row_pitch{ 0 };
+    uint32_t height{ 0 };
+};
+
+struct AndroidHardwareBufferInfo : public ExternalMemoryInfo
+{
+    format::HandleId memory_id{ format::kNullHandleId };
+    AHardwareBuffer* hardware_buffer{ nullptr };
+    uint8_t*         data{ nullptr };
+
+    std::vector<AndroidHardwareBufferPlaneInfo> plane_info{};
+};
+
+struct HostMemoryPointerInfo : public ExternalMemoryInfo
+{
+    void*  data{ nullptr };
+    size_t size{ 0 };
+};
+
 struct DeviceMemoryInfo : public VulkanObjectInfo<VkDeviceMemory>
 {
     VulkanResourceAllocator*            allocator{ nullptr };
     VulkanResourceAllocator::MemoryData allocator_data{ 0 };
+
+    ExternalMemoryInfo* external_memory{ nullptr };
 };
 
 struct BufferInfo : public VulkanObjectInfo<VkBuffer>
@@ -366,7 +407,7 @@ struct DescriptorPoolInfo : public VulkanPoolInfo<VkDescriptorPool>
 
 struct DescriptorUpdateTemplateInfo : public VulkanObjectInfo<VkDescriptorUpdateTemplate>
 {
-    std::vector<VkDescriptorType> descriptor_image_types;
+    std::vector<VkDescriptorType>      descriptor_image_types;
     VkDescriptorUpdateTemplateEntryKHR acceleration_structure_template_entry;
 };
 

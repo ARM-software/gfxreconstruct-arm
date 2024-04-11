@@ -127,37 +127,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-static uint32_t GetHardwareBufferFormatBpp(uint32_t format)
-{
-    switch (format)
-    {
-        case AHARDWAREBUFFER_FORMAT_BLOB:
-        case AHARDWAREBUFFER_FORMAT_S8_UINT: // VK_FORMAT_S8_UINT
-            return 1;
-        case AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM: // VK_FORMAT_R5G6B5_UNORM_PACK16
-        case AHARDWAREBUFFER_FORMAT_D16_UNORM:    // VK_FORMAT_D16_UNORM
-            return 2;
-        case AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM: // VK_FORMAT_R8G8B8_UNORM
-            return 3;
-        case AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:    // VK_FORMAT_R8G8B8A8_UNORM
-        case AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM:    // VK_FORMAT_R8G8B8A8_UNORM
-        case AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM: // VK_FORMAT_A2B10G10R10_UNORM_PACK32
-        case AHARDWAREBUFFER_FORMAT_D24_UNORM:         // VK_FORMAT_X8_D24_UNORM_PACK32
-        case AHARDWAREBUFFER_FORMAT_D24_UNORM_S8_UINT: // VK_FORMAT_D24_UNORM_S8_UINT
-        case AHARDWAREBUFFER_FORMAT_D32_FLOAT:         // VK_FORMAT_D32_SFLOAT
-            return 4;
-        case AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT: // VK_FORMAT_R16G16B16A16_SFLOAT
-        case AHARDWAREBUFFER_FORMAT_D32_FLOAT_S8_UINT:  // VK_FORMAT_D32_SFLOAT_S8_UINT
-            return 8;
-        default:
-            break;
-    }
-
-    return 0;
-}
-#endif
-
 VulkanReplayConsumerBase::VulkanReplayConsumerBase(std::shared_ptr<application::Application> application,
                                                    const VulkanReplayOptions&                options) :
     loader_handle_(nullptr),
@@ -320,68 +289,87 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
                                  memory_id);
         }
     }
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
     else
     {
-        auto entry = hardware_buffer_memory_info_.find(memory_id);
-        if (entry != hardware_buffer_memory_info_.end())
+        auto entry = android_hardware_buffer_ids_.find(memory_id);
+        if (entry != android_hardware_buffer_ids_.end())
         {
             result = VK_SUCCESS;
 
-            void*                           buffer_data = nullptr;
-            const HardwareBufferMemoryInfo& buffer_info = entry->second;
+            const AndroidHardwareBufferInfo& ahb_info = android_hardware_buffers_.find(entry->second)->second;
 
-            int lock_result = AHardwareBuffer_lock(
-                buffer_info.hardware_buffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &buffer_data);
-
-            if (lock_result == 0)
+            if (ahb_info.data != nullptr)
             {
-                assert(buffer_data != nullptr);
+                resource::CopyImageSubresourceMemory(ahb_info.data,
+                                                     data,
+                                                     static_cast<size_t>(offset),
+                                                     static_cast<size_t>(size),
+                                                     ahb_info.plane_info[0].replay_row_pitch,
+                                                     ahb_info.plane_info[0].capture_row_pitch,
+                                                     ahb_info.plane_info[0].height);
 
-                if (buffer_info.plane_info.size() == 1)
+                for (const format::HandleId device_memory_id : ahb_info.bound_memories)
                 {
-                    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size);
-                    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, offset);
+                    ProcessFillMemoryCommand(device_memory_id, offset, size, data);
+                }
+            }
+            else if (ahb_info.hardware_buffer != nullptr)
+            {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+                void* buffer_data = nullptr;
 
-                    size_t   data_size         = static_cast<size_t>(size);
-                    size_t   data_offset       = static_cast<size_t>(offset);
-                    size_t   capture_row_pitch = buffer_info.plane_info[0].capture_row_pitch;
-                    size_t   replay_row_pitch  = buffer_info.plane_info[0].replay_row_pitch;
-                    uint32_t height            = buffer_info.plane_info[0].height;
+                int lock_result = AHardwareBuffer_lock(
+                    ahb_info.hardware_buffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &buffer_data);
 
-                    resource::CopyImageSubresourceMemory(static_cast<uint8_t*>(buffer_data),
-                                                         data,
-                                                         data_offset,
-                                                         data_size,
-                                                         replay_row_pitch,
-                                                         capture_row_pitch,
-                                                         height);
+                if (lock_result == 0)
+                {
+                    assert(buffer_data != nullptr);
+
+                    if (ahb_info.plane_info.size() == 1)
+                    {
+                        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size);
+                        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, offset);
+
+                        size_t   data_size         = static_cast<size_t>(size);
+                        size_t   data_offset       = static_cast<size_t>(offset);
+                        size_t   capture_row_pitch = ahb_info.plane_info[0].capture_row_pitch;
+                        size_t   replay_row_pitch  = ahb_info.plane_info[0].replay_row_pitch;
+                        uint32_t height            = ahb_info.plane_info[0].height;
+
+                        resource::CopyImageSubresourceMemory(static_cast<uint8_t*>(buffer_data),
+                                                             data,
+                                                             data_offset,
+                                                             data_size,
+                                                             replay_row_pitch,
+                                                             capture_row_pitch,
+                                                             height);
+                    }
+                    else
+                    {
+                        // TODO: multi-plane image format support when strides do not match.
+                        GFXRECON_LOG_ERROR(
+                            "Ignoring fill memory command for AHardwareBuffer with multi-plane format and "
+                            "mismatched capture/replay strides (Memory ID = %" PRIu64 "): support not yet implemented",
+                            memory_id);
+                    }
+
+                    lock_result = AHardwareBuffer_unlock(ahb_info.hardware_buffer, nullptr);
+                    if (lock_result != 0)
+                    {
+                        GFXRECON_LOG_ERROR(
+                            "AHardwareBuffer_unlock failed for AHardwareBuffer object (Memory ID = %" PRIu64 ")",
+                            memory_id);
+                    }
                 }
                 else
                 {
-                    // TODO: multi-plane image format support when strides do not match.
-                    GFXRECON_LOG_ERROR("Ignoring fill memory command for AHardwareBuffer with multi-plane format and "
-                                       "mismatched capture/replay strides (Memory ID = %" PRIu64
-                                       "): support not yet implemented",
-                                       memory_id);
+                    GFXRECON_LOG_ERROR(
+                        "AHardwareBuffer_lock failed for AHardwareBuffer object (Memory ID = %" PRIu64 ")", memory_id);
                 }
-
-                lock_result = AHardwareBuffer_unlock(buffer_info.hardware_buffer, nullptr);
-                if (lock_result != 0)
-                {
-                    GFXRECON_LOG_ERROR("AHardwareBuffer_unlock failed for AHardwareBuffer object (Memory ID = %" PRIu64
-                                       ")",
-                                       memory_id);
-                }
-            }
-            else
-            {
-                GFXRECON_LOG_ERROR("AHardwareBuffer_lock failed for AHardwareBuffer object (Memory ID = %" PRIu64 ")",
-                                   memory_id);
+#endif
             }
         }
     }
-#endif
 
     if (result == VK_ERROR_MEMORY_MAP_FAILED)
     {
@@ -468,6 +456,69 @@ void VulkanReplayConsumerBase::ProcessResizeWindowCommand2(format::HandleId surf
     }
 }
 
+static uint32_t GetHardwareBufferFormatBpp(uint32_t format)
+{
+    // Values for AHardwareBuffer_Format are specified in
+    // https://developer.android.com/ndk/reference/group/a-hardware-buffer
+
+    switch (format)
+    {
+        case 0x21: // AHARDWAREBUFFER_FORMAT_BLOB
+        case 0x35: // AHARDWAREBUFFER_FORMAT_S8_UINT            = VK_FORMAT_S8_UINT
+            return 1;
+        case 0x04: // AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM       = VK_FORMAT_R5G6B5_UNORM_PACK16
+        case 0x30: // AHARDWAREBUFFER_FORMAT_D16_UNORM          = VK_FORMAT_D16_UNORM
+            return 2;
+        case 0x03: // AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM       = VK_FORMAT_R8G8B8_UNORM
+            return 3;
+        case 0x01: // AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM     = VK_FORMAT_R8G8B8A8_UNORM
+        case 0x02: // AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM     = VK_FORMAT_R8G8B8A8_UNORM
+        case 0x2b: // AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM  = VK_FORMAT_A2B10G10R10_UNORM_PACK32
+        case 0x31: // AHARDWAREBUFFER_FORMAT_D24_UNORM          = VK_FORMAT_X8_D24_UNORM_PACK32
+        case 0x32: // AHARDWAREBUFFER_FORMAT_D24_UNORM_S8_UINT  = VK_FORMAT_D24_UNORM_S8_UINT
+        case 0x33: // AHARDWAREBUFFER_FORMAT_D32_FLOAT          = VK_FORMAT_D32_SFLOAT
+            return 4;
+        case 0x16: // AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT = VK_FORMAT_R16G16B16A16_SFLOAT
+        case 0x34: // AHARDWAREBUFFER_FORMAT_D32_FLOAT_S8_UINT  = VK_FORMAT_D32_SFLOAT_S8_UINT
+            return 8;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+static bool IsHardwareBufferWriteOnly(uint64_t usage)
+{
+    // Values for AHardwareBuffer_UsageFlags are specified in
+    // https://developer.android.com/ndk/reference/group/a-hardware-buffer
+
+    static constexpr uint64_t usage_cpu_read_never      = uint64_t(0);
+    static constexpr uint64_t usage_cpu_read_rarely     = uint64_t(2);
+    static constexpr uint64_t usage_cpu_read_often      = uint64_t(3);
+    static constexpr uint64_t usage_cpu_read_mask       = uint64_t(0xF);
+    static constexpr uint64_t usage_cpu_write_never     = uint64_t(0) << 4;
+    static constexpr uint64_t usage_cpu_write_rarely    = uint64_t(2) << 4;
+    static constexpr uint64_t usage_cpu_write_often     = uint64_t(3) << 4;
+    static constexpr uint64_t usage_cpu_write_mask      = uint64_t(0xF) << 4;
+    static constexpr uint64_t usage_gpu_sampled_image   = uint64_t(1) << 8;
+    static constexpr uint64_t usage_gpu_framebuffer     = uint64_t(1) << 9;
+    static constexpr uint64_t usage_gpu_color_output    = usage_gpu_framebuffer;
+    static constexpr uint64_t usage_composer_overlay    = uint64_t(1) << 11;
+    static constexpr uint64_t usage_protected_content   = uint64_t(1) << 14;
+    static constexpr uint64_t usage_video_encode        = uint64_t(1) << 16;
+    static constexpr uint64_t usage_sensor_direct_data  = uint64_t(1) << 23;
+    static constexpr uint64_t usage_gpu_data_buffer     = uint64_t(1) << 24;
+    static constexpr uint64_t usage_gpu_cube_map        = uint64_t(1) << 25;
+    static constexpr uint64_t usage_gpu_mipmap_complete = uint64_t(1) << 26;
+    static constexpr uint64_t usage_front_buffer        = uint64_t(1) << 32;
+
+    static constexpr uint64_t write_only_mask = usage_cpu_write_mask | usage_gpu_framebuffer | usage_gpu_color_output |
+                                                usage_sensor_direct_data | usage_front_buffer;
+
+    return (usage & write_only_mask) != 0;
+}
+
 void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
     format::HandleId                                    memory_id,
     uint64_t                                            buffer_id,
@@ -479,9 +530,21 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
     uint32_t                                            layers,
     const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
 {
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-    assert(hardware_buffers_.find(buffer_id) == hardware_buffers_.end());
+    assert(android_hardware_buffers_.find(buffer_id) == android_hardware_buffers_.end());
+    assert(android_hardware_buffer_ids_.find(memory_id) == android_hardware_buffer_ids_.end());
 
+    android_hardware_buffer_ids_[memory_id] = buffer_id;
+
+    AndroidHardwareBufferInfo& ahb_info = android_hardware_buffers_[buffer_id];
+    ahb_info.memory_type                = ExternalMemoryType::AndroidHardwareBuffer;
+    ahb_info.buffer_id                  = buffer_id;
+    ahb_info.bound_memories             = {};
+    ahb_info.memory_id                  = memory_id;
+    ahb_info.hardware_buffer            = nullptr;
+    ahb_info.data                       = nullptr;
+    ahb_info.plane_info                 = {};
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
     AHardwareBuffer_Desc desc = {};
     desc.format               = format;
     desc.height               = height;
@@ -493,35 +556,32 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
     int              result = AHardwareBuffer_allocate(&desc, &buffer);
     if ((result == 0) && (buffer != nullptr))
     {
-        HardwareBufferInfo& ahb_info = hardware_buffers_[buffer_id];
-        ahb_info.memory_id           = memory_id;
-        ahb_info.hardware_buffer     = buffer;
-
-        result = -1;
-
-        std::vector<format::HardwareBufferPlaneInfo> replay_plane_info;
+        ahb_info.hardware_buffer = buffer;
 
         // The multi-plane functions are declared for API 26, but are only available to link with API 29.  So, this
         // could be turned into a run-time check dependent on dlsym returning a valid pointer for
         // AHardwareBuffer_lockPlanes.
 #if __ANDROID_API__ >= 29
-        if (desc.usage & AHARDWAREBUFFER_USAGE_CPU_WRITE_MASK)
+        if ((desc.usage & AHARDWAREBUFFER_USAGE_CPU_WRITE_MASK) && !plane_info.empty())
         {
             AHardwareBuffer_Planes ahb_planes;
             result =
                 AHardwareBuffer_lockPlanes(buffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &ahb_planes);
             if (result == 0)
             {
-                void* data = ahb_planes.planes[0].data;
+                assert(ahb_planes.planeCount == plane_info.size());
+
+                uint8_t* data = reinterpret_cast<uint8_t*>(ahb_planes.planes[0].data);
 
                 for (uint32_t i = 0; i < ahb_planes.planeCount; ++i)
                 {
-                    format::HardwareBufferPlaneInfo ahb_plane_info;
-                    ahb_plane_info.offset =
-                        reinterpret_cast<uint8_t*>(ahb_planes.planes[i].data) - reinterpret_cast<uint8_t*>(data);
-                    ahb_plane_info.pixel_stride = ahb_planes.planes[i].pixelStride;
-                    ahb_plane_info.row_pitch    = ahb_planes.planes[i].rowStride;
-                    replay_plane_info.emplace_back(std::move(ahb_plane_info));
+                    AndroidHardwareBufferPlaneInfo& info = ahb_info.plane_info.emplace_back();
+
+                    info.capture_offset    = plane_info[i].offset;
+                    info.replay_offset     = reinterpret_cast<uint8_t*>(ahb_planes.planes[i].data) - data;
+                    info.capture_row_pitch = plane_info[i].row_pitch;
+                    info.replay_row_pitch  = ahb_planes.planes[i].rowStride;
+                    info.height            = height;
                 }
 
                 if (AHardwareBuffer_unlock(buffer, nullptr) != 0)
@@ -538,51 +598,19 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
             }
         }
 #endif
-
-        HardwareBufferMemoryInfo& memory_info = hardware_buffer_memory_info_[memory_id];
-        memory_info.hardware_buffer           = buffer;
-        memory_info.compatible_strides        = true;
-
-        // Check for matching strides.
-        if (plane_info.empty() || replay_plane_info.empty())
+        if (ahb_info.plane_info.empty())
         {
             uint32_t bpp = GetHardwareBufferFormatBpp(format);
 
             AHardwareBuffer_describe(buffer, &desc);
-            if (stride != desc.stride)
-            {
-                memory_info.compatible_strides = false;
-            }
 
-            memory_info.plane_info.resize(1);
-            memory_info.plane_info[0].capture_offset    = 0;
-            memory_info.plane_info[0].replay_offset     = 0;
-            memory_info.plane_info[0].capture_row_pitch = bpp * stride;
-            memory_info.plane_info[0].replay_row_pitch  = bpp * desc.stride;
-            memory_info.plane_info[0].height            = height;
-        }
-        else
-        {
-            assert(plane_info.size() == replay_plane_info.size());
+            AndroidHardwareBufferPlaneInfo& info = ahb_info.plane_info.emplace_back();
 
-            size_t layer_count = plane_info.size();
-
-            memory_info.plane_info.resize(layer_count);
-
-            for (size_t i = 0; i < layer_count; ++i)
-            {
-                memory_info.plane_info[i].capture_offset    = plane_info[i].offset;
-                memory_info.plane_info[i].replay_offset     = replay_plane_info[i].offset;
-                memory_info.plane_info[i].capture_row_pitch = plane_info[i].row_pitch;
-                memory_info.plane_info[i].replay_row_pitch  = replay_plane_info[i].row_pitch;
-                memory_info.plane_info[i].height            = height;
-
-                if ((plane_info[i].offset != replay_plane_info[i].offset) ||
-                    (plane_info[i].row_pitch != replay_plane_info[i].row_pitch))
-                {
-                    memory_info.compatible_strides = false;
-                }
-            }
+            info.capture_offset    = 0;
+            info.replay_offset     = 0;
+            info.capture_row_pitch = bpp * stride;
+            info.replay_row_pitch  = bpp * desc.stride;
+            info.height            = height;
         }
     }
     else
@@ -593,36 +621,57 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
                            memory_id);
     }
 #else
-    GFXRECON_UNREFERENCED_PARAMETER(memory_id);
-    GFXRECON_UNREFERENCED_PARAMETER(buffer_id);
-    GFXRECON_UNREFERENCED_PARAMETER(format);
-    GFXRECON_UNREFERENCED_PARAMETER(width);
-    GFXRECON_UNREFERENCED_PARAMETER(height);
-    GFXRECON_UNREFERENCED_PARAMETER(stride);
+
     GFXRECON_UNREFERENCED_PARAMETER(usage);
     GFXRECON_UNREFERENCED_PARAMETER(layers);
     GFXRECON_UNREFERENCED_PARAMETER(plane_info);
+
 #endif
+
+    if (ahb_info.hardware_buffer == nullptr)
+    {
+        uint32_t bpp = GetHardwareBufferFormatBpp(format);
+
+        if (!IsHardwareBufferWriteOnly(usage))
+        {
+            ahb_info.data = new uint8_t[height * width * bpp];
+        }
+
+        AndroidHardwareBufferPlaneInfo& info = ahb_info.plane_info.emplace_back();
+
+        info.capture_offset    = 0;
+        info.replay_offset     = 0;
+        info.capture_row_pitch = bpp * stride;
+        info.replay_row_pitch  = bpp * width;
+        info.height            = height;
+    }
 }
 
 void VulkanReplayConsumerBase::ProcessDestroyHardwareBufferCommand(uint64_t buffer_id)
 {
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-    auto entry = hardware_buffers_.find(buffer_id);
-    if (entry != hardware_buffers_.end())
+    auto entry = android_hardware_buffers_.find(buffer_id);
+    if (entry != android_hardware_buffers_.end())
     {
-        AHardwareBuffer_release(entry->second.hardware_buffer);
-        hardware_buffer_memory_info_.erase(entry->second.memory_id);
-        hardware_buffers_.erase(entry);
+        GFXRECON_ASSERT(entry->second.bound_memories.empty());
+
+        android_hardware_buffer_ids_.erase(entry->second.memory_id);
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+        if (entry->second.hardware_buffer != nullptr)
+        {
+            AHardwareBuffer_release(entry->second.hardware_buffer);
+        }
+#endif
+        if (entry->second.data != nullptr)
+        {
+            delete[] entry->second.data;
+        }
+        android_hardware_buffers_.erase(entry);
     }
     else
     {
         GFXRECON_LOG_WARNING("Skipping destroy for unrecognized AHardwareBuffer object (Buffer ID = %" PRIu64 ")",
                              buffer_id);
     }
-#else
-    GFXRECON_UNREFERENCED_PARAMETER(buffer_id);
-#endif
 }
 
 void VulkanReplayConsumerBase::ProcessSetDevicePropertiesCommand(format::HandleId physical_device_id,
@@ -1106,12 +1155,11 @@ void* VulkanReplayConsumerBase::PreProcessExternalObject(uint64_t          objec
         // The window system related handles are ignored by replay.
         // The checkpoint marker is ignored by replay.
     }
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
     else if (call_id == format::ApiCallId::ApiCall_vkGetAndroidHardwareBufferPropertiesANDROID)
     {
         // Get the hardware buffer from the decoded buffer id.
-        auto entry = hardware_buffers_.find(object_id);
-        if (entry != hardware_buffers_.end())
+        auto entry = android_hardware_buffers_.find(object_id);
+        if (entry != android_hardware_buffers_.end())
         {
             object = entry->second.hardware_buffer;
         }
@@ -1121,7 +1169,6 @@ void* VulkanReplayConsumerBase::PreProcessExternalObject(uint64_t          objec
                                       "vkGetAndroidHardwareBufferPropertiesANDROID")
         }
     }
-#endif
     else
     {
         GFXRECON_LOG_WARNING("Skipping object handle mapping for unsupported external object type processed by %s",
@@ -2097,51 +2144,6 @@ void VulkanReplayConsumerBase::ProcessSwapchainFullScreenExclusiveInfo(
             }
 
             pnext = pnext->pNext;
-        }
-    }
-}
-
-void VulkanReplayConsumerBase::ProcessImportAndroidHardwareBufferInfo(const Decoded_VkMemoryAllocateInfo* allocate_info)
-{
-    assert(allocate_info != nullptr);
-
-    if (allocate_info->pNext != nullptr)
-    {
-        auto pnext = reinterpret_cast<Decoded_VkBaseOutStructure*>(allocate_info->pNext->GetMetaStructPointer());
-        while (pnext != nullptr)
-        {
-            if (pnext->decoded_value->sType == VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID)
-            {
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-                auto import_ahb_info = reinterpret_cast<Decoded_VkImportAndroidHardwareBufferInfoANDROID*>(pnext);
-
-                // Get the hardware buffer from the Decoded_VkImportAndroidHardwareBufferInfoANDROID buffer id.
-                auto entry = hardware_buffers_.find(import_ahb_info->buffer);
-                if (entry != hardware_buffers_.end())
-                {
-                    import_ahb_info->decoded_value->buffer = entry->second.hardware_buffer;
-                }
-                else
-                {
-                    GFXRECON_LOG_WARNING("Failed to find a valid AHardwareBuffer handle for the "
-                                         "VkImportAndroidHardwareBufferInfoANDROID "
-                                         "extension structure provided to vkAllocateMemory")
-                }
-#else
-                GFXRECON_LOG_WARNING("vkAllocateMemory called with the VkImportAndroidHardwareBufferInfoANDROID "
-                                     "extension structure, which is not supported by this platform")
-#endif
-                break;
-            }
-
-            if (pnext->pNext != nullptr)
-            {
-                pnext = reinterpret_cast<Decoded_VkBaseOutStructure*>(pnext->pNext->GetMetaStructPointer());
-            }
-            else
-            {
-                pnext = nullptr;
-            }
         }
     }
 }
@@ -4364,28 +4366,34 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         auto allocator = device_info->allocator.get();
         assert(allocator != nullptr);
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-        ProcessImportAndroidHardwareBufferInfo(pAllocateInfo->GetMetaStructPointer());
-#endif
+        format::HandleId capture_id = (*pMemory->GetPointer());
 
-        VulkanResourceAllocator::MemoryData allocator_data;
-        auto                                replay_allocate_info = pAllocateInfo->GetPointer();
-        auto                                replay_memory        = pMemory->GetHandlePointer();
-        auto                                capture_id           = (*pMemory->GetPointer());
+        bool     uses_address   = false;
+        uint64_t opaque_address = 0;
 
-        // Check if this allocation was captured with an opaque address
-        bool                uses_address           = false;
-        bool                address_override_found = false;
-        bool                uses_import_memory     = false;
-        uint64_t            opaque_address         = 0;
-        VkBaseOutStructure* current_struct = reinterpret_cast<const VkBaseOutStructure*>(replay_allocate_info)->pNext;
+        bool address_override_found = false;
 
-        size_t                                            host_pointer_size = 0;
-        std::unique_ptr<void, std::function<void(void*)>> external_memory_guard(
-            nullptr, [&](void* memory) { util::platform::FreeRawMemory(memory, host_pointer_size); });
+        bool                                              uses_host_pointer_memory = false;
+        size_t                                            host_pointer_memory_size = 0;
+        std::unique_ptr<void, std::function<void(void*)>> host_memory_pointer_guard(
+            nullptr, [&](void* memory) { util::platform::FreeRawMemory(memory, host_pointer_memory_size); });
 
-        while (current_struct != nullptr)
+        bool uses_android_hardware_buffer = false;
+
+        uint64_t external_buffer_id = 0;
+
+        VkMemoryAllocateInfo modified_allocate_info = (*pAllocateInfo->GetPointer());
+
+        VkBaseOutStructure*               prev_struct = reinterpret_cast<VkBaseOutStructure*>(&modified_allocate_info);
+        const Decoded_VkBaseOutStructure* prev_node =
+            reinterpret_cast<const Decoded_VkBaseOutStructure*>(pAllocateInfo->GetMetaStructPointer());
+
+        while (prev_node != nullptr && prev_node->pNext != nullptr)
         {
+            VkBaseOutStructure* current_struct = reinterpret_cast<VkBaseOutStructure*>(prev_struct->pNext);
+            const Decoded_VkBaseOutStructure* current_node =
+                reinterpret_cast<const Decoded_VkBaseOutStructure*>(prev_node->pNext->GetMetaStructPointer());
+
             if (current_struct->sType == VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO)
             {
                 auto alloc_flags_info = reinterpret_cast<VkMemoryAllocateFlagsInfo*>(current_struct);
@@ -4406,40 +4414,92 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                 }
                 break;
             }
-            else if (current_struct->sType == VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT)
-            {
-                auto import_info = reinterpret_cast<VkImportMemoryHostPointerInfoEXT*>(current_struct);
-
-                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, replay_allocate_info->allocationSize);
-
-                size_t allocation_size = static_cast<size_t>(replay_allocate_info->allocationSize);
-
-                host_pointer_size =
-                    util::platform::GetAlignedSize(allocation_size, util::platform::GetSystemPageSize());
-
-                // VkAllocateMemory fails when memory was allocated with default malloc func, probably because of extra
-                // memory bytes allocated for malloc private info
-                import_info->pHostPointer = util::platform::AllocateRawMemory(host_pointer_size);
-
-                if (import_info->pHostPointer == nullptr)
-                {
-                    GFXRECON_LOG_ERROR("Failed to allocate raw memory with size = %" PRIuPTR " with error code: %u",
-                                       host_pointer_size,
-                                       util::platform::GetSystemLastErrorCode());
-                    std::abort();
-                }
-                external_memory_guard.reset(import_info->pHostPointer);
-
-                uses_import_memory = true;
-            }
             else if (current_struct->sType == VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO)
             {
                 address_override_found = true;
             }
+            else if (current_struct->sType == VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT)
+            {
+                VkImportMemoryHostPointerInfoEXT* import_struct =
+                    reinterpret_cast<VkImportMemoryHostPointerInfoEXT*>(current_struct);
+                const Decoded_VkImportMemoryHostPointerInfoEXT* import_node =
+                    reinterpret_cast<const Decoded_VkImportMemoryHostPointerInfoEXT*>(current_node);
 
-            current_struct = current_struct->pNext;
+                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, modified_allocate_info.allocationSize);
+
+                host_pointer_memory_size = static_cast<size_t>(modified_allocate_info.allocationSize);
+                host_pointer_memory_size =
+                    util::platform::GetAlignedSize(host_pointer_memory_size, util::platform::GetSystemPageSize());
+
+                auto entry = host_memory_pointers_.find(import_node->pHostPointer);
+                if (entry == host_memory_pointers_.end())
+                {
+                    // VkAllocateMemory fails when memory was allocated with default malloc func, probably because of
+                    // extra memory bytes allocated for malloc private info
+                    import_struct->pHostPointer = util::platform::AllocateRawMemory(host_pointer_memory_size);
+
+                    if (import_struct->pHostPointer == nullptr)
+                    {
+                        GFXRECON_LOG_ERROR("Failed to allocate raw memory with size = %" PRIuPTR " with error code: %u",
+                                           host_pointer_memory_size,
+                                           util::platform::GetSystemLastErrorCode());
+                        std::abort();
+                    }
+                    host_memory_pointer_guard.reset(import_struct->pHostPointer);
+                }
+                else
+                {
+                    GFXRECON_ASSERT(entry->second.size == host_pointer_memory_size);
+
+                    import_struct->pHostPointer = entry->second.data;
+                }
+
+                uses_host_pointer_memory = true;
+                external_buffer_id       = import_node->pHostPointer;
+            }
+            else if (current_struct->sType == VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID)
+            {
+                VkImportAndroidHardwareBufferInfoANDROID* import_struct =
+                    reinterpret_cast<VkImportAndroidHardwareBufferInfoANDROID*>(current_struct);
+                const Decoded_VkImportAndroidHardwareBufferInfoANDROID* import_node =
+                    reinterpret_cast<const Decoded_VkImportAndroidHardwareBufferInfoANDROID*>(current_node);
+
+                auto entry = android_hardware_buffers_.find(import_node->buffer);
+                if (entry != android_hardware_buffers_.end())
+                {
+                    uses_android_hardware_buffer = true;
+                    external_buffer_id           = import_node->buffer;
+
+                    if (entry->second.hardware_buffer != nullptr && allocator->SupportsExternalMemory())
+                    {
+                        import_struct->buffer = entry->second.hardware_buffer;
+                    }
+                    else
+                    {
+                        prev_struct->pNext = current_struct->pNext;
+
+                        prev_node = reinterpret_cast<const Decoded_VkBaseOutStructure*>(
+                            prev_node->pNext->GetMetaStructPointer());
+
+                        continue;
+                    }
+                }
+                else
+                {
+                    GFXRECON_LOG_WARNING("Failed to find a valid AHardwareBuffer handle for the "
+                                         "VkImportAndroidHardwareBufferInfoANDROID "
+                                         "extension structure provided to vkAllocateMemory")
+                }
+            }
+
+            prev_struct = current_struct;
+            prev_node   = current_node;
         }
 
+        VulkanResourceAllocator::MemoryData allocator_data;
+        VkDeviceMemory*                     replay_memory = pMemory->GetHandlePointer();
+
+        VkMemoryOpaqueCaptureAddressAllocateInfo address_info;
         if (uses_address && !address_override_found)
         {
             // Insert VkMemoryOpaqueCaptureAddressAllocateInfo into front of pNext chain before allocating
@@ -4447,50 +4507,106 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
             // The Vulkan spec states: If the pNext chain includes a VkImportMemoryHostPointerInfoEXT structure,
             // VkMemoryOpaqueCaptureAddressAllocateInfo::opaqueCaptureAddress must be zero
             // (https://vulkan.lunarg.com/doc/view/1.3.216.0/linux/1.3-extensions/vkspec.html#VUID-VkMemoryAllocateInfo-pNext-03332)
-            if (uses_import_memory)
+            if (uses_host_pointer_memory)
             {
                 opaque_address = 0;
             }
 
-            VkMemoryAllocateInfo                     modified_allocate_info = (*replay_allocate_info);
-            VkMemoryOpaqueCaptureAddressAllocateInfo address_info           = {
-                VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO,
-                modified_allocate_info.pNext,
-                opaque_address
-            };
+            address_info.sType                = VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO;
+            address_info.pNext                = modified_allocate_info.pNext;
+            address_info.opaqueCaptureAddress = opaque_address;
+
             modified_allocate_info.pNext = &address_info;
-
-            result = allocator->AllocateMemory(&modified_allocate_info,
-                                               GetAllocationCallbacks(pAllocator),
-                                               capture_id,
-                                               replay_memory,
-                                               &allocator_data);
-        }
-        else
-        {
-            result = allocator->AllocateMemory(
-                replay_allocate_info, GetAllocationCallbacks(pAllocator), capture_id, replay_memory, &allocator_data);
         }
 
-        if ((result == VK_SUCCESS) && (replay_allocate_info != nullptr) && ((*replay_memory) != VK_NULL_HANDLE))
-        {
-            auto memory_info = reinterpret_cast<DeviceMemoryInfo*>(pMemory->GetConsumerData(0));
-            assert(memory_info != nullptr);
+        result = allocator->AllocateMemory(
+            &modified_allocate_info, GetAllocationCallbacks(pAllocator), capture_id, replay_memory, &allocator_data);
 
-            memory_info->allocator      = allocator;
-            memory_info->allocator_data = allocator_data;
+        if (result == VK_SUCCESS)
+        {
+            ExternalMemoryInfo* external_memory_info = nullptr;
+
+            if (uses_host_pointer_memory)
+            {
+                HostMemoryPointerInfo& host_memory_pointer = host_memory_pointers_[external_buffer_id];
+
+                if (host_memory_pointer_guard)
+                {
+                    host_memory_pointer.memory_type    = ExternalMemoryType::HostMemoryPointer;
+                    host_memory_pointer.buffer_id      = external_buffer_id;
+                    host_memory_pointer.bound_memories = { capture_id };
+                    host_memory_pointer.size           = host_pointer_memory_size;
+                    host_memory_pointer.data           = host_memory_pointer_guard.release();
+                }
+                else
+                {
+                    host_memory_pointer.bound_memories.emplace(capture_id);
+                }
+
+                external_memory_info = &host_memory_pointer;
+            }
+            else if (uses_android_hardware_buffer)
+            {
+                AndroidHardwareBufferInfo& ahb_info = android_hardware_buffers_[external_buffer_id];
+
+                ahb_info.bound_memories.emplace(capture_id);
+
+                external_memory_info = &ahb_info;
+
+                if (ahb_info.data != nullptr)
+                {
+                    if (allocator->SupportsExternalMemory())
+                    {
+                        uint64_t size = ahb_info.plane_info[0].height * ahb_info.plane_info[0].replay_row_pitch;
+                        void*    data = nullptr;
+
+                        result = allocator->MapMemory(
+                            *replay_memory, ahb_info.plane_info[0].replay_offset, size, 0, &data, allocator_data);
+
+                        if (result == VK_SUCCESS && data != nullptr)
+                        {
+                            util::platform::MemoryCopy(
+                                data, size, ahb_info.data + ahb_info.plane_info[0].replay_offset, size);
+
+                            VkMappedMemoryRange memory_range;
+                            memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+                            memory_range.pNext  = nullptr;
+                            memory_range.memory = *replay_memory;
+                            memory_range.offset = ahb_info.plane_info[0].replay_offset;
+                            memory_range.size   = size;
+
+                            allocator->FlushMappedMemoryRanges(1, &memory_range, &allocator_data);
+                            allocator->UnmapMemory(*replay_memory, allocator_data);
+                        }
+                        else
+                        {
+                            GFXRECON_LOG_ERROR("Could not map AHardwareBuffer related VkDeviceMemory for "
+                                               "initialization. Data corruption may occur.");
+                        }
+                    }
+                    else
+                    {
+                        GFXRECON_LOG_ERROR("AHardwareBuffer related VkDeviceMemory cannot be initialized (vulkan "
+                                           "allocator uses lazy allocation). Data corruption may occur.");
+                    }
+                }
+            }
+
+            if (*replay_memory != VK_NULL_HANDLE)
+            {
+                auto memory_info = reinterpret_cast<DeviceMemoryInfo*>(pMemory->GetConsumerData(0));
+                assert(memory_info != nullptr);
+
+                memory_info->allocator       = allocator;
+                memory_info->allocator_data  = allocator_data;
+                memory_info->external_memory = external_memory_info;
+            }
         }
         else if (original_result == VK_SUCCESS)
         {
             // When memory allocation fails at replay, but succeeded at capture, check for memory incompatibilities and
             // recommend enabling memory translation.
-            allocator->ReportAllocateMemoryIncompatibility(replay_allocate_info);
-        }
-
-        if (result == VK_SUCCESS && uses_import_memory)
-        {
-            external_memory_.emplace(*replay_memory,
-                                     std::make_pair(external_memory_guard.release(), host_pointer_size));
+            allocator->ReportAllocateMemoryIncompatibility(&modified_allocate_info);
         }
     }
     else
@@ -4621,14 +4737,36 @@ void VulkanReplayConsumerBase::OverrideFreeMemory(PFN_vkFreeMemory  func,
         memory         = memory_info->handle;
         allocator_data = memory_info->allocator_data;
 
-        auto findIt = external_memory_.find(memory);
-        if (findIt != external_memory_.end())
-        {
-            util::platform::FreeRawMemory(findIt->second.first, findIt->second.second);
-            external_memory_.erase(findIt);
-        }
-
         memory_info->allocator_data = 0;
+
+        if (memory_info->external_memory != nullptr)
+        {
+            auto it = memory_info->external_memory->bound_memories.find(memory_info->capture_id);
+            assert(it != memory_info->external_memory->bound_memories.end());
+            memory_info->external_memory->bound_memories.erase(it);
+
+            switch (memory_info->external_memory->memory_type)
+            {
+                case ExternalMemoryType::AndroidHardwareBuffer:
+                {
+                    break; // Nothing to do...
+                }
+                case ExternalMemoryType::HostMemoryPointer:
+                {
+                    HostMemoryPointerInfo& hmp_info = host_memory_pointers_[memory_info->external_memory->buffer_id];
+
+                    if (hmp_info.bound_memories.empty())
+                    {
+                        util::platform::FreeRawMemory(hmp_info.data, hmp_info.size);
+                        host_memory_pointers_.erase(memory_info->external_memory->buffer_id);
+                    }
+                }
+                default:
+                {
+                    break;
+                }
+            }
+        }
     }
 
     allocator->FreeMemory(memory, GetAllocationCallbacks(pAllocator), allocator_data);
@@ -5028,6 +5166,9 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     auto allocator = device_info->allocator.get();
     assert(allocator != nullptr);
 
+    ImageInfo* image_info = reinterpret_cast<ImageInfo*>(pImage->GetConsumerData(0));
+    assert(image_info != nullptr);
+
     VulkanResourceAllocator::ResourceData allocator_data;
     auto                                  replay_image = pImage->GetHandlePointer();
     auto                                  capture_id   = (*pImage->GetPointer());
@@ -5044,25 +5185,53 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     }
 
-    // Skip external memory extension if unsupported in allocator
-    auto create_info_extension = reinterpret_cast<VkBaseOutStructure*>(&modified_create_info);
-    while (create_info_extension)
-    {
-        if (create_info_extension->pNext)
-        {
-            const VkBaseOutStructure* next_extension =
-                reinterpret_cast<const VkBaseOutStructure*>(create_info_extension->pNext);
+    // Modify external memory extensions depending on device support
 
+    bool skipExternalMemoryImageCreateInfo = false;
+
+    VkBaseOutStructure* current_struct = reinterpret_cast<VkBaseOutStructure*>(&modified_create_info);
+    while (current_struct && current_struct->pNext)
+    {
+        VkBaseOutStructure* next_struct = current_struct->pNext;
+
+        if (next_struct->sType == VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID)
+        {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+            VkExternalFormatANDROID* info = reinterpret_cast<VkExternalFormatANDROID*>(next_struct);
             if (!allocator->SupportsExternalMemory())
             {
-                if (next_extension->sType == VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO ||
-                    next_extension->sType == VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID)
-                {
-                    create_info_extension->pNext = next_extension->pNext;
-                }
+                skipExternalMemoryImageCreateInfo = true;
+                current_struct->pNext             = next_struct->pNext;
+            }
+#else
+            skipExternalMemoryImageCreateInfo = true;
+            current_struct->pNext             = next_struct->pNext;
+#endif
+            break;
+        }
+
+        current_struct = current_struct->pNext;
+    }
+
+    current_struct = reinterpret_cast<VkBaseOutStructure*>(&modified_create_info);
+    while (current_struct && current_struct->pNext)
+    {
+        VkBaseOutStructure* next_struct = current_struct->pNext;
+
+        if (next_struct->sType == VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO &&
+            skipExternalMemoryImageCreateInfo)
+        {
+            current_struct->pNext = next_struct->pNext;
+
+            if (modified_create_info.format == VK_FORMAT_UNDEFINED)
+            {
+                modified_create_info.format = VK_FORMAT_R8G8B8_UNORM;
             }
         }
-        create_info_extension = create_info_extension->pNext;
+        else
+        {
+            current_struct = current_struct->pNext;
+        }
     }
 
     VkResult result = allocator->CreateImage(
@@ -5072,9 +5241,6 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
 
     if ((result == VK_SUCCESS) && (replay_create_info != nullptr) && ((*replay_image) != VK_NULL_HANDLE))
     {
-        auto image_info = reinterpret_cast<ImageInfo*>(pImage->GetConsumerData(0));
-        assert(image_info != nullptr);
-
         image_info->allocator_data = allocator_data;
         image_info->usage          = replay_create_info->usage;
         image_info->type           = replay_create_info->imageType;
