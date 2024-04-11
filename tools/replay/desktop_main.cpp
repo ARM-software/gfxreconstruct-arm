@@ -155,10 +155,9 @@ int main(int argc, const char** argv)
             gfxrecon::decode::VulkanReplayOptions          vulkan_replay_options =
                 GetVulkanReplayOptions(arg_parser, filename, &tracked_object_info_table);
 
-            uint32_t start_frame = 0;
-            uint32_t end_frame   = 0;
+            uint32_t measurement_start_frame = 0;
+            uint32_t measurement_end_frame   = 0;
 
-            bool        has_mfr                            = false;
             bool        quit_after_measurement_frame_range = false;
             bool        flush_measurement_frame_range      = false;
             bool        flush_inside_measurement_range     = false;
@@ -167,21 +166,16 @@ int main(int argc, const char** argv)
 
             if (vulkan_replay_options.enable_vulkan)
             {
-                has_mfr                            = GetMeasurementFrameRange(arg_parser, start_frame, end_frame);
+                GetMeasurementFrameRange(arg_parser, measurement_start_frame, measurement_end_frame);
+                GetMeasurementFilename(arg_parser, measurement_file_name);
                 quit_after_measurement_frame_range = vulkan_replay_options.quit_after_measurement_frame_range;
                 flush_measurement_frame_range      = vulkan_replay_options.flush_measurement_frame_range;
                 preload_measurement_frame_range    = vulkan_replay_options.preload_measurement_range;
                 flush_inside_measurement_range     = vulkan_replay_options.flush_inside_measurement_range;
             }
 
-            if (has_mfr)
-            {
-                GetMeasurementFilename(arg_parser, measurement_file_name);
-                flush_inside_measurement_range = vulkan_replay_options.flush_inside_measurement_range;
-            }
-            gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(start_frame),
-                                                 static_cast<uint64_t>(end_frame),
-                                                 has_mfr,
+            gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(measurement_start_frame),
+                                                 static_cast<uint64_t>(measurement_end_frame),
                                                  quit_after_measurement_frame_range,
                                                  flush_measurement_frame_range,
                                                  flush_inside_measurement_range,
@@ -269,12 +263,12 @@ int main(int argc, const char** argv)
             if ((file_processor->GetCurrentFrameNumber() > 0) &&
                 (file_processor->GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
             {
-                if (file_processor->GetCurrentFrameNumber() < start_frame)
+                if (file_processor->GetCurrentFrameNumber() < measurement_start_frame)
                 {
                     GFXRECON_LOG_WARNING(
                         "Measurement range start frame (%u) is greater than the last replayed frame (%u). "
                         "Measurements were never started, cannot calculate measurement range FPS.",
-                        start_frame,
+                        measurement_start_frame,
                         file_processor->GetCurrentFrameNumber());
                 }
                 else
@@ -283,7 +277,7 @@ int main(int argc, const char** argv)
                     dx12_replay_consumer.PostReplay();
 #endif
 
-                    fps_info.LogToConsole();
+                    fps_info.LogMeasurements();
                 }
             }
             else if (file_processor->GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)

@@ -38,14 +38,13 @@ class FpsInfo
   public:
     FpsInfo(uint64_t               measurement_start_frame        = 1,
             uint64_t               measurement_end_frame          = std::numeric_limits<uint64_t>::max(),
-            bool                   has_measurement_range          = false,
             bool                   quit_after_range               = false,
             bool                   flush_measurement_range        = false,
             bool                   flush_inside_measurement_range = false,
             bool                   preload_measurement_range      = false,
             const std::string_view measurement_file_name          = "");
 
-    void LogToConsole();
+    void LogMeasurements();
 
     void                   BeginFile();
     bool                   ShouldWaitIdleBeforeFrame(uint64_t file_processor_frame);
@@ -58,18 +57,22 @@ class FpsInfo
     [[nodiscard]] uint64_t ShouldPreloadFrames(uint64_t current_frame) const;
 
   private:
-    uint64_t start_time_;
+    int64_t start_time_;
 
-    uint64_t measurement_start_frame_;
-    uint64_t measurement_end_frame_;
+    int64_t replay_start_time_;
+    int64_t replay_end_time_;
 
     int64_t measurement_start_time_;
     int64_t measurement_end_time_;
 
-    uint64_t replay_start_time_;
-    int64_t  replay_start_frame_;
+    double measurement_start_boot_time_;
+    double measurement_end_boot_time_;
 
-    bool has_measurement_range_;
+    uint64_t replay_start_frame_;
+
+    uint64_t measurement_start_frame_;
+    uint64_t measurement_end_frame_;
+
     bool quit_after_range_;
     bool flush_measurement_range_;
     bool flush_inside_measurement_range_;
