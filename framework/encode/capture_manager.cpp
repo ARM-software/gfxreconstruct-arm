@@ -99,7 +99,7 @@ CaptureManager::CaptureManager(format::ApiFamilyId api_family) :
     previous_runtime_trigger_state_(CaptureSettings::RuntimeTriggerState::kNotUsed), debug_layer_(false),
     debug_device_lost_(false), screenshot_prefix_(""), screenshots_enabled_(false), disable_dxr_(false),
     accel_struct_padding_(0), iunknown_wrapping_(false), force_command_serialization_(false), queue_zero_only_(false),
-    allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false)
+    allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false), page_guard_external_memory_(false)
 {}
 
 CaptureManager::~CaptureManager()
@@ -311,6 +311,7 @@ bool CaptureManager::Initialize(std::string base_filename, const CaptureSettings
         if (use_external_memory)
         {
             page_guard_memory_mode_ = kMemoryModeExternal;
+            page_guard_external_memory_ = true;
         }
         else if (trace_settings.page_guard_persistent_memory)
         {
