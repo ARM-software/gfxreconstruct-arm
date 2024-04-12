@@ -8525,21 +8525,22 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
         std::vector<const VkDescriptorBufferInfo*>         buffer_infos;
         for (uint32_t i = 0; i < descriptor_write_count; ++i)
         {
-            auto& descriptor_write = descriptor_writes_decoder->GetPointer()[i];
-            if (descriptor_write.descriptorType != VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+            VkWriteDescriptorSet& descriptor_write = descriptor_writes_decoder->GetPointer()[i];
+            if (descriptor_write.pBufferInfo == nullptr)
             {
                 continue;
             }
 
-            auto& descriptor_write_meta = descriptor_writes_decoder->GetMetaStructPointer()[i];
+            Decoded_VkWriteDescriptorSet& descriptor_write_meta = descriptor_writes_decoder->GetMetaStructPointer()[i];
             for (uint32_t j = 0; j < descriptor_write.descriptorCount; ++j)
             {
-                // To map the buffers later, we need their allocator data
-                resource_data.emplace_back(
-                    GetObjectInfoTable()
-                        .GetBufferInfo(descriptor_write_meta.pBufferInfo->GetMetaStructPointer()[j].buffer)
-                        ->allocator_data);
-                buffer_infos.emplace_back(descriptor_write.pBufferInfo);
+                BufferInfo* info = object_info_table_.GetBufferInfo(
+                    descriptor_write_meta.pBufferInfo->GetMetaStructPointer()[j].buffer);
+                if (info->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+                {
+                    resource_data.emplace_back(info->allocator_data);
+                    buffer_infos.emplace_back(descriptor_write.pBufferInfo);
+                }
             }
         }
         acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
@@ -9061,6 +9062,8 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
     }
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
+        StoreDescriptorUpdateWithTemplate(pData, device_info);
+
         acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(
             in_descriptorSet, update_template_info->acceleration_structure_template_entry, pData);
     }
@@ -9068,6 +9071,30 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
         in_device, in_descriptorSet, in_descriptorUpdateTemplate, pData->GetPointer());
 }
 
+void VulkanReplayConsumerBase::StoreDescriptorUpdateWithTemplate(
+    gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData, gfxrecon::decode::DeviceInfo* device_info)
+{
+    uint32_t buffer_count = pData->GetBufferInfoCount();
+    if (buffer_count != 0)
+    {
+        VkDescriptorBufferInfo*         descriptor_buffer_info      = pData->GetBufferInfoPointer();
+        Decoded_VkDescriptorBufferInfo* descriptor_buffer_info_meta = pData->GetBufferInfoMetaStructPointer();
+        std::vector<VulkanResourceAllocator::ResourceData> resource_data(buffer_count);
+        std::vector<const VkDescriptorBufferInfo*>         descriptor_buffer_infos(buffer_count);
+        for (uint32_t buffer_idx = 0; buffer_idx < buffer_count; ++buffer_idx)
+        {
+            BufferInfo* info = object_info_table_.GetBufferInfo(descriptor_buffer_info_meta[buffer_idx].buffer);
+            if (info->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+            {
+                resource_data[buffer_idx]           = info->allocator_data;
+                descriptor_buffer_infos[buffer_idx] = &descriptor_buffer_info[buffer_idx];
+            }
+        }
+
+        acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
+            resource_data, descriptor_buffer_infos);
+    }
+}
 void VulkanReplayConsumerBase::Process_vkCmdPushDescriptorSetWithTemplateKHR(const ApiCallInfo& call_info,
                                                                              format::HandleId   commandBuffer,
                                                                              format::HandleId descriptorUpdateTemplate,
@@ -9119,6 +9146,8 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
 
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
+        StoreDescriptorUpdateWithTemplate(pData, device_info);
+
         acceleration_structure_builders_[device]->UpdateDescriptorSetWithTemplateKHR(
             in_descriptorSet, update_template_info->acceleration_structure_template_entry, pData);
     }
