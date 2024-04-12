@@ -123,7 +123,7 @@ std::string UtcNowString();
 // Time in seconds since boot
 inline double GetBootTime()
 {
-    return ConvertTimestampToSeconds(GetTimestamp())
+    return ConvertTimestampToSeconds(GetTimestamp());
 }
 
 #else // !defined(WIN32)
@@ -138,7 +138,7 @@ inline double GetBootTime()
     return ConvertTimestampToSeconds(timestamp);
 
 #else
-    return 0.0
+    return 0.0;
 #endif
 }
 
