@@ -1396,7 +1396,17 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 
-    std::unordered_map<format::HandleId, std::optional<VkDeviceAddress>>           tracked_addresses_;
+    struct TrackedAddress
+    {
+        enum class Type
+        {
+            AccelerationStructure,
+            Buffer
+        };
+        Type            address_type;
+        VkDeviceAddress address;
+    };
+    std::unordered_map<format::HandleId, TrackedAddress>                           tracked_addresses_;
     std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
 };
 

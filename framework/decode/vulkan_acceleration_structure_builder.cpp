@@ -323,7 +323,16 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
         return;
     // Try to find the entry in the internal map by capture address of the acceleration structure
     auto as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
-        return entry->original_address_ == address;
+        if (entry->original_address_ == address || entry->new_address_ == address)
+        {
+            return true;
+        }
+        else if (entry->replacement_acceleration_struct_ &&
+                 entry->replacement_acceleration_struct_->new_address_ == address)
+        {
+            return true;
+        }
+        return false;
     });
 
     if (as != acceleration_structures_.end())
@@ -340,27 +349,7 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
         }
         return;
     }
-
-    // Instance updated by FixDeviceMemory metacommand will match the original AS runtime device address -
-    // change to replacement AS address if exists
-    as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
-        return entry->new_address_ == address;
-    });
-
-    if (as != acceleration_structures_.end())
-    {
-        if ((*as)->replacement_acceleration_struct_)
-        {
-            address = (*as)->replacement_acceleration_struct_->new_address_;
-        }
-    }
-
-    // If we are updating the instance buffer that was already updated, we would find the new
-    // device addresses instead of old
-    as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
-        return entry->replacement_acceleration_struct_->new_address_ == address;
-    });
-    if (as == acceleration_structures_.end())
+    else
     {
         GFXRECON_LOG_DEBUG("Acceleration structure address not found: %" PRIu64, address);
     }
@@ -936,8 +925,7 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
         it->second.push_back({ first_query, std::move(stagging_buffer_entry), acc_str_to_process });
     }
 }
-VkDeviceAddress
-VulkanAccelerationStructureBuilder::OnGetAccelerationStructureDeviceAddress(VkAccelerationStructureKHR handle)
+VkDeviceAddress VulkanAccelerationStructureBuilder::GetActualDeviceAddress(VkAccelerationStructureKHR handle)
 {
     AccelerationStructureEntry* entry = GetAccelerationStructureEntry(handle);
     if (entry->replacement_acceleration_struct_)
@@ -1178,13 +1166,13 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
             wait = true;
         }
     }
-    instance_buffer_entries.clear();
     if (wait)
     {
         queue_with_deffered_buffer_write = queue;
     }
-    deferred_inspection_buffers.clear();
 
+    instance_buffer_entries.clear();
+    deferred_inspection_buffers.clear();
     // Update the descriptor set with the actual handle, if any such update is stored
     for (auto it = cached_descriptor_write.begin(); it != cached_descriptor_write.end();)
     {

@@ -420,17 +420,26 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDe
             if (tracked_addresses_.find(infos[i].id) != tracked_addresses_.end())
             {
                 locations[header.memory_id].push_back(infos[i]);
-                uint64_t        offset  = infos[i].adjusted_address - infos[i].original_address;
-                VkDeviceAddress address = 0;
-                if (!tracked_addresses_[infos[i].id])
+                uint64_t offset = infos[i].adjusted_address - infos[i].original_address;
+
+                VkDeviceAddress       address;
+                const TrackedAddress& tracked_address = tracked_addresses_[infos[i].id];
+                switch (tracked_address.address_type)
                 {
-                    address = acceleration_structure_builders_[memory_info->parent_id]
-                                  ->OnGetAccelerationStructureDeviceAddress(
-                                      object_info_table_.GetAccelerationStructureKHRInfo(infos[i].id)->handle);
-                }
-                else
-                {
-                    address = tracked_addresses_[infos[i].id].value();
+                    case TrackedAddress::Type::AccelerationStructure:
+                    {
+                        AccelerationStructureKHRInfo* info =
+                            object_info_table_.GetAccelerationStructureKHRInfo(infos[i].id);
+                        VkAccelerationStructureKHR handle = info->handle;
+                        address =
+                            acceleration_structure_builders_[memory_info->parent_id]->GetActualDeviceAddress(handle);
+                        break;
+                    }
+                    case TrackedAddress::Type::Buffer:
+                    {
+                        address = tracked_address.address;
+                        break;
+                    }
                 }
                 locations[header.memory_id].back().new_address = address + offset;
             }
@@ -4872,6 +4881,8 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
             auto original_buffer_address = memory_device_address + memoryOffset;
             acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
                 buffer_info, original_buffer_address, 0);
+            tracked_addresses_[buffer_info->capture_id] =
+                TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
         }
     }
     return result;
@@ -8055,15 +8066,15 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
     VkDevice                         device       = device_info->handle;
     const VkBufferDeviceAddressInfo* address_info = pInfo->GetPointer();
 
-    auto new_device_address = func(device, address_info);
+    VkDeviceAddress new_device_address = func(device, address_info);
 
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
         format::HandleId buffer      = pInfo->GetMetaStructPointer()->buffer;
-        auto             buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
+        BufferInfo*      buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
         acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
             buffer_data, original_result, new_device_address);
-        tracked_addresses_[buffer] = new_device_address;
+        tracked_addresses_[buffer] = TrackedAddress{ TrackedAddress::Type::Buffer, new_device_address };
     }
 
     return new_device_address;
@@ -8083,10 +8094,12 @@ void VulkanReplayConsumerBase::OverrideGetAccelerationStructureDeviceAddressKHR(
                                   "require the accelerationStructureCaptureReplay feature for accurate capture and "
                                   "replay. The replay device does not support this feature, so replay may fail.");
     }
+
+    VkDeviceAddress address = func(device_info->handle, pInfo->GetPointer());
     if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
         format::HandleId id    = pInfo->GetMetaStructPointer()->accelerationStructure;
-        tracked_addresses_[id] = std::nullopt;
+        tracked_addresses_[id] = TrackedAddress{ TrackedAddress::Type::AccelerationStructure, address };
     }
 }
 
