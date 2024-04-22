@@ -3052,9 +3052,16 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
         VulkanAccelerationStructureBuilder::Functions as_builder_functions = {
-            .get_acceleration_structure_build_sizes       = device_table->GetAccelerationStructureBuildSizesKHR,
-            .create_acceleration_structure                = device_table->CreateAccelerationStructureKHR,
-            .get_buffer_device_address                    = device_table->GetBufferDeviceAddressKHR,
+            .get_acceleration_structure_build_sizes = device_table->GetAccelerationStructureBuildSizesKHR,
+            .create_acceleration_structure          = device_table->CreateAccelerationStructureKHR,
+            .get_buffer_device_address =
+                (device_table->GetBufferDeviceAddress == gfxrecon::encode::noop::GetBufferDeviceAddress
+                     ? nullptr
+                     : device_table->GetBufferDeviceAddress),
+            .get_buffer_device_address_khr =
+                (device_table->GetBufferDeviceAddressKHR == gfxrecon::encode::noop::GetBufferDeviceAddressKHR
+                     ? nullptr
+                     : device_table->GetBufferDeviceAddressKHR),
             .cmd_build_acceleration_structures            = device_table->CmdBuildAccelerationStructuresKHR,
             .get_acceleration_structure_device_address    = device_table->GetAccelerationStructureDeviceAddressKHR,
             .get_buffer_memory_requirements               = device_table->GetBufferMemoryRequirements,
@@ -5202,11 +5209,11 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         allocator_data = buffer_info->allocator_data;
 
         buffer_info->allocator_data = 0;
-    }
 
-    if (!allocator->SupportsOpaqueDeviceAddresses())
-    {
-        acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+        if (!allocator->SupportsOpaqueDeviceAddresses())
+        {
+            acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+        }
     }
 
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
