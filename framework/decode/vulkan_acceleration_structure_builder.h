@@ -48,7 +48,8 @@ class VulkanAccelerationStructureBuilder
     {
         PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };
         PFN_vkCreateAccelerationStructureKHR              create_acceleration_structure{ nullptr };
-        PFN_vkGetBufferDeviceAddressKHR                   get_buffer_device_address{ nullptr };
+        PFN_vkGetBufferDeviceAddress                      get_buffer_device_address{ nullptr };
+        PFN_vkGetBufferDeviceAddressKHR                   get_buffer_device_address_khr{ nullptr };
         PFN_vkCmdBuildAccelerationStructuresKHR           cmd_build_acceleration_structures{ nullptr };
         PFN_vkGetAccelerationStructureDeviceAddressKHR    get_acceleration_structure_device_address{ nullptr };
         PFN_vkGetBufferMemoryRequirements                 get_buffer_memory_requirements{ nullptr };

@@ -313,7 +313,23 @@ VkDeviceAddress VulkanAccelerationStructureBuilder::GetBufferDeviceAddress(VkBuf
     info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     info.pNext  = nullptr;
     info.buffer = buffer;
-    return functions_.get_buffer_device_address(device_, &info);
+
+    VkDeviceAddress result = 0;
+
+    if (functions_.get_buffer_device_address_khr)
+    {
+        result = functions_.get_buffer_device_address_khr(device_, &info);
+    }
+    else if (functions_.get_buffer_device_address)
+    {
+        result = functions_.get_buffer_device_address(device_, &info);
+    }
+    else
+    {
+        throw std::runtime_error("Unable to execute GetBufferDeviceAddress(KHR) - no implementation found.");
+    }
+
+    return result;
 }
 
 // overwrites acceleration structure capture device address with runtime device address
