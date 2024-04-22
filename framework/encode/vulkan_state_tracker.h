@@ -395,7 +395,8 @@ class VulkanStateTracker
 
     void TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address);
 
-    void TrackRayTracingShaderGroupHandles(VkDevice device, VkPipeline pipeline, size_t data_size, const void* data);
+    void TrackRayTracingShaderGroupHandles(
+        VkDevice device, VkPipeline pipeline, uint32_t group_count, size_t data_size, const void* data);
 
     void TrackAcquireFullScreenExclusiveMode(VkDevice device, VkSwapchainKHR swapchain);
 

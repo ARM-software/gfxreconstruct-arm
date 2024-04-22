@@ -123,6 +123,8 @@ class VulkanStateWriter
 
     void WritePipelineState(const VulkanStateTable& state_table);
 
+    void WriteGetRaytracingShaderGroupHandles(const VulkanStateTable& state_table);
+
     void WriteDescriptorSetState(const VulkanStateTable& state_table);
 
     void WriteQueryPoolState(const VulkanStateTable& state_table);

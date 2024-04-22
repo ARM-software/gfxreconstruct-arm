@@ -154,6 +154,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     WritePipelineLayoutState(state_table);
     StandardCreateWrite<PipelineCacheWrapper>(state_table);
     WritePipelineState(state_table);
+    WriteGetRaytracingShaderGroupHandles(state_table);
     WriteAccelerationStructureKHRState(state_table);
     WriteTlasToBlasDependenciesMetadata(state_table);
     WriteAccelerationStructureStateMetaCommands(state_table);
@@ -630,9 +631,9 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
         }
         else if (wrapper->create_call_id == format::ApiCall_vkCreateRayTracingPipelinesKHR)
         {
-            if (wrapper->device_id != format::kNullHandleId)
+            if (wrapper->device->handle_id != format::kNullHandleId)
             {
-                WriteSetRayTracingShaderGroupHandlesCommand(wrapper->device_id,
+                WriteSetRayTracingShaderGroupHandlesCommand(wrapper->device->handle_id,
                                                             wrapper->handle_id,
                                                             wrapper->shader_group_handle_data.size(),
                                                             wrapper->shader_group_handle_data.data());
@@ -660,7 +661,8 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
                     // deferred operation join command, so the deferred command can finish. These join commands must be
                     // after calling vkCreateRayTracingPipelinesKHR. Here we record these deferred operations and their
                     // related device id to generate the join command later.
-                    temp_deferred_operation_join_command[wrapper->deferred_operation.handle_id] = wrapper->device_id;
+                    temp_deferred_operation_join_command[wrapper->deferred_operation.handle_id] =
+                        wrapper->device->handle_id;
                 }
                 // TODO: It shouldn't destroy VkDeferredOperation after vkCreateRayTracingPipelinesKHR because it will
                 // run vkDeferredOperationJoinKHR and vkGetDeferredOperationResultKHR after
@@ -770,6 +772,31 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
     for (const auto& entry : temp_layouts)
     {
         DestroyTemporaryDeviceObject(format::ApiCall_vkDestroyPipelineLayout, entry.first, entry.second);
+    }
+}
+
+void VulkanStateWriter::WriteGetRaytracingShaderGroupHandles(const VulkanStateTable& state_table)
+{
+    std::vector<const PipelineWrapper*> wrappers;
+
+    state_table.VisitWrappers([&](const PipelineWrapper* wrapper) {
+        if (wrapper->create_call_id == format::ApiCall_vkCreateRayTracingPipelinesKHR)
+        {
+            wrappers.emplace_back(wrapper);
+        }
+    });
+    for (const PipelineWrapper* wrapper : wrappers)
+    {
+        parameter_stream_.Reset();
+        encoder_.EncodeHandleValue<DeviceWrapper>(wrapper->device->handle);
+        encoder_.EncodeHandleValue<PipelineWrapper>(wrapper->handle);
+        encoder_.EncodeUInt32Value(0);
+        encoder_.EncodeUInt32Value(wrapper->group_count);
+        encoder_.EncodeSizeTValue(wrapper->shader_group_handle_data.size());
+        encoder_.EncodeVoidArray(wrapper->shader_group_handle_data.data(), wrapper->shader_group_handle_data.size());
+        encoder_.EncodeEnumValue(VK_SUCCESS);
+        WriteFunctionCall(format::ApiCall_vkGetRayTracingShaderGroupHandlesKHR, &parameter_stream_);
+        parameter_stream_.Reset();
     }
 }
 
@@ -1243,6 +1270,7 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
 
     for (const auto& [device, commands] : blas_build_commands)
     {
+        const DeviceWrapper* device_wrapper = state_table.GetDeviceWrapper(device);
         for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
         {
             EncodeAccelerationStructureBuildMetaCommand(commands[cmd_index]);

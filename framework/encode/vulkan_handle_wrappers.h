@@ -345,7 +345,8 @@ struct PipelineWrapper : public HandleWrapper<VkPipeline>
     std::shared_ptr<PipelineLayoutDependencies> layout_dependencies; // Shared with PipelineLayoutWrapper
 
     // Ray tracing pipeline's shader group handle data
-    format::HandleId     device_id{ format::kNullHandleId };
+    DeviceWrapper*       device;
+    uint32_t             group_count;
     std::vector<uint8_t> shader_group_handle_data;
     CreateDependencyInfo deferred_operation;
 
