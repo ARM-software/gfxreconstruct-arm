@@ -1456,16 +1456,15 @@ void VulkanStateTracker::TrackDeviceMemoryDeviceAddress(VkDevice device, VkDevic
     device_memory_addresses_map.emplace(address, wrapper);
 }
 
-void VulkanStateTracker::TrackRayTracingShaderGroupHandles(VkDevice    device,
-                                                           VkPipeline  pipeline,
-                                                           size_t      data_size,
-                                                           const void* data)
+void VulkanStateTracker::TrackRayTracingShaderGroupHandles(
+    VkDevice device, VkPipeline pipeline, uint32_t group_count, size_t data_size, const void* data)
 {
     assert((device != VK_NULL_HANDLE) && (pipeline != VK_NULL_HANDLE));
 
     auto           wrapper   = GetWrapper<PipelineWrapper>(pipeline);
     const uint8_t* byte_data = reinterpret_cast<const uint8_t*>(data);
-    wrapper->device_id       = GetWrappedId<DeviceWrapper>(device);
+    wrapper->device          = GetWrapper<DeviceWrapper>(device);
+    wrapper->group_count     = group_count;
     wrapper->shader_group_handle_data.assign(byte_data, byte_data + data_size);
 }
 
