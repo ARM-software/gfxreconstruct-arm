@@ -1336,6 +1336,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void ConsumeVendorBinaryDataHeader(const uint8_t*                                vendor_binary_data,
                                        VkDeviceFaultVendorBinaryHeaderVersionOneEXT& header);
 
+    void StoreDescriptorUpdateWithTemplate(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData,
+                                           gfxrecon::decode::DeviceInfo*                      device_info);
+
   private:
     util::platform::LibraryHandle                                    loader_handle_;
     PFN_vkGetInstanceProcAddr                                        get_instance_proc_addr_;
