@@ -8603,6 +8603,11 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
         for (uint32_t i = 0; i < descriptor_write_count; ++i)
         {
             VkWriteDescriptorSet& descriptor_write = descriptor_writes_decoder->GetPointer()[i];
+            if (descriptor_write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER &&
+                descriptor_write.descriptorType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+            {
+                continue;
+            }
             if (descriptor_write.pBufferInfo == nullptr)
             {
                 continue;
@@ -9152,25 +9157,27 @@ void VulkanReplayConsumerBase::StoreDescriptorUpdateWithTemplate(
     gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData, gfxrecon::decode::DeviceInfo* device_info)
 {
     uint32_t buffer_count = pData->GetBufferInfoCount();
-    if (buffer_count != 0)
+    if (buffer_count == 0)
     {
-        VkDescriptorBufferInfo*         descriptor_buffer_info      = pData->GetBufferInfoPointer();
-        Decoded_VkDescriptorBufferInfo* descriptor_buffer_info_meta = pData->GetBufferInfoMetaStructPointer();
-        std::vector<VulkanResourceAllocator::ResourceData> resource_data(buffer_count);
-        std::vector<const VkDescriptorBufferInfo*>         descriptor_buffer_infos(buffer_count);
-        for (uint32_t buffer_idx = 0; buffer_idx < buffer_count; ++buffer_idx)
-        {
-            BufferInfo* info = object_info_table_.GetBufferInfo(descriptor_buffer_info_meta[buffer_idx].buffer);
-            if (info->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
-            {
-                resource_data[buffer_idx]           = info->allocator_data;
-                descriptor_buffer_infos[buffer_idx] = &descriptor_buffer_info[buffer_idx];
-            }
-        }
-
-        acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
-            resource_data, descriptor_buffer_infos);
+        return;
     }
+
+    VkDescriptorBufferInfo*         descriptor_buffer_info      = pData->GetBufferInfoPointer();
+    Decoded_VkDescriptorBufferInfo* descriptor_buffer_info_meta = pData->GetBufferInfoMetaStructPointer();
+    std::vector<VulkanResourceAllocator::ResourceData> resource_data(buffer_count);
+    std::vector<const VkDescriptorBufferInfo*>         descriptor_buffer_infos(buffer_count);
+    for (uint32_t buffer_idx = 0; buffer_idx < buffer_count; ++buffer_idx)
+    {
+        BufferInfo* info = object_info_table_.GetBufferInfo(descriptor_buffer_info_meta[buffer_idx].buffer);
+        if (info->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+        {
+            resource_data[buffer_idx]           = info->allocator_data;
+            descriptor_buffer_infos[buffer_idx] = &descriptor_buffer_info[buffer_idx];
+        }
+    }
+
+    acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
+        resource_data, descriptor_buffer_infos);
 }
 void VulkanReplayConsumerBase::Process_vkCmdPushDescriptorSetWithTemplateKHR(const ApiCallInfo& call_info,
                                                                              format::HandleId   commandBuffer,
