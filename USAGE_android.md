@@ -752,7 +752,8 @@ usage: gfxrecon.py replay [-h] [--push-file LOCAL_FILE] [--version] [--pause-fra
                           [--measurement-file DEVICE_FILE] [--quit-after-measurement-range]
                           [--flush-measurement-range] [-m MODE]
                           [--swapchain MODE] [--use-captured-swapchain-indices]
-                          [--use-colorspace-fallback]
+                          [--use-colorspace-fallback] [--preload-measurement-range]
+                          [--log-level LEVEL]
                           [file]
 
 Launch the replay tool.
@@ -901,6 +902,12 @@ optional arguments:
                         in the original capture. This allows preserving frames
                         when capturing a replay that uses. offscreen swapchain.
                         (forwarded to replay tool)
+  --preload-measurement-range
+                        Preloads a frame range specified with
+                        --measurement-frame-range
+                        from the trace file into a continuous, expandable
+                        buffer,in order to mitigate the impact of read file
+                        commands on performance measurements.
 ```
 
 The command will force-stop an active replay process before starting the replay

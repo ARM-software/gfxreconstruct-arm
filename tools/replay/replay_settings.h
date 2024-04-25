@@ -279,6 +279,12 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\twhen it encounters a pipeline created without cache. This option can");
     GFXRECON_WRITE_CONSOLE("          \t\tbe used in coordination with `--save-pipeline-cache` and");
     GFXRECON_WRITE_CONSOLE("          \t\t`--load-pipeline-cache`.");
+    GFXRECON_WRITE_CONSOLE("  --preload-measurement-range");
+    GFXRECON_WRITE_CONSOLE("          \t\tPreloads a frame range specified with");
+    GFXRECON_WRITE_CONSOLE("          \t\t--measurement-frame-range");
+    GFXRECON_WRITE_CONSOLE("          \t\tfrom the trace file into a continuous, expandable");
+    GFXRECON_WRITE_CONSOLE("          \t\tbuffer, in order to mitigate the impact of read file");
+    GFXRECON_WRITE_CONSOLE("          \t\tcommands on performance measurements.");
 
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")

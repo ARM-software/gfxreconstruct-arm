@@ -411,10 +411,11 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--swapchain MODE] [--use-captured-swapchain-indices]
                         [--mfr|--measurement-frame-range <start-frame>-<end-frame>]
                         [--measurement-file <file>] [--quit-after-measurement-range]
-                        [--flush-measurement-range]
-                        [--log-level <level>] [--log-file <file>] [--log-debugview]
-                        [--api <api>] [--no-debug-popup] <file>
-                        [--use-colorspace-fallback]
+                        [--flush-measurement-range] [--log-level <level>] 
+                        [--log-file <file>] [--log-debugview] [--api <api>]
+                        [--no-debug-popup] [--use-colorspace-fallback]
+                        [--preload-measurement-range]
+                        <file>
 
 Required arguments:
   <file>                Path to the capture file to replay.
@@ -487,7 +488,7 @@ Optional arguments:
                         vkGetPipelineCacheData (same as
                         --omit-pipeline-cache-data).
   --wsi <platform>      Force replay to use the specified wsi platform.
-                        Available platforms are: auto,win32,xlib,xcb,wayland
+                        Available platforms are: auto,win32,xlib,xcb,wayland,headless
   --surface-index <N>   Restrict rendering to the Nth surface object created.
                         Used with captures that include multiple surfaces.  Default
                         is -1 (render to all surfaces).
@@ -585,6 +586,12 @@ Optional arguments:
                         was called in the original capture.
                         This allows preserving frames when capturing a replay that uses.
                         offscreen swapchain.
+  --preload-measurement-range
+                        Preloads a frame range specified with --measurement-frame-range
+                        from the trace file into a continuous, expandable buffer,
+                        in order to mitigate the impact of read file commands on
+                        performance measurements.
+
 ```
 
 ### Key Controls
