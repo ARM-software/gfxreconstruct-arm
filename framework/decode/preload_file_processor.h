@@ -91,7 +91,6 @@ class PreloadFileProcessor : public FileProcessor
     size_t preload_frame_number_;
 
     bool ProcessBlocks() override;
-    size_t GetRequiredByteSizeForFrames(size_t frame_count);
 
     bool ReadBytes(void* buffer, size_t buffer_size) override;
 };

@@ -32,10 +32,23 @@ PreloadFileProcessor::PreloadFileProcessor() : status_(PreloadStatus::kInactive)
 
 void PreloadFileProcessor::PreloadNextFrames(size_t count)
 {
-    // reserve enough memory to cover entire frame range
-    size_t total_bytes_needed = GetRequiredByteSizeForFrames(count);
-    preload_buffer_.Reserve(total_bytes_needed);
-    GFXRECON_LOG_INFO("Preloading reserved %zu bytes", total_bytes_needed);
+    // Reserve enough memory to cover entire frame range
+    {
+        gfxrecon::decode::FileProcessor file_processor(UINT64_MAX);
+        file_processor.Initialize(filename_);
+
+        while (file_processor.GetCurrentFrameNumber() < current_frame_number_ + count &&
+               file_processor.ProcessNextFrame())
+        {
+            GFXRECON_LOG_WARNING(
+                "Frame %zu size %zu", file_processor.GetCurrentFrameNumber(), file_processor.GetNumBytesRead());
+        }
+
+        count = file_processor.GetCurrentFrameNumber() - current_frame_number_;
+
+        preload_buffer_.Reserve(file_processor.GetNumBytesRead() - bytes_read_);
+        GFXRECON_LOG_INFO("Preloading reserved %zu bytes", file_processor.GetNumBytesRead() - bytes_read_);
+    }
 
     status_ = PreloadStatus::kRecord;
     for (preload_frame_number_ = 0; preload_frame_number_ < count; ++preload_frame_number_)
@@ -52,20 +65,6 @@ void PreloadFileProcessor::PreloadNextFrames(size_t count)
         ProcessNextFrame();
     }
     status_ = PreloadStatus::kReplay;
-}
-
-size_t PreloadFileProcessor::GetRequiredByteSizeForFrames(size_t frame_count)
-{
-    gfxrecon::decode::FileProcessor file_processor(UINT64_MAX);
-    file_processor.Initialize(filename_);
-
-    while (file_processor.GetCurrentFrameNumber() < current_frame_number_ + frame_count)
-    {
-        file_processor.ProcessNextFrame();
-        GFXRECON_LOG_WARNING("Frame %zu size %zu", file_processor.GetCurrentFrameNumber(), file_processor.GetNumBytesRead());
-    }
-    size_t bytes_needed = file_processor.GetNumBytesRead() - bytes_read_;
-    return bytes_needed;
 }
 
 size_t PreloadFileProcessor::GetNextBufferChunkSize()
