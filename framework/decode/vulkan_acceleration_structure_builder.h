@@ -160,6 +160,11 @@ class VulkanAccelerationStructureBuilder
 
     VkDeviceAddress GetActualDeviceAddress(VkAccelerationStructureKHR handle);
 
+    void RegisterInstanceBufferStagingUpdate(VkCommandBuffer                       command_buffer,
+                                             VulkanResourceAllocator::ResourceData src_buffer_allocator_data,
+                                             VkDeviceSize                          src_offset,
+                                             VkBuffer                              dst_buffer);
+
   private:
     struct ShaderGroupHandleEntry
     {
@@ -356,6 +361,13 @@ class VulkanAccelerationStructureBuilder
         std::vector<
             std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
         instance_buffer_updates_;
+
+    // holds data needed in the scenario of instance data being passed through a staging buffer:
+    // instance data gets written to buffer A and then copied via vkCmdCopyBuffer to buffer B, whilst being in
+    // the same command buffer as the tlas build command using that data
+    std::unordered_map<VkCommandBuffer,
+                       std::vector<std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkBuffer>>>
+        instance_buffer_staging_updates_;
 
     // holds information gathered during vkCmdCopyQueryPoolResults that needs to be processed before
     // vkCmdCopyAccelerationStructureKHR in order to know replacement AS compressed sizes

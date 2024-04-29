@@ -124,6 +124,7 @@
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets",
     "vkCmdCopyQueryPoolResults": "OverrideCmdCopyQueryPoolResults",
-    "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR"
+    "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",
+    "vkCmdCopyBuffer": "OverrideCmdCopyBuffer"
   }
 }

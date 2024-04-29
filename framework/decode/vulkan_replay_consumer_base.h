@@ -566,6 +566,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                          VkDeviceSize                  stride,
                                          VkQueryResultFlags            flags);
 
+    void OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer                         func,
+                               const CommandBufferInfo*                    command_buffer_info,
+                               const BufferInfo*                           src_buffer,
+                               const BufferInfo*                           dst_buffer,
+                               uint32_t                                    regionCount,
+                               StructPointerDecoder<Decoded_VkBufferCopy>* pRegions);
+
     VkResult OverrideQueueSubmit(PFN_vkQueueSubmit                                 func,
                                  VkResult                                          original_result,
                                  const QueueInfo*                                  queue_info,
