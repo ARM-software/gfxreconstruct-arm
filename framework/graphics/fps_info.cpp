@@ -43,7 +43,8 @@ FpsInfo::FpsInfo(uint64_t               measurement_start_frame,
                  const std::string_view measurement_file_name) :
     start_time_(0),
     replay_start_time_(0), replay_end_time_(0), measurement_start_time_(0), measurement_end_time_(0),
-    measurement_start_boot_time_(0), replay_start_frame_(0), measurement_start_frame_(measurement_start_frame),
+    measurement_start_boot_time_(0), measurement_end_boot_time_(0), measurement_start_process_time_(0),
+    measurement_end_process_time_(0), replay_start_frame_(0), measurement_start_frame_(measurement_start_frame),
     measurement_end_frame_(measurement_end_frame), quit_after_range_(quit_after_range),
     flush_measurement_range_(flush_measurement_range), flush_inside_measurement_range_(flush_inside_measurement_range),
     started_measurement_(false), ended_measurement_(false), preload_measurement_range_(preload_measurement_range),
@@ -79,9 +80,10 @@ void FpsInfo::BeginFrame(uint64_t frame)
     {
         if (frame >= measurement_start_frame_)
         {
-            measurement_start_boot_time_ = util::datetime::GetBootTime();
-            measurement_start_time_      = util::datetime::GetTimestamp();
-            started_measurement_         = true;
+            measurement_start_boot_time_    = util::datetime::GetBootTime();
+            measurement_start_time_         = util::datetime::GetTimestamp();
+            measurement_start_process_time_ = util::datetime::GetProcessTime();
+            started_measurement_            = true;
             GFXRECON_WRITE_CONSOLE("================== Start timer (Frame: %llu) ==================", frame);
             frame_durations_.clear();
         }
@@ -100,9 +102,10 @@ void FpsInfo::EndFrame(uint64_t frame)
         // Measurement frame range end is non-inclusive, as opposed to trim frame range
         if (frame >= measurement_end_frame_ - 1)
         {
-            measurement_end_boot_time_ = util::datetime::GetBootTime();
-            measurement_end_time_      = frame_end_time;
-            ended_measurement_         = true;
+            measurement_end_boot_time_    = util::datetime::GetBootTime();
+            measurement_end_process_time_ = util::datetime::GetProcessTime();
+            measurement_end_time_         = frame_end_time;
+            ended_measurement_            = true;
         }
     }
 }
@@ -120,9 +123,10 @@ void FpsInfo::EndFile(uint64_t frame)
 
     if (!ended_measurement_)
     {
-        measurement_end_boot_time_ = util::datetime::GetBootTime();
-        measurement_end_time_      = replay_end_time_;
-        measurement_end_frame_     = frame;
+        measurement_end_boot_time_    = util::datetime::GetBootTime();
+        measurement_end_process_time_ = util::datetime::GetProcessTime();
+        measurement_end_time_         = replay_end_time_;
+        measurement_end_frame_        = frame;
     }
 }
 
@@ -160,8 +164,10 @@ void FpsInfo::LogMeasurements()
                                         { "end_frame", measurement_end_frame_ },
                                         { "frame_count", measured_frames },
                                         { "start_time_boot", measurement_start_boot_time_ },
+                                        { "start_time_process", measurement_start_process_time_ },
                                         { "start_time_monotonic", start_time_monotonic },
                                         { "end_time_boot", measurement_end_boot_time_ },
+                                        { "end_time_process", measurement_end_process_time_ },
                                         { "end_time_monotonic", end_time_monotonic },
                                         { "duration", measured_time },
                                         { "fps", measured_fps },

@@ -68,6 +68,9 @@ class FpsInfo
     double measurement_start_boot_time_;
     double measurement_end_boot_time_;
 
+    double measurement_start_process_time_;
+    double measurement_end_process_time_;
+
     uint64_t replay_start_frame_;
 
     uint64_t measurement_start_frame_;

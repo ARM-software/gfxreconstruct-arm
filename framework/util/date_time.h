@@ -126,14 +126,40 @@ inline double GetBootTime()
     return ConvertTimestampToSeconds(GetTimestamp());
 }
 
+// Time in seconds consumed by this process
+inline double GetProcessTime()
+{
+    ULONG64 CycleTime;
+
+    // Get time and convert ticks to seconds
+    QueryProcessCycleTime(GetCurrentProcess(), &CycleTime);
+    return (static_cast<double>(CycleTime) / CLOCKS_PER_SEC);
+}
+
 #else // !defined(WIN32)
 
+// Time in seconds since boot
 inline double GetBootTime()
 {
 #if defined(CLOCK_BOOTTIME)
 
     timespec time;
     clock_gettime(CLOCK_BOOTTIME, &time);
+    int64_t timestamp = (1000000000 * static_cast<int64_t>(time.tv_sec)) + static_cast<int64_t>(time.tv_nsec);
+    return ConvertTimestampToSeconds(timestamp);
+
+#else
+    return 0.0;
+#endif
+}
+
+// Time in seconds consumed by this process
+inline double GetProcessTime()
+{
+#if defined(CLOCK_PROCESS_CPUTIME_ID)
+
+    timespec time;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time);
     int64_t timestamp = (1000000000 * static_cast<int64_t>(time.tv_sec)) + static_cast<int64_t>(time.tv_nsec);
     return ConvertTimestampToSeconds(timestamp);
 
