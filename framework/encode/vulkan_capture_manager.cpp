@@ -1748,6 +1748,12 @@ void VulkanCaptureManager::PostProcess_vkCreateSwapchainKHR(VkResult            
         auto new_swapchain_wrapper           = GetWrapper<SwapchainKHRWrapper>(*pSwapchain);
         old_swapchain_wrapper->new_swapchain = new_swapchain_wrapper;
         new_swapchain_wrapper->old_swapchain = old_swapchain_wrapper;
+
+        // Iterate over the images acquired from this swapchain, and add the new swaphchain as parent swapchain
+        for (ImageWrapper* image : old_swapchain_wrapper->child_images)
+        {
+            image->parent_swapchains.insert(new_swapchain_wrapper->handle);
+        }
     }
 }
 
