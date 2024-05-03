@@ -1270,10 +1270,9 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
 
     for (const auto& [device, commands] : blas_build_commands)
     {
-        const DeviceWrapper* device_wrapper = state_table.GetDeviceWrapper(device);
         for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
         {
-            EncodeAccelerationStructureBuildMetaCommand(commands[cmd_index]);
+            WriteAccelerationStructureBuildMetaCommand(commands[cmd_index]);
         }
     }
 
@@ -1281,13 +1280,13 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
     {
         for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
         {
-            EncodeAccelerationStructureWritePropertiesCommand(commands[cmd_index]);
+            WriteAccelerationStructureWritePropertiesCommand(commands[cmd_index]);
         }
     }
 
     for (const auto& [device, command] : copy_commands)
     {
-        EncodeAccelerationStructureCopyMetaCommand(command);
+        WriteAccelerationStructureCopyMetaCommand(command);
     }
 
     for (const auto& command_container : { tlas_build_commands, blas_update_commands, tlas_update_commands })
@@ -1296,14 +1295,13 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
         {
             for (uint32_t cmd_index = 0; cmd_index < commands.size(); ++cmd_index)
             {
-                EncodeAccelerationStructureBuildMetaCommand(commands[cmd_index]);
+                WriteAccelerationStructureBuildMetaCommand(commands[cmd_index]);
             }
         }
     }
 }
 
-void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
-    const AccelerationStructureBuildCommandData& command)
+void VulkanStateWriter::WriteAccelerationStructureBuildMetaCommand(const AccelerationStructureBuildCommandData& command)
 {
     parameter_stream_.Reset();
 
@@ -1340,7 +1338,7 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
     ++blocks_written_;
 }
 
-void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command)
+void VulkanStateWriter::WriteAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command)
 {
     parameter_stream_.Reset();
 
@@ -1363,7 +1361,7 @@ void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(const Acceler
     ++blocks_written_;
 }
 
-void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
+void VulkanStateWriter::WriteAccelerationStructureWritePropertiesCommand(
     const AccelerationStructureWritePropertiesCommandData& command)
 {
     parameter_stream_.Reset();
@@ -1404,6 +1402,7 @@ void VulkanStateWriter::WriteAccelerationStructureKHRState(const VulkanStateTabl
         }
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());
+        WriteGetAccelerationStructureDeviceAddressKHRCall(state_table, wrapper);
     });
 }
 
@@ -3463,6 +3462,23 @@ bool VulkanStateWriter::IsFramebufferValid(const FramebufferWrapper* framebuffer
     }
 
     return valid;
+}
+
+void VulkanStateWriter::WriteGetAccelerationStructureDeviceAddressKHRCall(
+    const VulkanStateTable& state_table, const AccelerationStructureKHRWrapper* wrapper)
+{
+    parameter_stream_.Reset();
+    auto device_wrapper = state_table.GetDeviceWrapper(wrapper->device_id);
+    encoder_.EncodeHandleValue<DeviceWrapper>(device_wrapper->handle);
+    VkAccelerationStructureDeviceAddressInfoKHR info{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+                                                      nullptr,
+                                                      wrapper->handle };
+
+    EncodeStructPtr(&encoder_, &info);
+    encoder_.EncodeVkDeviceAddressValue(GetDeviceTable(device_wrapper->handle)
+                                            ->GetAccelerationStructureDeviceAddressKHR(device_wrapper->handle, &info));
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetAccelerationStructureDeviceAddressKHR, &parameter_stream_);
+    parameter_stream_.Reset();
 }
 
 GFXRECON_END_NAMESPACE(encode)

@@ -349,7 +349,7 @@ class VulkanStateWriter
     };
     using AccelerationStructureBuildCommandsContainer =
         std::unordered_map<format::HandleId, std::vector<AccelerationStructureBuildCommandData>>;
-    void EncodeAccelerationStructureBuildMetaCommand(const AccelerationStructureBuildCommandData& command);
+    void WriteAccelerationStructureBuildMetaCommand(const AccelerationStructureBuildCommandData& command);
 
     struct AccelerationStructureCopyCommandData
     {
@@ -358,7 +358,7 @@ class VulkanStateWriter
     };
     using AccelerationStructureCopyCommandsContainer =
         std::unordered_map<format::HandleId, AccelerationStructureCopyCommandData>;
-    void EncodeAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command);
+    void WriteAccelerationStructureCopyMetaCommand(const AccelerationStructureCopyCommandData& command);
 
     struct AccelerationStructureWritePropertiesCommandData
     {
@@ -369,7 +369,10 @@ class VulkanStateWriter
     using AccelerationStructureWritePropertiesCommandsContainer =
         std::unordered_map<format::HandleId, std::vector<AccelerationStructureWritePropertiesCommandData>>;
     void
-    EncodeAccelerationStructureWritePropertiesCommand(const AccelerationStructureWritePropertiesCommandData& command);
+    WriteAccelerationStructureWritePropertiesCommand(const AccelerationStructureWritePropertiesCommandData& command);
+
+    void WriteGetAccelerationStructureDeviceAddressKHRCall(const VulkanStateTable&                state_table,
+                                                           const AccelerationStructureKHRWrapper* wrapper);
 
   private:
     util::FileOutputStream*  output_stream_;
