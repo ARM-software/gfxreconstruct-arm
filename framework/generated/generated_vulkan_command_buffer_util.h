@@ -151,6 +151,10 @@ void TrackCmdDrawIndirectCountKHRHandles(CommandBufferWrapper* wrapper, VkBuffer
 
 void TrackCmdDrawIndexedIndirectCountKHRHandles(CommandBufferWrapper* wrapper, VkBuffer buffer, VkBuffer countBuffer);
 
+void TrackCmdSetRenderingAttachmentLocationsKHRHandles(CommandBufferWrapper* wrapper, const VkRenderingAttachmentLocationInfoKHR* pLocationInfo);
+
+void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo);
+
 void TrackCmdEncodeVideoKHRHandles(CommandBufferWrapper* wrapper, const VkVideoEncodeInfoKHR* pEncodeInfo);
 
 void TrackCmdSetEvent2KHRHandles(CommandBufferWrapper* wrapper, VkEvent event, const VkDependencyInfo* pDependencyInfo);

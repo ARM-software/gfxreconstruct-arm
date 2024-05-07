@@ -12718,10 +12718,13 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingAttachmentLocationsKHR(
     {
         encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pLocationInfo);
-        manager->EndCommandApiCallCapture(commandBuffer);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingAttachmentLocationsKHRHandles, pLocationInfo);
     }
 
-    GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(commandBuffer, pLocationInfo);
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkRenderingAttachmentLocationInfoKHR* pLocationInfo_unwrapped = UnwrapStructPtrHandles(pLocationInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(commandBuffer, pLocationInfo_unwrapped);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocationsKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
 }
@@ -12751,10 +12754,13 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndicesKHR(
     {
         encoder->EncodeHandleValue<CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pLocationInfo);
-        manager->EndCommandApiCallCapture(commandBuffer);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingInputAttachmentIndicesKHRHandles, pLocationInfo);
     }
 
-    GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pLocationInfo);
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo_unwrapped = UnwrapStructPtrHandles(pLocationInfo, handle_unwrap_memory);
+
+    GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pLocationInfo_unwrapped);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
 }
@@ -23384,7 +23390,10 @@ VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceOpticalFlowImageFormatsNV(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetPhysicalDeviceOpticalFlowImageFormatsNV>::Dispatch(manager, physicalDevice, pOpticalFlowImageFormatInfo, pFormatCount, pImageFormatProperties);
 
-    VkResult result = GetInstanceTable(physicalDevice)->GetPhysicalDeviceOpticalFlowImageFormatsNV(physicalDevice, pOpticalFlowImageFormatInfo, pFormatCount, pImageFormatProperties);
+    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
+    const VkOpticalFlowImageFormatInfoNV* pOpticalFlowImageFormatInfo_unwrapped = UnwrapStructPtrHandles(pOpticalFlowImageFormatInfo, handle_unwrap_memory);
+
+    VkResult result = GetInstanceTable(physicalDevice)->GetPhysicalDeviceOpticalFlowImageFormatsNV(physicalDevice, pOpticalFlowImageFormatInfo_unwrapped, pFormatCount, pImageFormatProperties);
     if (result < 0)
     {
         omit_output_data = true;
