@@ -31,44 +31,79 @@ void VulkanDeviceAddressTracker::TrackAccelerationStructureDeviceAddress(format:
 }
 
 std::vector<format::AddressLocationInfo>
-VulkanDeviceAddressTracker::GetAddressesInMemoryRange(void* start_address, size_t offset, size_t size)
+VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
+                                                      const DeviceMemoryWrapper*   memory,
+                                                      void*                        start_address,
+                                                      size_t                       offset,
+                                                      size_t                       size)
 {
-    std::vector<format::AddressLocationInfo> locations;
-    uint64_t*                                start       = (uint64_t*)((uint8_t*)start_address + offset);
-    uint64_t*                                end         = (uint64_t*)((uint8_t*)start_address + offset + size);
-    gfxrecon::encode::VulkanCaptureManager*  cap_manager = gfxrecon::encode::VulkanCaptureManager::Get();
+    gfxrecon::encode::VulkanCaptureManager* cap_manager = gfxrecon::encode::VulkanCaptureManager::Get();
 
-    lock();
-    if (tracked_objects.empty())
+    std::lock_guard lg(*this);
+    if (!memory)
     {
-        unlock();
-        return locations;
+        return {};
     }
+    if (tracked_objects.empty() || memory->bound_buffers.empty())
+    {
+        return {};
+    }
+
     auto [min, max] =
         std::minmax_element(tracked_objects.begin(), tracked_objects.end(), [](const auto& a, const auto& b) {
             return a.second.original_address < b.second.original_address;
         });
-    const VkDeviceAddress min_addr = min->second.original_address;
-    const VkDeviceAddress max_addr = max->second.original_address + max->second.size;
-    for (uint64_t* ptr = start; ptr != end; ptr++)
+    std::vector<BufferWrapper*> buffers;
+    buffers.reserve(memory->bound_buffers.size());
+
+    for (auto& buf : memory->bound_buffers)
     {
-        const uint64_t value = *ptr;
-        if (value >= min_addr && value <= max_addr)
+        bool ignore = false;
+        for (auto usage : ignored_usages)
         {
-            for (auto& [entry, loc] : tracked_objects)
+            if ((buf->usage & usage) == usage)
             {
-                bool is_value_in_range = (value >= loc.original_address) && (value <= loc.original_address + loc.size);
-                if (is_value_in_range)
-                {
-                    loc.adjusted_address = value;
-                    loc.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
-                    locations.push_back(loc);
-                    break;
-                }
+                ignore = true;
+                break;
             }
         }
+        if (!ignore)
+        {
+            buffers.push_back(buf);
+        }
     }
-    unlock();
+
+    if (buffers.empty())
+    {
+        return {};
+    }
+
+    std::vector<format::AddressLocationInfo> locations;
+    const VkDeviceAddress                    min_addr = min->second.original_address;
+    const VkDeviceAddress                    max_addr = max->second.original_address + max->second.size;
+    uint64_t*                                start    = (uint64_t*)((uint8_t*)start_address + offset);
+    uint64_t*                                end      = (uint64_t*)((uint8_t*)start_address + offset + size);
+    for (uint64_t* ptr = start; ptr != end; ptr++)
+    {
+        const uint64_t value             = *ptr;
+        bool           value_is_in_range = value >= min_addr && value <= max_addr;
+        if (!value_is_in_range)
+        {
+            continue;
+        }
+        auto entry = std::find_if(tracked_objects.begin(), tracked_objects.end(), [value](auto& entry) {
+            return (value >= entry.second.original_address) &&
+                   (value <= entry.second.original_address + entry.second.size);
+        });
+
+        if (entry == tracked_objects.end())
+        {
+            continue;
+        }
+        entry->second.adjusted_address = value;
+        entry->second.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
+        locations.push_back(entry->second);
+    }
     return locations;
 }
 GFXRECON_END_NAMESPACE(encode)

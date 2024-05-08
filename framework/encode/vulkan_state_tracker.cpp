@@ -354,15 +354,10 @@ void VulkanStateTracker::TrackBufferMemoryBinding(
 {
     assert((device != VK_NULL_HANDLE) && (buffer != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
 
-    auto wrapper            = GetWrapper<BufferWrapper>(buffer);
-    wrapper->bind_device    = GetWrapper<DeviceWrapper>(device);
-    wrapper->bind_memory_id = GetWrappedId<DeviceMemoryWrapper>(memory);
-    wrapper->bind_offset    = memoryOffset;
-    wrapper->bind_pnext     = nullptr;
+    auto wrapper         = GetWrapper<BufferWrapper>(buffer);
+    wrapper->bind_device = GetWrapper<DeviceWrapper>(device);
+    wrapper->bind_pnext  = nullptr;
     wrapper->bind_pnext_memory.Reset();
-
-    DeviceMemoryWrapper* memory_wrapper = GetWrapper<DeviceMemoryWrapper>(memory);
-    memory_wrapper->bound_buffers.insert(wrapper);
 
     if (bind_info_pnext != nullptr)
     {

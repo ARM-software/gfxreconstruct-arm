@@ -813,6 +813,7 @@ VkResult VulkanCaptureManager::OverrideCreateBuffer(VkDevice                    
 
         auto buffer_wrapper          = GetWrapper<BufferWrapper>(*pBuffer);
         buffer_wrapper->created_size = modified_create_info.size;
+        buffer_wrapper->usage        = pCreateInfo->usage;
         if (uses_address)
         {
             // If the buffer has a device address, write the 'set buffer address' command before writing the API call to
@@ -2320,7 +2321,8 @@ void VulkanCaptureManager::PreProcess_vkFlushMappedMemoryRanges(VkDevice        
                         manager->ProcessMemoryEntry(
                             current_memory_wrapper->handle_id,
                             [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                                auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+                                auto locations = address_tracker.GetAddressesInMemoryRange(
+                                    buffer_usages_to_ignore_, memories[memory_id], start_address, offset, size);
                                 if (locations.size())
                                 {
                                     WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());
@@ -2380,7 +2382,8 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
 
             manager->ProcessMemoryEntry(
                 wrapper->handle_id, [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                    auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+                    auto locations = address_tracker.GetAddressesInMemoryRange(
+                        buffer_usages_to_ignore_, memories[memory_id], start_address, offset, size);
                     if (locations.size())
                     {
                         WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());
@@ -2666,7 +2669,8 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd()
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-            auto locations = address_tracker.GetAddressesInMemoryRange(start_address, offset, size);
+            auto locations = address_tracker.GetAddressesInMemoryRange(
+                buffer_usages_to_ignore_, memories[memory_id], start_address, offset, size);
             if (locations.size())
             {
                 WriteFixDeviceAddressCmd(memory_id, locations.size(), locations.data());

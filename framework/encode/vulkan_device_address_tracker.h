@@ -1,6 +1,7 @@
 #pragma once
 #include "vulkan/vulkan.h"
 
+#include "encode/vulkan_handle_wrapper_util.h"
 #include "format/format.h"
 #include <unordered_map>
 #include <vector>
@@ -22,8 +23,11 @@ class VulkanDeviceAddressTracker
 
     void TrackBufferDeviceAddress(format::HandleId buffer_id, uint64_t buffer_size, VkDeviceAddress address);
     void TrackAccelerationStructureDeviceAddress(format::HandleId id, VkDeviceAddress address);
-
-    std::vector<format::AddressLocationInfo> GetAddressesInMemoryRange(void* start_address, size_t offset, size_t size);
+    std::vector<format::AddressLocationInfo> GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
+                                                                       const DeviceMemoryWrapper*   memory,
+                                                                       void*                        start_address,
+                                                                       size_t                       offset,
+                                                                       size_t                       size);
 };
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

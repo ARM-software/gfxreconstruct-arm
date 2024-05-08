@@ -844,9 +844,12 @@ class VulkanCaptureManager : public CaptureManager
     void PostProcess_vkBindBufferMemory(
         VkResult result, VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset)
     {
-        auto wrapper            = GetWrapper<BufferWrapper>(buffer);
-        wrapper->bind_memory_id = GetWrappedId<DeviceMemoryWrapper>(memory);
-        wrapper->bind_offset    = memoryOffset;
+        auto wrapper                        = GetWrapper<BufferWrapper>(buffer);
+        wrapper->bind_memory_id             = GetWrappedId<DeviceMemoryWrapper>(memory);
+        wrapper->bind_offset                = memoryOffset;
+        DeviceMemoryWrapper* memory_wrapper = GetWrapper<DeviceMemoryWrapper>(memory);
+        memory_wrapper->bound_buffers.insert(wrapper);
+
         if (((GetCaptureMode() & kModeTrack) == kModeTrack) && (result == VK_SUCCESS))
         {
             assert(state_tracker_ != nullptr);
@@ -861,9 +864,11 @@ class VulkanCaptureManager : public CaptureManager
     {
         for (uint32_t i = 0; i < bindInfoCount; ++i)
         {
-            auto wrapper            = GetWrapper<BufferWrapper>(pBindInfos[i].buffer);
-            wrapper->bind_memory_id = GetWrappedId<DeviceMemoryWrapper>(pBindInfos[i].memory);
-            wrapper->bind_offset    = pBindInfos[i].memoryOffset;
+            auto wrapper                        = GetWrapper<BufferWrapper>(pBindInfos[i].buffer);
+            wrapper->bind_memory_id             = GetWrappedId<DeviceMemoryWrapper>(pBindInfos[i].memory);
+            wrapper->bind_offset                = pBindInfos[i].memoryOffset;
+            DeviceMemoryWrapper* memory_wrapper = GetWrapper<DeviceMemoryWrapper>(pBindInfos[i].memory);
+            memory_wrapper->bound_buffers.insert(wrapper);
         }
         if (((GetCaptureMode() & kModeTrack) == kModeTrack) && (result == VK_SUCCESS) && (pBindInfos != nullptr))
         {

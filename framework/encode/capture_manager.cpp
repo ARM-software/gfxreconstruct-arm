@@ -266,6 +266,7 @@ bool CaptureManager::Initialize(std::string base_filename, const CaptureSettings
     allow_pipeline_compile_required_        = trace_settings.allow_pipeline_compile_required;
     fence_query_delay_                      = trace_settings.fence_query_delay;
     experimental_raytracing_fastforwarding_ = trace_settings.experimental_raytracing_fastforwarding;
+    buffer_usages_to_ignore_                = trace_settings.buffer_usages_to_ignore;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;
@@ -310,7 +311,7 @@ bool CaptureManager::Initialize(std::string base_filename, const CaptureSettings
         // External memory takes precedence over shadow memory modes.
         if (use_external_memory)
         {
-            page_guard_memory_mode_ = kMemoryModeExternal;
+            page_guard_memory_mode_     = kMemoryModeExternal;
             page_guard_external_memory_ = true;
         }
         else if (trace_settings.page_guard_persistent_memory)

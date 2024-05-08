@@ -198,10 +198,11 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>
     const void*        bind_pnext{ nullptr };
     HandleUnwrapMemory bind_pnext_memory; // Global HandleUnwrapMemory could be reset anytime, so it should have its own
                                           // HandleUnwrapMemory.
-    format::HandleId bind_memory_id{ format::kNullHandleId };
-    VkDeviceSize     bind_offset{ 0 };
-    uint32_t         queue_family_index{ 0 };
-    VkDeviceSize     created_size{ 0 };
+    format::HandleId   bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize       bind_offset{ 0 };
+    uint32_t           queue_family_index{ 0 };
+    VkDeviceSize       created_size{ 0 };
+    VkBufferUsageFlags usage{ 0 };
 
     // State tracking info for buffers with device addresses.
     format::HandleId device_id{ format::kNullHandleId };

@@ -324,7 +324,7 @@ class CaptureManager
         }
     }
 
-  private:
+  protected:
     static uint32_t                                 instance_count_;
     static std::mutex                               instance_lock_;
     static thread_local std::unique_ptr<ThreadData> thread_data_;
@@ -374,7 +374,7 @@ class CaptureManager
     static std::function<void()>            delete_instance_func_;
     uint32_t                                fence_query_delay_;
     bool                                    experimental_raytracing_fastforwarding_;
-
+    std::vector<uint64_t>                   buffer_usages_to_ignore_;
     struct
     {
         bool     rv_annotation{ false };
