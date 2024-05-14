@@ -1088,9 +1088,11 @@ void CaptureManager::WriteFillMemoryCmd(format::HandleId memory_id, uint64_t off
     }
 }
 
-void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             memory_id,
-                                              uint64_t                     num_of_locations,
-                                              format::AddressLocationInfo* locations)
+void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId                      device_id,
+                                              format::HandleId                      memory_id,
+                                              format::FixDeviceAddressCommandTarget target,
+                                              uint64_t                              num_of_locations,
+                                              format::AddressLocationInfo*          locations)
 {
     if ((capture_mode_ & kModeWrite) == kModeWrite)
     {
@@ -1102,7 +1104,9 @@ void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             memor
         fix_cmd.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
         fix_cmd.meta_header.meta_data_id =
             format::MakeMetaDataId(api_family_, format::MetaDataType::kFixDeviceAddressCommand);
+        fix_cmd.device_id        = device_id;
         fix_cmd.memory_id        = memory_id;
+        fix_cmd.target           = target;
         fix_cmd.num_of_locations = num_of_locations;
         CombineAndWriteToFile({ { &fix_cmd, sizeof(format::FixDeviceAddressCommandHeader) },
                                 { locations, num_of_locations * sizeof(format::AddressLocationInfo) } });
