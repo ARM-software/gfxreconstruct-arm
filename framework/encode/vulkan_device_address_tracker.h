@@ -15,9 +15,9 @@ class VulkanDeviceAddressTracker
 {
   public:
     std::shared_mutex mx{};
+    void              lock() { mx.lock(); }
+    void              unlock() { mx.unlock(); }
 
-    void lock() { mx.lock(); }
-    void unlock() { mx.unlock(); }
     // Handle to its location
     std::unordered_map<format::HandleId, format::AddressLocationInfo> tracked_objects;
 
@@ -25,9 +25,10 @@ class VulkanDeviceAddressTracker
     void TrackAccelerationStructureDeviceAddress(format::HandleId id, VkDeviceAddress address);
     std::vector<format::AddressLocationInfo> GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
                                                                        const DeviceMemoryWrapper*   memory,
-                                                                       void*                        start_address,
+                                                                       const void*                  start_address,
                                                                        size_t                       offset,
                                                                        size_t                       size);
+    std::vector<format::AddressLocationInfo> GetAddressesInData(const void* start_address, size_t offset, size_t size);
 };
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

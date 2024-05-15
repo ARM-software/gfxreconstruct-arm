@@ -767,7 +767,9 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
     else if (meta_data_type == format::MetaDataType::kFixDeviceAddressCommand)
     {
         format::FixDeviceAddressCommandHeader header;
+        success        = ReadBytes(&header.device_id, sizeof(header.device_id));
         success        = ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success        = ReadBytes(&header.target, sizeof(header.target));
         success        = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
         auto locations = new format::AddressLocationInfo[header.num_of_locations];
         success        = ReadBytes(locations, header.num_of_locations * sizeof(format::AddressLocationInfo));

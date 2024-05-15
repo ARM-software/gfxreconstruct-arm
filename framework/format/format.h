@@ -321,11 +321,19 @@ struct FillMemoryCommandHeader
     uint64_t memory_size;   // Uncompressed size of the data encoded after the header.
 };
 
+enum FixDeviceAddressCommandTarget
+{
+    DeviceMemory  = 0,
+    PushConstants = 1
+};
+
 struct FixDeviceAddressCommandHeader
 {
-    MetaDataHeader   meta_header;
-    format::HandleId memory_id;
-    uint64_t         num_of_locations;
+    MetaDataHeader                meta_header;
+    format::HandleId              device_id;
+    format::HandleId              memory_id;
+    FixDeviceAddressCommandTarget target;
+    uint64_t                      num_of_locations;
 };
 
 struct AddressLocationInfo
