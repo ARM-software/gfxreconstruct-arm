@@ -531,26 +531,6 @@ class VulkanCaptureManager : public CaptureManager
                                       const VkAllocationCallbacks*    pAllocator,
                                       VkSwapchainKHR*                 pSwapchain);
 
-    void PreProcess_vkCmdPushConstants(VkCommandBuffer    commandBuffer,
-                                       VkPipelineLayout   layout,
-                                       VkShaderStageFlags stageFlags,
-                                       uint32_t           offset,
-                                       uint32_t           size,
-                                       const void*        pValues)
-    {
-        CommandBufferWrapper* wrapper = GetWrapper<CommandBufferWrapper>(commandBuffer);
-
-        auto locations = address_tracker.GetAddressesInData(pValues, offset, size);
-        if (!locations.empty())
-        {
-            WriteFixDeviceAddressCmd(wrapper->parent_pool->device->handle_id,
-                                     format::kNullHandleId,
-                                     format::FixDeviceAddressCommandTarget::PushConstants,
-                                     locations.size(),
-                                     locations.data());
-        }
-    }
-
     void PostProcess_vkAcquireNextImageKHR(VkResult result,
                                            VkDevice,
                                            VkSwapchainKHR swapchain,
