@@ -281,11 +281,9 @@ class CaptureManager
 
     void WriteCreateHeapAllocationCmd(uint64_t allocation_id, uint64_t allocation_size);
 
-    void WriteFixDeviceAddressCmd(format::HandleId                      device_id,
-                                  format::HandleId                      memory_id,
-                                  format::FixDeviceAddressCommandTarget target,
-                                  uint64_t                              num_of_locations,
-                                  format::AddressLocationInfo*          locations);
+    void WriteFixDeviceAddressCmd(format::HandleId             memory_id,
+                                  uint64_t                     num_of_locations,
+                                  format::AddressLocationInfo* locations);
 
   protected:
     std::unique_ptr<util::Compressor> compressor_;

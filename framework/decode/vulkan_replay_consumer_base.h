@@ -1203,14 +1203,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                             uint32_t                                                       height,
                             uint32_t                                                       depth);
 
-    void OverrideCmdPushConstants(PFN_vkCmdPushConstants   func,
-                                  CommandBufferInfo*       in_commandBuffer,
-                                  PipelineLayoutInfo*      in_layout,
-                                  VkShaderStageFlags       stageFlags,
-                                  uint32_t                 offset,
-                                  uint32_t                 size,
-                                  PointerDecoder<uint8_t>* pValues);
-
     const VulkanReplayOptions options_;
 
   private:
@@ -1425,8 +1417,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         VkDeviceAddress address;
     };
     std::unordered_map<format::HandleId, TrackedAddress>                           tracked_addresses_;
-    std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> device_memory_locations;
-    std::vector<format::AddressLocationInfo>                                       push_constant_locations;
+    std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
 };
 
 GFXRECON_END_NAMESPACE(decode)
