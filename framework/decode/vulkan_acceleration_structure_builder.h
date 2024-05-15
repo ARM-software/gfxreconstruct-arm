@@ -87,8 +87,8 @@ class VulkanAccelerationStructureBuilder
                               VkCopyDescriptorSet*  descriptor_copies);
 
     void
-    StoreDeferredDeviceAddressBufferUpdates(const std::vector<VulkanResourceAllocator::ResourceData>& resource_data,
-                                            const std::vector<const VkDescriptorBufferInfo*>&         buffer_infos);
+         StoreDeferredDeviceAddressBufferUpdates(const std::vector<BufferInfo*>&                   buffer_infos,
+                                                 const std::vector<const VkDescriptorBufferInfo*>& descriptor_buffer_infos);
     void UpdateDescriptorSetWithTemplateKHR(VkDescriptorSet                                    descriptor_set,
                                             const VkDescriptorUpdateTemplateEntryKHR&          entry,
                                             gfxrecon::decode::DescriptorUpdateTemplateDecoder* data);
@@ -290,13 +290,10 @@ class VulkanAccelerationStructureBuilder
     struct DescriptorUpdateBufferEntries
     {
         DescriptorUpdateBufferEntries() = default;
-        DescriptorUpdateBufferEntries(uint32_t size) :
-            size_(size), buffer_handles(size), allocation_data_(size), offsets_(size), ranges_(size)
-        {}
+        DescriptorUpdateBufferEntries(uint32_t size) : size_(size), infos_(size), offsets_(size), ranges_(size) {}
 
         uint32_t                                           size_{};
-        std::vector<VkBuffer>                              buffer_handles;
-        std::vector<VulkanResourceAllocator::ResourceData> allocation_data_;
+        std::vector<BufferInfo*>                           infos_;
         std::vector<VkDeviceSize>                          offsets_;
         std::vector<VkDeviceSize>                          ranges_;
     };

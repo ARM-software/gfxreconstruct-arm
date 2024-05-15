@@ -1146,47 +1146,24 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
     bool wait = false;
     for (const auto& descriptor_update_buffers : deferred_inspection_buffers)
     {
-        bool should_inspect = false;
-        // Check that this descriptor update had any buffer we consider an instance buffer
-        for (const auto& instance_buffer_entry : instance_buffer_entries)
-        {
-            if (std::any_of(
-                    descriptor_update_buffers.buffer_handles.begin(),
-                    descriptor_update_buffers.buffer_handles.end(),
-                    [&instance_buffer_entry](VkBuffer handle) { return handle == instance_buffer_entry->handle_; }))
-            {
-                should_inspect = true;
-                break;
-            }
-        }
-
-        if (!should_inspect)
-        {
-            continue;
-        }
-
         for (uint32_t buffer_idx = 0; buffer_idx < descriptor_update_buffers.size_; ++buffer_idx)
         {
-            if (!descriptor_update_buffers.allocation_data_[buffer_idx])
+            if (descriptor_update_buffers.infos_[buffer_idx]->usage &
+                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
             {
                 continue;
             }
 
             uint8_t* data;
             allocator_->MapResourceMemoryDirect(
-                allocator_->GetBufferSize(descriptor_update_buffers.allocation_data_[buffer_idx]),
+                allocator_->GetBufferSize(descriptor_update_buffers.infos_[buffer_idx]->allocator_data),
                 0,
                 (void**)&data,
-                descriptor_update_buffers.allocation_data_[buffer_idx]);
+                descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
             data += descriptor_update_buffers.offsets_[buffer_idx];
 
             // Try to interpret whatever is inside the buffer as VkDeviceAddress
             VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
-
-            if (!device_addresses)
-            {
-                continue;
-            }
 
             auto acceleration_structure = std::find_if(
                 acceleration_structures_.begin(),
@@ -1200,6 +1177,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
             {
                 continue;
             }
+
             if (queue_with_deffered_buffer_write != VK_NULL_HANDLE)
             {
                 functions_.queue_wait_idle(queue_with_deffered_buffer_write);
@@ -1207,12 +1185,12 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
             }
 
             // Otherwise, iterate over this buffer and replace device addresses
-            for (uint32_t i = 0; i < descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress); ++i)
+            uint32_t count = descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
+            for (uint32_t i = 0; i < count; ++i)
             {
                 UpdateAccelerationStructDeviceAddress(device_addresses[i]);
             }
-
-            allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.allocation_data_[buffer_idx]);
+            allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
             wait = true;
         }
     }
@@ -1377,21 +1355,16 @@ void VulkanAccelerationStructureBuilder::PostQueuePresent()
 }
 
 void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates(
-    const std::vector<VulkanResourceAllocator::ResourceData>& resource_data,
-    const std::vector<const VkDescriptorBufferInfo*>&         pBufferInfos)
+    const std::vector<BufferInfo*>&                   buffer_infos,
+    const std::vector<const VkDescriptorBufferInfo*>& descriptor_buffer_infos)
 {
-    if (resource_data.empty())
-    {
-        return;
-    }
-    auto& buffers = deferred_inspection_buffers.emplace_back(resource_data.size());
+    auto& buffers = deferred_inspection_buffers.emplace_back(buffer_infos.size());
 
-    for (uint32_t i = 0; i < resource_data.size(); ++i)
+    for (uint32_t i = 0; i < buffer_infos.size(); ++i)
     {
-        buffers.buffer_handles[i]   = pBufferInfos[i]->buffer;
-        buffers.allocation_data_[i] = resource_data[i];
-        buffers.offsets_[i]         = pBufferInfos[i]->offset;
-        buffers.ranges_[i]          = pBufferInfos[i]->range;
+        buffers.infos_[i]   = buffer_infos[i];
+        buffers.offsets_[i] = descriptor_buffer_infos[i]->offset;
+        buffers.ranges_[i]  = descriptor_buffer_infos[i]->range;
     }
 }
 
