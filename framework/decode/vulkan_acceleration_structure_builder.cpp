@@ -565,7 +565,7 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
             VkBuffer dst_buffer = std::get<2>(*it);
             if (dst_buffer == instance_buffer->handle_)
             {
-                GFXRECON_LOG_WARNING("Stagging write of instance buffer has been detected");
+                GFXRECON_LOG_DEBUG("Stagging write of instance buffer has been detected");
                 VulkanResourceAllocator::ResourceData src_buffer_allocator_data = std::get<0>(*it);
                 VkDeviceSize                          src_offset                = std::get<1>(*it);
 
