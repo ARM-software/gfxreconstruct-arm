@@ -67,7 +67,7 @@ def CheckDeviceSelection():
     devices = QueryAvailableDevices()
     if len(devices) <= 1:
         return
-    
+
     selection = os.getenv(android_serial)
     if selection is None or selection == '':
         raise DeviceSelectionException('Multiple devices detected - you must specify which one to use by setting ANDROID_SERIAL environment variable.')
@@ -111,7 +111,7 @@ def CreateReplayParser():
     parser.add_argument('--use-ext-frame-boundary', action='store_true', default=False, help='Convert all offscreen frame boundaries to `VK_EXT_frame_boundary` frame boundaries. (forwarded to replay tool)')
     parser.add_argument('--sgfs', '--skip-get-fence-status', metavar='STATUS', default=0, help='Specify behaviour to skip calls to vkWaitForFences and vkGetFenceStatus. Default is 0 - No skip (forwarded to replay tool)')
     parser.add_argument('--sgfr', '--skip-get-fence-ranges', metavar='FRAME-RANGES', default='', help='Frame ranges where --sgfs applies. Default is all frames (forwarded to replay tool)')
-    parser.add_argument('--use-colorspace-fallback', action='store_true', default=False, help='Swap the swapchain color space if unsupported by replay device. Check if color space is not supported by replay device and swap to VK_COLOR_SPACE_SRGB_NONLINEAR_KHR. (forwarded to replay tool).')
+    parser.add_argument('--use-colorspace-fallback', '--colorspace-fallback', action='store_true', default=False, help='Swap the swapchain color space if unsupported by replay device. Check if color space is not supported by replay device and swap to VK_COLOR_SPACE_SRGB_NONLINEAR_KHR. (forwarded to replay tool).')
     parser.add_argument('--offscreen-swapchain-frame-boundary', action='store_true', default=False, help='Should only be used with offscreen swapchain. Activates the extension VK_EXT_frame_boundary (always supported if trimming, checks for driver support otherwise) and inserts command buffer submission with VkFrameBoundaryEXT where vkQueuePresentKHR was called in the original capture. This allows preserving frames when capturing a replay that uses. offscreen swapchain. (forwarded to replay tool)')
     parser.add_argument('--mfr', '--measurement-frame-range', metavar='START-END', help='Custom framerange to measure FPS for. This range will include the start frame but not the end frame. The measurement frame range defaults to all frames except the loading frame but can be configured for any range. If the end frame is past the last frame in the trace it will be clamped to the frame after the last (so in that case the results would include the last frame). (forwarded to replay tool)')
     parser.add_argument('--measurement-file', metavar='DEVICE_FILE', help='File in which measurements are written. Default is: \'/sdcard/gfxrecon-measurements.json\' on android and \'./gfxrecon-measurements.json\' on desktop. (forwarded to replay tool)')
@@ -226,19 +226,19 @@ def MakeExtrasString(args):
     if args.swapchain:
         arg_list.append('--swapchain')
         arg_list.append('{}'.format(args.swapchain))
-    
+
     if args.offscreen_swapchain_frame_boundary:
         arg_list.append('--offscreen-swapchain-frame-boundary')
 
     if args.vssb:
         arg_list.append('--vssb')
-    
+
     if args.use_ext_frame_boundary:
         arg_list.append('--use-ext-frame-boundary')
-    
+
     if args.offscreen_swapchain_frame_boundary:
         arg_list.append('--offscreen-swapchain-frame-boundary')
-    
+
     if args.sgfs:
         arg_list.append('--sgfs')
         arg_list.append('{}'.format(args.sgfs))
@@ -246,7 +246,7 @@ def MakeExtrasString(args):
     if args.sgfr:
         arg_list.append('--sgfr')
         arg_list.append('{}'.format(args.sgfr))
-        
+
     if args.preload_measurement_range:
         arg_list.append('--preload-measurement-range')
 
@@ -305,7 +305,7 @@ def Replay(replay_args):
 
         print('Executing:', adb_stop)
         subprocess.check_call(shlex.split(adb_stop, posix='win' not in sys.platform))
-        
+
         cmd = ' '.join([adb_start, '--es', '"args"', '"{}"'.format(extras)])
         print('Executing:', cmd)
 

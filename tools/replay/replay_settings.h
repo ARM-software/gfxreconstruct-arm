@@ -32,7 +32,8 @@ const char kOptions[] =
     "screenshot-all,--onhb|--omit-null-hardware-buffers,--vssb|--virtual-swapchain-skip-blit,--preload-measurement-"
     "range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--qamr|--quit-after-"
     "measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-"
-    "range,--use-captured-swapchain-indices,--dcp,--discard-cached-psos,--use-colorspace-fallback,--use-cached-psos,--"
+    "range,--use-captured-swapchain-indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-"
+    "fallback,--use-cached-psos,--"
     "dx12-override-object-names,--offscreen-swapchain-frame-boundary";
 const char kArguments[] =
     "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
@@ -71,7 +72,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--fw <width,height> | --force-windowed <width,height>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfs <status> | --skip-get-fence-status <status>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfr <frame-ranges> | --skip-get-fence-ranges <frame-ranges>]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--use-colorspace-fallback]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--use-colorspace-fallback|--colorspace-fallback]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--offscreen-swapchain-frame-boundary]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--mfr|--measurement-frame-range <start-frame>-<end-frame>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--measurement-file <file>] [--quit-after-measurement-range]");
@@ -228,7 +229,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tframe but can be configured for any range. If the end frame is past the");
     GFXRECON_WRITE_CONSOLE("          \t\tlast frame in the trace it will be clamped to the frame after the last");
     GFXRECON_WRITE_CONSOLE("          \t\t(so in that case the results would include the last frame).");
-    GFXRECON_WRITE_CONSOLE("  --use-colorspace-fallback");
+    GFXRECON_WRITE_CONSOLE("  --use-colorspace-fallback|--colorspace-fallback");
     GFXRECON_WRITE_CONSOLE("          \t\tSwap the swapchain color space if unsupported by replay device.");
     GFXRECON_WRITE_CONSOLE("          \t\tCheck if color space is not supported by replay device and fallback to "
                            "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR.");
