@@ -5244,6 +5244,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         if (!allocator->SupportsOpaqueDeviceAddresses())
         {
             acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+            tracked_addresses_.erase(buffer_info->capture_id);
         }
     }
 
@@ -8599,6 +8600,7 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
     {
         acceleration_structure_builders_[device_info->capture_id]->OnDestroyAccelerationStructure(
             acceleration_structure_info);
+        tracked_addresses_.erase(acceleration_structure_info->capture_id);
     }
 
     func(device_info->handle, acceleration_structure, GetAllocationCallbacks(pAllocator));
