@@ -959,7 +959,7 @@ std::vector<uint64_t> CaptureSettings::ParseBufferUsages(const std::string& valu
         if (val.size() == 2)
         {
             result.push_back(StringToBufferUsage(val));
-            GFXRECON_LOG_INFO("single opt %s", val.c_str());
+            GFXRECON_LOG_DEBUG("single opt %s", val.c_str());
         }
         else
         {
@@ -968,7 +968,7 @@ std::vector<uint64_t> CaptureSettings::ParseBufferUsages(const std::string& valu
             for (auto& v : vals)
             {
                 mask |= StringToBufferUsage(v);
-                GFXRECON_LOG_INFO("multiple opt %s", v.c_str());
+                GFXRECON_LOG_DEBUG("multiple opt %s", v.c_str());
             }
             result.push_back(mask);
         }
