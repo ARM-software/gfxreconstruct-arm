@@ -324,13 +324,17 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    VkQueue                                                  queue_with_buffer_write = VK_NULL_HANDLE;
-    std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
-    std::vector<std::unique_ptr<BufferEntry>>                buffers_;
-    std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
-    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData>            cached_descriptor_write;
-    std::vector<DescriptorUpdateBufferEntries>                                     deferred_inspection_buffers;
-    std::vector<BufferEntry*>                                                      instance_buffer_entries;
+    VkQueue                                                             queue_with_buffer_write = VK_NULL_HANDLE;
+    std::vector<std::unique_ptr<AccelerationStructureEntry>>            acceleration_structures_;
+    std::vector<std::unique_ptr<BufferEntry>>                           buffers_;
+    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
+    std::vector<DescriptorUpdateBufferEntries>                          deferred_inspection_buffers;
+
+    struct DoubleBufferScratch
+    {
+        std::unordered_map<format::HandleId, std::vector<std::unique_ptr<BufferEntry>>> scratches_previous;
+        std::unordered_map<format::HandleId, std::vector<std::unique_ptr<BufferEntry>>> scratches_current;
+    } scratch_double_buffer_;
 
     struct RaytracingPipelineProperties
     {
@@ -416,6 +420,9 @@ class VulkanAccelerationStructureBuilder
     void BeginCommandBuffer();
     void ExecuteCommandBuffer();
     void UpdateShaderBindingTable(const VkStridedDeviceAddressRegionKHR& sbt_entry);
+
+    void UpdateScratchDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
+                                    VkDeviceSize                                 scratch_size);
 };
 
 GFXRECON_END_NAMESPACE(decode)
