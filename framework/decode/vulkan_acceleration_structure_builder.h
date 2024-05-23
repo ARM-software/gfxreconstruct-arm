@@ -292,10 +292,10 @@ class VulkanAccelerationStructureBuilder
         DescriptorUpdateBufferEntries() = default;
         DescriptorUpdateBufferEntries(uint32_t size) : size_(size), infos_(size), offsets_(size), ranges_(size) {}
 
-        uint32_t                                           size_{};
-        std::vector<BufferInfo*>                           infos_;
-        std::vector<VkDeviceSize>                          offsets_;
-        std::vector<VkDeviceSize>                          ranges_;
+        uint32_t                  size_{};
+        std::vector<BufferInfo*>  infos_;
+        std::vector<VkDeviceSize> offsets_;
+        std::vector<VkDeviceSize> ranges_;
     };
 
     // This objects are internal and responsible for executing the state recreation meta commands
@@ -324,7 +324,7 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    VkQueue                                                  queue_with_deffered_buffer_write = VK_NULL_HANDLE;
+    VkQueue                                                  queue_with_buffer_write = VK_NULL_HANDLE;
     std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
     std::vector<std::unique_ptr<BufferEntry>>                buffers_;
     std::unordered_map<VkDeviceAddress, std::vector<std::unique_ptr<BufferEntry>>> scratches_;
@@ -385,7 +385,7 @@ class VulkanAccelerationStructureBuilder
     CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags mem_prop_flags = {});
 
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
-    void                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
+    bool                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
     void                        UpdateBufferDeviceAddress(VkDeviceAddress& address);
     void                        UpdateDeviceAddress(VkCommandBuffer                              command_buffer,
                                                     VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,

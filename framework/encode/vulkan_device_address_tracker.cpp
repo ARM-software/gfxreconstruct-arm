@@ -8,26 +8,23 @@ void VulkanDeviceAddressTracker::TrackBufferDeviceAddress(format::HandleId id,
                                                           uint64_t         buffer_size,
                                                           VkDeviceAddress  address)
 {
-    lock();
+    std::lock_guard lg(*this);
     assert(address != 0);
     format::AddressLocationInfo loc{};
     loc.id               = id;
     loc.original_address = address;
     loc.size             = buffer_size;
     tracked_objects[id]  = loc;
-    unlock();
 }
-
 void VulkanDeviceAddressTracker::TrackAccelerationStructureDeviceAddress(format::HandleId id, VkDeviceAddress address)
 {
-    lock();
+    std::lock_guard lg(*this);
     assert(address != 0);
     format::AddressLocationInfo loc{};
     loc.id               = id;
     loc.original_address = address;
     loc.adjusted_address = address;
     tracked_objects[id]  = loc;
-    unlock();
 }
 
 std::vector<format::AddressLocationInfo>
@@ -44,7 +41,7 @@ VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t
     {
         return {};
     }
-    if (tracked_objects.empty() || memory->bound_buffers.empty())
+    if (tracked_objects.empty())
     {
         return {};
     }
@@ -53,29 +50,33 @@ VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t
         std::minmax_element(tracked_objects.begin(), tracked_objects.end(), [](const auto& a, const auto& b) {
             return a.second.original_address < b.second.original_address;
         });
-    std::vector<BufferWrapper*> buffers;
-    buffers.reserve(memory->bound_buffers.size());
-
-    for (auto& buf : memory->bound_buffers)
+    if (!memory->bound_buffers.empty())
     {
-        bool ignore = false;
-        for (auto usage : ignored_usages)
+
+        std::vector<BufferWrapper*> buffers;
+        buffers.reserve(memory->bound_buffers.size());
+
+        for (auto& buf : memory->bound_buffers)
         {
-            if ((buf->usage & usage) == usage)
+            bool ignore = false;
+            for (auto usage : ignored_usages)
             {
-                ignore = true;
-                break;
+                if ((buf->usage & usage) == usage)
+                {
+                    ignore = true;
+                    break;
+                }
+            }
+            if (!ignore)
+            {
+                buffers.push_back(buf);
             }
         }
-        if (!ignore)
-        {
-            buffers.push_back(buf);
-        }
-    }
 
-    if (buffers.empty())
-    {
-        return {};
+        if (buffers.empty())
+        {
+            return {};
+        }
     }
 
     std::vector<format::AddressLocationInfo> locations;

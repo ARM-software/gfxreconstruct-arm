@@ -333,10 +333,10 @@ VkDeviceAddress VulkanAccelerationStructureBuilder::GetBufferDeviceAddress(VkBuf
 }
 
 // overwrites acceleration structure capture device address with runtime device address
-void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address)
+bool VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address)
 {
     if (address == 0)
-        return;
+        return true;
     // Try to find the entry in the internal map by capture address of the acceleration structure
     auto as = std::find_if(acceleration_structures_.begin(), acceleration_structures_.end(), [&](const auto& entry) {
         if (entry->original_address_ == address || entry->new_address_ == address)
@@ -363,11 +363,12 @@ void VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
         {
             address = (*as)->new_address_;
         }
-        return;
+        return true;
     }
     else
     {
         GFXRECON_LOG_DEBUG("Acceleration structure address not found: %" PRIu64, address);
+        return false;
     }
 }
 
@@ -594,9 +595,24 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     data += offset + build_range.primitiveOffset;
 
     VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
-    for (uint32_t instance_index = 0; instance_index < build_range.primitiveCount; ++instance_index)
+
+    // All or nothing strategy - we should always find a device address
+    // This way, we do not perform a modificaction of real device memory until we are sure that it is valid
+    std::vector<VkAccelerationStructureInstanceKHR> copy(instance_data, instance_data + build_range.primitiveCount);
+    bool                                            success = true;
+    for (uint32_t instance_index = 0; instance_index < build_range.primitiveCount && success; ++instance_index)
     {
-        UpdateAccelerationStructDeviceAddress(instance_data[instance_index].accelerationStructureReference);
+        success = UpdateAccelerationStructDeviceAddress(copy[instance_index].accelerationStructureReference);
+    }
+
+    if (success)
+    {
+        uint32_t size = copy.size() * sizeof(VkAccelerationStructureInstanceKHR);
+        util::platform::MemoryCopy(instance_data, size, copy.data(), size);
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("Update of the instance buffer failed");
     }
     allocator_->UnmapResourceMemoryDirect(instance_buffer_allocator_data);
 }
@@ -1113,6 +1129,13 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                                                        uint32_t            submitCount,
                                                        const VkSubmitInfo* pSubmits)
 {
+    if (queue_with_buffer_write != VK_NULL_HANDLE)
+    {
+        functions_.queue_wait_idle(queue_with_buffer_write);
+        queue_with_buffer_write = VK_NULL_HANDLE;
+    }
+
+    bool wait = false;
     // Perform the actual update of the bottom level acceleration structures in the instance buffers
     for (int i = 0; i < submitCount; ++i)
     {
@@ -1139,11 +1162,11 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                     UpdateInstanceBufferContent(resource_data, offset, range_info);
                 }
                 instance_buffer_updates_.erase(instance_buffers_update_itr);
+                wait = true;
             }
         }
     }
 
-    bool wait = false;
     for (const auto& descriptor_update_buffers : deferred_inspection_buffers)
     {
         for (uint32_t buffer_idx = 0; buffer_idx < descriptor_update_buffers.size_; ++buffer_idx)
@@ -1162,41 +1185,30 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                 descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
             data += descriptor_update_buffers.offsets_[buffer_idx];
 
-            // Try to interpret whatever is inside the buffer as VkDeviceAddress
             VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
 
-            auto acceleration_structure = std::find_if(
-                acceleration_structures_.begin(),
-                acceleration_structures_.end(),
-                [&device_addresses](const std::unique_ptr<AccelerationStructureEntry>& entry) {
-                    return entry->original_address_ == *device_addresses || entry->new_address_ == *device_addresses;
-                });
-            // If we have not found an acceleration structure with such device address
-            // then probably it is not the correct buffer to go into
-            if (acceleration_structure == acceleration_structures_.end())
+            // All or nothing - if we are looking in the wrong buffer, we do not want to update
+            // the contents until we are sure
+            uint32_t count   = descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
+            bool     success = true;
+            std::vector<VkDeviceAddress> copy(device_addresses, device_addresses + count);
+            for (uint32_t i = 0; i < count && success; ++i)
             {
-                continue;
+                success = UpdateAccelerationStructDeviceAddress(copy[i]);
             }
-
-            if (queue_with_deffered_buffer_write != VK_NULL_HANDLE)
+            if (success)
             {
-                functions_.queue_wait_idle(queue_with_deffered_buffer_write);
-                queue_with_deffered_buffer_write = VK_NULL_HANDLE;
-            }
-
-            // Otherwise, iterate over this buffer and replace device addresses
-            uint32_t count = descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
-            for (uint32_t i = 0; i < count; ++i)
-            {
-                UpdateAccelerationStructDeviceAddress(device_addresses[i]);
+                uint32_t size = sizeof(VkDeviceAddress) * count;
+                util::platform::MemoryCopy(data, size, copy.data(), size);
+                wait = true;
             }
             allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
-            wait = true;
         }
     }
+
     if (wait)
     {
-        queue_with_deffered_buffer_write = queue;
+        queue_with_buffer_write = queue;
     }
 
     instance_buffer_entries.clear();
