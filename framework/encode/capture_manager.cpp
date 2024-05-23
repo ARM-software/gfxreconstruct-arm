@@ -1100,6 +1100,8 @@ void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             memor
         assert(thread_data != nullptr);
 
         fix_cmd.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        fix_cmd.meta_header.block_header.size =
+            format::GetMetaDataBlockBaseSize(fix_cmd) + (num_of_locations * sizeof(format::AddressLocationInfo));
         fix_cmd.meta_header.meta_data_id =
             format::MakeMetaDataId(api_family_, format::MetaDataType::kFixDeviceAddressCommand);
         fix_cmd.memory_id        = memory_id;
