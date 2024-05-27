@@ -1311,10 +1311,24 @@ void VulkanAccelerationStructureBuilder::OnCmdTraceRaysKHR(VkCommandBuffer      
                                                            VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable)
 {
     // SBT's device addresses can change, update them based on GetBufferDeviceAddress calls recorded earlier
-    UpdateBufferDeviceAddress(pRaygenShaderBindingTable->deviceAddress);
-    UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
-    UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
-    UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
+    // Device addresses are not guaranteed to be valid - some tables could be left out, process only the regions with
+    // specified size
+    if (pRaygenShaderBindingTable->size)
+    {
+        UpdateBufferDeviceAddress(pRaygenShaderBindingTable->deviceAddress);
+    }
+    if (pMissShaderBindingTable->size)
+    {
+        UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
+    }
+    if (pHitShaderBindingTable->size)
+    {
+        UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
+    }
+    if (pCallableShaderBindingTable->size)
+    {
+        UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
+    }
 
     // Shader group handles stored in SBT's will require update as well, this should be done before QueueSubmit
     // Store SBT data for later replacement
