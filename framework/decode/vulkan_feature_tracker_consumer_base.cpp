@@ -27,9 +27,23 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     /*
      * IMPORTANT:
      * Members initialized with true are not handled
-     * Members initialized with false are handlel
+     * Members initialized with false are handled
      * TODO: handle features initialized with true
      */
+
+    /*
+     * NAMING CONVENTION:
+     * corexx_        -> internal variable modified when detecting an used/unused feature
+     * capture_corexx -> the features requested by the app
+     * output_corexx  -> result meant to be inserted in the trace (instead of capture_corexx)
+     * Same logic applies for extensions handling naming
+     */
+
+    // TODO: Have all lines below(inside the constructor) generated from a json file
+    // TODO: Have the ProcessCoreXXFeatures methods be generated to be more readable
+    // TODO: Have a generated file that calls Process_STRUCTNAME as the current way of processing functions results in
+    // having the same handling for the same struct in multiple functions
+
     core10_.robustBufferAccess                      = true;
     core10_.fullDrawIndexUint32                     = true;
     core10_.imageCubeArray                          = false;
@@ -86,6 +100,62 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core10_.sparseResidencyAliased                  = false;
     core10_.inheritedQueries                        = false;
 
+    core10_members_as_strings_ = { "robustBufferAccess",
+                                   "fullDrawIndexUint32",
+                                   "imageCubeArray",
+                                   "independentBlend",
+                                   "geometryShader",
+                                   "tessellationShader",
+                                   "sampleRateShading",
+                                   "dualSrcBlend",
+                                   "logicOp",
+                                   "multiDrawIndirect",
+                                   "drawIndirectFirstInstance",
+                                   "depthClamp",
+                                   "depthBiasClamp",
+                                   "fillModeNonSolid",
+                                   "depthBounds",
+                                   "wideLines",
+                                   "largePoints",
+                                   "alphaToOne",
+                                   "multiViewport",
+                                   "samplerAnisotropy",
+                                   "textureCompressionETC2",
+                                   "textureCompressionASTC_LDR",
+                                   "textureCompressionBC",
+                                   "occlusionQueryPrecise",
+                                   "pipelineStatisticsQuery",
+                                   "vertexPipelineStoresAndAtomics",
+                                   "fragmentStoresAndAtomics",
+                                   "shaderTessellationAndGeometryPointSize",
+                                   "shaderImageGatherExtended",
+                                   "shaderStorageImageExtendedFormats",
+                                   "shaderStorageImageMultisample",
+                                   "shaderStorageImageReadWithoutFormat",
+                                   "shaderStorageImageWriteWithoutFormat",
+                                   "shaderUniformBufferArrayDynamicIndexing "
+                                   "shaderSampledImageArrayDynamicIndexing",
+                                   "shaderStorageBufferArrayDynamicIndexing "
+                                   "shaderStorageImageArrayDynamicIndexing",
+                                   "shaderClipDistance",
+                                   "shaderCullDistance",
+                                   "shaderFloat64",
+                                   "shaderInt64",
+                                   "shaderInt16",
+                                   "shaderResourceResidency",
+                                   "shaderResourceMinLod",
+                                   "sparseBinding",
+                                   "sparseResidencyBuffer",
+                                   "sparseResidencyImage2D",
+                                   "sparseResidencyImage3D",
+                                   "sparseResidency2Samples",
+                                   "sparseResidency4Samples",
+                                   "sparseResidency8Samples",
+                                   "sparseResidency16Samples",
+                                   "sparseResidencyAliased",
+                                   "variableMultisampleRate",
+                                   "inheritedQueries" };
+
     core11_.storageBuffer16BitAccess           = true;
     core11_.uniformAndStorageBuffer16BitAccess = true;
     core11_.storagePushConstant16              = true;
@@ -98,6 +168,19 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core11_.protectedMemory                    = true;
     core11_.samplerYcbcrConversion             = true;
     core11_.shaderDrawParameters               = true;
+
+    core11_members_as_strings_ = { "storageBuffer16BitAccess",
+                                   "uniformAndStorageBuffer16BitAccess",
+                                   "storagePushConstant16",
+                                   "storageInputOutput16",
+                                   "multiview",
+                                   "multiviewGeometryShader",
+                                   "multiviewTessellationShader",
+                                   "variablePointersStorageBuffer",
+                                   "variablePointers",
+                                   "protectedMemory",
+                                   "samplerYcbcrConversion",
+                                   "shaderDrawParameters" };
 
     core12_.samplerMirrorClampToEdge                           = false;
     core12_.drawIndirectCount                                  = false;
@@ -147,6 +230,52 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core12_.shaderOutputLayer                                  = true;
     core12_.subgroupBroadcastDynamicId                         = true;
 
+    core12_members_as_strings_ = { "samplerMirrorClampToEdge",
+                                   "drawIndirectCount",
+                                   "storageBuffer8BitAccess",
+                                   "uniformAndStorageBuffer8BitAccess",
+                                   "storagePushConstant8",
+                                   "shaderBufferInt64Atomics",
+                                   "shaderSharedInt64Atomics",
+                                   "shaderFloat16",
+                                   "shaderInt8",
+                                   "descriptorIndexing",
+                                   "shaderInputAttachmentArrayDynamicIndexing",
+                                   "shaderUniformTexelBufferArrayDynamicIndexing",
+                                   "shaderStorageTexelBufferArrayDynamicIndexing",
+                                   "shaderUniformBufferArrayNonUniformIndexing",
+                                   "shaderSampledImageArrayNonUniformIndexing",
+                                   "shaderStorageBufferArrayNonUniformIndexing",
+                                   "shaderInputAttachmentArrayNonUniformIndexing",
+                                   "shaderUniformTexelBufferArrayNonUniformIndexing",
+                                   "shaderStorageTexelBufferArrayNonUniformIndexing",
+                                   "descriptorBindingUniformBufferUpdateAfterBind",
+                                   "descriptorBindingSampledImageUpdateAfterBind",
+                                   "descriptorBindingStorageImageUpdateAfterBind",
+                                   "descriptorBindingStorageBufferUpdateAfterBind",
+                                   "descriptorBindingUniformTexelBufferUpdateAfterBind",
+                                   "descriptorBindingStorageTexelBufferUpdateAfterBind",
+                                   "descriptorBindingUpdateUnusedWhilePending",
+                                   "descriptorBindingPartiallyBound",
+                                   "descriptorBindingVariableDescriptorCount",
+                                   "runtimeDescriptorArray",
+                                   "samplerFilterMinmax",
+                                   "scalarBlockLayout",
+                                   "imagelessFramebuffer",
+                                   "uniformBufferStandardLayout",
+                                   "shaderSubgroupExtendedTypes",
+                                   "separateDepthStencilLayouts",
+                                   "hostQueryReset",
+                                   "timelineSemaphore",
+                                   "bufferDeviceAddress",
+                                   "bufferDeviceAddressCaptureReplay",
+                                   "bufferDeviceAddressMultiDevice",
+                                   "vulkanMemoryModel",
+                                   "vulkanMemoryModelAvailabilityVisibilityChains",
+                                   "shaderOutputViewportIndex",
+                                   "shaderOutputLayer",
+                                   "subgroupBroadcastDynamicId" };
+
     core13_.robustImageAccess                                  = true;
     core13_.inlineUniformBlock                                 = true;
     core13_.descriptorBindingInlineUniformBlockUpdateAfterBind = true;
@@ -163,9 +292,25 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core13_.shaderIntegerDotProduct                            = true;
     core13_.maintenance4                                       = true;
 
+    core13_members_as_strings_ = { "robustImageAccess",
+                                   "inlineUniformBlock",
+                                   "descriptorBindingInlineUniformBlockUpdateAfterBind",
+                                   "pipelineCreationCacheControl",
+                                   "privateData",
+                                   "shaderDemoteToHelperInvocation",
+                                   "shaderTerminateInvocation",
+                                   "subgroupSizeControl",
+                                   "computeFullSubgroups",
+                                   "synchronization2",
+                                   "textureCompressionASTC_HDR",
+                                   "shaderZeroInitializeWorkgroupMemory",
+                                   "dynamicRendering",
+                                   "shaderIntegerDotProduct",
+                                   "maintenance4" };
+
     // extensions & alias extensions
-    ext_VK_EXT_swapchain_colorspace           = false;
-    p_ext_VK_KHR_sampler_mirror_clamp_to_edge = &core12_.samplerMirrorClampToEdge;
+    supported_instance_extensions_map = { { VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false } };
+    supported_device_extensions_map   = { { VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME, false } };
 }
 
 void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
@@ -175,38 +320,40 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkInstance>*                    pInstance)
 {
-    if (!capture_mode_)
+    auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
+
+    if (pCreateInfoDec->enabledExtensionCount)
     {
-        auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
-
-        std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
-                                                   pCreateInfoDec->ppEnabledExtensionNames +
-                                                       pCreateInfoDec->enabledExtensionCount);
-
-        for (std::vector<std::string>::iterator it = extensions_vector.begin(); it != extensions_vector.end(); it++)
+        if (capture_mode_)
         {
-            if ((ext_VK_EXT_swapchain_colorspace == false) && (*it == "VK_EXT_swapchain_colorspace"))
+            std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
+                                                       pCreateInfoDec->ppEnabledExtensionNames +
+                                                           pCreateInfoDec->enabledExtensionCount);
+            capture_instance_extensions_vector = extensions_vector;
+        }
+        else
+        {
+            auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
+
+            uint32_t extensions_count = output_instance_extensions_vector.size();
+
+            const char* extensions[extensions_count]{};
+            for (uint32_t i = 0; i < extensions_count; i++)
             {
-                extensions_vector.erase(it);
-                pCreateInfoDec->enabledExtensionCount--;
+                extensions[i] = output_instance_extensions_vector[i].c_str();
             }
+
+            pCreateInfoDec->ppEnabledExtensionNames = extensions;
+            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+
+            GFXRECON_ASSERT(encoding_buffer_ != nullptr);
+
+            gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
+            EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
+            EncodeStructPtr(&encoder, pAllocator->GetPointer());
+            encoder.EncodeHandleIdPtr(pInstance->GetPointer());
+            encoder.EncodeEnumValue(returnValue);
         }
-
-        const char* extensions[pCreateInfoDec->enabledExtensionCount]{};
-        for (uint32_t i = 0; i < pCreateInfoDec->enabledExtensionCount; i++)
-        {
-            extensions[i] = extensions_vector[i].c_str();
-        }
-
-        pCreateInfoDec->ppEnabledExtensionNames = extensions;
-
-        GFXRECON_ASSERT(encoding_buffer_ != nullptr);
-
-        gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
-        EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
-        EncodeStructPtr(&encoder, pAllocator->GetPointer());
-        encoder.EncodeHandleIdPtr(pInstance->GetPointer());
-        encoder.EncodeEnumValue(returnValue);
     }
 }
 
@@ -224,7 +371,6 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
 
     if (pEnabledFeatures != nullptr)
     {
-        GFXRECON_WRITE_CONSOLE("Vulkan 1.0");
         if (capture_mode_)
         {
             capture_core10_ = *pEnabledFeatures;
@@ -240,7 +386,6 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
     {
         if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
         {
-            GFXRECON_WRITE_CONSOLE("Vulkan 1.0");
             if (capture_mode_)
             {
                 capture_core10_ = ((VkPhysicalDeviceFeatures2*)pNext)->features;
@@ -252,7 +397,6 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES)
         {
-            GFXRECON_WRITE_CONSOLE("Vulkan 1.1");
             if (capture_mode_)
             {
                 capture_core11_ = *((VkPhysicalDeviceVulkan11Features*)pNext);
@@ -264,7 +408,6 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
         {
-            GFXRECON_WRITE_CONSOLE("Vulkan 1.2");
             if (capture_mode_)
             {
                 capture_core12_ = *((VkPhysicalDeviceVulkan12Features*)pNext);
@@ -276,8 +419,6 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
         {
-            GFXRECON_WRITE_CONSOLE("Vulkan 1.3");
-
             if (capture_mode_)
             {
                 capture_core13_ = *((VkPhysicalDeviceVulkan13Features*)pNext);
@@ -290,37 +431,37 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
     }
 
-    if (!capture_mode_)
+    if (pCreateInfoDec->enabledExtensionCount)
     {
-        std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
-                                                   pCreateInfoDec->ppEnabledExtensionNames +
-                                                       pCreateInfoDec->enabledExtensionCount);
-
-        for (std::vector<std::string>::iterator it = extensions_vector.begin(); it != extensions_vector.end(); it++)
+        if (capture_mode_)
         {
-            if ((*p_ext_VK_KHR_sampler_mirror_clamp_to_edge == false) && (*it == "VK_KHR_sampler_mirror_clamp_to_edge"))
+            std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
+                                                       pCreateInfoDec->ppEnabledExtensionNames +
+                                                           pCreateInfoDec->enabledExtensionCount);
+            capture_device_extensions_vector = extensions_vector;
+        }
+        else
+        {
+            uint32_t extensions_count = output_device_extensions_vector.size();
+
+            const char* extensions[extensions_count]{};
+            for (uint32_t i = 0; i < extensions_count; i++)
             {
-                extensions_vector.erase(it);
-                pCreateInfoDec->enabledExtensionCount--;
+                extensions[i] = output_device_extensions_vector[i].c_str();
             }
+
+            pCreateInfoDec->ppEnabledExtensionNames = extensions;
+            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+
+            GFXRECON_ASSERT(encoding_buffer_ != nullptr);
+
+            gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
+            encoder.EncodeHandleIdValue(physicalDevice);
+            EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
+            EncodeStructPtr(&encoder, pAllocator->GetPointer());
+            encoder.EncodeHandleIdPtr(pDevice->GetPointer());
+            encoder.EncodeEnumValue(returnValue);
         }
-
-        const char* extensions[pCreateInfoDec->enabledExtensionCount]{};
-        for (uint32_t i = 0; i < pCreateInfoDec->enabledExtensionCount; i++)
-        {
-            extensions[i] = extensions_vector[i].c_str();
-        }
-
-        pCreateInfoDec->ppEnabledExtensionNames = extensions;
-
-        GFXRECON_ASSERT(encoding_buffer_ != nullptr);
-
-        gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
-        encoder.EncodeHandleIdValue(physicalDevice);
-        EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
-        EncodeStructPtr(&encoder, pAllocator->GetPointer());
-        encoder.EncodeHandleIdPtr(pDevice->GetPointer());
-        encoder.EncodeEnumValue(returnValue);
     }
 }
 
@@ -723,7 +864,8 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateSampler(
         pCreateInfoDec->addressModeV == VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE ||
         pCreateInfoDec->addressModeW == VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE)
     {
-        core12_.samplerMirrorClampToEdge;
+        core12_.samplerMirrorClampToEdge                                                    = true;
+        supported_device_extensions_map[VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME] = true;
     }
 }
 
@@ -854,450 +996,237 @@ void VulkanFeatureTrackerConsumerBase::checkSwapchainColorspaceEXT(VkColorSpaceK
         s == VK_COLOR_SPACE_HDR10_HLG_EXT || s == VK_COLOR_SPACE_HDR10_ST2084_EXT ||
         s == VK_COLOR_SPACE_PASS_THROUGH_EXT)
     {
-        ext_VK_EXT_swapchain_colorspace = true;
+        supported_instance_extensions_map[VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME] = true;
     }
 }
 
-void VulkanFeatureTrackerConsumerBase::ProcessFeatures()
+bool VulkanFeatureTrackerConsumerBase::ProcessFeaturesAndExtensions()
 {
-    ProcessCore10Features();
-    ProcessCore11Features();
-    ProcessCore12Features();
-    ProcessCore13Features();
-}
-void VulkanFeatureTrackerConsumerBase::ProcessCore10Features()
-{
-    // bitwise AND every member
-    output_core10_.robustBufferAccess  = core10_.robustBufferAccess & capture_core10_.robustBufferAccess;
-    output_core10_.fullDrawIndexUint32 = core10_.fullDrawIndexUint32 & capture_core10_.fullDrawIndexUint32;
-    output_core10_.imageCubeArray      = core10_.imageCubeArray & capture_core10_.imageCubeArray;
-    output_core10_.independentBlend    = core10_.independentBlend & capture_core10_.independentBlend;
-    output_core10_.geometryShader      = core10_.geometryShader & capture_core10_.geometryShader;
-    output_core10_.tessellationShader  = core10_.tessellationShader & capture_core10_.tessellationShader;
-    output_core10_.sampleRateShading   = core10_.sampleRateShading & capture_core10_.sampleRateShading;
-    output_core10_.dualSrcBlend        = core10_.dualSrcBlend & capture_core10_.dualSrcBlend;
-    output_core10_.logicOp             = core10_.logicOp & capture_core10_.logicOp;
-    output_core10_.multiDrawIndirect   = core10_.multiDrawIndirect & capture_core10_.multiDrawIndirect;
-    output_core10_.drawIndirectFirstInstance =
-        core10_.drawIndirectFirstInstance & capture_core10_.drawIndirectFirstInstance;
-    output_core10_.depthClamp             = core10_.depthClamp & capture_core10_.depthClamp;
-    output_core10_.depthBiasClamp         = core10_.depthBiasClamp & capture_core10_.depthBiasClamp;
-    output_core10_.fillModeNonSolid       = core10_.fillModeNonSolid & capture_core10_.fillModeNonSolid;
-    output_core10_.depthBounds            = core10_.depthBounds & capture_core10_.depthBounds;
-    output_core10_.wideLines              = core10_.wideLines & capture_core10_.wideLines;
-    output_core10_.largePoints            = core10_.largePoints & capture_core10_.largePoints;
-    output_core10_.alphaToOne             = core10_.alphaToOne & capture_core10_.alphaToOne;
-    output_core10_.multiViewport          = core10_.multiViewport & capture_core10_.multiViewport;
-    output_core10_.samplerAnisotropy      = core10_.samplerAnisotropy & capture_core10_.samplerAnisotropy;
-    output_core10_.textureCompressionETC2 = core10_.textureCompressionETC2 & capture_core10_.textureCompressionETC2;
-    output_core10_.textureCompressionASTC_LDR =
-        core10_.textureCompressionASTC_LDR & capture_core10_.textureCompressionASTC_LDR;
-    output_core10_.textureCompressionBC    = core10_.textureCompressionBC & capture_core10_.textureCompressionBC;
-    output_core10_.occlusionQueryPrecise   = core10_.occlusionQueryPrecise & capture_core10_.occlusionQueryPrecise;
-    output_core10_.pipelineStatisticsQuery = core10_.pipelineStatisticsQuery & capture_core10_.pipelineStatisticsQuery;
-    output_core10_.vertexPipelineStoresAndAtomics =
-        core10_.vertexPipelineStoresAndAtomics & capture_core10_.vertexPipelineStoresAndAtomics;
-    output_core10_.fragmentStoresAndAtomics =
-        core10_.fragmentStoresAndAtomics & capture_core10_.fragmentStoresAndAtomics;
-    output_core10_.shaderTessellationAndGeometryPointSize =
-        core10_.shaderTessellationAndGeometryPointSize & capture_core10_.shaderTessellationAndGeometryPointSize;
-    output_core10_.shaderImageGatherExtended =
-        core10_.shaderImageGatherExtended & capture_core10_.shaderImageGatherExtended;
-    output_core10_.shaderStorageImageExtendedFormats =
-        core10_.shaderStorageImageExtendedFormats & capture_core10_.shaderStorageImageExtendedFormats;
-    output_core10_.shaderStorageImageMultisample =
-        core10_.shaderStorageImageMultisample & capture_core10_.shaderStorageImageMultisample;
-    output_core10_.shaderStorageImageReadWithoutFormat =
-        core10_.shaderStorageImageReadWithoutFormat & capture_core10_.shaderStorageImageReadWithoutFormat;
-    output_core10_.shaderStorageImageWriteWithoutFormat =
-        core10_.shaderStorageImageWriteWithoutFormat & capture_core10_.shaderStorageImageWriteWithoutFormat;
-    output_core10_.shaderUniformBufferArrayDynamicIndexing =
-        core10_.shaderUniformBufferArrayDynamicIndexing & capture_core10_.shaderUniformBufferArrayDynamicIndexing;
-    output_core10_.shaderSampledImageArrayDynamicIndexing =
-        core10_.shaderSampledImageArrayDynamicIndexing & capture_core10_.shaderSampledImageArrayDynamicIndexing;
-    output_core10_.shaderStorageBufferArrayDynamicIndexing =
-        core10_.shaderStorageBufferArrayDynamicIndexing & capture_core10_.shaderStorageBufferArrayDynamicIndexing;
-    output_core10_.shaderStorageImageArrayDynamicIndexing =
-        core10_.shaderStorageImageArrayDynamicIndexing & capture_core10_.shaderStorageImageArrayDynamicIndexing;
-    output_core10_.shaderClipDistance      = core10_.shaderClipDistance & capture_core10_.shaderClipDistance;
-    output_core10_.shaderCullDistance      = core10_.shaderCullDistance & capture_core10_.shaderCullDistance;
-    output_core10_.shaderFloat64           = core10_.shaderFloat64 & capture_core10_.shaderFloat64;
-    output_core10_.shaderInt64             = core10_.shaderInt64 & capture_core10_.shaderInt64;
-    output_core10_.shaderInt16             = core10_.shaderInt16 & capture_core10_.shaderInt16;
-    output_core10_.shaderResourceResidency = core10_.shaderResourceResidency & capture_core10_.shaderResourceResidency;
-    output_core10_.shaderResourceMinLod    = core10_.shaderResourceMinLod & capture_core10_.shaderResourceMinLod;
-    output_core10_.variableMultisampleRate = core10_.variableMultisampleRate & capture_core10_.variableMultisampleRate;
-    output_core10_.sparseBinding           = core10_.sparseBinding & capture_core10_.sparseBinding;
-    output_core10_.sparseResidencyBuffer   = core10_.sparseResidencyBuffer & capture_core10_.sparseResidencyBuffer;
-    output_core10_.sparseResidencyImage2D  = core10_.sparseResidencyImage2D & capture_core10_.sparseResidencyImage2D;
-    output_core10_.sparseResidencyImage3D  = core10_.sparseResidencyImage3D & capture_core10_.sparseResidencyImage3D;
-    output_core10_.sparseResidency2Samples = core10_.sparseResidency2Samples & capture_core10_.sparseResidency2Samples;
-    output_core10_.sparseResidency4Samples = core10_.sparseResidency4Samples & capture_core10_.sparseResidency4Samples;
-    output_core10_.sparseResidency8Samples = core10_.sparseResidency8Samples & capture_core10_.sparseResidency8Samples;
-    output_core10_.sparseResidency16Samples =
-        core10_.sparseResidency16Samples & capture_core10_.sparseResidency16Samples;
-    output_core10_.sparseResidencyAliased = core10_.sparseResidencyAliased & capture_core10_.sparseResidencyAliased;
-    output_core10_.inheritedQueries       = core10_.inheritedQueries & capture_core10_.inheritedQueries;
+    bool result = false;
+
+    bool core10_detected_unused_feature = ProcessCore10Features();
+    bool core11_detected_unused_feature = ProcessCore11Features();
+    bool core12_detected_unused_feature = ProcessCore12Features();
+    bool core13_detected_unused_feature = ProcessCore13Features();
+
+    bool detected_device_unused_extensions   = ProcessDeviceExtensions();
+    bool detected_instance_unused_extensions = ProcessInstanceExtensions();
+
+    result = core10_detected_unused_feature || core11_detected_unused_feature || core12_detected_unused_feature ||
+             core13_detected_unused_feature || detected_device_unused_extensions || detected_instance_unused_extensions;
+
+    if (result)
+    {
+        printf("%s", consumer_output_log_.c_str());
+        consumer_output_log_.clear();
+    }
+
+    return result;
 }
 
-void VulkanFeatureTrackerConsumerBase::ProcessCore11Features()
+bool VulkanFeatureTrackerConsumerBase::ProcessInstanceExtensions()
 {
+    bool detected_unused_extension = false;
+
+    std::string output_log{};
+
+    output_instance_extensions_vector = capture_instance_extensions_vector;
+
+    for (auto it = supported_instance_extensions_map.begin(); it != supported_instance_extensions_map.end(); it++)
+    {
+        std::string extension_name = it->first;
+        VkBool32    is_used        = it->second;
+
+        auto it2 = std::find(
+            output_instance_extensions_vector.begin(), output_instance_extensions_vector.end(), extension_name);
+
+        if (!is_used && (it2 != output_instance_extensions_vector.end()))
+        {
+            detected_unused_extension = true;
+            output_instance_extensions_vector.erase(it2);
+            output_log += "\t" + extension_name + "\r\n";
+        }
+    }
+
+    if (detected_unused_extension)
+    {
+        consumer_output_log_ = "Instance Extensions to be removed:\r\n" + output_log;
+    }
+
+    return detected_unused_extension;
+}
+
+bool VulkanFeatureTrackerConsumerBase::ProcessDeviceExtensions()
+{
+    bool detected_unused_extension = false;
+
+    std::string output_log{};
+
+    output_device_extensions_vector = capture_device_extensions_vector;
+
+    for (auto it = supported_device_extensions_map.begin(); it != supported_device_extensions_map.end(); it++)
+    {
+        std::string extension_name = it->first;
+        VkBool32    is_used        = it->second;
+
+        auto it2 =
+            std::find(output_device_extensions_vector.begin(), output_device_extensions_vector.end(), extension_name);
+
+        if (!is_used && (it2 != output_device_extensions_vector.end()))
+        {
+            detected_unused_extension = true;
+            output_device_extensions_vector.erase(it2);
+            output_log += "\t" + extension_name + "\r\n";
+        }
+    }
+
+    if (detected_unused_extension)
+    {
+        consumer_output_log_ = "Device Extensions to be removed:\r\n" + output_log;
+    }
+
+    return detected_unused_extension;
+}
+
+bool VulkanFeatureTrackerConsumerBase::ProcessCore10Features()
+{
+    bool detected_unused_feature = false;
+
+    std::string output_log{};
+
+    // iterate through struct members, this is a workaround until this function will be generated
+    VkBool32* p_output_core10   = (VkBool32*)(&output_core10_);
+    VkBool32* p_core10          = (VkBool32*)(&core10_);
+    VkBool32* p_capture_core10_ = (VkBool32*)(&capture_core10_);
+
+    for (int i = 0; i < core10_members_as_strings_.size(); i++)
+    {
+        *p_output_core10 = (*p_core10) & (*p_capture_core10_);
+        if ((*p_output_core10) != (*p_capture_core10_))
+        {
+            output_log += "\t" + core10_members_as_strings_[i] + "\r\n";
+            detected_unused_feature = true;
+        }
+        p_output_core10++;
+        p_core10++;
+        p_capture_core10_++;
+    }
+
+    if (detected_unused_feature)
+    {
+
+        consumer_output_log_ = "Core10 Features to be removed:\r\n" + output_log;
+    }
+
+    return detected_unused_feature;
+}
+
+bool VulkanFeatureTrackerConsumerBase::ProcessCore11Features()
+{
+    bool detected_unused_feature = false;
+
+    std::string output_log{};
+
     // bitwise AND every member except sType and pNext
     output_core11_.sType = capture_core11_.sType;
     output_core11_.pNext = capture_core11_.pNext;
 
-    output_core11_.storageBuffer16BitAccess =
-        core11_.storageBuffer16BitAccess & capture_core11_.storageBuffer16BitAccess;
-    output_core11_.uniformAndStorageBuffer16BitAccess =
-        core11_.uniformAndStorageBuffer16BitAccess & capture_core11_.uniformAndStorageBuffer16BitAccess;
-    output_core11_.storagePushConstant16   = core11_.storagePushConstant16 & capture_core11_.storagePushConstant16;
-    output_core11_.storageInputOutput16    = core11_.storageInputOutput16 & capture_core11_.storageInputOutput16;
-    output_core11_.multiview               = core11_.multiview & capture_core11_.multiview;
-    output_core11_.multiviewGeometryShader = core11_.multiviewGeometryShader & capture_core11_.multiviewGeometryShader;
-    output_core11_.multiviewTessellationShader =
-        core11_.multiviewTessellationShader & capture_core11_.multiviewTessellationShader;
-    output_core11_.variablePointersStorageBuffer =
-        core11_.variablePointersStorageBuffer & capture_core11_.variablePointersStorageBuffer;
-    output_core11_.variablePointers       = core11_.variablePointers & capture_core11_.variablePointers;
-    output_core11_.protectedMemory        = core11_.protectedMemory & capture_core11_.protectedMemory;
-    output_core11_.samplerYcbcrConversion = core11_.samplerYcbcrConversion & capture_core11_.samplerYcbcrConversion;
-    output_core11_.shaderDrawParameters   = core11_.shaderDrawParameters & capture_core11_.shaderDrawParameters;
+    // iterate through struct members, this is a workaround until this function will be generated
+    VkBool32* p_output_core11   = (VkBool32*)(&output_core11_.storageBuffer16BitAccess);
+    VkBool32* p_core11          = (VkBool32*)(&core11_.storageBuffer16BitAccess);
+    VkBool32* p_capture_core11_ = (VkBool32*)(&capture_core11_.storageBuffer16BitAccess);
+
+    for (int i = 0; i < core11_members_as_strings_.size(); i++)
+    {
+        *p_output_core11 = (*p_core11) & (*p_capture_core11_);
+        if ((*p_output_core11) != (*p_capture_core11_))
+        {
+            output_log += "\t" + core11_members_as_strings_[i] + "\r\n";
+            detected_unused_feature = true;
+        }
+        p_output_core11++;
+        p_core11++;
+        p_capture_core11_++;
+    }
+
+    if (detected_unused_feature)
+    {
+        consumer_output_log_ = "Core11 Features to be removed:\r\n" + output_log;
+    }
+
+    return detected_unused_feature;
 }
-void VulkanFeatureTrackerConsumerBase::ProcessCore12Features()
+
+bool VulkanFeatureTrackerConsumerBase::ProcessCore12Features()
 {
+    bool detected_unused_feature = false;
+
+    std::string output_log{};
+
     // bitwise AND every member except sType and pNext
     output_core12_.sType = capture_core12_.sType;
     output_core12_.pNext = capture_core12_.pNext;
 
-    output_core12_.samplerMirrorClampToEdge =
-        core12_.samplerMirrorClampToEdge & capture_core12_.samplerMirrorClampToEdge;
-    output_core12_.drawIndirectCount       = core12_.drawIndirectCount & capture_core12_.drawIndirectCount;
-    output_core12_.storageBuffer8BitAccess = core12_.storageBuffer8BitAccess & capture_core12_.storageBuffer8BitAccess;
-    output_core12_.uniformAndStorageBuffer8BitAccess =
-        core12_.uniformAndStorageBuffer8BitAccess & capture_core12_.uniformAndStorageBuffer8BitAccess;
-    output_core12_.storagePushConstant8 = core12_.storagePushConstant8 & capture_core12_.storagePushConstant8;
-    output_core12_.shaderBufferInt64Atomics =
-        core12_.shaderBufferInt64Atomics & capture_core12_.shaderBufferInt64Atomics;
-    output_core12_.shaderSharedInt64Atomics =
-        core12_.shaderSharedInt64Atomics & capture_core12_.shaderSharedInt64Atomics;
-    output_core12_.shaderFloat16      = core12_.shaderFloat16 & capture_core12_.shaderFloat16;
-    output_core12_.shaderInt8         = core12_.shaderInt8 & capture_core12_.shaderInt8;
-    output_core12_.descriptorIndexing = core12_.descriptorIndexing & capture_core12_.descriptorIndexing;
-    output_core12_.shaderInputAttachmentArrayDynamicIndexing =
-        core12_.shaderInputAttachmentArrayDynamicIndexing & capture_core12_.shaderInputAttachmentArrayDynamicIndexing;
-    output_core12_.shaderUniformTexelBufferArrayDynamicIndexing =
-        core12_.shaderUniformTexelBufferArrayDynamicIndexing &
-        capture_core12_.shaderUniformTexelBufferArrayDynamicIndexing;
-    output_core12_.shaderStorageTexelBufferArrayDynamicIndexing =
-        core12_.shaderStorageTexelBufferArrayDynamicIndexing &
-        capture_core12_.shaderStorageTexelBufferArrayDynamicIndexing;
-    output_core12_.shaderUniformBufferArrayNonUniformIndexing =
-        core12_.shaderUniformBufferArrayNonUniformIndexing & capture_core12_.shaderUniformBufferArrayNonUniformIndexing;
-    output_core12_.shaderSampledImageArrayNonUniformIndexing =
-        core12_.shaderSampledImageArrayNonUniformIndexing & capture_core12_.shaderSampledImageArrayNonUniformIndexing;
-    output_core12_.shaderStorageBufferArrayNonUniformIndexing =
-        core12_.shaderStorageBufferArrayNonUniformIndexing & capture_core12_.shaderStorageBufferArrayNonUniformIndexing;
-    output_core12_.shaderStorageImageArrayNonUniformIndexing =
-        core12_.shaderStorageImageArrayNonUniformIndexing & capture_core12_.shaderStorageImageArrayNonUniformIndexing;
-    output_core12_.shaderInputAttachmentArrayNonUniformIndexing =
-        core12_.shaderInputAttachmentArrayNonUniformIndexing &
-        capture_core12_.shaderInputAttachmentArrayNonUniformIndexing;
-    output_core12_.shaderUniformTexelBufferArrayNonUniformIndexing =
-        core12_.shaderUniformTexelBufferArrayNonUniformIndexing &
-        capture_core12_.shaderUniformTexelBufferArrayNonUniformIndexing;
-    output_core12_.shaderStorageTexelBufferArrayNonUniformIndexing =
-        core12_.shaderStorageTexelBufferArrayNonUniformIndexing &
-        capture_core12_.shaderStorageTexelBufferArrayNonUniformIndexing;
-    output_core12_.descriptorBindingUniformBufferUpdateAfterBind =
-        core12_.descriptorBindingUniformBufferUpdateAfterBind &
-        capture_core12_.descriptorBindingUniformBufferUpdateAfterBind;
-    output_core12_.descriptorBindingSampledImageUpdateAfterBind =
-        core12_.descriptorBindingSampledImageUpdateAfterBind &
-        capture_core12_.descriptorBindingSampledImageUpdateAfterBind;
-    output_core12_.descriptorBindingStorageImageUpdateAfterBind =
-        core12_.descriptorBindingStorageImageUpdateAfterBind &
-        capture_core12_.descriptorBindingStorageImageUpdateAfterBind;
-    output_core12_.descriptorBindingStorageBufferUpdateAfterBind =
-        core12_.descriptorBindingStorageBufferUpdateAfterBind &
-        capture_core12_.descriptorBindingStorageBufferUpdateAfterBind;
-    output_core12_.descriptorBindingUniformTexelBufferUpdateAfterBind =
-        core12_.descriptorBindingUniformTexelBufferUpdateAfterBind &
-        capture_core12_.descriptorBindingUniformTexelBufferUpdateAfterBind;
-    output_core12_.descriptorBindingStorageTexelBufferUpdateAfterBind =
-        core12_.descriptorBindingStorageTexelBufferUpdateAfterBind &
-        capture_core12_.descriptorBindingStorageTexelBufferUpdateAfterBind;
-    output_core12_.descriptorBindingUpdateUnusedWhilePending =
-        core12_.descriptorBindingUpdateUnusedWhilePending & capture_core12_.descriptorBindingUpdateUnusedWhilePending;
-    output_core12_.descriptorBindingPartiallyBound =
-        core12_.descriptorBindingPartiallyBound & capture_core12_.descriptorBindingPartiallyBound;
-    output_core12_.descriptorBindingVariableDescriptorCount =
-        core12_.descriptorBindingVariableDescriptorCount & capture_core12_.descriptorBindingVariableDescriptorCount;
-    output_core12_.runtimeDescriptorArray = core12_.runtimeDescriptorArray & capture_core12_.runtimeDescriptorArray;
-    output_core12_.samplerFilterMinmax    = core12_.samplerFilterMinmax & capture_core12_.samplerFilterMinmax;
-    output_core12_.scalarBlockLayout      = core12_.scalarBlockLayout & capture_core12_.scalarBlockLayout;
-    output_core12_.imagelessFramebuffer   = core12_.imagelessFramebuffer & capture_core12_.imagelessFramebuffer;
-    output_core12_.uniformBufferStandardLayout =
-        core12_.uniformBufferStandardLayout & capture_core12_.uniformBufferStandardLayout;
-    output_core12_.shaderSubgroupExtendedTypes =
-        core12_.shaderSubgroupExtendedTypes & capture_core12_.shaderSubgroupExtendedTypes;
-    output_core12_.separateDepthStencilLayouts =
-        core12_.separateDepthStencilLayouts & capture_core12_.separateDepthStencilLayouts;
-    output_core12_.hostQueryReset      = core12_.hostQueryReset & capture_core12_.hostQueryReset;
-    output_core12_.timelineSemaphore   = core12_.timelineSemaphore & capture_core12_.timelineSemaphore;
-    output_core12_.bufferDeviceAddress = core12_.bufferDeviceAddress & capture_core12_.bufferDeviceAddress;
-    output_core12_.bufferDeviceAddressCaptureReplay =
-        core12_.bufferDeviceAddressCaptureReplay & capture_core12_.bufferDeviceAddressCaptureReplay;
-    output_core12_.bufferDeviceAddressMultiDevice =
-        core12_.bufferDeviceAddressMultiDevice & capture_core12_.bufferDeviceAddressMultiDevice;
-    output_core12_.vulkanMemoryModel = core12_.vulkanMemoryModel & capture_core12_.vulkanMemoryModel;
-    output_core12_.vulkanMemoryModelDeviceScope =
-        core12_.vulkanMemoryModelDeviceScope & capture_core12_.vulkanMemoryModelDeviceScope;
-    output_core12_.vulkanMemoryModelAvailabilityVisibilityChains =
-        core12_.vulkanMemoryModelAvailabilityVisibilityChains &
-        capture_core12_.vulkanMemoryModelAvailabilityVisibilityChains;
-    output_core12_.shaderOutputViewportIndex =
-        core12_.shaderOutputViewportIndex & capture_core12_.shaderOutputViewportIndex;
-    output_core12_.shaderOutputLayer = core12_.shaderOutputLayer & capture_core12_.shaderOutputLayer;
-    output_core12_.subgroupBroadcastDynamicId =
-        core12_.subgroupBroadcastDynamicId & capture_core12_.subgroupBroadcastDynamicId;
+    // iterate through struct members, this is a workaround until this function will be generated
+    VkBool32* p_output_core12   = (VkBool32*)(&output_core12_.samplerMirrorClampToEdge);
+    VkBool32* p_core12          = (VkBool32*)(&core12_.samplerMirrorClampToEdge);
+    VkBool32* p_capture_core12_ = (VkBool32*)(&capture_core12_.samplerMirrorClampToEdge);
+
+    for (int i = 0; i < core12_members_as_strings_.size(); i++)
+    {
+        *p_output_core12 = (*p_core12) & (*p_capture_core12_);
+        if ((*p_output_core12) != (*p_capture_core12_))
+        {
+            output_log += "\t" + core12_members_as_strings_[i] + "\r\n";
+            detected_unused_feature = true;
+        }
+        p_output_core12++;
+        p_core12++;
+        p_capture_core12_++;
+    }
+
+    if (detected_unused_feature)
+    {
+        consumer_output_log_ = "Core12 Features to be removed:\r\n" + output_log;
+    }
+
+    return detected_unused_feature;
 }
-void VulkanFeatureTrackerConsumerBase::ProcessCore13Features()
+
+bool VulkanFeatureTrackerConsumerBase::ProcessCore13Features()
 {
+    bool detected_unused_feature = false;
+
+    std::string output_log{};
+
     // bitwise AND every member except sType and pNext
     output_core13_.sType = capture_core13_.sType;
     output_core13_.pNext = capture_core13_.pNext;
 
-    output_core13_.robustImageAccess  = core13_.robustImageAccess & capture_core13_.robustImageAccess;
-    output_core13_.inlineUniformBlock = core13_.inlineUniformBlock & capture_core13_.inlineUniformBlock;
-    output_core13_.descriptorBindingInlineUniformBlockUpdateAfterBind =
-        core13_.descriptorBindingInlineUniformBlockUpdateAfterBind &
-        capture_core13_.descriptorBindingInlineUniformBlockUpdateAfterBind;
-    output_core13_.pipelineCreationCacheControl =
-        core13_.pipelineCreationCacheControl & capture_core13_.pipelineCreationCacheControl;
-    output_core13_.privateData = core13_.privateData & capture_core13_.privateData;
-    output_core13_.shaderDemoteToHelperInvocation =
-        core13_.shaderDemoteToHelperInvocation & capture_core13_.shaderDemoteToHelperInvocation;
-    output_core13_.shaderTerminateInvocation =
-        core13_.shaderTerminateInvocation & capture_core13_.shaderTerminateInvocation;
-    output_core13_.subgroupSizeControl  = core13_.subgroupSizeControl & capture_core13_.subgroupSizeControl;
-    output_core13_.computeFullSubgroups = core13_.computeFullSubgroups & capture_core13_.computeFullSubgroups;
-    output_core13_.synchronization2     = core13_.synchronization2 & capture_core13_.synchronization2;
-    output_core13_.textureCompressionASTC_HDR =
-        core13_.textureCompressionASTC_HDR & capture_core13_.textureCompressionASTC_HDR;
-    output_core13_.shaderZeroInitializeWorkgroupMemory =
-        core13_.shaderZeroInitializeWorkgroupMemory & capture_core13_.shaderZeroInitializeWorkgroupMemory;
-    output_core13_.dynamicRendering        = core13_.dynamicRendering & capture_core13_.dynamicRendering;
-    output_core13_.shaderIntegerDotProduct = core13_.shaderIntegerDotProduct & capture_core13_.shaderIntegerDotProduct;
-    output_core13_.maintenance4            = core13_.maintenance4 & capture_core13_.maintenance4;
-}
-void VulkanFeatureTrackerConsumerBase::PrintCore10Features(VkPhysicalDeviceFeatures core10)
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("\tCore10");
-    GFXRECON_WRITE_CONSOLE("%d robustBufferAccess", core10.robustBufferAccess);
-    GFXRECON_WRITE_CONSOLE("%d fullDrawIndexUint32", core10.fullDrawIndexUint32);
-    GFXRECON_WRITE_CONSOLE("%d imageCubeArray", core10.imageCubeArray);
-    GFXRECON_WRITE_CONSOLE("%d independentBlend", core10.independentBlend);
-    GFXRECON_WRITE_CONSOLE("%d geometryShader", core10.geometryShader);
-    GFXRECON_WRITE_CONSOLE("%d tessellationShader", core10.tessellationShader);
-    GFXRECON_WRITE_CONSOLE("%d sampleRateShading", core10.sampleRateShading);
-    GFXRECON_WRITE_CONSOLE("%d dualSrcBlend", core10.dualSrcBlend);
-    GFXRECON_WRITE_CONSOLE("%d logicOp", core10.logicOp);
-    GFXRECON_WRITE_CONSOLE("%d multiDrawIndirect", core10.multiDrawIndirect);
-    GFXRECON_WRITE_CONSOLE("%d drawIndirectFirstInstance", core10.drawIndirectFirstInstance);
-    GFXRECON_WRITE_CONSOLE("%d depthClamp", core10.depthClamp);
-    GFXRECON_WRITE_CONSOLE("%d depthBiasClamp", core10.depthBiasClamp);
-    GFXRECON_WRITE_CONSOLE("%d fillModeNonSolid", core10.fillModeNonSolid);
-    GFXRECON_WRITE_CONSOLE("%d depthBounds", core10.depthBounds);
-    GFXRECON_WRITE_CONSOLE("%d wideLines", core10.wideLines);
-    GFXRECON_WRITE_CONSOLE("%d largePoints", core10.largePoints);
-    GFXRECON_WRITE_CONSOLE("%d alphaToOne", core10.alphaToOne);
-    GFXRECON_WRITE_CONSOLE("%d multiViewport", core10.multiViewport);
-    GFXRECON_WRITE_CONSOLE("%d samplerAnisotropy", core10.samplerAnisotropy);
-    GFXRECON_WRITE_CONSOLE("%d textureCompressionETC2", core10.textureCompressionETC2);
-    GFXRECON_WRITE_CONSOLE("%d textureCompressionASTC_LDR", core10.textureCompressionASTC_LDR);
-    GFXRECON_WRITE_CONSOLE("%d textureCompressionBC", core10.textureCompressionBC);
-    GFXRECON_WRITE_CONSOLE("%d occlusionQueryPrecise", core10.occlusionQueryPrecise);
-    GFXRECON_WRITE_CONSOLE("%d pipelineStatisticsQuery", core10.pipelineStatisticsQuery);
-    GFXRECON_WRITE_CONSOLE("%d vertexPipelineStoresAndAtomics", core10.vertexPipelineStoresAndAtomics);
-    GFXRECON_WRITE_CONSOLE("%d fragmentStoresAndAtomics", core10.fragmentStoresAndAtomics);
-    GFXRECON_WRITE_CONSOLE("%d shaderTessellationAndGeometryPointSize", core10.shaderTessellationAndGeometryPointSize);
-    GFXRECON_WRITE_CONSOLE("%d shaderImageGatherExtended", core10.shaderImageGatherExtended);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageImageExtendedFormats", core10.shaderStorageImageExtendedFormats);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageImageMultisample", core10.shaderStorageImageMultisample);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageImageReadWithoutFormat", core10.shaderStorageImageReadWithoutFormat);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageImageWriteWithoutFormat", core10.shaderStorageImageWriteWithoutFormat);
-    GFXRECON_WRITE_CONSOLE("%d shaderUniformBufferArrayDynamicIndexing ",
-                           core10.shaderUniformBufferArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderSampledImageArrayDynamicIndexing", core10.shaderSampledImageArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageBufferArrayDynamicIndexing ",
-                           core10.shaderStorageBufferArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageImageArrayDynamicIndexing", core10.shaderStorageImageArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderClipDistance", core10.shaderClipDistance);
-    GFXRECON_WRITE_CONSOLE("%d shaderCullDistance", core10.shaderCullDistance);
-    GFXRECON_WRITE_CONSOLE("%d shaderFloat64", core10.shaderFloat64);
-    GFXRECON_WRITE_CONSOLE("%d shaderInt64", core10.shaderInt64);
-    GFXRECON_WRITE_CONSOLE("%d shaderInt16", core10.shaderInt16);
-    GFXRECON_WRITE_CONSOLE("%d shaderResourceResidency", core10.shaderResourceResidency);
-    GFXRECON_WRITE_CONSOLE("%d shaderResourceMinLod", core10.shaderResourceMinLod);
-    GFXRECON_WRITE_CONSOLE("%d sparseBinding", core10.sparseBinding);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidencyBuffer", core10.sparseResidencyBuffer);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidencyImage2D", core10.sparseResidencyImage2D);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidencyImage3D", core10.sparseResidencyImage3D);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidency2Samples", core10.sparseResidency2Samples);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidency4Samples", core10.sparseResidency4Samples);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidency8Samples", core10.sparseResidency8Samples);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidency16Samples", core10.sparseResidency16Samples);
-    GFXRECON_WRITE_CONSOLE("%d sparseResidencyAliased", core10.sparseResidencyAliased);
-    GFXRECON_WRITE_CONSOLE("%d variableMultisampleRate", core10.variableMultisampleRate);
-    GFXRECON_WRITE_CONSOLE("%d inheritedQueries", core10.inheritedQueries);
-    GFXRECON_WRITE_CONSOLE("");
-}
+    // iterate through struct members, this is a workaround until this function will be generated
+    VkBool32* p_output_core13   = (VkBool32*)(&output_core13_.robustImageAccess);
+    VkBool32* p_core13          = (VkBool32*)(&core13_.robustImageAccess);
+    VkBool32* p_capture_core13_ = (VkBool32*)(&capture_core13_.robustImageAccess);
 
-void VulkanFeatureTrackerConsumerBase::PrintCore11Features(VkPhysicalDeviceVulkan11Features core11)
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("\tCore11");
-    GFXRECON_WRITE_CONSOLE("%d storageBuffer16BitAccess", core11.storageBuffer16BitAccess);
-    GFXRECON_WRITE_CONSOLE("%d uniformAndStorageBuffer16BitAccess", core11.uniformAndStorageBuffer16BitAccess);
-    GFXRECON_WRITE_CONSOLE("%d storagePushConstant16", core11.storagePushConstant16);
-    GFXRECON_WRITE_CONSOLE("%d storageInputOutput16", core11.storageInputOutput16);
-    GFXRECON_WRITE_CONSOLE("%d multiview", core11.multiview);
-    GFXRECON_WRITE_CONSOLE("%d multiviewGeometryShader", core11.multiviewGeometryShader);
-    GFXRECON_WRITE_CONSOLE("%d multiviewTessellationShader", core11.multiviewTessellationShader);
-    GFXRECON_WRITE_CONSOLE("%d variablePointersStorageBuffer", core11.variablePointersStorageBuffer);
-    GFXRECON_WRITE_CONSOLE("%d variablePointers", core11.variablePointers);
-    GFXRECON_WRITE_CONSOLE("%d protectedMemory", core11.protectedMemory);
-    GFXRECON_WRITE_CONSOLE("%d samplerYcbcrConversion", core11.samplerYcbcrConversion);
-    GFXRECON_WRITE_CONSOLE("%d shaderDrawParameters", core11.shaderDrawParameters);
-    GFXRECON_WRITE_CONSOLE("");
-}
+    for (int i = 0; i < core13_members_as_strings_.size(); i++)
+    {
+        *p_output_core13 = (*p_core13) & (*p_capture_core13_);
+        if ((*p_output_core13) != (*p_capture_core13_))
+        {
+            output_log += "\t" + core13_members_as_strings_[i] + "\r\n";
+            detected_unused_feature = true;
+        }
+        p_output_core13++;
+        p_core13++;
+        p_capture_core13_++;
+    }
 
-void VulkanFeatureTrackerConsumerBase::PrintCore12Features(VkPhysicalDeviceVulkan12Features core12)
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("\tCore12");
+    if (detected_unused_feature)
+    {
+        consumer_output_log_ = "Core13 Features to be removed:\r\n" + output_log;
+    }
 
-    GFXRECON_WRITE_CONSOLE("%d samplerMirrorClampToEdge", core12.samplerMirrorClampToEdge);
-    GFXRECON_WRITE_CONSOLE("%d drawIndirectCount", core12.drawIndirectCount);
-    GFXRECON_WRITE_CONSOLE("%d storageBuffer8BitAccess", core12.storageBuffer8BitAccess);
-    GFXRECON_WRITE_CONSOLE("%d uniformAndStorageBuffer8BitAccess", core12.uniformAndStorageBuffer8BitAccess);
-    GFXRECON_WRITE_CONSOLE("%d storagePushConstant8", core12.storagePushConstant8);
-    GFXRECON_WRITE_CONSOLE("%d shaderBufferInt64Atomics", core12.shaderBufferInt64Atomics);
-    GFXRECON_WRITE_CONSOLE("%d shaderSharedInt64Atomics", core12.shaderSharedInt64Atomics);
-    GFXRECON_WRITE_CONSOLE("%d shaderFloat16", core12.shaderFloat16);
-    GFXRECON_WRITE_CONSOLE("%d shaderInt8", core12.shaderInt8);
-    GFXRECON_WRITE_CONSOLE("%d descriptorIndexing", core12.descriptorIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderInputAttachmentArrayDynamicIndexing",
-                           core12.shaderInputAttachmentArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderUniformTexelBufferArrayDynamicIndexing",
-                           core12.shaderUniformTexelBufferArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageTexelBufferArrayDynamicIndexing",
-                           core12.shaderStorageTexelBufferArrayDynamicIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderUniformBufferArrayNonUniformIndexing",
-                           core12.shaderUniformBufferArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderSampledImageArrayNonUniformIndexing",
-                           core12.shaderSampledImageArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageBufferArrayNonUniformIndexing",
-                           core12.shaderStorageBufferArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderInputAttachmentArrayNonUniformIndexing",
-                           core12.shaderInputAttachmentArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderUniformTexelBufferArrayNonUniformIndexing",
-                           core12.shaderUniformTexelBufferArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d shaderStorageTexelBufferArrayNonUniformIndexing",
-                           core12.shaderStorageTexelBufferArrayNonUniformIndexing);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingUniformBufferUpdateAfterBind",
-                           core12.descriptorBindingUniformBufferUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingSampledImageUpdateAfterBind",
-                           core12.descriptorBindingSampledImageUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingStorageImageUpdateAfterBind",
-                           core12.descriptorBindingStorageImageUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingStorageBufferUpdateAfterBind",
-                           core12.descriptorBindingStorageBufferUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingUniformTexelBufferUpdateAfterBind",
-                           core12.descriptorBindingUniformTexelBufferUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingStorageTexelBufferUpdateAfterBind",
-                           core12.descriptorBindingStorageTexelBufferUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingUpdateUnusedWhilePending",
-                           core12.descriptorBindingUpdateUnusedWhilePending);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingPartiallyBound", core12.descriptorBindingPartiallyBound);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingVariableDescriptorCount",
-                           core12.descriptorBindingVariableDescriptorCount);
-    GFXRECON_WRITE_CONSOLE("%d runtimeDescriptorArray", core12.runtimeDescriptorArray);
-    GFXRECON_WRITE_CONSOLE("%d samplerFilterMinmax", core12.samplerFilterMinmax);
-    GFXRECON_WRITE_CONSOLE("%d scalarBlockLayout", core12.scalarBlockLayout);
-    GFXRECON_WRITE_CONSOLE("%d imagelessFramebuffer", core12.imagelessFramebuffer);
-    GFXRECON_WRITE_CONSOLE("%d uniformBufferStandardLayout", core12.uniformBufferStandardLayout);
-    GFXRECON_WRITE_CONSOLE("%d shaderSubgroupExtendedTypes", core12.shaderSubgroupExtendedTypes);
-    GFXRECON_WRITE_CONSOLE("%d separateDepthStencilLayouts", core12.separateDepthStencilLayouts);
-    GFXRECON_WRITE_CONSOLE("%d hostQueryReset", core12.hostQueryReset);
-    GFXRECON_WRITE_CONSOLE("%d timelineSemaphore", core12.timelineSemaphore);
-    GFXRECON_WRITE_CONSOLE("%d bufferDeviceAddress", core12.bufferDeviceAddress);
-    GFXRECON_WRITE_CONSOLE("%d bufferDeviceAddressCaptureReplay", core12.bufferDeviceAddressCaptureReplay);
-    GFXRECON_WRITE_CONSOLE("%d bufferDeviceAddressMultiDevice", core12.bufferDeviceAddressMultiDevice);
-    GFXRECON_WRITE_CONSOLE("%d vulkanMemoryModel", core12.vulkanMemoryModel);
-    GFXRECON_WRITE_CONSOLE("%d vulkanMemoryModelAvailabilityVisibilityChains",
-                           core12.vulkanMemoryModelAvailabilityVisibilityChains);
-    GFXRECON_WRITE_CONSOLE("%d shaderOutputViewportIndex", core12.shaderOutputViewportIndex);
-    GFXRECON_WRITE_CONSOLE("%d shaderOutputLayer", core12.shaderOutputLayer);
-    GFXRECON_WRITE_CONSOLE("%d subgroupBroadcastDynamicId", core12.subgroupBroadcastDynamicId);
-    GFXRECON_WRITE_CONSOLE("");
-}
-
-void VulkanFeatureTrackerConsumerBase::PrintCore13Features(VkPhysicalDeviceVulkan13Features core13)
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("\tCore13");
-    GFXRECON_WRITE_CONSOLE("%d robustImageAccess", core13.robustImageAccess);
-    GFXRECON_WRITE_CONSOLE("%d inlineUniformBlock", core13.inlineUniformBlock);
-    GFXRECON_WRITE_CONSOLE("%d descriptorBindingInlineUniformBlockUpdateAfterBind",
-                           core13.descriptorBindingInlineUniformBlockUpdateAfterBind);
-    GFXRECON_WRITE_CONSOLE("%d pipelineCreationCacheControl", core13.pipelineCreationCacheControl);
-    GFXRECON_WRITE_CONSOLE("%d privateData", core13.privateData);
-    GFXRECON_WRITE_CONSOLE("%d shaderDemoteToHelperInvocation", core13.shaderDemoteToHelperInvocation);
-    GFXRECON_WRITE_CONSOLE("%d shaderTerminateInvocation", core13.shaderTerminateInvocation);
-    GFXRECON_WRITE_CONSOLE("%d subgroupSizeControl", core13.subgroupSizeControl);
-    GFXRECON_WRITE_CONSOLE("%d computeFullSubgroups", core13.computeFullSubgroups);
-    GFXRECON_WRITE_CONSOLE("%d synchronization2", core13.synchronization2);
-    GFXRECON_WRITE_CONSOLE("%d textureCompressionASTC_HDR", core13.textureCompressionASTC_HDR);
-    GFXRECON_WRITE_CONSOLE("%d shaderZeroInitializeWorkgroupMemory", core13.shaderZeroInitializeWorkgroupMemory);
-    GFXRECON_WRITE_CONSOLE("%d dynamicRendering", core13.dynamicRendering);
-    GFXRECON_WRITE_CONSOLE("%d shaderIntegerDotProduct", core13.shaderIntegerDotProduct);
-    GFXRECON_WRITE_CONSOLE("%d maintenance4", core13.maintenance4);
-    GFXRECON_WRITE_CONSOLE("");
-}
-
-void VulkanFeatureTrackerConsumerBase::PrintAllFeatures()
-{
-    GFXRECON_WRITE_CONSOLE("ORIGINAL Features:");
-    GFXRECON_WRITE_CONSOLE("");
-    PrintCore10Features(capture_core10_);
-    PrintCore11Features(capture_core11_);
-    PrintCore12Features(capture_core12_);
-    PrintCore13Features(capture_core13_);
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
-
-    GFXRECON_WRITE_CONSOLE("DETECTED Features:");
-    GFXRECON_WRITE_CONSOLE("");
-    PrintCore10Features(core10_);
-    PrintCore11Features(core11_);
-    PrintCore12Features(core12_);
-    PrintCore13Features(core13_);
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
-
-    GFXRECON_WRITE_CONSOLE("OUTPUTED Features:");
-    GFXRECON_WRITE_CONSOLE("");
-    PrintCore10Features(output_core10_);
-    PrintCore11Features(output_core11_);
-    PrintCore12Features(output_core12_);
-    PrintCore13Features(output_core13_);
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE("");
+    return detected_unused_feature;
 }
 
 GFXRECON_END_NAMESPACE(decode)
