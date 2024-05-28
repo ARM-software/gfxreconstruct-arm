@@ -6003,6 +6003,11 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             GFXRECON_LOG_ERROR("Unrecognized sType: %s", util::ToString(base->sType).c_str());
             return value;
         }
+        case VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO:
+        case VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO:
+        {
+            return value;
+        }
         case VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkShaderModuleCreateInfo*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:

@@ -172,6 +172,11 @@ class VulkanStructHandleWrappersBodyGenerator(BaseGenerator):
         write('            GFXRECON_LOG_ERROR("Unrecognized sType: %s", util::ToString(base->sType).c_str());', file=self.outFile)
         write('            return value;', file=self.outFile)
         write('        }', file=self.outFile)
+        write('        case VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO:', file=self.outFile)
+        write('        case VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO:', file=self.outFile)
+        write('        {', file=self.outFile)
+        write('            return value;', file=self.outFile)
+        write('        }', file=self.outFile)
         for base_type in self.pnext_structs_with_handles:
             write(
                 '        case {}:'.format(
