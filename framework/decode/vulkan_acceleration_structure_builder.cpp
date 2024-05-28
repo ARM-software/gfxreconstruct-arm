@@ -600,11 +600,10 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     // This way, we do not perform a modificaction of real device memory until we are sure that it is valid
     std::vector<VkAccelerationStructureInstanceKHR> copy(instance_data, instance_data + build_range.primitiveCount);
     bool                                            success = true;
-    for (uint32_t instance_index = 0; instance_index < build_range.primitiveCount && success; ++instance_index)
+    for (uint32_t instance_index = 0; success && (instance_index < build_range.primitiveCount); ++instance_index)
     {
         success = UpdateAccelerationStructDeviceAddress(copy[instance_index].accelerationStructureReference);
     }
-
     if (success)
     {
         uint32_t size = copy.size() * sizeof(VkAccelerationStructureInstanceKHR);
@@ -612,7 +611,7 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     }
     else
     {
-        GFXRECON_LOG_ERROR("Update of the instance buffer failed");
+        GFXRECON_LOG_DEBUG("Some of the instance buffer BLAS addresses failed to update");
     }
     allocator_->UnmapResourceMemoryDirect(instance_buffer_allocator_data);
 }
@@ -1192,7 +1191,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
             uint32_t count   = descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
             bool     success = true;
             std::vector<VkDeviceAddress> copy(device_addresses, device_addresses + count);
-            for (uint32_t i = 0; i < count && success; ++i)
+            for (uint32_t i = 0; success && (i < count); ++i)
             {
                 success = UpdateAccelerationStructDeviceAddress(copy[i]);
             }
@@ -1376,7 +1375,14 @@ void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates
     {
         buffers.infos_[i]   = buffer_infos[i];
         buffers.offsets_[i] = descriptor_buffer_infos[i]->offset;
-        buffers.ranges_[i]  = descriptor_buffer_infos[i]->range;
+        if (descriptor_buffer_infos[i]->range == VK_WHOLE_SIZE)
+        {
+            buffers.ranges_[i] = allocator_->GetBufferSize(buffer_infos[i]->allocator_data);
+        }
+        else
+        {
+            buffers.ranges_[i] = descriptor_buffer_infos[i]->range;
+        }
     }
 }
 
