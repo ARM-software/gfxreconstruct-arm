@@ -184,7 +184,7 @@ void GetUsedPhysicalFeatures(const std::string&                                 
         if ((file_processor.GetCurrentFrameNumber() > 0) &&
             (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
         {
-            ft_consumer->ProcessFeatures();
+            ft_consumer->ProcessFeaturesAndExtensions();
             GFXRECON_WRITE_CONSOLE("Retrieved used physical features");
         }
         else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
