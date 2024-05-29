@@ -403,6 +403,11 @@ std::string XcbWindow::GetWsiExtension() const
     return VK_KHR_XCB_SURFACE_EXTENSION_NAME;
 }
 
+VkExtent2D XcbWindow::GetSize() const
+{
+    return { width_, height_ };
+}
+
 VkResult
 XcbWindow::CreateSurface(const encode::InstanceTable* table, VkInstance instance, VkFlags flags, VkSurfaceKHR* pSurface)
 {
