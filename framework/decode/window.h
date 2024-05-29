@@ -80,6 +80,8 @@ class Window
 
     virtual std::string GetWsiExtension() const = 0;
 
+    virtual VkExtent2D GetSize() const = 0;
+
     virtual VkResult
     CreateSurface(const encode::InstanceTable* table, VkInstance instance, VkFlags flags, VkSurfaceKHR* pSurface) = 0;
 

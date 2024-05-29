@@ -116,6 +116,11 @@ std::string AndroidWindow::GetWsiExtension() const
     return VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
 }
 
+VkExtent2D AndroidWindow::GetSize() const
+{
+    return { width_, height_ };
+}
+
 VkResult AndroidWindow::CreateSurface(const encode::InstanceTable* table,
                                       VkInstance                   instance,
                                       VkFlags                      flags,

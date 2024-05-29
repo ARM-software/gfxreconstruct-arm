@@ -65,6 +65,8 @@ class MetalWindow : public decode::Window
 
     std::string GetWsiExtension() const override;
 
+    VkExtent2D GetSize() const override;
+
     VkResult CreateSurface(const encode::InstanceTable* table,
                            VkInstance                   instance,
                            VkFlags                      flags,

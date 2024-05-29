@@ -65,6 +65,8 @@ class AndroidWindow : public decode::Window
 
     virtual std::string GetWsiExtension() const override;
 
+    virtual VkExtent2D GetSize() const override;
+
     virtual VkResult CreateSurface(const encode::InstanceTable* table,
                                    VkInstance                   instance,
                                    VkFlags                      flags,
