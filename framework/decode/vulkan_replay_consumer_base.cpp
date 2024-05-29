@@ -8653,9 +8653,9 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
         // Store the information about buffers that are to be used as Storage Buffers
-        std::vector<BufferInfo*>                           buffer_infos;
-        std::vector<const VkDescriptorBufferInfo*>         descriptor_buffer_infos;
-        bool                                               contains_build_input = false;
+        std::vector<BufferInfo*>                   buffer_infos;
+        std::vector<const VkDescriptorBufferInfo*> descriptor_buffer_infos;
+        bool                                       contains_build_input = false;
         for (uint32_t i = 0; i < descriptor_write_count; ++i)
         {
             VkWriteDescriptorSet& descriptor_write = descriptor_writes_decoder->GetPointer()[i];
@@ -9222,11 +9222,11 @@ void VulkanReplayConsumerBase::StoreDescriptorUpdateWithTemplate(
         return;
     }
 
-    VkDescriptorBufferInfo*         descriptor_buffer_info      = pData->GetBufferInfoPointer();
-    Decoded_VkDescriptorBufferInfo* descriptor_buffer_info_meta = pData->GetBufferInfoMetaStructPointer();
-    std::vector<BufferInfo*>        buffer_infos(buffer_count);
-    std::vector<const VkDescriptorBufferInfo*>         descriptor_buffer_infos(buffer_count);
-    bool                                               contains_build_input = false;
+    VkDescriptorBufferInfo*                    descriptor_buffer_info      = pData->GetBufferInfoPointer();
+    Decoded_VkDescriptorBufferInfo*            descriptor_buffer_info_meta = pData->GetBufferInfoMetaStructPointer();
+    std::vector<BufferInfo*>                   buffer_infos(buffer_count);
+    std::vector<const VkDescriptorBufferInfo*> descriptor_buffer_infos(buffer_count);
+    bool                                       contains_build_input = false;
     for (uint32_t buffer_idx = 0; buffer_idx < buffer_count; ++buffer_idx)
     {
         BufferInfo* info = object_info_table_.GetBufferInfo(descriptor_buffer_info_meta[buffer_idx].buffer);
