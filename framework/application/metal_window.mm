@@ -251,7 +251,7 @@ std::string MetalWindow::GetWsiExtension() const
     return VK_EXT_METAL_SURFACE_EXTENSION_NAME;
 }
 
-VkExtent2D MetalWindow::GetSize() const override
+VkExtent2D MetalWindow::GetSize() const
 {
     return { width_, height_ };
 }
