@@ -42,7 +42,9 @@ VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
     acceleration_structure_features_(acceleration_structure_features),
     raytracing_pipeline_properties_(ray_tracing_pipeline_properties.shaderGroupHandleSize,
                                     ray_tracing_pipeline_properties.shaderGroupHandleAlignment)
-{}
+{
+    InitializeInternalExecObjects();
+}
 
 VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
 {
@@ -108,19 +110,15 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
     VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data)
 {
-    // Retrieve / initialize the command executable structures
-    if (!cmd_execute_obj_.initialized_)
-    {
-        InitializeInternalExecObjects();
-    }
     VkCommandBuffer command_buffer = cmd_execute_obj_.command_buffer_;
 
     BeginCommandBuffer();
 
     std::set<VkDeviceAddress> state_recreation_device_addresses;
 
-    // We need to create and populate the geometry buffers for TLAS, if they did not survive
-    // long enough to be included in state recreation
+    // We need to create and populate the geometry buffers for TLAS
+    // This can happen if the TLAS is not rebuilt routinely in the content
+    // and therefore the buffers that serve as intance buffers are destroyed and not included into state recreation
     if (!instance_buffers_data.empty())
     {
         for (uint32_t i = 0; i < info_count; ++i)
@@ -135,23 +133,25 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
                 VkDeviceSize buffer_size =
                     range_infos[i][g].primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
 
-                auto entry               = CreateBuffer(buffer_size,
-                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                              VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-                entry->original_address_ = geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress;
+                std::unique_ptr<BufferEntry>& entry = buffers_.emplace_back(
+                    CreateBuffer(buffer_size,
+                                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                     VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+                // Because the instance buffer does not exist in the state recreation, we cannot rely on its capture
+                // device address as it can potentially be reused for other buffer, especially in the small traces and
+                // simple content Therefore, we put new device address as both old and new, and modify geometry info to
+                // later match on this new "old" device address
                 entry->new_address_      = GetBufferDeviceAddress(entry->handle_);
+                entry->original_address_ = entry->new_address_;
+                const_cast<VkDeviceAddress&>(geometry_infos[i].pGeometries[g].geometry.instances.data.deviceAddress) =
+                    entry->new_address_;
+                state_recreation_device_addresses.insert(entry->new_address_);
 
-                void* mapped;
-                allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, entry->allocator_data_);
+                VkAccelerationStructureInstanceKHR* mapped;
+                allocator_->MapResourceMemoryDirect(buffer_size, 0, (void**)&mapped, entry->allocator_data_);
                 util::platform::MemoryCopy(mapped, buffer_size, instance_buffers_data[g].data(), buffer_size);
                 allocator_->UnmapResourceMemoryDirect(entry->allocator_data_);
-
-                // We add their original device address, that remains unchanged to the set, to delete them right after
-                // we finished building
-                state_recreation_device_addresses.insert(entry->new_address_);
-                // We still need to add them to the global tracking so that builder finds them later
-                buffers_.push_back(std::move(entry));
             }
         }
     }
@@ -177,10 +177,6 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
 void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructuresMetaCommand(
     uint32_t info_count, VkCopyAccelerationStructureInfoKHR* copy_infos)
 {
-    if (!cmd_execute_obj_.initialized_)
-    {
-        InitializeInternalExecObjects();
-    }
     VkCommandBuffer command_buffer = cmd_execute_obj_.command_buffer_;
     BeginCommandBuffer();
 
@@ -195,10 +191,6 @@ void VulkanAccelerationStructureBuilder::ProcessCopyVulkanAccelerationStructures
 void VulkanAccelerationStructureBuilder::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
     VkQueryType query_type, VkAccelerationStructureKHR acceleration_structure)
 {
-    if (!cmd_execute_obj_.initialized_)
-    {
-        InitializeInternalExecObjects();
-    }
     VkCommandBuffer command_buffer = cmd_execute_obj_.command_buffer_;
 
     BeginCommandBuffer();
@@ -281,7 +273,7 @@ std::unique_ptr<VulkanAccelerationStructureBuilder::BufferEntry> VulkanAccelerat
     create_info.pQueueFamilyIndices   = nullptr;
 
     VulkanResourceAllocator::ResourceData buffer_allocator_data;
-    allocator_->CreateBuffer(&create_info, nullptr, format::kNullHandleId, &buffer, &buffer_allocator_data);
+    allocator_->CreateBufferDirect(&create_info, nullptr, &buffer, &buffer_allocator_data);
 
     VkMemoryRequirements requirements{};
     functions_.get_buffer_memory_requirements(device_, buffer, &requirements);
@@ -299,11 +291,11 @@ std::unique_ptr<VulkanAccelerationStructureBuilder::BufferEntry> VulkanAccelerat
 
     VkDeviceMemory                      memory{};
     VulkanResourceAllocator::MemoryData memory_allocator_data{};
-    allocator_->AllocateMemory(&allocate_info, nullptr, format::kNullHandleId, &memory, &memory_allocator_data);
+    allocator_->AllocateMemoryDirect(&allocate_info, nullptr, &memory, &memory_allocator_data);
 
-    allocator_->BindBufferMemory(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
+    allocator_->BindBufferMemoryDirect(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
 
-    auto entry             = std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), allocator_);
+    std::unique_ptr<BufferEntry> entry = std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), allocator_);
     entry->allocator_data_ = buffer_allocator_data;
     entry->handle_         = buffer;
 
@@ -422,22 +414,20 @@ VulkanAccelerationStructureBuilder::GetBufferByRuntimeDeviceAddress(VkDeviceAddr
 VulkanAccelerationStructureBuilder::BufferEntry*
 VulkanAccelerationStructureBuilder::GetBufferByCaptureDeviceAddress(VkDeviceAddress original_address)
 {
-    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const std::unique_ptr<BufferEntry>& entry) {
-        return entry->original_address_ == original_address;
+    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
+        auto buffer_size = allocator_->GetBufferSize(entry->allocator_data_);
+        return entry->original_address_ <= original_address &&
+               (entry->original_address_ + buffer_size) > original_address;
     });
-    if (buffer == buffers_.end())
+    if (buffer != buffers_.end())
     {
-        // If the above fails, the buffer still could be found
-        // Try to search for such a buffer that the device address falls into range of the
-        // addresses the buffer occupies
-        buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-            auto buffer_size = allocator_->GetBufferSize(entry->allocator_data_);
-            return entry->original_address_ < original_address &&
-                   (entry->original_address_ + buffer_size) > original_address;
-        });
+        return buffer->get();
     }
-    GFXRECON_ASSERT(buffer != buffers_.end());
-    return buffer->get();
+    else
+    {
+        GFXRECON_LOG_DEBUG("Could not find a buffer with specified capture time device address");
+        return nullptr;
+    }
 }
 
 void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(uint32_t              descriptor_write_count,
@@ -600,10 +590,9 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     VkAccelerationStructureBuildRangeInfoKHR build_range)
 {
     uint8_t* data;
-    allocator_->MapResourceMemoryDirect(sizeof(VkAccelerationStructureInstanceKHR) * build_range.primitiveCount,
-                                        0,
-                                        (void**)&data,
-                                        instance_buffer_allocator_data);
+    uint32_t size = build_range.primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
+
+    allocator_->MapResourceMemoryDirect(size, 0, (void**)&data, instance_buffer_allocator_data);
     data += offset + build_range.primitiveOffset;
 
     VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
@@ -618,7 +607,6 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     }
     if (success)
     {
-        uint32_t size = copy.size() * sizeof(VkAccelerationStructureInstanceKHR);
         util::platform::MemoryCopy(instance_data, size, copy.data(), size);
     }
     else
@@ -843,8 +831,15 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
 { // Check whether the scratch with this original device address is already allocated and fits the size
     VkDeviceAddress capture_scratch_address = geometry_infos.scratchData.deviceAddress;
 
+    format::HandleId capture_id = format::kNullHandleId;
+    // When fastforwarding, the scratch buffers could be destroyed and not be recreated in state recreation
     BufferEntry* original_scratch_entry = GetBufferByCaptureDeviceAddress(capture_scratch_address);
-    auto         scratch_entries = scratch_double_buffer_.scratches_current.find(original_scratch_entry->capture_id_);
+    if (original_scratch_entry)
+    {
+        capture_id = original_scratch_entry->capture_id_;
+    }
+
+    auto scratch_entries = scratch_double_buffer_.scratches_current.find(capture_id);
 
     if (scratch_entries != scratch_double_buffer_.scratches_current.end())
     {
@@ -869,8 +864,8 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
     }
     else
     {
-        auto [it, inserted] = scratch_double_buffer_.scratches_current.emplace(
-            original_scratch_entry->capture_id_, std::vector<std::unique_ptr<BufferEntry>>());
+        auto [it, inserted] =
+            scratch_double_buffer_.scratches_current.emplace(capture_id, std::vector<std::unique_ptr<BufferEntry>>());
         auto& new_scratch = it->second.emplace_back(
             CreateBuffer(scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         new_scratch->original_address_           = geometry_infos.scratchData.deviceAddress;
