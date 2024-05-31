@@ -936,8 +936,11 @@ uint64_t StringToBufferUsage(std::string& str)
         return 0x00400000;
     if (str == "push_descriptors") // VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
         return 0x04000000;
+    if (str == "ignore_all")
+        return 0;
+
     GFXRECON_LOG_WARNING("Unimplemented usage %s", str.c_str());
-    return 0;
+    return UINT64_MAX;
 }
 
 std::vector<uint64_t> CaptureSettings::ParseBufferUsages(const std::string& value_string)
@@ -956,22 +959,14 @@ std::vector<uint64_t> CaptureSettings::ParseBufferUsages(const std::string& valu
     std::vector<std::string> values = util::strings::SplitString(trimmed, ',');
     for (auto& val : values)
     {
-        if (val.size() == 2)
+        uint64_t                 mask = 0;
+        std::vector<std::string> vals = util::strings::SplitString(val, '|');
+        for (auto& v : vals)
         {
-            result.push_back(StringToBufferUsage(val));
-            GFXRECON_LOG_DEBUG("single opt %s", val.c_str());
+            mask |= StringToBufferUsage(v);
+            GFXRECON_LOG_DEBUG("multiple opt %s", v.c_str());
         }
-        else
-        {
-            uint64_t                 mask = 0;
-            std::vector<std::string> vals = util::strings::SplitString(val, '|');
-            for (auto& v : vals)
-            {
-                mask |= StringToBufferUsage(v);
-                GFXRECON_LOG_DEBUG("multiple opt %s", v.c_str());
-            }
-            result.push_back(mask);
-        }
+        result.push_back(mask);
     }
     return result;
 }
