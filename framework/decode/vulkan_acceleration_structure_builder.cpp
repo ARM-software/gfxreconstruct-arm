@@ -1382,11 +1382,8 @@ void VulkanAccelerationStructureBuilder::RegisterInstanceBufferStagingUpdate(
 
 void VulkanAccelerationStructureBuilder::PostQueuePresent()
 {
-    if (scratch_double_buffer_.scratches_previous.empty())
-    {
-        scratch_double_buffer_.scratches_previous.clear();
-    }
-    scratch_double_buffer_.scratches_current = std::move(scratch_double_buffer_.scratches_previous);
+    scratch_double_buffer_.scratches_previous.clear();
+    std::swap(scratch_double_buffer_.scratches_previous, scratch_double_buffer_.scratches_current);
 }
 
 void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates(
