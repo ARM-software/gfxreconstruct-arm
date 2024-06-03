@@ -911,7 +911,10 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
 
                     allocator_->UnmapResourceMemoryDirect(buffer->allocator_data_);
 
-                    assert(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
+                    // This assert may get hit if the acceleration structures were not build and the optimized sizes are
+                    // not known. This situation can happen if gpu is mocked and the assert can be triggered in debug
+                    // mode only
+                    GFXRECON_ASSERT(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
 
                     // add results to compacted_sizes_processed map
                     std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> processing_result;
@@ -932,14 +935,22 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
         if (!compacted_entry->replacement_acceleration_struct_)
         {
             assert(compacted_sizes_processed.count(*original_entry->handles_.begin()));
-            VkDeviceSize size_of_acc{ compacted_sizes_processed[*original_entry->handles_.begin()] };
+            VkDeviceSize compacted_as_size{ compacted_sizes_processed[*original_entry->handles_.begin()] };
             compacted_sizes_processed.erase(*original_entry->handles_.begin());
 
-            std::unique_ptr<BufferEntry>             storage = CreateBuffer(size_of_acc,
+            // Creating a buffer of size 0 is not allowed, however if gpu is mocked it will not report optimized size
+            // properly. In that case - the source size
+            if (!compacted_as_size)
+            {
+                compacted_as_size =
+                    original_entry->replacement_acceleration_struct_->size_info_.accelerationStructureSize;
+            }
+
+            std::unique_ptr<BufferEntry>             storage = CreateBuffer(compacted_as_size,
                                                                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
             VkAccelerationStructureBuildSizesInfoKHR size_info{};
-            size_info.accelerationStructureSize = size_of_acc;
+            size_info.accelerationStructureSize = compacted_as_size;
 
             VkAccelerationStructureBuildGeometryInfoKHR geometry{};
             geometry.type = compacted_entry->type_;
