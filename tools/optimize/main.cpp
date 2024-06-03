@@ -23,8 +23,8 @@
 
 #include "project_version.h"
 #include "file_optimizer.h"
-#include "feature_file_optimizer.h"
 #include "replay_options_editor.h"
+#include "vulkan_file_optimizer.h"
 
 #include "../tool_settings.h"
 
@@ -100,7 +100,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("Optional arguments:");
     GFXRECON_WRITE_CONSOLE(
         "  --set-replay-options <options>\t\tAdd default playback options to the trace. Use quotation marks "
-        "for multiple arguments.");
+        "for multiple arguments. Do NOT combine this option with any other option.");
     GFXRECON_WRITE_CONSOLE("  -h\t\t\tPrint usage information and exit (same as --help).");
     GFXRECON_WRITE_CONSOLE("  --version\t\tPrint version information and exit.");
 #if defined(WIN32)
@@ -123,157 +123,6 @@ static void PrintUsage(const char* exe_name)
 #endif
 }
 
-void GetUnreferencedResources(const std::string&                              input_filename,
-                              std::unordered_set<gfxrecon::format::HandleId>* unreferenced_ids)
-{
-    GFXRECON_ASSERT(unreferenced_ids != nullptr);
-
-    gfxrecon::decode::FileProcessor file_processor;
-    if (file_processor.Initialize(input_filename))
-    {
-        gfxrecon::decode::VulkanDecoder                    decoder;
-        gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-
-        decoder.AddConsumer(&resref_consumer);
-
-        file_processor.AddDecoder(&decoder);
-        file_processor.ProcessAllFrames();
-
-        if (resref_consumer.WasNotOptimizable())
-        {
-            GFXRECON_WRITE_CONSOLE("File did not contain trim state setup - no optimization was performed");
-            gfxrecon::util::Log::Release();
-            exit(65);
-        }
-        else if ((file_processor.GetCurrentFrameNumber() > 0) &&
-                 (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
-        {
-            // Get the list of resources that were included in a command buffer submission during replay.
-            resref_consumer.GetReferencedResourceIds(nullptr, unreferenced_ids);
-        }
-        else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
-        {
-            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
-            gfxrecon::util::Log::Release();
-            exit(-1);
-        }
-        else
-        {
-            GFXRECON_WRITE_CONSOLE("File did not contain any frames");
-            gfxrecon::util::Log::Release();
-            exit(0);
-        }
-    }
-}
-
-void GetUsedPhysicalFeatures(const std::string&                                  input_filename,
-                             gfxrecon::decode::VulkanDecoder*                    decoder,
-                             gfxrecon::decode::VulkanFeatureTrackerConsumerBase* ft_consumer)
-{
-    GFXRECON_ASSERT(decoder != nullptr);
-    GFXRECON_ASSERT(ft_consumer != nullptr);
-
-    gfxrecon::decode::FileProcessor file_processor;
-    if (file_processor.Initialize(input_filename))
-    {
-        file_processor.AddDecoder(decoder);
-        ft_consumer->SetCaptureMode(true);
-        file_processor.ProcessAllFrames();
-        ft_consumer->SetCaptureMode(false);
-
-        if ((file_processor.GetCurrentFrameNumber() > 0) &&
-            (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
-        {
-            ft_consumer->ProcessFeaturesAndExtensions();
-            GFXRECON_WRITE_CONSOLE("Retrieved used physical features");
-        }
-        else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
-        {
-            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
-            gfxrecon::util::Log::Release();
-            exit(-1);
-        }
-        else
-        {
-            GFXRECON_WRITE_CONSOLE("File did not contain any frames");
-            gfxrecon::util::Log::Release();
-            exit(0);
-        }
-    }
-}
-
-void VkRemoveUnusedFeatures(std::string input_filename, std::string output_filename)
-{
-    GFXRECON_WRITE_CONSOLE("Scanning Vulkan file %s for unused features.", input_filename.c_str());
-
-    gfxrecon::decode::VulkanDecoder                    decoder;
-    gfxrecon::decode::VulkanFeatureTrackerConsumerBase ft_consumer;
-    decoder.AddConsumer(&ft_consumer);
-
-    GetUsedPhysicalFeatures(input_filename, &decoder, &ft_consumer);
-
-    gfxrecon::FeatureFileOptimizer file_transformer;
-
-    if (file_transformer.Initialize(input_filename, output_filename))
-    {
-        file_transformer.AddDecoder(&decoder);
-        file_transformer.SetConsumer(&ft_consumer);
-        file_transformer.Process();
-
-        if (file_transformer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
-        {
-            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
-            gfxrecon::util::Log::Release();
-            exit(-1);
-        }
-
-        GFXRECON_WRITE_CONSOLE("Unused features filtering complete.");
-    }
-}
-
-void FilterUnreferencedResources(const std::string&                               input_filename,
-                                 const std::string&                               output_filename,
-                                 std::unordered_set<gfxrecon::format::HandleId>&& unreferenced_ids)
-{
-    gfxrecon::FileOptimizer file_transformer(std::move(unreferenced_ids));
-    if (file_transformer.Initialize(input_filename, output_filename))
-    {
-        file_transformer.Process();
-
-        if (file_transformer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone)
-        {
-            GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
-            gfxrecon::util::Log::Release();
-            exit(-1);
-        }
-
-        GFXRECON_WRITE_CONSOLE("Resource filtering complete.");
-        GFXRECON_WRITE_CONSOLE("\tOriginal file size: %" PRIu64 " bytes", file_transformer.GetNumBytesRead());
-        GFXRECON_WRITE_CONSOLE("\tOptimized file size: %" PRIu64 " bytes", file_transformer.GetNumBytesWritten());
-    }
-}
-
-void VkRemoveRedundantResources(std::string input_filename, std::string output_filename, bool& output_produced)
-{
-    GFXRECON_WRITE_CONSOLE("Scanning Vulkan file %s for unreferenced resources.", input_filename.c_str());
-    std::unordered_set<gfxrecon::format::HandleId> unreferenced_ids;
-    GetUnreferencedResources(input_filename, &unreferenced_ids);
-
-    if (!unreferenced_ids.empty())
-    {
-        // Filter unreferenced ids.
-        GFXRECON_WRITE_CONSOLE("Writing optimized file, removing initialization data for %" PRIu64 " unused resources.",
-                               unreferenced_ids.size());
-        FilterUnreferencedResources(input_filename, output_filename, std::move(unreferenced_ids));
-        output_produced = true;
-    }
-    else
-    {
-        GFXRECON_WRITE_CONSOLE("No unused resources detected.", input_filename.c_str());
-        output_produced = false;
-    }
-}
-
 void RunDx12Optimizations(const std::string&                        input_filename,
                           const std::string&                        output_filename,
                           gfxrecon::decode::Dx12OptimizationOptions dx12_options)
@@ -286,6 +135,83 @@ void RunDx12Optimizations(const std::string&                        input_filena
         exit(-1);
     }
 #endif
+}
+
+std::unique_ptr<gfxrecon::VulkanFileOptimizer::VulkanOptimizationData>
+GetVulkanOptimizationData(const std::string& input_filename)
+{
+    auto result = std::make_unique<gfxrecon::VulkanFileOptimizer::VulkanOptimizationData>();
+
+    gfxrecon::decode::FileProcessor file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        gfxrecon::decode::VulkanDecoder                    decoder;
+        gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
+        auto feature_tracker_consumer = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+
+        decoder.AddConsumer(&resref_consumer);
+        decoder.AddConsumer(feature_tracker_consumer.get());
+
+        feature_tracker_consumer->SetCaptureMode(true);
+        file_processor.AddDecoder(&decoder);
+        file_processor.ProcessAllFrames();
+        feature_tracker_consumer->SetCaptureMode(false);
+
+        if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
+        {
+            throw std::runtime_error("Failed to scan input file for optimizations");
+        }
+
+        resref_consumer.GetReferencedResourceIds(nullptr, &result->unreferenced_ids);
+
+        if (feature_tracker_consumer->ProcessFeaturesAndExtensions())
+        {
+            result->feature_tracker_consumer = std::move(feature_tracker_consumer);
+        }
+    }
+    return result;
+}
+
+void RunVulkanOptimizations(const std::string& input_filename, const std::string& output_filename)
+{
+    GFXRECON_WRITE_CONSOLE("Scanning vulkan trace %s for optimizations...", input_filename.c_str());
+
+    // First pass - get the optimization data
+    auto vulkan_opt_data = GetVulkanOptimizationData(input_filename);
+
+    // Check if any optimization can be done
+    const bool can_optimize_features       = vulkan_opt_data->feature_tracker_consumer != nullptr;
+    const bool can_remove_unused_resources = !vulkan_opt_data->unreferenced_ids.empty();
+
+    // Early exit if no optimization can be done
+    if (!can_optimize_features && !can_remove_unused_resources)
+    {
+        GFXRECON_WRITE_CONSOLE("Nothing to optimize. Exiting.");
+        return;
+    }
+
+    // Modification pass. Implement all identified optimizations in output file
+    gfxrecon::VulkanFileOptimizer file_optimizer(*vulkan_opt_data);
+    if (file_optimizer.Initialize(input_filename, output_filename))
+    {
+        gfxrecon::decode::VulkanDecoder decoder;
+        if (can_optimize_features)
+        {
+            decoder.AddConsumer(vulkan_opt_data->feature_tracker_consumer.get());
+        }
+        file_optimizer.AddDecoder(&decoder);
+        file_optimizer.Process();
+
+        if (file_optimizer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone &&
+            file_optimizer.GetErrorState() != gfxrecon::decode::FileTransformer::Error::kErrorReadingBlockHeader)
+        {
+            throw std::runtime_error("A failure has occurred during file processing");
+        }
+
+        GFXRECON_WRITE_CONSOLE("Vulkan optimizations complete.");
+        GFXRECON_WRITE_CONSOLE("\tOriginal file size: %" PRIu64 " bytes", file_optimizer.GetNumBytesRead());
+        GFXRECON_WRITE_CONSOLE("\tOptimized file size: %" PRIu64 " bytes", file_optimizer.GetNumBytesWritten());
+    }
 }
 
 void SetReplayOptions(std::string input_filename, std::string output_filename, std::string replay_options)
@@ -352,6 +278,17 @@ int main(int argc, const char** argv)
         dx12_options.optimize_resource_values_experimental = arg_parser.IsOptionSet(kDx12OptimizeDxrExperimental);
         dx12_options.remove_redundant_psos                 = arg_parser.IsOptionSet(kD3d12PsoRemoval);
         const auto& override_gpu                           = arg_parser.GetArgumentValue(kOverrideGpuArgument);
+
+        // Quick validation
+        if (set_replay_options)
+        {
+            if (dx12_options.optimize_resource_values || dx12_options.optimize_resource_values_experimental ||
+                dx12_options.remove_redundant_psos || !override_gpu.empty())
+            {
+                throw std::runtime_error("Option --set-replay-options cannot be used with any other option. Exiting.");
+            }
+        }
+
         if (!override_gpu.empty())
         {
             dx12_options.override_gpu_index = std::stoi(override_gpu);
@@ -364,9 +301,19 @@ int main(int argc, const char** argv)
             dx12_options.optimize_resource_values = true;
         }
 
-        // Automatic mode. User specified no options.
-        if ((dx12_options.optimize_resource_values == false) && (dx12_options.remove_redundant_psos == false) &&
-            (set_replay_options == false))
+        // Setting default replay options only, skip all other optimizations
+        if (set_replay_options)
+        {
+            const auto& replay_options = arg_parser.GetArgumentValue(kReplayOptions);
+            SetReplayOptions(input_filename, output_filename, replay_options);
+        }
+        // Perform user selected DX12 optimizations
+        else if (dx12_options.optimize_resource_values || dx12_options.remove_redundant_psos || !override_gpu.empty())
+        {
+            RunDx12Optimizations(input_filename, output_filename, dx12_options);
+        }
+        // Automatic mode - user specified no options, detect api and perform default optimizations
+        else
         {
             bool detected_d3d12  = false;
             bool detected_vulkan = false;
@@ -380,55 +327,13 @@ int main(int argc, const char** argv)
             }
             else if (detected_vulkan)
             {
-                std::filesystem::path p(output_filename);
-                if (p.extension() != ".tmp")
-                {
-                    p.replace_extension("tmp");
-                }
-                else
-                {
-                    p.replace_extension("tmp2");
-                }
-
-                std::string tmp_file_name    = p.string();
-                bool        tmp_file_created = false;
-
-                try
-                {
-                    VkRemoveRedundantResources(input_filename, tmp_file_name, tmp_file_created);
-                }
-                catch (const std::runtime_error& e)
-                {
-                    if (!(std::string(e.what()) == std::string("File does not contain a state block to optimize")))
-                    {
-                        throw std::runtime_error("File optimizing crashed while processing");
-                    }
-                }
-
-                if (tmp_file_created)
-                {
-                    VkRemoveUnusedFeatures(tmp_file_name, output_filename);
-                    std::remove(tmp_file_name.c_str());
-                }
-                else
-                {
-                    VkRemoveUnusedFeatures(input_filename, output_filename);
-                }
+                // Run all vulkan optimizations
+                RunVulkanOptimizations(input_filename, output_filename);
             }
             else
             {
                 GFXRECON_LOG_ERROR("Could not detect graphics API. Aborting optimization.")
             }
-        }
-        // Manual mode. Follow user instructions.
-        else
-        {
-            if (set_replay_options)
-            {
-                const auto& replay_options = arg_parser.GetArgumentValue(kReplayOptions);
-                SetReplayOptions(input_filename, output_filename, replay_options);
-            }
-            RunDx12Optimizations(input_filename, output_filename, dx12_options);
         }
     }
     catch (const std::runtime_error& error)
