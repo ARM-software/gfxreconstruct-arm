@@ -6292,8 +6292,9 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
             {
                 VkExtent2D window_size = surface_info->window->GetSize();
 
-                if (window_size.width != modified_create_info.imageExtent.width ||
-                    window_size.height != modified_create_info.imageExtent.height)
+                if ((window_size.width != modified_create_info.imageExtent.width ||
+                     window_size.height != modified_create_info.imageExtent.height) &&
+                    !(window_size.width == 0 && window_size.height == 0))
                 {
                     GFXRECON_LOG_WARNING(
                         "Could not resize window to (%u, %u). Instead, window was resized to (%u, %u). Swapchain will "
