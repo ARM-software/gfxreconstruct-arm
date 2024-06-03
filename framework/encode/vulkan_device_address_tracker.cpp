@@ -84,8 +84,9 @@ VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t
     const VkDeviceAddress                    max_addr = max->second.original_address + max->second.size;
     uint64_t*                                start    = (uint64_t*)((uint8_t*)start_address + offset);
     uint64_t*                                end      = (uint64_t*)((uint8_t*)start_address + offset + size);
-    for (uint64_t* ptr = start; ptr != end; ptr++)
+    for (int i = 0; i < size / sizeof(uint64_t); i++)
     {
+        uint64_t*      ptr               = start + i;
         const uint64_t value             = *ptr;
         bool           value_is_in_range = value >= min_addr && value <= max_addr;
         if (!value_is_in_range)
