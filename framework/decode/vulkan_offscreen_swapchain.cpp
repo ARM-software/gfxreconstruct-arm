@@ -244,7 +244,7 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
                                                    const QueueInfo*                      queue_info,
                                                    const VkPresentInfoKHR*               present_info)
 {
-    if (insert_frame_boundary_ > 0)
+    if (insert_frame_boundary_)
     {
         std::vector<VkImage> images(present_info->swapchainCount);
         for (uint32_t i = 0; i < images.size(); ++i)
