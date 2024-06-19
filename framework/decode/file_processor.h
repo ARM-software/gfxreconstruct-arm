@@ -58,6 +58,9 @@ class FileProcessor
         kErrorUnsupportedCompressionType   = -10
     };
 
+    // TODO GH #1195: frame numbering should be 1-based.
+    const uint32_t kFirstFrame = 0;
+
   public:
     FileProcessor();
 
@@ -134,6 +137,7 @@ class FileProcessor
     Error                    error_state_;
     uint64_t                 bytes_read_;
     std::string              filename_;
+    bool                     capture_uses_frame_markers_;
 
     /// @brief Incremented at the end of every block successfully processed.
     uint64_t block_index_;
@@ -162,7 +166,6 @@ class FileProcessor
     util::Compressor*                   compressor_;
     uint64_t                            api_call_index_;
     uint64_t                            block_limit_;
-    bool                                capture_uses_frame_markers_;
     uint64_t                            first_frame_;
 };
 

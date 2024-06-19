@@ -40,7 +40,7 @@ void PreloadFileProcessor::PreloadNextFrames(size_t count)
         while (file_processor.GetCurrentFrameNumber() < current_frame_number_ + count &&
                file_processor.ProcessNextFrame())
         {
-            GFXRECON_LOG_WARNING(
+            GFXRECON_LOG_DEBUG(
                 "Frame %zu size %zu", file_processor.GetCurrentFrameNumber(), file_processor.GetNumBytesRead());
         }
 
@@ -264,6 +264,68 @@ bool PreloadFileProcessor::ProcessBlocks()
                         else
                         {
                             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read meta-data block header");
+                        }
+                    }
+                }
+                else if (block_header.type == format::BlockType::kFrameMarkerBlock)
+                {
+                    if (status_ == PreloadStatus::kRecord)
+                    {
+                        format::MarkerType marker_type = format::MarkerType::kUnknownMarker;
+                        success                        = ReadBytes(&marker_type, sizeof(marker_type));
+                        if (!success)
+                        {
+                            HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
+                        }
+
+                        preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
+                        preload_buffer_.Add(&block_header);
+                        preload_buffer_.Add(&marker_type);
+                        size_t parameters_size  = block_header.size - sizeof(marker_type);
+                        auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
+                        success                 = ReadBytes(parameter_buffer, parameters_size);
+                        if (!success)
+                        {
+                            HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
+                        }
+                        if (IsFrameDelimiter(block_header.type, marker_type))
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        format::MarkerType marker_type  = format::MarkerType::kUnknownMarker;
+                        uint64_t           frame_number = 0;
+
+                        success = ReadBytes(&marker_type, sizeof(marker_type));
+
+                        if (success)
+                        {
+                            success = ProcessFrameMarker(block_header, marker_type);
+
+                            // Break from loop on frame delimiter.
+                            if (IsFrameDelimiter(block_header.type, marker_type))
+                            {
+                                // If the capture file contains frame markers, it will have a frame marker for every
+                                // frame-ending API call such as vkQueuePresentKHR. If this is the first frame marker
+                                // encountered, reset the frame count and ignore frame-ending API calls in
+                                // IsFrameDelimiter(format::ApiCallId call_id).
+                                if (!capture_uses_frame_markers_)
+                                {
+                                    capture_uses_frame_markers_ = true;
+                                    current_frame_number_       = kFirstFrame;
+                                }
+
+                                // Make sure to increment the frame number on the way out.
+                                ++current_frame_number_;
+                                ++block_index_;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read frame marker header");
                         }
                     }
                 }
