@@ -5168,12 +5168,13 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
         }
     }
     VkBufferCreateInfo modified_create_info = (*replay_create_info);
+
+    VkBufferOpaqueCaptureAddressCreateInfo address_info = {
+        VK_STRUCTURE_TYPE_BUFFER_OPAQUE_CAPTURE_ADDRESS_CREATE_INFO
+    };
+
     if (uses_address)
     {
-        VkBufferOpaqueCaptureAddressCreateInfo address_info = {
-            VK_STRUCTURE_TYPE_BUFFER_OPAQUE_CAPTURE_ADDRESS_CREATE_INFO
-        };
-
         auto entry = device_info->opaque_addresses.find(capture_id);
         if (entry != device_info->opaque_addresses.end())
         {
