@@ -1227,8 +1227,7 @@ void CaptureManager::WriteCaptureOptions(std::string& operation_annotation)
     }
     if (fence_query_delay_ != default_settings.fence_query_delay)
     {
-        buffer += "\n    \"fence-query-delay\": ";
-        buffer += fence_query_delay_ ? "true," : "false,";
+        buffer += "\n    \"fence-query-delay\": " + std::to_string(fence_query_delay_) + ',';
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {
