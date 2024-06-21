@@ -425,20 +425,34 @@ inline bool FileSeek(FILE* stream, int64_t offset, FileSeekOrigin origin)
 
 inline size_t FileWriteNoLock(const void* buffer, size_t element_size, size_t element_count, FILE* stream)
 {
+    size_t write_count = 0;
+    int    err         = 0;
+    do
+    {
 #if defined(__APPLE__) || (defined(__ANDROID__) && (__ANDROID_API__ < 28))
-    return fwrite(buffer, element_size, element_count, stream);
+        write_count += fwrite(buffer, element_size, element_count, stream);
 #else
-    return fwrite_unlocked(buffer, element_size, element_count, stream);
+        write_count += fwrite_unlocked(buffer, element_size, element_count, stream);
 #endif
+        err = ferror(stream);
+    } while (write_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return write_count;
 }
 
 inline size_t FileReadNoLock(void* buffer, size_t element_size, size_t element_count, FILE* stream)
 {
+    size_t read_count = 0;
+    int    err        = 0;
+    do
+    {
 #if defined(__APPLE__) || (defined(__ANDROID__) && (__ANDROID_API__ < 28))
-    return fread(buffer, element_size, element_count, stream);
+        read_count += fread(buffer, element_size, element_count, stream);
 #else
-    return fread_unlocked(buffer, element_size, element_count, stream);
+        read_count += fread_unlocked(buffer, element_size, element_count, stream);
 #endif
+        err = ferror(stream);
+    } while (!feof(stream) && read_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return read_count;
 }
 
 inline int32_t FileVprintf(FILE* stream, const char* format, va_list vlist)
@@ -600,7 +614,14 @@ inline bool StringContains(const char* text, const char* substring)
 
 inline int32_t FilePuts(const char* char_string, FILE* stream)
 {
-    return fputs(char_string, stream);
+    int result = 0;
+    int err    = 0;
+    do
+    {
+        result = fputs(char_string, stream);
+        err    = ferror(stream);
+    } while (result == EOF && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return result;
 }
 
 inline int32_t FileFlush(FILE* stream)
@@ -610,12 +631,26 @@ inline int32_t FileFlush(FILE* stream)
 
 inline size_t FileWrite(const void* buffer, size_t element_size, size_t element_count, FILE* stream)
 {
-    return fwrite(buffer, element_size, element_count, stream);
+    size_t write_count = 0;
+    int    err         = 0;
+    do
+    {
+        write_count += fwrite(buffer, element_size, element_count, stream);
+        err = ferror(stream);
+    } while (write_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return write_count;
 }
 
 inline size_t FileRead(void* buffer, size_t element_size, size_t element_count, FILE* stream)
 {
-    return fread(buffer, element_size, element_count, stream);
+    size_t read_count = 0;
+    int    err        = 0;
+    do
+    {
+        read_count += fread(buffer, element_size, element_count, stream);
+        err = ferror(stream);
+    } while (!feof(stream) && read_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return read_count;
 }
 
 inline int32_t SetFileBufferSize(FILE* stream, size_t buffer_size)
