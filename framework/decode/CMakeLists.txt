@@ -176,6 +176,10 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_offscreen_swapchain.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_buffer_tracker.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_buffer_tracker.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/window.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.cpp

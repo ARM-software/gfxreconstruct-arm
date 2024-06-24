@@ -351,6 +351,8 @@ struct BufferInfo : public VulkanObjectInfo<VkBuffer>
 {
     // The following values are only used for memory portability.
     VulkanResourceAllocator::ResourceData allocator_data{ 0 };
+    VkDeviceAddress                       capture_address{ 0 };
+    VkDeviceAddress                       replay_address{ 0 };
 
     // The following values are only used when loading the initial state for trimmed files.
     VkMemoryPropertyFlags memory_property_flags{ 0 };

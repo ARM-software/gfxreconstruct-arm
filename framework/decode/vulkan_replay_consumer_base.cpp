@@ -189,6 +189,7 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     WaitDevicesIdle();
 
     acceleration_structure_builders_.clear();
+    buffer_tracker_.clear();
 
     // Cleanup screenshot resources before destroying device.
     object_info_table_.VisitDeviceInfo([this](const DeviceInfo* info) {
@@ -3070,39 +3071,6 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
     const encode::DeviceTable* device_table = GetDeviceTable(*replay_device);
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        VulkanAccelerationStructureBuilder::Functions as_builder_functions = {
-            .get_acceleration_structure_build_sizes = device_table->GetAccelerationStructureBuildSizesKHR,
-            .create_acceleration_structure          = device_table->CreateAccelerationStructureKHR,
-            .get_buffer_device_address =
-                (device_table->GetBufferDeviceAddress == gfxrecon::encode::noop::GetBufferDeviceAddress
-                     ? nullptr
-                     : device_table->GetBufferDeviceAddress),
-            .get_buffer_device_address_khr =
-                (device_table->GetBufferDeviceAddressKHR == gfxrecon::encode::noop::GetBufferDeviceAddressKHR
-                     ? nullptr
-                     : device_table->GetBufferDeviceAddressKHR),
-            .cmd_build_acceleration_structures            = device_table->CmdBuildAccelerationStructuresKHR,
-            .get_acceleration_structure_device_address    = device_table->GetAccelerationStructureDeviceAddressKHR,
-            .get_buffer_memory_requirements               = device_table->GetBufferMemoryRequirements,
-            .cmd_copy_acceleration_structure              = device_table->CmdCopyAccelerationStructureKHR,
-            .cmd_write_acceleration_structures_properties = device_table->CmdWriteAccelerationStructuresPropertiesKHR,
-            .destroy_acceleration_structure               = device_table->DestroyAccelerationStructureKHR,
-            .create_command_pool                          = device_table->CreateCommandPool,
-            .destroy_command_pool                         = device_table->DestroyCommandPool,
-            .allocate_command_buffers                     = device_table->AllocateCommandBuffers,
-            .get_device_queue                             = device_table->GetDeviceQueue,
-            .begin_command_buffer                         = device_table->BeginCommandBuffer,
-            .end_command_buffer                           = device_table->EndCommandBuffer,
-            .reset_command_buffer                         = device_table->ResetCommandBuffer,
-            .queue_submit                                 = device_table->QueueSubmit,
-            .queue_wait_idle                              = device_table->QueueWaitIdle,
-            .update_descriptor_sets                       = device_table->UpdateDescriptorSets,
-            .get_query_pool_results                       = device_table->GetQueryPoolResults,
-            .cmd_copy_query_pool_results                  = device_table->CmdCopyQueryPoolResults,
-            .cmd_pipeline_barrier                         = device_table->CmdPipelineBarrier,
-            .create_query_pool                            = device_table->CreateQueryPool
-        };
-
         VkPhysicalDeviceRayTracingPipelinePropertiesKHR ray_tracing_pipeline_properties{};
         ray_tracing_pipeline_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
         VkPhysicalDeviceProperties2 device_properties{};
@@ -3117,13 +3085,17 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
         device_features.pNext = &acceleration_structure_features;
         instance_table->GetPhysicalDeviceFeatures2(physical_device, &device_features);
 
+        buffer_tracker_[*pDevice->GetPointer()] =
+            std::make_unique<VulkanBufferTracker>(device_table, *replay_device, allocator);
+
         acceleration_structure_builders_[*pDevice->GetPointer()] = std::make_unique<VulkanAccelerationStructureBuilder>(
-            as_builder_functions,
+            device_table,
             *replay_device,
             allocator,
             *physical_device_info->replay_device_info->memory_properties,
             ray_tracing_pipeline_properties,
-            acceleration_structure_features);
+            acceleration_structure_features,
+            buffer_tracker_[*pDevice->GetPointer()].get());
     }
 
     // Restore modified property/feature create info values to the original application values
@@ -4934,10 +4906,18 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
         auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
         if (entry != device_info->opaque_addresses.end())
         {
-            auto memory_device_address   = entry->second;
-            auto original_buffer_address = memory_device_address + memoryOffset;
-            acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
-                buffer_info, original_buffer_address, 0);
+            auto                      device_table            = GetDeviceTable(device_info->handle);
+            auto                      memory_device_address   = entry->second;
+            auto                      original_buffer_address = memory_device_address + memoryOffset;
+            VkBufferDeviceAddressInfo info                    = {};
+            info.sType                                        = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            info.pNext                                        = nullptr;
+            info.buffer                                       = buffer_info->handle;
+
+            buffer_info->capture_address = original_buffer_address;
+            buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
+
+            buffer_tracker_[device_info->capture_id]->SetBufferInfo(buffer_info);
             tracked_addresses_[buffer_info->capture_id] =
                 TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
         }
@@ -5035,8 +5015,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
             {
                 auto memory_device_address   = entry->second;
                 auto original_buffer_address = memory_device_address + memoryOffset;
-                acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
-                    buffer_info, original_buffer_address, 0);
+                buffer_tracker_[device_info->capture_id]->SetBufferInfo(buffer_info);
                 tracked_addresses_[buffer_info->capture_id] =
                     TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
             }
@@ -5184,11 +5163,11 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
 
     if (replaying_trimmed_capture_)
     {
-        // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer VkBufferCreateInfo.
-        // Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
-        // vkBindBufferMemory failures due to memory requirement mismatch during replay. So here we add
-        // VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
-        // We also need to add VK_BUFFER_USAGE_TRANSFER_DST_BIT to be able to restore buffer and copy to it
+        // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer
+        // VkBufferCreateInfo. Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is
+        // set, we sometimes hit vkBindBufferMemory failures due to memory requirement mismatch during replay. So
+        // here we add VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture. We also need to add
+        // VK_BUFFER_USAGE_TRANSFER_DST_BIT to be able to restore buffer and copy to it
         auto modified_create_info = const_cast<VkBufferCreateInfo*>(replay_create_info);
         modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -5224,9 +5203,9 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
         {
             address_info.opaqueCaptureAddress = entry->second;
 
-            // The shallow copy of VkBufferCreateInfo references the same pNext list from the copy source.  We insert
-            // the buffer address extension struct at the start of the list to avoid modifying the original by appending
-            // to the end.
+            // The shallow copy of VkBufferCreateInfo references the same pNext list from the copy source.  We
+            // insert the buffer address extension struct at the start of the list to avoid modifying the original
+            // by appending to the end.
             address_info.pNext         = modified_create_info.pNext;
             modified_create_info.pNext = &address_info;
 
@@ -5290,6 +5269,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         if (!allocator->SupportsOpaqueDeviceAddresses())
         {
             acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+            buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
             tracked_addresses_.erase(buffer_info->capture_id);
         }
     }
@@ -5606,9 +5586,10 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
 
     if (replay_create_info != nullptr)
     {
-        // Modify the layout of the update template entries to match the tight packing performed by the trace encoding.
-        // The trace encoding wrote the update template entries as a tightly packed array of VkDescriptorImageInfo
-        // values, followed by an array of VkDescriptorBufferInfo values, followed by an array of VkBufferView values.
+        // Modify the layout of the update template entries to match the tight packing performed by the trace
+        // encoding. The trace encoding wrote the update template entries as a tightly packed array of
+        // VkDescriptorImageInfo values, followed by an array of VkDescriptorBufferInfo values, followed by an array
+        // of VkBufferView values.
         VkDescriptorUpdateTemplateCreateInfo override_create_info = (*replay_create_info);
 
         std::vector<VkDescriptorUpdateTemplateEntry> entries(
@@ -5849,9 +5830,9 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
         }
         else
         {
-            // If capture data could not be loaded from file, do not fail, just do not use pipeline cache data. We want
-            // this behaviour so that a cache can be created incrementally by loading the partial cache from the
-            // previous run and feeding it to create the next cache with more data until everything is built.
+            // If capture data could not be loaded from file, do not fail, just do not use pipeline cache data. We
+            // want this behaviour so that a cache can be created incrementally by loading the partial cache from
+            // the previous run and feeding it to create the next cache with more data until everything is built.
             override_create_info.initialDataSize = 0;
             override_create_info.pInitialData    = nullptr;
         }
@@ -6341,14 +6322,15 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
                      window_size.height != modified_create_info.imageExtent.height) &&
                     !(window_size.width == 0 && window_size.height == 0))
                 {
-                    GFXRECON_LOG_WARNING(
-                        "Could not resize window to (%u, %u). Instead, window was resized to (%u, %u). Swapchain will "
-                        "be resized accordingly, but bugs might occur. Using virtual swapchain should mitigate those "
-                        "bugs.",
-                        modified_create_info.imageExtent.width,
-                        modified_create_info.imageExtent.height,
-                        window_size.width,
-                        window_size.height);
+                    GFXRECON_LOG_WARNING("Could not resize window to (%u, %u). Instead, window was resized to (%u, "
+                                         "%u). Swapchain will "
+                                         "be resized accordingly, but bugs might occur. Using virtual swapchain "
+                                         "should mitigate those "
+                                         "bugs.",
+                                         modified_create_info.imageExtent.width,
+                                         modified_create_info.imageExtent.height,
+                                         window_size.width,
+                                         window_size.height);
 
                     modified_create_info.imageExtent = window_size;
                 }
@@ -6666,9 +6648,9 @@ VkResult VulkanReplayConsumerBase::OverrideAcquireNextImageKHR(PFN_vkAcquireNext
 
     VkResult result = VK_SUCCESS;
 
-    // If image acquire failed at capture, there is nothing worth replaying as the fence and semaphore aren't processed
-    // and a successful acquire on replay of an image that does not have a corresponding present to replay can lead to
-    // OUT_OF_DATE errors.
+    // If image acquire failed at capture, there is nothing worth replaying as the fence and semaphore aren't
+    // processed and a successful acquire on replay of an image that does not have a corresponding present to replay
+    // can lead to OUT_OF_DATE errors.
     if (original_result != VK_SUCCESS && original_result != VK_SUBOPTIMAL_KHR)
     {
         result = original_result;
@@ -6701,18 +6683,18 @@ VkResult VulkanReplayConsumerBase::OverrideAcquireNextImageKHR(PFN_vkAcquireNext
             // The image has already been acquired. Swap the synchronization objects.
             if (semaphore != VK_NULL_HANDLE)
             {
-                // TODO: This should be processed at a higher level where the original handle IDs are available, so that
-                // the swap can be performed with the original handle ID and the semaphore can be guaranteed not to be
-                // used after destroy.
+                // TODO: This should be processed at a higher level where the original handle IDs are available, so
+                // that the swap can be performed with the original handle ID and the semaphore can be guaranteed
+                // not to be used after destroy.
                 object_info_table_.ReplaceSemaphore(semaphore, preacquire_semaphore);
                 preacquire_semaphore = semaphore;
             }
 
             if (fence != VK_NULL_HANDLE)
             {
-                // TODO: This should be processed at a higher level where the original handle IDs are available, so that
-                // the swap can be performed with the original handle ID and the fence can be guaranteed not to be used
-                // after destroy.
+                // TODO: This should be processed at a higher level where the original handle IDs are available, so
+                // that the swap can be performed with the original handle ID and the fence can be guaranteed not to
+                // be used after destroy.
                 object_info_table_.ReplaceFence(fence, preacquire_fence);
                 preacquire_fence = fence;
             }
@@ -6791,9 +6773,9 @@ VkResult VulkanReplayConsumerBase::OverrideAcquireNextImage2KHR(
     SwapchainKHRInfo* swapchain_info    = object_info_table_.GetSwapchainKHRInfo(acquire_meta_info->swapchain);
     assert(swapchain_info != nullptr);
 
-    // If image acquire failed at capture, there is nothing worth replaying as the fence and semaphore aren't processed
-    // and a successful acquire on replay of an image that does not have a corresponding present to replay can lead to
-    // OUT_OF_DATE errors.
+    // If image acquire failed at capture, there is nothing worth replaying as the fence and semaphore aren't
+    // processed and a successful acquire on replay of an image that does not have a corresponding present to replay
+    // can lead to OUT_OF_DATE errors.
     if (original_result < 0)
     {
         result = original_result;
@@ -6827,18 +6809,18 @@ VkResult VulkanReplayConsumerBase::OverrideAcquireNextImage2KHR(
             // The image has already been acquired. Swap the synchronization objects.
             if (replay_acquire_info->semaphore != VK_NULL_HANDLE)
             {
-                // TODO: This should be processed at a higher level where the original handle IDs are available, so that
-                // the swap can be performed with the original handle ID and the semaphore can be guaranteed not to be
-                // used after destroy.
+                // TODO: This should be processed at a higher level where the original handle IDs are available, so
+                // that the swap can be performed with the original handle ID and the semaphore can be guaranteed
+                // not to be used after destroy.
                 object_info_table_.ReplaceSemaphore(replay_acquire_info->semaphore, preacquire_semaphore);
                 preacquire_semaphore = replay_acquire_info->semaphore;
             }
 
             if (replay_acquire_info->fence != VK_NULL_HANDLE)
             {
-                // TODO: This should be processed at a higher level where the original handle IDs are available, so that
-                // the swap can be performed with the original handle ID and the fence can be guaranteed not to be used
-                // after destroy.
+                // TODO: This should be processed at a higher level where the original handle IDs are available, so
+                // that the swap can be performed with the original handle ID and the fence can be guaranteed not to
+                // be used after destroy.
                 object_info_table_.ReplaceFence(replay_acquire_info->fence, preacquire_fence);
                 preacquire_fence = replay_acquire_info->fence;
             }
@@ -7203,7 +7185,8 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
     }
     else
     {
-        // Check for imported semaphores in the present info, creating a vector of imported semaphore info structures.
+        // Check for imported semaphores in the present info, creating a vector of imported semaphore info
+        // structures.
         if (present_info_data != nullptr)
         {
             GetImportedSemaphores(present_info_data->pWaitSemaphores, &removed_semaphores_);
@@ -8044,16 +8027,16 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
         if ((result == VK_SUCCESS) || (result == VK_OPERATION_NOT_DEFERRED_KHR) ||
             (result == VK_PIPELINE_COMPILE_REQUIRED_EXT))
         {
-            // The above return values mean the command is not deferred and driver will finish all workload in current
-            // thread. Therefore the created pipelines can be read and copied to out_pPipelines which will be
-            // referenced later.
+            // The above return values mean the command is not deferred and driver will finish all workload in
+            // current thread. Therefore the created pipelines can be read and copied to out_pPipelines which will
+            // be referenced later.
             //
             // Note:
-            //     Some pipelines might actually fail creation if the return value is VK_PIPELINE_COMPILE_REQUIRED_EXT.
-            //     These failed pipelines will generate VK_NULL_HANDLE.
+            //     Some pipelines might actually fail creation if the return value is
+            //     VK_PIPELINE_COMPILE_REQUIRED_EXT. These failed pipelines will generate VK_NULL_HANDLE.
             //
-            //     If the return value is VK_OPERATION_DEFERRED_KHR, it means the command is deferred, and thus pipeline
-            //     creation is not finished. Subsequent handling will be done by
+            //     If the return value is VK_OPERATION_DEFERRED_KHR, it means the command is deferred, and thus
+            //     pipeline creation is not finished. Subsequent handling will be done by
             //     vkDeferredOperationJoinKHR/vkGetDeferredOperationResultKHR after pipeline creation is finished.
 
             if (deferred_operation_info)
@@ -8209,8 +8192,10 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
     {
         format::HandleId buffer      = pInfo->GetMetaStructPointer()->buffer;
         BufferInfo*      buffer_data = GetObjectInfoTable().GetBufferInfo(buffer);
-        acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
-            buffer_data, original_result, new_device_address);
+        buffer_data->capture_address = original_result;
+        buffer_data->replay_address  = new_device_address;
+
+        buffer_tracker_[device_info->capture_id]->SetBufferInfo(buffer_data);
         tracked_addresses_[buffer] = TrackedAddress{ TrackedAddress::Type::Buffer, new_device_address };
     }
 

@@ -1418,7 +1418,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::vector<const char*>                                                            faked_extensions_;
     // map acceleration structure builders for each device
     std::unordered_map<format::HandleId, std::unique_ptr<VulkanAccelerationStructureBuilder>>
-        acceleration_structure_builders_;
+                                                                               acceleration_structure_builders_;
+    std::unordered_map<format::HandleId, std::unique_ptr<VulkanBufferTracker>> buffer_tracker_;
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
