@@ -38,6 +38,7 @@ to one of these other documents:
       - [Windows Options](#windows-options)
       - [Linux Options](#linux-options)
       - [Supported Options](#supported-options)
+      - [Raytracing capture issues](#raytracing-capture-issues)
       - [Memory Tracking Known Issues](#memory-tracking-known-issues)
       - [Settings File](#settings-file)
       - [Selecting Settings for the page\_guard Memory Tracking Mode](#selecting-settings-for-the-page_guard-memory-tracking-mode)
@@ -211,7 +212,34 @@ Force Command Serialization | GFXRECON_FORCE_COMMAND_SERIALIZATION | BOOL | Sets
 Delay fence queries | GFXRECON_FENCE_QUERY_DELAY | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.
 Queue Zero Only | GFXRECON_QUEUE_ZERO_ONLY | BOOL | Forces to using only QueueFamilyIndex: 0 and queueCount: 1 on capturing to avoid replay error for unavailble VkQueue.
 Allow Pipeline Compile Required | GFXRECON_ALLOW_PIPELINE_COMPILE_REQUIRED | BOOL | The default behaviour forces VK_PIPELINE_COMPILE_REQUIRED to be returned from Create*Pipelines calls which have VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT set, and skips dispatching and recording the calls. This forces applications to fallback to recompiling pipelines without caching, the Vulkan calls for which will be captured. Enabling this option causes capture to record the application's calls and implementation's return values unmodified, but the resulting captures are fragile to changes in Vulkan implementations if they use pipeline caching.
-Ignore device address lookup in buffers | GFXRECON_BUFFER_USAGES_TO_IGNORE | STRING | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. <ul><li>`transfer_src` VK_BUFFER_USAGE_TRANSFER_SRC_BIT</li><li>`transfer_dst` VK_BUFFER_USAGE_TRANSFER_DST_BIT</li><li>`uniform_texel` VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT</li><li>`storage_texel` VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT</li><li>`uniform` VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT</li><li>`storage` VK_BUFFER_USAGE_STORAGE_BUFFER_BIT</li><li>`index` VK_BUFFER_USAGE_INDEX_BUFFER_BIT</li><li>`vertex` VK_BUFFER_USAGE_VERTEX_BUFFER_BIT</li><li>`indirect` VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT</li><li>`shader_address` VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT</li><li>`acc_input` VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR</li><li>`acc_storage` VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR</li><li>`shader_binding` VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR</li><li>`resource_descriptor` VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT</li><li>`push_descriptors` VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT</li><li>`ignore_all` 0 (Do not perform lookup at all)</li></ul> It is possible to combine usages using binary or. For example index \| vertex
+Ignore device address lookup in buffers | GFXRECON_BUFFER_USAGES_TO_IGNORE | STRING | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. Potential values: `transfer_src`, `transfer_dst` ,`uniform_texel`, `storage_texel`, `uniform`, `storage`, `index`, `vertex`, `indirect`, `shader_address`, `acc_input`, `acc_storage`, `shader_binding` `resource_descriptor` ,`push_descriptors`, `ignore_all`. It is possible to combine usages using binary 'or' operator.
+
+#### Raytracing capture issues
+
+If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. To remedy that, buffer_usages_to_ignore option allows to skip lookups in buffers based on buffer usage:
+
+GFXRECON_BUFFER_USAGES_TO_IGNORE | VkBufferUsageFlagBits |
+------| -------------|
+`transfer_src`        | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+`transfer_dst`        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+`uniform_texel`       | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+`storage_texel`       | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
+`uniform`             | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+`storage`             | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+`index`               | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+`vertex`              | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+`indirect`            | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+`shader_address`      | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+`acc_input`           | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+`acc_storage`         | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+`shader_binding`      | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR
+`resource_descriptor` | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
+`push_descriptors`    | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
+`ignore_all`          | Do not perform lookup at all
+
+
+ It is possible to combine usages using binary 'or' operator, for example: 
+`export GFXRECON_BUFFER_USAGES_TO_IGNORE='transfer_src|transfer_dst|uniform'`
 
 #### Memory Tracking Known Issues
 

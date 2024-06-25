@@ -378,7 +378,7 @@ Page guard unblock SIGSEGV | debug.gfxrecon.page_guard_unblock_sigsegv | BOOL | 
 Page guard signal handler watcher | debug.gfxrecon.page_guard_signal_handler_watcher | BOOL | When the `page_guard` memory tracking mode is enabled, setting this enviroment variable to `true` will spawn a thread which will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`
 Page guard signal handler watcher max restores | debug.gfxrecon.page_guard_signal_handler_watcher_max_restores | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative value will make the watcher thread run indefinitely. Default is `1`
 Delay fence queries | debug.gfxrecon.fence_query_delay | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.
-Ignore device address lookup in buffers | debug.gfxrecon.buffer_usages_to_ignore | STRING | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. <ul><li>`transfer_src` VK_BUFFER_USAGE_TRANSFER_SRC_BIT</li><li>`transfer_dst` VK_BUFFER_USAGE_TRANSFER_DST_BIT</li><li>`uniform_texel` VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT</li><li>`storage_texel` VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT</li><li>`uniform` VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT</li><li>`storage` VK_BUFFER_USAGE_STORAGE_BUFFER_BIT</li><li>`index` VK_BUFFER_USAGE_INDEX_BUFFER_BIT</li><li>`vertex` VK_BUFFER_USAGE_VERTEX_BUFFER_BIT</li><li>`indirect` VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT</li><li>`shader_address` VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT</li><li>`acc_input` VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR</li><li>`acc_storage` VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR</li><li>`shader_binding` VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR</li><li>`resource_descriptor` VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT</li><li>`push_descriptors` VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT</li><li>`ignore_all` 0 (Do not perform lookup at all)</li></ul> It is possible to combine usages using binary or. For example index \| vertex
+Ignore device address lookup in buffers | debug.gfxrecon.buffer_usages_to_ignore | STRING | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. Potential values: `transfer_src`, `transfer_dst` ,`uniform_texel`, `storage_texel`, `uniform`, `storage`, `index`, `vertex`, `indirect`, `shader_address`, `acc_input`, `acc_storage`, `shader_binding` `resource_descriptor` ,`push_descriptors`, `ignore_all`. It is possible to combine usages using binary 'or' operator.
 
 #### Settings File
 
@@ -409,7 +409,33 @@ in the GFXReconstruct GitHub repository at `layer/vk_layer_settings.txt`. Most
 binary distributions of the GFXReconstruct software will also include a sample
 settings file.
 
-#### Selecting Settings for the page_guard Memory Tracking Mode
+
+#### Selecting parameters for buffer_usages_to_ignore
+
+If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. To remedy that, buffer_usages_to_ignore option allows to skip lookups in buffers based on buffer usage:
+debug.gfxrecon.buffer_usages_to_ignore | VkBufferUsageFlagBits |
+------| -------------|
+`transfer_src`        | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+`transfer_dst`        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+`uniform_texel`       | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+`storage_texel`       | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
+`uniform`             | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+`storage`             | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+`index`               | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+`vertex`              | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+`indirect`            | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+`shader_address`      | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+`acc_input`           | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+`acc_storage`         | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+`shader_binding`      | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR
+`resource_descriptor` | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
+`push_descriptors`    | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
+`ignore_all`          | Do not perform lookup at all
+
+ It is possible to combine usages using binary 'or' operator, for example: 
+ `setprop debug.gfxrecon.buffer_usages_to_ignore 'transfer_src|transfer_dst|uniform'`
+
+#### Selecting settings for the page_guard Memory Tracking Mode
 
 The default settings selected for the `page_guard` memory tracking mode are the
 settings that are most likely to work on a given platform, but may not provide
@@ -663,7 +689,6 @@ application being captured, for example "com.khronos.vulkan_samples" is the full
 name of the Vulkan Samples.
 
 Refer to the other settings in [Capture Options](#capture-options).
-
 
 ## Replaying API Calls
 
