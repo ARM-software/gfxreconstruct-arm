@@ -4945,6 +4945,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
 
     std::vector<BufferInfo*>                           buffer_infos;
     std::vector<const DeviceMemoryInfo*>               memory_infos;
+    std::vector<VkDeviceSize>                          memory_offsets;
     std::vector<VulkanResourceAllocator::ResourceData> allocator_buffer_datas(bindInfoCount, 0);
     std::vector<VulkanResourceAllocator::MemoryData>   allocator_memory_datas(bindInfoCount, 0);
     std::vector<VkMemoryPropertyFlags>                 memory_property_flags(bindInfoCount, 0);
@@ -4953,11 +4954,13 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
     {
         const Decoded_VkBindBufferMemoryInfo* bind_meta_info = &replay_bind_meta_infos[i];
 
-        auto buffer_info = object_info_table_.GetBufferInfo(bind_meta_info->buffer);
-        auto memory_info = object_info_table_.GetDeviceMemoryInfo(bind_meta_info->memory);
+        auto buffer_info   = object_info_table_.GetBufferInfo(bind_meta_info->buffer);
+        auto memory_info   = object_info_table_.GetDeviceMemoryInfo(bind_meta_info->memory);
+        auto memory_offset = bind_meta_info->decoded_value->memoryOffset;
 
         buffer_infos.push_back(buffer_info);
         memory_infos.push_back(memory_info);
+        memory_offsets.push_back(memory_offset);
 
         if (buffer_info != nullptr)
         {
@@ -4997,6 +5000,29 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
         // enabling memory translation.
         allocator->ReportBindBuffer2Incompatibility(
             bindInfoCount, replay_bind_infos, allocator_buffer_datas.data(), allocator_memory_datas.data());
+    }
+
+    for (uint32_t i = 0; i < bindInfoCount; ++i)
+    {
+        auto buffer_info  = buffer_infos[i];
+        auto memory_info  = memory_infos[i];
+        auto memoryOffset = memory_offsets[i];
+
+        if (!allocator->SupportsOpaqueDeviceAddresses())
+        {
+            // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
+            // Fill out this data based on original memory device address and binding offset
+            auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
+            if (entry != device_info->opaque_addresses.end())
+            {
+                auto memory_device_address   = entry->second;
+                auto original_buffer_address = memory_device_address + memoryOffset;
+                acceleration_structure_builders_[device_info->capture_id]->SetBufferInfo(
+                    buffer_info, original_buffer_address, 0);
+                tracked_addresses_[buffer_info->capture_id] =
+                    TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
+            }
+        }
     }
 
     return result;
