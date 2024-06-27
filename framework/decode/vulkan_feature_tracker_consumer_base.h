@@ -6,6 +6,7 @@
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
+#include "util/vulkan_modifier_base.h"
 
 #include "vulkan/vulkan.h"
 
@@ -17,13 +18,10 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-class VulkanFeatureTrackerConsumerBase : public VulkanConsumer
+class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
 {
   public:
     VulkanFeatureTrackerConsumerBase();
-
-    void SetCaptureMode(bool capture_mode) { capture_mode_ = capture_mode; }
-    void SetBuffer(gfxrecon::encode::ParameterBuffer* buffer) { encoding_buffer_ = buffer; }
 
     bool ProcessFeaturesAndExtensions();
     void PrintAllFeatures();
@@ -232,7 +230,6 @@ class VulkanFeatureTrackerConsumerBase : public VulkanConsumer
     void PrintCore13Features(VkPhysicalDeviceVulkan13Features core13);
 
   private:
-    bool capture_mode_{};
 
     std::vector<std::string> core10_members_as_strings_;
     VkPhysicalDeviceFeatures core10_{};
@@ -262,8 +259,6 @@ class VulkanFeatureTrackerConsumerBase : public VulkanConsumer
 
     std::vector<std::string> output_instance_extensions_vector{};
     std::vector<std::string> output_device_extensions_vector{};
-
-    encode::ParameterBuffer* encoding_buffer_;
 
     std::string consumer_output_log_{};
 };

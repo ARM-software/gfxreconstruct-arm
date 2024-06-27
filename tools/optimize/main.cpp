@@ -152,10 +152,8 @@ GetVulkanOptimizationData(const std::string& input_filename)
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
 
-        feature_tracker_consumer->SetCaptureMode(true);
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
-        feature_tracker_consumer->SetCaptureMode(false);
 
         if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
         {
@@ -166,7 +164,7 @@ GetVulkanOptimizationData(const std::string& input_filename)
 
         if (feature_tracker_consumer->ProcessFeaturesAndExtensions())
         {
-            result->feature_tracker_consumer = std::move(feature_tracker_consumer);
+            result->modifiers.push_back(std::move(feature_tracker_consumer));
         }
     }
     return result;
@@ -180,26 +178,19 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
     auto vulkan_opt_data = GetVulkanOptimizationData(input_filename);
 
     // Check if any optimization can be done
-    const bool can_optimize_features       = vulkan_opt_data->feature_tracker_consumer != nullptr;
     const bool can_remove_unused_resources = !vulkan_opt_data->unreferenced_ids.empty();
 
     // Early exit if no optimization can be done
-    if (!can_optimize_features && !can_remove_unused_resources)
+    if (vulkan_opt_data->modifiers.empty() && !can_remove_unused_resources)
     {
         GFXRECON_WRITE_CONSOLE("Nothing to optimize. Exiting.");
         return;
     }
 
     // Modification pass. Implement all identified optimizations in output file
-    gfxrecon::VulkanFileOptimizer file_optimizer(*vulkan_opt_data);
+    gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get());
     if (file_optimizer.Initialize(input_filename, output_filename))
     {
-        gfxrecon::decode::VulkanDecoder decoder;
-        if (can_optimize_features)
-        {
-            decoder.AddConsumer(vulkan_opt_data->feature_tracker_consumer.get());
-        }
-        file_optimizer.AddDecoder(&decoder);
         file_optimizer.Process();
 
         if (file_optimizer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone &&

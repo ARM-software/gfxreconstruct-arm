@@ -32,6 +32,8 @@ target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.h
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/buffer_editor_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_modifier_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/compressor.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.cpp

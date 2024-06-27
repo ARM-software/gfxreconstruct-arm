@@ -28,76 +28,79 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
 bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id)
 {
-    if ((call_id == format::ApiCall_vkCreateDevice) || (call_id == format::ApiCall_vkCreateInstance))
+    size_t              parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(call_id);
+    uint64_t            uncompressed_size     = 0;
+    decode::ApiCallInfo call_info{ GetCurrentBlockIndex() };
+    bool                success = ReadBytes(&call_info.thread_id, sizeof(call_info.thread_id));
+
+    parameter_buffer_size -= sizeof(call_info.thread_id);
+
+    if (format::IsBlockCompressed(block_header.type))
     {
-        size_t              parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(call_id);
-        uint64_t            uncompressed_size     = 0;
-        decode::ApiCallInfo call_info{ GetCurrentBlockIndex() };
-        bool                success = ReadBytes(&call_info.thread_id, sizeof(call_info.thread_id));
+        parameter_buffer_size -= sizeof(uncompressed_size);
+        success = ReadBytes(&uncompressed_size, sizeof(uncompressed_size));
 
-        parameter_buffer_size -= sizeof(call_info.thread_id);
-
-        if (format::IsBlockCompressed(block_header.type))
+        if (success)
         {
-            parameter_buffer_size -= sizeof(uncompressed_size);
-            success = ReadBytes(&uncompressed_size, sizeof(uncompressed_size));
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, uncompressed_size);
+
+            size_t actual_size = 0;
+            success            = ReadCompressedParameterBuffer(
+                parameter_buffer_size, static_cast<size_t>(uncompressed_size), &actual_size);
 
             if (success)
             {
-                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, uncompressed_size);
-
-                size_t actual_size = 0;
-                success            = ReadCompressedParameterBuffer(
-                    parameter_buffer_size, static_cast<size_t>(uncompressed_size), &actual_size);
-
-                if (success)
-                {
-                    assert(actual_size == uncompressed_size);
-                    parameter_buffer_size = static_cast<size_t>(uncompressed_size);
-                }
-                else
-                {
-                    HandleBlockReadError(kErrorReadingCompressedBlockData,
-                                         "Failed to read compressed function call block data");
-                }
+                assert(actual_size == uncompressed_size);
+                parameter_buffer_size = static_cast<size_t>(uncompressed_size);
             }
             else
             {
-                HandleBlockReadError(kErrorReadingCompressedBlockHeader,
-                                     "Failed to read compressed function call block header");
+                HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                     "Failed to read compressed function call block data");
             }
         }
         else
         {
-            success = ReadParameterBuffer(parameter_buffer_size);
+            HandleBlockReadError(kErrorReadingCompressedBlockHeader,
+                                 "Failed to read compressed function call block header");
+        }
+    }
+    else
+    {
+        success = ReadParameterBuffer(parameter_buffer_size);
 
-            if (!success)
-            {
-                HandleBlockReadError(kErrorReadingBlockData, "Failed to read function call block data");
-            }
-        }
-
-        encode::ParameterBuffer buffer;
-        if (optimization_data_.feature_tracker_consumer)
+        if (!success)
         {
-            optimization_data_.feature_tracker_consumer->SetBuffer(&buffer);
+            HandleBlockReadError(kErrorReadingBlockData, "Failed to read function call block data");
         }
-        else
-        {
-            buffer.Write(GetParameterBuffer().data(), parameter_buffer_size);
-        }
-
-        for (auto decoder : decoders_)
-        {
-            decode::DecodeAllocator::Begin();
-            decoder->DecodeFunctionCall(call_id, call_info, GetParameterBuffer().data(), parameter_buffer_size);
-            decode::DecodeAllocator::End();
-        }
-        WriteFunctionCall(call_id, call_info.thread_id, &buffer);
-        return true;
     }
 
-    return FileOptimizer::ProcessFunctionCall(block_header, call_id);
+    // Separate buffer that holds call parameters to modify
+    encode::ParameterBuffer buffer;
+
+    // Initialize our modifiable parameter buffer with the initial data from trace
+    buffer.Write(GetParameterBuffer().data(), parameter_buffer_size);
+
+    // Each modifier will get access to parameter buffer to read and modify
+    // The same parameter buffer will be passed to next modifier in chain
+    bool delete_current_call = false;
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetParameterBuffer(&buffer);
+        decoder.AddConsumer(modifier.get());
+        decode::DecodeAllocator::Begin();
+        decoder.DecodeFunctionCall(call_id, call_info, buffer.GetData(), buffer.GetDataSize());
+        decode::DecodeAllocator::End();
+        decoder.RemoveConsumer(modifier.get());
+        delete_current_call |= modifier->GetDeleteCurrentCall();
+    }
+
+    // TODO: Write buffer with calls to add pre/post current call
+    if (!delete_current_call)
+    {
+        WriteFunctionCall(call_id, call_info.thread_id, &buffer);
+    }
+    return success;
 }
 
 // TODO: This is the same code used by CaptureManager to write function call data. It could be moved to a format
