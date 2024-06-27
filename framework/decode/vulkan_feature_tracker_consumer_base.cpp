@@ -324,7 +324,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
 
     if (pCreateInfoDec->enabledExtensionCount)
     {
-        if (capture_mode_)
+        if (!parameter_buffer_)
         {
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
@@ -346,9 +346,9 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
             pCreateInfoDec->ppEnabledExtensionNames = extensions;
             pCreateInfoDec->enabledExtensionCount   = extensions_count;
 
-            GFXRECON_ASSERT(encoding_buffer_ != nullptr);
+            parameter_buffer_->Reset();
 
-            gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
+            gfxrecon::encode::ParameterEncoder encoder(parameter_buffer_);
             EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
             EncodeStructPtr(&encoder, pAllocator->GetPointer());
             encoder.EncodeHandleIdPtr(pInstance->GetPointer());
@@ -371,7 +371,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
 
     if (pEnabledFeatures != nullptr)
     {
-        if (capture_mode_)
+        if (!parameter_buffer_)
         {
             capture_core10_ = *pEnabledFeatures;
         }
@@ -386,7 +386,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
     {
         if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
         {
-            if (capture_mode_)
+            if (!parameter_buffer_)
             {
                 capture_core10_ = ((VkPhysicalDeviceFeatures2*)pNext)->features;
             }
@@ -397,7 +397,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES)
         {
-            if (capture_mode_)
+            if (!parameter_buffer_)
             {
                 capture_core11_ = *((VkPhysicalDeviceVulkan11Features*)pNext);
             }
@@ -408,7 +408,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
         {
-            if (capture_mode_)
+            if (!parameter_buffer_)
             {
                 capture_core12_ = *((VkPhysicalDeviceVulkan12Features*)pNext);
             }
@@ -419,7 +419,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
         {
-            if (capture_mode_)
+            if (!parameter_buffer_)
             {
                 capture_core13_ = *((VkPhysicalDeviceVulkan13Features*)pNext);
             }
@@ -431,9 +431,11 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
     }
 
+    std::vector<const char*> extensions;
+
     if (pCreateInfoDec->enabledExtensionCount)
     {
-        if (capture_mode_)
+        if (!parameter_buffer_)
         {
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
@@ -442,26 +444,28 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else
         {
+            // TODO: change output_device_extensions_vector to std:vector<const char*>, remove this loop
             uint32_t extensions_count = output_device_extensions_vector.size();
-
-            const char* extensions[extensions_count]{};
             for (uint32_t i = 0; i < extensions_count; i++)
             {
-                extensions[i] = output_device_extensions_vector[i].c_str();
+                extensions.push_back(output_device_extensions_vector[i].c_str());
             }
 
-            pCreateInfoDec->ppEnabledExtensionNames = extensions;
+            pCreateInfoDec->ppEnabledExtensionNames = extensions.data();
             pCreateInfoDec->enabledExtensionCount   = extensions_count;
-
-            GFXRECON_ASSERT(encoding_buffer_ != nullptr);
-
-            gfxrecon::encode::ParameterEncoder encoder(encoding_buffer_);
-            encoder.EncodeHandleIdValue(physicalDevice);
-            EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
-            EncodeStructPtr(&encoder, pAllocator->GetPointer());
-            encoder.EncodeHandleIdPtr(pDevice->GetPointer());
-            encoder.EncodeEnumValue(returnValue);
         }
+    }
+
+    if (parameter_buffer_)
+    {
+        parameter_buffer_->Reset();
+
+        gfxrecon::encode::ParameterEncoder encoder(parameter_buffer_);
+        encoder.EncodeHandleIdValue(physicalDevice);
+        EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
+        EncodeStructPtr(&encoder, pAllocator->GetPointer());
+        encoder.EncodeHandleIdPtr(pDevice->GetPointer());
+        encoder.EncodeEnumValue(returnValue);
     }
 }
 

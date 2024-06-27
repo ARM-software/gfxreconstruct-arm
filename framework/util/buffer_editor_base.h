@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2024 LunarG, Inc.
+** Copyright (c) 2018-2023 LunarG, Inc.
 ** Copyright (c) 2024 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
@@ -21,40 +21,39 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_VULKAN_FILE_OPTIMIZER_H
-#define GFXRECON_VULKAN_FILE_OPTIMIZER_H
+#ifndef GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
+#define GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
 
-#include "file_optimizer.h"
 #include "util/defines.h"
-#include "generated/generated_vulkan_decoder.h"
-#include "util/vulkan_modifier_base.h"
+#include "format/format.h"
+#include "encode/parameter_buffer.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
+GFXRECON_BEGIN_NAMESPACE(util)
 
-class VulkanFileOptimizer : public FileOptimizer
+// Facilitates communication between file optimizer and modificators
+// Provides access to buffers and information on types of modification
+class BufferEditorBase
 {
   public:
-    struct VulkanOptimizationData
+    virtual void SetParameterBuffer(encode::ParameterBuffer* buffer) { parameter_buffer_ = buffer; }
+
+    virtual bool GetDeleteCurrentCall()
     {
-        std::unordered_set<gfxrecon::format::HandleId>         unreferenced_ids;
-        std::vector<std::unique_ptr<util::VulkanModifierBase>> modifiers;
-    };
+        bool delete_current_call_tmp = delete_current_call;
+        delete_current_call          = false;
+        return delete_current_call_tmp;
+    }
 
-    VulkanFileOptimizer(VulkanOptimizationData* optimization_data) :
-        FileOptimizer(optimization_data->unreferenced_ids), optimization_data_(optimization_data)
-    {}
+  protected:
+    // Points to parameter buffer that can be modified
+    encode::ParameterBuffer* parameter_buffer_ = nullptr;
 
-  private:
-    virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id) override;
-
-    void WriteFunctionCall(format::ApiCallId         call_id,
-                           format::ThreadId          thread_id,
-                           util::MemoryOutputStream* parameter_buffer);
-
-    VulkanOptimizationData* optimization_data_;
-    decode::VulkanDecoder   decoder;
+    // Set if current call is meant to be removed from the trace
+    bool delete_current_call = false;
 };
 
+GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_FILE_OPTIMIZER_H
+#endif // GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
