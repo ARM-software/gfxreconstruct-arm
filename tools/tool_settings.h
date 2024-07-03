@@ -133,6 +133,10 @@ const char kNumPipelineCreationJobs[]             = "--pipeline-creation-jobs";
 const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
 const char kTriggerScriptNameArgument[]           = "--trigger-script-path";
 const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
+const char kSkipGetFenceStatusShortArgument[]     = "--sgfs";
+const char kSkipGetFenceStatusLongArgument[]      = "--skip-get-fence-status";
+const char kSkipGetFenceRangesShortArgument[]     = "--sgfr";
+const char kSkipGetFenceRangesLongArgument[]      = "--skip-get-fence-ranges";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -1091,7 +1095,17 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.surface_index = std::stoi(surface_index);
     }
 
-    const std::string& skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatus);
+    if (arg_parser.IsOptionSet(kWaitBeforePresent))
+    {
+        replay_options.wait_before_present = true;
+    }
+
+    std::string skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatusShortArgument);
+    if (skip_get_fence_status.empty())
+    {
+        skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatusLongArgument);
+    }
+
     if (!skip_get_fence_status.empty())
     {
         const int i_skip_get_fence_status = std::stoi(skip_get_fence_status);
@@ -1108,18 +1122,24 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         }
     }
 
-    const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRanges);
-    if (skip_get_fence_ranges.empty())
+    if (arg_parser.IsArgumentSet(kSkipGetFenceRangesShortArgument))
+    {
+        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRangesShortArgument);
+        replay_options.skip_get_fence_ranges =
+            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRangesShortArgument);
+    }
+    else if (arg_parser.IsArgumentSet(kSkipGetFenceRangesLongArgument))
+    {
+        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRangesLongArgument);
+        replay_options.skip_get_fence_ranges =
+            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRangesLongArgument);
+    }
+    else
     {
         gfxrecon::util::UintRange range;
         range.first = 1;
         range.last  = std::numeric_limits<uint32_t>::max();
         replay_options.skip_get_fence_ranges.push_back(range);
-    }
-    else
-    {
-        replay_options.skip_get_fence_ranges =
-            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRanges);
     }
 
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);

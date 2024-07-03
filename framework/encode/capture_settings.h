@@ -76,6 +76,12 @@ class CaptureSettings
         kQueueSubmits,
     };
 
+    enum class FenceQueryDelayUnit
+    {
+        kCalls,
+        kFrames
+    };
+
     const static char kDefaultCaptureFileName[];
 
     struct ResourveValueAnnotationInfo
@@ -118,6 +124,7 @@ class CaptureSettings
         uint32_t                     accel_struct_padding{ 0 };
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
+        FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
         bool                         queue_zero_only{ false };
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };
@@ -201,6 +208,9 @@ class CaptureSettings
                                                               util::ScreenshotFormat default_value);
 
     static std::vector<uint64_t> ParseBufferUsages(const std::string& value_string);
+
+    static FenceQueryDelayUnit ParseFenceQueryDelayUnit(const std::string&  value_string,
+                                                        FenceQueryDelayUnit default_value);
 
   private:
     TraceSettings       trace_settings_;

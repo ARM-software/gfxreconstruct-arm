@@ -1329,7 +1329,7 @@ VKAPI_ATTR VkResult VKAPI_CALL GetFenceStatus(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetFenceStatus>::Dispatch(manager, device, fence);
 
-    VkResult result = vulkan_wrappers::GetDeviceTable(device)->GetFenceStatus(device, fence);
+    VkResult result = manager->OverrideGetFenceStatus(device, fence);
 
     auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetFenceStatus);
     if (encoder)

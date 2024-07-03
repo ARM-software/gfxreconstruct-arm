@@ -187,10 +187,17 @@ class CommonCaptureManager
         return thread_data->block_index_ == 0 ? 0 : thread_data->block_index_ - 1;
     }
 
-    uint32_t GetFenceQueryDelay() const { return fence_query_delay_; }
+    uint32_t GetFenceQueryDelay() const
+    {
+        return fence_query_delay_;
+    }
+    CaptureSettings::FenceQueryDelayUnit GetFenceQueryDelayUnit() const
+    {
+        return fence_query_delay_unit_;
+    }
 
   public:
-    static bool CreateInstance(ApiCaptureManager* api_instance_, const std::function<void()>& destroyer);
+    static bool    CreateInstance(ApiCaptureManager* api_instance_, const std::function<void()>& destroyer);
     static int32_t GetPidFromPackageName(const char* progress_name);
     template <typename Derived>
     static bool CreateInstance()
@@ -280,7 +287,7 @@ class CommonCaptureManager
     bool                                GetDebugDeviceLostSetting() const { return debug_device_lost_; }
     bool                                GetDisableDxrSetting() const { return disable_dxr_; }
     auto                                GetAccelStructPaddingSetting() const { return accel_struct_padding_; }
-    bool GetForceFifoPresentModeSetting() const
+    bool                                GetForceFifoPresentModeSetting() const
     {
         return force_fifo_present_mode_;
     }
@@ -420,6 +427,7 @@ class CommonCaptureManager
     bool                                    quit_after_frame_ranges_;
     static std::function<void()>            delete_instance_func_;
     uint32_t                                fence_query_delay_;
+    CaptureSettings::FenceQueryDelayUnit    fence_query_delay_unit_;
     bool                                    force_fifo_present_mode_;
     std::vector<uint64_t>                   buffer_usages_to_ignore_;
     struct
