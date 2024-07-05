@@ -851,17 +851,17 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                const QueueInfo*                                          queue_info,
                                                const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label);
 
-    VkResult
-    OverrideSetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT func,
-                                       const VkResult                   original_result,
-                                       const DeviceInfo*                device_info,
-                                       const StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info);
+    uintptr_t GetObjectAllocatorData(VkObjectType object_type, format::HandleId handle_id);
 
-    VkResult
-    OverrideSetDebugUtilsObjectTagEXT(PFN_vkSetDebugUtilsObjectTagEXT                                   func,
-                                      const VkResult                                                    original_result,
-                                      const DeviceInfo*                                                 device_info,
-                                      const StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* pTagInfo);
+    VkResult OverrideSetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT func,
+                                                const VkResult                   original_result,
+                                                const DeviceInfo*                device_info,
+                                                StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info);
+
+    VkResult OverrideSetDebugUtilsObjectTagEXT(PFN_vkSetDebugUtilsObjectTagEXT func,
+                                               const VkResult                  original_result,
+                                               const DeviceInfo*               device_info,
+                                               StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* tag_info);
 
     void OverrideSubmitDebugUtilsMessageEXT(
         PFN_vkSubmitDebugUtilsMessageEXT                                          func,
