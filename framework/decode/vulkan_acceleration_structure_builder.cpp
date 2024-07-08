@@ -149,7 +149,9 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
                 state_recreation_device_addresses.insert(entry->new_address_);
 
                 VkAccelerationStructureInstanceKHR* mapped;
-                allocator_->MapResourceMemoryDirect(buffer_size, 0, (void**)&mapped, entry->allocator_data_);
+                VkResult                            mapping_result =
+                    allocator_->MapResourceMemoryDirect(buffer_size, 0, (void**)&mapped, entry->allocator_data_);
+                GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
                 util::platform::MemoryCopy(mapped, buffer_size, instance_buffers_data[g].data(), buffer_size);
                 allocator_->UnmapResourceMemoryDirect(entry->allocator_data_);
             }
@@ -296,8 +298,8 @@ std::unique_ptr<VulkanAccelerationStructureBuilder::BufferEntry> VulkanAccelerat
     allocator_->BindBufferMemoryDirect(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
 
     std::unique_ptr<BufferEntry> entry = std::make_unique<BufferEntry>(0, GetBufferDeviceAddress(buffer), allocator_);
-    entry->allocator_data_ = buffer_allocator_data;
-    entry->handle_         = buffer;
+    entry->allocator_data_             = buffer_allocator_data;
+    entry->handle_                     = buffer;
 
     return entry;
 }
@@ -592,7 +594,9 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
     uint8_t* data;
     uint32_t size = build_range.primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
 
-    allocator_->MapResourceMemoryDirect(size, 0, (void**)&data, instance_buffer_allocator_data);
+    VkResult mapping_result =
+        allocator_->MapResourceMemoryDirect(size, 0, (void**)&data, instance_buffer_allocator_data);
+    GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
     data += offset + build_range.primitiveOffset;
 
     VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
@@ -900,7 +904,9 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
 
                     void* mapped;
 
-                    allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->allocator_data_);
+                    VkResult mapping_result =
+                        allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->allocator_data_);
+                    GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
 
                     util::platform::MemoryCopy(vector_of_acc_str_sizes.data(), buffer_size, mapped, buffer_size);
 
@@ -1203,11 +1209,12 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
             }
 
             uint8_t* data;
-            allocator_->MapResourceMemoryDirect(
+            VkResult mapping_result = allocator_->MapResourceMemoryDirect(
                 allocator_->GetBufferSize(descriptor_update_buffers.infos_[buffer_idx]->allocator_data),
                 0,
                 (void**)&data,
                 descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
+            GFXRECON_ASSERT(mapping_result != VK_SUCCESS);
             data += descriptor_update_buffers.offsets_[buffer_idx];
 
             VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
@@ -1286,7 +1293,9 @@ void VulkanAccelerationStructureBuilder::UpdateShaderBindingTable(const VkStride
     }
     uint8_t*           mapped_sbt_buffer;
     const BufferEntry* sbt_buffer = GetBufferByRuntimeDeviceAddress(sbt_entry.deviceAddress);
-    allocator_->MapResourceMemoryDirect(sbt_entry.size, 0, (void**)&mapped_sbt_buffer, sbt_buffer->allocator_data_);
+    VkResult           mapping_result =
+        allocator_->MapResourceMemoryDirect(sbt_entry.size, 0, (void**)&mapped_sbt_buffer, sbt_buffer->allocator_data_);
+    GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
 
     // sbt device address may be offsetted, account for that in
     const size_t sbt_offset = sbt_entry.deviceAddress - sbt_buffer->new_address_;
