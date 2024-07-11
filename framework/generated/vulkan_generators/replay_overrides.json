@@ -125,6 +125,8 @@
     "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets",
     "vkCmdCopyQueryPoolResults": "OverrideCmdCopyQueryPoolResults",
     "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",
-    "vkCmdCopyBuffer": "OverrideCmdCopyBuffer"
+    "vkCmdCopyBuffer": "OverrideCmdCopyBuffer",
+    "vkCmdPushConstants": "OverrideCmdPushConstants",
+    "vkCmdUpdateBuffer": "OverrideCmdUpdateBuffer"
   }
 }

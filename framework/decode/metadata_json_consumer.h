@@ -83,7 +83,7 @@ class MetadataJsonConsumer : public Base
         using namespace util;
         const JsonOptions& json_options = GetOptions();
         auto&              jdata        = WriteMetaCommandStart("FixDeviceAddresCommand");
-        HandleToJson(jdata["memory_id"], header.memory_id, json_options);
+        HandleToJson(jdata["relation_id"], header.relation_id, json_options);
         for (int i = 0; i < header.num_of_locations; i++)
         {
             HandleToJson(jdata["location"][i]["buffer_id"], infos[i].id, json_options);

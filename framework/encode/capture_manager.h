@@ -281,7 +281,7 @@ class CaptureManager
 
     void WriteCreateHeapAllocationCmd(uint64_t allocation_id, uint64_t allocation_size);
 
-    void WriteFixDeviceAddressCmd(format::HandleId             memory_id,
+    void WriteFixDeviceAddressCmd(format::HandleId             relation_id,
                                   uint64_t                     num_of_locations,
                                   format::AddressLocationInfo* locations);
 

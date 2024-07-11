@@ -1088,7 +1088,7 @@ void CaptureManager::WriteFillMemoryCmd(format::HandleId memory_id, uint64_t off
     }
 }
 
-void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             memory_id,
+void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             relation_id,
                                               uint64_t                     num_of_locations,
                                               format::AddressLocationInfo* locations)
 {
@@ -1104,7 +1104,7 @@ void CaptureManager::WriteFixDeviceAddressCmd(format::HandleId             memor
             format::GetMetaDataBlockBaseSize(fix_cmd) + (num_of_locations * sizeof(format::AddressLocationInfo));
         fix_cmd.meta_header.meta_data_id =
             format::MakeMetaDataId(api_family_, format::MetaDataType::kFixDeviceAddressCommand);
-        fix_cmd.memory_id        = memory_id;
+        fix_cmd.relation_id      = relation_id;
         fix_cmd.num_of_locations = num_of_locations;
         CombineAndWriteToFile({ { &fix_cmd, sizeof(format::FixDeviceAddressCommandHeader) },
                                 { locations, num_of_locations * sizeof(format::AddressLocationInfo) } });
