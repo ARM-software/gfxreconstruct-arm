@@ -225,6 +225,10 @@ if(APPLE)
     add_link_options(-Wl,-dead_strip -Wl,-dead_strip_dylibs)
 endif()
 
+if(ANDROID)
+    add_link_options(-Wl,-z,max-page-size=16384)
+endif()
+
 # GFXReconstruct provided find modules
 if(WIN32)
 find_package(Detours)
