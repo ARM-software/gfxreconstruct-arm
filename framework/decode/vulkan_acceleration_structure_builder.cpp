@@ -1214,7 +1214,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                 0,
                 (void**)&data,
                 descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
-            GFXRECON_ASSERT(mapping_result != VK_SUCCESS);
+            GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
             data += descriptor_update_buffers.offsets_[buffer_idx];
 
             VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
