@@ -71,8 +71,6 @@
     "vkQueuePresentKHR": "OverrideQueuePresentKHR",
     "vkImportSemaphoreFdKHR": "OverrideImportSemaphoreFdKHR",
     "vkGetSemaphoreFdKHR": "OverrideGetSemaphoreFdKHR",
-    "vkGetSemaphoreCounterValue": "OverrideGetSemaphoreCounterValue",
-    "vkGetSemaphoreCounterValueKHR": "OverrideGetSemaphoreCounterValue",
     "vkImportSemaphoreWin32HandleKHR": "OverrideImportSemaphoreWin32HandleKHR",
     "vkGetSemaphoreWin32HandleInfoKHR": "OverrideGetSemaphoreWin32HandleKHR",
     "vkCreateAndroidSurfaceKHR": "OverrideCreateAndroidSurfaceKHR",
