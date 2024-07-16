@@ -124,6 +124,7 @@ const char kDisableSubpassFusionOption[]      = "--dsf";
 const char kSavePipelineCacheArgument[]       = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]       = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]    = "--add-new-pipeline-caches";
+const char kMarkingLayersArgument[]           = "--marking-layers";
 #if defined(WIN32)
 const char kApiFamilyOption[]             = "--api";
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
@@ -832,6 +833,16 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions& options, const gfx
     IsForceWindowed(options, arg_parser);
 }
 
+static std::vector<std::string> GetMarkingLayersNames(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    const std::string& value = arg_parser.GetArgumentValue(kMarkingLayersArgument);
+    if (value.empty())
+    {
+        return {};
+    }
+    return gfxrecon::util::strings::SplitString(value, ',');
+}
+
 static gfxrecon::decode::VulkanReplayOptions
 GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parser,
                        const std::string&                              filename,
@@ -998,6 +1009,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
 
+    replay_options.marking_layers_names = GetMarkingLayersNames(arg_parser);
+
     return replay_options;
 }
 
@@ -1096,5 +1109,4 @@ static bool CheckOptionPrintUsage(const char* exe_name, const gfxrecon::util::Ar
 
     return false;
 }
-
 #endif // GFXRECON_PLATFORM_SETTINGS_H

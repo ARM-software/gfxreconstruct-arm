@@ -40,7 +40,7 @@ const char kArguments[] =
     "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--"
     "fw|--force-windowed,--sgfs|--skip-get-fence-status,--sgfr|--skip-get-fence-ranges,--measurement-file,--save-"
-    "pipeline-cache,--load-pipeline-cache,--batching-memory-usage,--swapchain";
+    "pipeline-cache,--load-pipeline-cache,--batching-memory-usage,--swapchain,--marking-layers";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -89,6 +89,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--log-level <level>] [--log-file <file>] <file>");
 #endif
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dsf | --disable-subpass-fusion]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--marking-tools <N1,...>]");
 
     GFXRECON_WRITE_CONSOLE("Required arguments:");
     GFXRECON_WRITE_CONSOLE("  <file>\t\tPath to the capture file to replay.");
@@ -286,6 +287,8 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tfrom the trace file into a continuous, expandable");
     GFXRECON_WRITE_CONSOLE("          \t\tbuffer, in order to mitigate the impact of read file");
     GFXRECON_WRITE_CONSOLE("          \t\tcommands on performance measurements.");
+    GFXRECON_WRITE_CONSOLE("  --marking-layers <N1[,...]>");
+    GFXRECON_WRITE_CONSOLE("          \t\t Specifies the tools that are used to mark API calls injected by replayer");
 
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
