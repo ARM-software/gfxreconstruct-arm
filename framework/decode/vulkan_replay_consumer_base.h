@@ -930,6 +930,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        const StructPointerDecoder<Decoded_VkSemaphoreGetFdInfoKHR>* pGetFdInfo,
                                        const PointerDecoder<int>*                                   pFd);
 
+    VkResult OverrideGetSemaphoreCounterValue(PFN_vkGetSemaphoreCounterValue func,
+                                              VkResult                       original_result,
+                                              const DeviceInfo*              device_info,
+                                              SemaphoreInfo*                 semaphore_info,
+                                              PointerDecoder<uint64_t>*      pValue);
+
     VkResult OverrideImportSemaphoreWin32HandleKHR(
         PFN_vkImportSemaphoreWin32HandleKHR                                      func,
         VkResult                                                                 original_result,

@@ -441,7 +441,7 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDe
 
         uint64_t offset = infos[i].adjusted_address - infos[i].original_address;
 
-        VkDeviceAddress       address;
+        VkDeviceAddress       address         = 0;
         const TrackedAddress& tracked_address = tracked_addresses_[infos[i].id];
         switch (tracked_address.address_type)
         {
@@ -458,7 +458,10 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDe
                 break;
             }
         }
-        location_info->new_address = address + offset;
+        if (address != 0)
+        {
+            location_info->new_address = address + offset;
+        }
     }
 }
 
@@ -7364,6 +7367,35 @@ VkResult VulkanReplayConsumerBase::OverrideGetSemaphoreFdKHR(
     GFXRECON_UNREFERENCED_PARAMETER(pGetFdInfo);
     GFXRECON_UNREFERENCED_PARAMETER(pFd);
     return original_result;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideGetSemaphoreCounterValue(PFN_vkGetSemaphoreCounterValue func,
+                                                                    VkResult                       original_result,
+                                                                    const DeviceInfo*              device_info,
+                                                                    SemaphoreInfo*                 semaphore_info,
+                                                                    PointerDecoder<uint64_t>*      pValue)
+{
+    assert((device_info != nullptr) && (semaphore_info != nullptr) && (pValue != nullptr) && !pValue->IsNull());
+
+    VkResult    result         = VK_SUCCESS;
+    VkDevice    device         = device_info->handle;
+    VkSemaphore semaphore      = semaphore_info->handle;
+    uint64_t    captured_value = (*pValue->GetPointer());
+    uint64_t    replay_value   = 0;
+
+    result = func(device, semaphore, &replay_value);
+    if ((result == VK_SUCCESS) && (replay_value < captured_value))
+    {
+        VkSemaphoreWaitInfo wait_info{};
+        wait_info.sType          = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        wait_info.pSemaphores    = &semaphore;
+        wait_info.semaphoreCount = 1;
+        wait_info.pValues        = &captured_value;
+
+        result = GetDeviceTable(device)->WaitSemaphores(device, &wait_info, UINT64_MAX);
+    }
+
+    return result;
 }
 
 VkResult VulkanReplayConsumerBase::OverrideImportSemaphoreWin32HandleKHR(

@@ -2564,12 +2564,12 @@ void VulkanReplayConsumer::Process_vkGetSemaphoreCounterValue(
     format::HandleId                            semaphore,
     PointerDecoder<uint64_t>*                   pValue)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    VkSemaphore in_semaphore = MapHandle<SemaphoreInfo>(semaphore, &VulkanObjectInfoTable::GetSemaphoreInfo);
-    uint64_t* out_pValue = pValue->IsNull() ? nullptr : pValue->AllocateOutputData(1, static_cast<uint64_t>(0));
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+    auto in_semaphore = GetObjectInfoTable().GetSemaphoreInfo(semaphore);
+    pValue->IsNull() ? nullptr : pValue->AllocateOutputData(1, static_cast<uint64_t>(0));
 
-    VkResult replay_result = GetDeviceTable(in_device)->GetSemaphoreCounterValue(in_device, in_semaphore, out_pValue);
-    CheckResult("vkGetSemaphoreCounterValue", returnValue, replay_result, call_info, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    VkResult replay_result = OverrideGetSemaphoreCounterValue(GetDeviceTable(in_device->handle)->GetSemaphoreCounterValue, returnValue, in_device, in_semaphore, pValue);
+    CheckResult("vkGetSemaphoreCounterValue", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkWaitSemaphores(
@@ -4801,12 +4801,12 @@ void VulkanReplayConsumer::Process_vkGetSemaphoreCounterValueKHR(
     format::HandleId                            semaphore,
     PointerDecoder<uint64_t>*                   pValue)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    VkSemaphore in_semaphore = MapHandle<SemaphoreInfo>(semaphore, &VulkanObjectInfoTable::GetSemaphoreInfo);
-    uint64_t* out_pValue = pValue->IsNull() ? nullptr : pValue->AllocateOutputData(1, static_cast<uint64_t>(0));
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+    auto in_semaphore = GetObjectInfoTable().GetSemaphoreInfo(semaphore);
+    pValue->IsNull() ? nullptr : pValue->AllocateOutputData(1, static_cast<uint64_t>(0));
 
-    VkResult replay_result = GetDeviceTable(in_device)->GetSemaphoreCounterValueKHR(in_device, in_semaphore, out_pValue);
-    CheckResult("vkGetSemaphoreCounterValueKHR", returnValue, replay_result, call_info, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    VkResult replay_result = OverrideGetSemaphoreCounterValue(GetDeviceTable(in_device->handle)->GetSemaphoreCounterValueKHR, returnValue, in_device, in_semaphore, pValue);
+    CheckResult("vkGetSemaphoreCounterValueKHR", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkWaitSemaphoresKHR(
