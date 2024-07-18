@@ -36,7 +36,24 @@ GFXRECON_BEGIN_NAMESPACE(util)
 class BufferEditorBase
 {
   public:
+    struct NewCallData
+    {
+        format::ApiCallId        call_id;
+        format::ThreadId         thread_id;
+        util::MemoryOutputStream parameter_buffer;
+    };
+
     virtual void SetParameterBuffer(encode::ParameterBuffer* buffer) { parameter_buffer_ = buffer; }
+
+    // Move new call data to the end of input vector
+    // The source data becomes invalid and its container is cleared
+    virtual void AppendPreCalls(std::vector<std::unique_ptr<NewCallData>>& pre_calls)
+    {
+        pre_calls.insert(pre_calls.end(),
+                         std::make_move_iterator(new_pre_calls_.begin()),
+                         std::make_move_iterator(new_pre_calls_.end()));
+        new_pre_calls_.clear();
+    }
 
     virtual bool GetDeleteCurrentCall()
     {
@@ -46,11 +63,20 @@ class BufferEditorBase
     }
 
   protected:
+    NewCallData* CreatePreCall()
+    {
+        new_pre_calls_.push_back(std::make_unique<NewCallData>());
+        return new_pre_calls_.back().get();
+    }
+
     // Points to parameter buffer that can be modified
     encode::ParameterBuffer* parameter_buffer_ = nullptr;
 
     // Set if current call is meant to be removed from the trace
     bool delete_current_call = false;
+
+    // Vector of new calls to add before currently processed call
+    std::vector<std::unique_ptr<NewCallData>> new_pre_calls_;
 };
 
 GFXRECON_END_NAMESPACE(util)
