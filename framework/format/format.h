@@ -323,8 +323,10 @@ struct FillMemoryCommandHeader
 
 struct FixDeviceAddressCommandHeader
 {
-    MetaDataHeader   meta_header;
-    format::HandleId memory_id;
+    MetaDataHeader meta_header;
+    // This could be either device id for standalone binary blobs, or memory id for data associated with particular
+    // vkDeviceMemory
+    format::HandleId relation_id;
     uint64_t         num_of_locations;
 };
 

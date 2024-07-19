@@ -30,29 +30,19 @@ void VulkanDeviceAddressTracker::TrackAccelerationStructureDeviceAddress(format:
 std::vector<format::AddressLocationInfo>
 VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
                                                       const DeviceMemoryWrapper*   memory,
-                                                      void*                        start_address,
+                                                      const void*                  start_address,
                                                       size_t                       offset,
                                                       size_t                       size)
 {
-    gfxrecon::encode::VulkanCaptureManager* cap_manager = gfxrecon::encode::VulkanCaptureManager::Get();
-
     std::lock_guard lg(*this);
-    if (!memory)
-    {
-        return {};
-    }
+
     if (tracked_objects.empty())
     {
         return {};
     }
 
-    auto [min, max] =
-        std::minmax_element(tracked_objects.begin(), tracked_objects.end(), [](const auto& a, const auto& b) {
-            return a.second.original_address < b.second.original_address;
-        });
-    if (!memory->bound_buffers.empty())
+    if (memory && !memory->bound_buffers.empty())
     {
-
         std::vector<BufferWrapper*> buffers;
         buffers.reserve(memory->bound_buffers.size());
 
@@ -78,6 +68,11 @@ VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t
             return {};
         }
     }
+
+    auto [min, max] =
+        std::minmax_element(tracked_objects.begin(), tracked_objects.end(), [](const auto& a, const auto& b) {
+            return a.second.original_address < b.second.original_address;
+        });
 
     std::vector<format::AddressLocationInfo> locations;
     const VkDeviceAddress                    min_addr = min->second.original_address;

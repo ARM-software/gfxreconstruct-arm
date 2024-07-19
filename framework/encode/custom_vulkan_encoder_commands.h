@@ -1455,6 +1455,26 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddress
         manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
     }
 };
+
+template <>
+struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushConstants>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PreProcess_vkCmdPushConstants(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdUpdateBuffer>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PreProcess_vkCmdUpdateBuffer(args...);
+    }
+};
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
