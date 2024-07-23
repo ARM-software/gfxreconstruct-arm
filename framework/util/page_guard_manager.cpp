@@ -287,6 +287,7 @@ bool PageGuardManager::CheckSignalHandler()
             {
                 GFXRECON_LOG_WARNING("PageGuardManager: Signal handler has been removed. Re-installing.")
 
+                instance_->ClearExceptionHandler(instance_->exception_handler_);
                 instance_->exception_handler_       = nullptr;
                 instance_->exception_handler_count_ = 0;
                 instance_->signal_handler_lock_.unlock();
@@ -498,6 +499,11 @@ void PageGuardManager::AddExceptionHandler()
 
         if (result != -1)
         {
+            if (sigaction(MEMPROT_SIGNAL, nullptr, &s_old_sigaction) == -1)
+            {
+                GFXRECON_LOG_ERROR("PageGuardManager failed to get exception handler (errno = %d)", errno);
+            }
+
             exception_handler_       = reinterpret_cast<void*>(PageGuardExceptionHandler);
             exception_handler_count_ = 1;
         }
