@@ -485,6 +485,7 @@ void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode
     functions_.create_command_pool                          = device_table->CreateCommandPool;
     functions_.destroy_command_pool                         = device_table->DestroyCommandPool;
     functions_.allocate_command_buffers                     = device_table->AllocateCommandBuffers;
+    functions_.free_command_buffers                         = device_table->FreeCommandBuffers;
     functions_.get_device_queue                             = device_table->GetDeviceQueue;
     functions_.begin_command_buffer                         = device_table->BeginCommandBuffer;
     functions_.end_command_buffer                           = device_table->EndCommandBuffer;
@@ -504,6 +505,7 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
     VkResult result;
 
     cmd_execute_obj_.device_               = device_;
+    cmd_execute_obj_.free_command_buffers_ = functions_.free_command_buffers;
     cmd_execute_obj_.destroy_command_pool_ = functions_.destroy_command_pool;
 
     VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };

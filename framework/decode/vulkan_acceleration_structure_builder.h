@@ -152,6 +152,7 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCreateCommandPool                           create_command_pool{ nullptr };
         PFN_vkDestroyCommandPool                          destroy_command_pool{ nullptr };
         PFN_vkAllocateCommandBuffers                      allocate_command_buffers{ nullptr };
+        PFN_vkFreeCommandBuffers                          free_command_buffers{ nullptr };
         PFN_vkGetDeviceQueue                              get_device_queue{ nullptr };
         PFN_vkBeginCommandBuffer                          begin_command_buffer{ nullptr };
         PFN_vkEndCommandBuffer                            end_command_buffer{ nullptr };
@@ -272,9 +273,11 @@ class VulkanAccelerationStructureBuilder
         {
             if (initialized_)
             {
+                free_command_buffers_(device_, pool_, 1, &command_buffer_);
                 destroy_command_pool_(device_, pool_, nullptr);
             }
         }
+        PFN_vkFreeCommandBuffers free_command_buffers_{ nullptr };
         PFN_vkDestroyCommandPool destroy_command_pool_{ nullptr };
 
         VkDevice        device_{ VK_NULL_HANDLE };
