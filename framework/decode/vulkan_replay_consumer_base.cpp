@@ -147,7 +147,7 @@ VulkanReplayConsumerBase::VulkanReplayConsumerBase(std::shared_ptr<application::
     application_(application), options_(options), loading_trim_state_(false), replaying_trimmed_capture_(false),
     have_imported_semaphores_(false), fps_info_(nullptr), device_fault_supported_(false),
     device_fault_vendor_data_supported_(false), device_fault_vendor_binary_dump_v1_header_size_(56),
-    omitted_pipeline_cache_data_(false)
+    omitted_pipeline_cache_data_(false), use_acceleration_structure_builder_(false)
 {
     assert(application_ != nullptr);
     assert(options.create_resource_allocator != nullptr);
@@ -493,6 +493,8 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDe
             {
                 AccelerationStructureKHRInfo* info   = object_info_table_.GetAccelerationStructureKHRInfo(infos[i].id);
                 VkAccelerationStructureKHR    handle = info->handle;
+                // Execution of this code means that there was a GetAccelerationStructureDeviceAddressCall
+                // Therefore no need for check if the builder should be used
                 address = acceleration_structure_builders_[device_id]->GetActualDeviceAddress(handle);
                 break;
             }
@@ -3146,11 +3148,19 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
         }
     }
 
+    // Check for VK_KHR_ACCELERATION_STRUCTURE extension after the unsupported are removed
+    if (std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
+            return util::platform::StringCompare(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, extension) == 0;
+        }) != modified_extensions.end())
+    {
+        use_acceleration_structure_builder_ = !allocator->SupportsOpaqueDeviceAddresses();
+    }
+
     const encode::VulkanDeviceTable* device_table = GetDeviceTable(*replay_device);
     buffer_tracker_[*pDevice->GetPointer()] =
         std::make_unique<VulkanBufferTracker>(device_table, physical_device_info, *replay_device, allocator);
 
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         VkPhysicalDeviceRayTracingPipelinePropertiesKHR ray_tracing_pipeline_properties{};
         ray_tracing_pipeline_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
@@ -3211,9 +3221,9 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
             util::MarkingLayersUtil::instance().EndInjected(device_info);
         }
 
-        if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+        if (use_acceleration_structure_builder_)
         {
-            auto builder = acceleration_structure_builders_.erase(device_info->capture_id);
+            acceleration_structure_builders_.erase(device_info->capture_id);
         }
 
         device_info->allocator->Destroy();
@@ -3767,7 +3777,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQuer
     VkQueryPool     query_pool     = query_pool_info->handle;
     VkBuffer        dst_buffer     = dst_buffer_info->handle;
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->OnCmdCopyQueryPoolResults(command_buffer_info,
                                                                                                     query_pool_info);
@@ -3794,7 +3804,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer        
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
 
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         if (dst_buffer->usage & VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
         {
@@ -3833,7 +3843,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoo
               ((original_result == VK_NOT_READY) && (result == VK_SUCCESS))) &&
              (++retries <= kMaxQueryPoolResultsRetries));
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->OnGetQueryPoolResults(device_info, query_pool_info);
     }
@@ -3888,7 +3898,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit func,
 
     auto device_info = object_info_table_.GetDeviceInfo(queue_info->parent_id);
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->OnQueueSubmit(
             queue_info->handle, submitCount, pSubmits->GetPointer());
@@ -5519,14 +5529,14 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
 
         buffer_info->allocator_data = 0;
 
-        if (!allocator->SupportsOpaqueDeviceAddresses())
+        if (use_acceleration_structure_builder_)
         {
             acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
-            buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
             tracked_addresses_.erase(buffer_info->capture_id);
         }
-    }
 
+        buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+    }
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
 }
 
@@ -7936,7 +7946,7 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
     GFXRECON_ASSERT(device_info != nullptr);
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->PostQueuePresent();
     }
@@ -8515,7 +8525,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
         result = func(device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
     }
 
-    if (result == VK_SUCCESS && !device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (result == VK_SUCCESS && use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->OnCreateAccelerationStructure(
             *replay_accel_struct, device_address, modified_create_info.type);
@@ -8543,7 +8553,7 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
         return;
     }
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
-    else if (!loading_trim_state_)
+    if (!loading_trim_state_ && use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdBuildAccelerationStructures(
             command_buffer, infoCount, infos, build_range_infos);
@@ -8562,7 +8572,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
         VkCopyAccelerationStructureInfoKHR* info           = pInfo->GetPointer();
         func(command_buffer, info);
     }
-    else if (!loading_trim_state_)
+    else if (!loading_trim_state_ && use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdCopyAccelerationStructure(
             command_buffer_info->handle, pInfo->GetPointer());
@@ -8586,7 +8596,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
         VkQueryPool                       query_pool           = query_pool_info->handle;
         func(command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
     }
-    else if (!loading_trim_state_)
+    else if (!loading_trim_state_ && use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdWriteAccelerationStructuresProperties(
             command_buffer_info->handle,
@@ -9039,7 +9049,7 @@ VulkanReplayConsumerBase::OverrideGetRayTracingShaderGroupHandlesKHR(PFN_vkGetRa
 
     VkResult result = func(device, pipeline, firstGroup, groupCount, dataSize, output_data);
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->RegisterShaderGroupHandleEntry(
             groupCount, dataSize, pData->GetPointer(), pData->GetOutputPointer());
@@ -9563,7 +9573,7 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
         acceleration_structure = acceleration_structure_info->handle;
     }
 
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->OnDestroyAccelerationStructure(
             acceleration_structure_info);
@@ -10240,7 +10250,7 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(const A
     {
         in_descriptorUpdateTemplate = update_template_info->handle;
     }
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         StoreDescriptorUpdateWithTemplate(pData, device_info);
 
@@ -10380,7 +10390,7 @@ void VulkanReplayConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(cons
         in_descriptorUpdateTemplate = update_template_info->handle;
     }
 
-    if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         StoreDescriptorUpdateWithTemplate(pData, device_info);
 
@@ -10406,15 +10416,13 @@ void VulkanReplayConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaComman
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
 
-    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    if (use_acceleration_structure_builder_)
     {
-        return;
+        MapStructArrayHandles(copy_infos->GetMetaStructPointer(), copy_infos->GetLength(), GetObjectInfoTable());
+
+        acceleration_structure_builders_[device]->ProcessCopyVulkanAccelerationStructuresMetaCommand(
+            copy_infos->GetLength(), copy_infos->GetPointer());
     }
-
-    MapStructArrayHandles(copy_infos->GetMetaStructPointer(), copy_infos->GetLength(), GetObjectInfoTable());
-
-    acceleration_structure_builders_[device]->ProcessCopyVulkanAccelerationStructuresMetaCommand(
-        copy_infos->GetLength(), copy_infos->GetPointer());
 }
 
 void VulkanReplayConsumerBase::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
@@ -10426,16 +10434,15 @@ void VulkanReplayConsumerBase::ProcessVulkanAccelerationStructuresWritePropertie
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
 
-    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    if (use_acceleration_structure_builder_)
     {
-        return;
+
+        VkAccelerationStructureKHR acceleration_structure = MapHandle<AccelerationStructureKHRInfo>(
+            acceleration_structure_id, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
+
+        acceleration_structure_builders_[device_id]->ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+            query_type, acceleration_structure);
     }
-
-    VkAccelerationStructureKHR acceleration_structure = MapHandle<AccelerationStructureKHRInfo>(
-        acceleration_structure_id, &VulkanObjectInfoTable::GetAccelerationStructureKHRInfo);
-
-    acceleration_structure_builders_[device_id]->ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
-        query_type, acceleration_structure);
 }
 
 void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaCommand(
@@ -10451,15 +10458,14 @@ void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaComma
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
 
-    if (allocator->SupportsOpaqueDeviceAddresses() || !loading_trim_state_)
+    if (use_acceleration_structure_builder_)
     {
-        return;
+
+        MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
+
+        acceleration_structure_builders_[device]->ProcessBuildVulkanAccelerationStructuresMetaCommand(
+            info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
     }
-
-    MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
-
-    acceleration_structure_builders_[device]->ProcessBuildVulkanAccelerationStructuresMetaCommand(
-        info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
 }
 
 void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData)
@@ -10623,7 +10629,7 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
     auto allocator = device_info->allocator.get();
     GFXRECON_ASSERT(allocator != nullptr);
 
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[in_commandBuffer->parent_id]->OnCmdTraceRaysKHR(
             in_commandBuffer->handle,
@@ -10736,7 +10742,7 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
     const auto*                 writes_meta          = p_descriptor_writes->GetMetaStructPointer();
 
     auto allocator = device_info->allocator.get();
-    if (!allocator->SupportsOpaqueDeviceAddresses())
+    if (use_acceleration_structure_builder_)
     {
         // Store the information about buffers that are to be used as Storage Buffers
         std::vector<BufferInfo*>                   buffer_infos;
