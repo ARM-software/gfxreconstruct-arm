@@ -78,6 +78,7 @@ struct VulkanReplayOptions : public ReplayOptions
     std::string                  load_pipeline_cache_filename;
     std::string                  save_pipeline_cache_filename;
     bool                         add_new_pipeline_caches;
+    std::vector<std::string>     marking_layers_names;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -23,6 +23,8 @@
 #include "decode/vulkan_offscreen_swapchain.h"
 #include "encode/vulkan_handle_wrapper_util.h"
 
+#include "util/marking_layers.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -100,7 +102,9 @@ VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                  
     }
 
     VkDevice device = device_info->handle;
+    util::MarkingLayersUtil::instance().BeginInjected(device_info);
     device_table_->GetDeviceQueue(device, default_queue_family_index_, 0, &default_queue_);
+    util::MarkingLayersUtil::instance().EndInjected(device_info);
 
     // If this option is set, a command buffer submission with a `VkFrameBoundaryEXT` must be called each time
     // `vkQueuePresentKHR` should have been called by the offscreen swapchain. So a maximum of work must be done at
@@ -270,8 +274,9 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
         submitInfo.pCommandBuffers      = nullptr;
         submitInfo.signalSemaphoreCount = 0;
         submitInfo.pSignalSemaphores    = nullptr;
-
+        util::MarkingLayersUtil::instance().BeginInjected(queue_info);
         device_table_->QueueSubmit(queue_info->handle, 1, &submitInfo, VK_NULL_HANDLE);
+        util::MarkingLayersUtil::instance().EndInjected(queue_info);
     }
     else if (present_info->waitSemaphoreCount > 0)
     {
@@ -329,7 +334,9 @@ VkResult VulkanOffscreenSwapchain::SignalSemaphoresFence(const QueueInfo*   queu
     {
         queue = default_queue_;
     }
-    return device_table_->QueueSubmit(queue, 1, &submit_info, fence);
+    // TODO: Mark as inserted
+    VkResult result = device_table_->QueueSubmit(queue, 1, &submit_info, fence);
+    return result;
 }
 
 GFXRECON_END_NAMESPACE(decode)

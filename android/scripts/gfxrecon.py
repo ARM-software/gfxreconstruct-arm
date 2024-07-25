@@ -125,7 +125,9 @@ def CreateReplayParser():
     parser.add_argument('-m', '--memory-translation', metavar='MODE', choices=['none', 'remap', 'realign', 'rebind'], help='Enable memory translation for replay on GPUs with memory types that are not compatible with the capture GPU\'s memory types.  Available modes are: none, remap, realign, rebind (forwarded to replay tool)')
     parser.add_argument('--swapchain', metavar='MODE', choices=['virtual', 'captured', 'offscreen'], help='Choose a swapchain mode to replay. Available modes are: virtual, captured, offscreen (forwarded to replay tool)')
     parser.add_argument('--use-captured-swapchain-indices', action='store_true', default=False, help='Same as "--swapchain captured". Ignored if the "--swapchain" option is used.')
-    parser.add_argument('--flush-inside-measurement-range', action='store_true', default=False, help='If this is specified the replayer will flush and wait for all current GPU work to finish at the end of each frame inside the measurement range')
+    parser.add_argument('--flush-inside-measurement-range', action='store_true', default=False,
+                        help='If this is specified the replayer will flush and wait for all current GPU work to finish at the end of each frame inside the measurement range')
+    parser.add_argument('--marking-layers', metavar='names', help='Specify the names of the api call marking layers to be used')
     parser.add_argument('file', nargs='?', help='File on device to play (forwarded to replay tool)')
 
     return parser
@@ -270,6 +272,11 @@ def MakeExtrasString(args):
 
     if args.flush_inside_measurement_range:
         arg_list.append('--flush-inside-measurement-range')
+
+    if args.marking_layers:
+        arg_list.append('--marking-layers')
+        arg_list.append('{}'.format(args.marking_layers))
+
 
     if args.file:
         arg_list.append(args.file)

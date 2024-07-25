@@ -46,6 +46,7 @@ class VulkanAccelerationStructureBuilder
 {
   public:
     VulkanAccelerationStructureBuilder(const encode::DeviceTable*                       device_table,
+                                       const PhysicalDeviceInfo*                        physical_device_info,
                                        VkDevice                                         device,
                                        VulkanResourceAllocator*                         allocator,
                                        const VkPhysicalDeviceMemoryProperties&          properties,
@@ -285,6 +286,7 @@ class VulkanAccelerationStructureBuilder
 
   private:
     Functions                        functions_;
+    const PhysicalDeviceInfo*        physical_device_info_;
     VkDevice                         device_;
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
