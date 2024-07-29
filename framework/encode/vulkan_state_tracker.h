@@ -463,6 +463,11 @@ class VulkanStateTracker
                         InitializeGroupObjectState<ParentHandle, SecondaryHandle, Wrapper, CreateInfo>(
                             parent_handle, secondary_handle, wrapper, create_info, create_call_id, create_parameters);
                 }
+                // If it is a duplicate handle add, make sure that creation parameters are updated
+                else
+                {
+                    wrapper->create_parameters = create_parameters;
+                }
             }
         }
     }

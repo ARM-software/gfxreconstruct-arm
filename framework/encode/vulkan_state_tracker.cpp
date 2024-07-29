@@ -1600,7 +1600,12 @@ void VulkanStateTracker::DestroyState(SwapchainKHRWrapper* wrapper)
     std::unique_lock<std::mutex> lock(state_table_mutex_);
     for (auto entry : wrapper->child_images)
     {
-        state_table_.RemoveWrapper(entry);
+        // Note that after this the create parameters are not valid
+        // as the swapchain is destroyed
+        if (entry->parent_swapchains.size() <= 1)
+        {
+            state_table_.RemoveWrapper(entry);
+        }
     }
 }
 
