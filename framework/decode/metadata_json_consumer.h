@@ -26,6 +26,7 @@
 
 #include "util/defines.h"
 #include "format/format_json.h"
+#include "generated/generated_vulkan_struct_to_json.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -303,13 +304,8 @@ class MetadataJsonConsumer : public Base
 
         HandleToJson(jdata["device"], device, json_options);
         FieldToJson(jdata["infoCount"], info_count, json_options);
-        // TODO
-        // FieldToJson(jdata["pInfos"], pInfos, json_options);
-        // FieldToJson(jdata["ppBuildRangeInfos"], ppRangeInfos, json_options);
-        if (!instance_buffers_data.empty())
-        {
-            FieldToJson(jdata["instance_buffer_data"], "[Binary data]", json_options);
-        }
+        FieldToJson(jdata["pInfos"], pInfos, json_options);
+        FieldToJson(jdata["ppBuildRangeInfos"], ppRangeInfos, json_options);
         WriteBlockEnd();
     }
     void ProcessCopyVulkanAccelerationStructuresMetaCommand(
@@ -319,8 +315,7 @@ class MetadataJsonConsumer : public Base
         auto&              jdata        = WriteMetaCommandStart("VulkanCopyAccelerationStructuresMetaCommand");
         HandleToJson(jdata["device"], device, json_options);
         FieldToJson(jdata["infoCount"], copy_infos->GetLength(), json_options);
-        // TODO
-        // FieldToJson(jdata["pInfos"], copy_infos, json_options);
+        FieldToJson(jdata["pInfos"], copy_infos, json_options);
         WriteBlockEnd();
     }
 
