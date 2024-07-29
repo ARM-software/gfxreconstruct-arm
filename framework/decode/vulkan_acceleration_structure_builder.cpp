@@ -21,6 +21,7 @@
 */
 #include "graphics/vulkan_resources_util.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
+#include "decode/vulkan_micromap_builder.h"
 #include "util/marking_layers.h"
 
 #include <algorithm>
@@ -641,6 +642,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
         UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
 
+    VulkanMicromapBuilder::OnCmdBuildAccStrHandling(buffer_tracker_, info_count, geometry_infos);
     functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
 }
 
@@ -685,6 +687,7 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
     {
         auto [it, inserted] = scratch_double_buffer_.scratches_current.emplace(
             capture_id, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
+
         auto& new_scratch                        = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
             scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
