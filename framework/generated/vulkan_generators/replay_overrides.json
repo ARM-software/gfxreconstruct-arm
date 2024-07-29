@@ -137,6 +137,10 @@
     "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",
     "vkCmdCopyBuffer": "OverrideCmdCopyBuffer",
     "vkCmdPushConstants": "OverrideCmdPushConstants",
-    "vkCmdUpdateBuffer": "OverrideCmdUpdateBuffer"
+    "vkCmdUpdateBuffer": "OverrideCmdUpdateBuffer",
+    "vkGetMicromapBuildSizesEXT": "OverrideGetMicromapBuildSizesEXT",
+    "vkCreateMicromapEXT": "OverrideCreateMicromapEXT",
+    "vkDestroyMicromapEXT": "OverrideDestroyMicromapEXT",
+    "vkCmdBuildMicromapsEXT": "OverrideCmdBuildMicromapsEXT"
   }
 }
