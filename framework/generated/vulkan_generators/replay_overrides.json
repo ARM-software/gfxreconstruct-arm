@@ -143,6 +143,6 @@
     "vkGetMicromapBuildSizesEXT": "OverrideGetMicromapBuildSizesEXT",
     "vkCreateMicromapEXT": "OverrideCreateMicromapEXT",
     "vkDestroyMicromapEXT": "OverrideDestroyMicromapEXT",
-    "vkCmdBuildMicromapsEXT": "OverrideCmdBuildMicromapsEXT"
+    "vkCmdBuildMicromapsEXT": "OverrideCmdBuildMicromapsEXT",
   }
 }

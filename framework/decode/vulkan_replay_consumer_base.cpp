@@ -8678,6 +8678,30 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
     }
 }
 
+void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
+    PFN_vkCmdBuildMicromapsEXT                            func,
+    CommandBufferInfo*                                    command_buffer_info,
+    uint32_t                                              infoCount,
+    StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos)
+{
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        VkCommandBuffer         command_buffer = command_buffer_info->handle;
+        VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+
+        func(command_buffer, infoCount, infos);
+        return;
+    }
+    // Use the builder when the rebind allocator is selected and the trimming is done / not used
+    else if (!loading_trim_state_)
+    {
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(
+            command_buffer_info->handle, infoCount, pInfos->GetPointer());
+    }
+}
+
 void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
     PFN_vkCmdCopyAccelerationStructureKHR                             func,
     CommandBufferInfo*                                                command_buffer_info,
@@ -9706,6 +9730,36 @@ void VulkanReplayConsumerBase::OverrideDestroyMicromapEXT(
     const DeviceInfo*                                    device_info,
     const MicromapEXTInfo*                               micromap_info,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    VkMicromapEXT                         micromap       = VK_NULL_HANDLE;
+    VulkanResourceAllocator::ResourceData allocator_data = 0;
+
+    if (micromap_info != nullptr)
+    {
+        micromap = micromap_info->handle;
+    }
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        micromap_builders_[device_info->capture_id]->OnDestroyMicromap(micromap_info);
+        tracked_addresses_.erase(micromap_info->capture_id);
+    }
+
+    func(device_info->handle, micromap, GetAllocationCallbacks(pAllocator));
+}
+
+void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
+    PFN_vkUpdateDescriptorSets                          func,
+    const DeviceInfo*                                   device_info,
+    uint32_t                                            descriptor_write_count,
+    StructPointerDecoder<Decoded_VkWriteDescriptorSet>* descriptor_writes_decoder,
+    uint32_t                                            descriptor_copy_count,
+    StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  descriptor_copies_decoder)
 {
     assert(device_info != nullptr);
 
