@@ -404,10 +404,10 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t memory_id,
 void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                              const format::AddressLocationInfo*           infos)
 {
-    const DeviceInfo*              device_info = object_info_table_.GetDeviceInfo(header.relation_id);
-    const DeviceMemoryInfo*        memory_info = nullptr;
-    const VulkanResourceAllocator* allocator   = nullptr;
-    format::HandleId               device_id;
+    const DeviceInfo*        device_info = object_info_table_.GetDeviceInfo(header.relation_id);
+    const DeviceMemoryInfo*  memory_info = nullptr;
+    VulkanResourceAllocator* allocator   = nullptr;
+    format::HandleId         device_id;
 
     if (device_info)
     {
@@ -427,6 +427,11 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDe
         GFXRECON_LOG_WARNING("Skipping memory fix for VkDeviceMemory object (ID = %" PRIu64
                              ") that is not associated with a resource allocator",
                              header.relation_id);
+        return;
+    }
+
+    if (allocator->SupportsOpaqueDeviceAddresses())
+    {
         return;
     }
 
