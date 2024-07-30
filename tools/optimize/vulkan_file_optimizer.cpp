@@ -84,6 +84,9 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     // Each modifier will get access to parameter buffer to read and modify
     // The same parameter buffer will be passed to next modifier in chain
     bool delete_current_call = false;
+
+    std::vector<std::unique_ptr<util::BufferEditorBase::NewCallData>> new_pre_calls;
+
     for (auto& modifier : optimization_data_->modifiers)
     {
         modifier->SetParameterBuffer(&buffer);
@@ -93,6 +96,12 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
         decode::DecodeAllocator::End();
         decoder.RemoveConsumer(modifier.get());
         delete_current_call |= modifier->GetDeleteCurrentCall();
+        modifier->AppendPreCalls(new_pre_calls);
+    }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
     }
 
     // TODO: Write buffer with calls to add pre/post current call
@@ -105,9 +114,9 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
 
 // TODO: This is the same code used by CaptureManager to write function call data. It could be moved to a format
 // utility.
-void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId         call_id,
-                                            format::ThreadId          thread_id,
-                                            util::MemoryOutputStream* parameter_buffer)
+void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call_id,
+                                            format::ThreadId                thread_id,
+                                            const util::MemoryOutputStream* parameter_buffer)
 {
     assert(parameter_buffer != nullptr);
 

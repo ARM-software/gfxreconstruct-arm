@@ -47,9 +47,9 @@ class VulkanFileOptimizer : public FileOptimizer
   private:
     virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id) override;
 
-    void WriteFunctionCall(format::ApiCallId         call_id,
-                           format::ThreadId          thread_id,
-                           util::MemoryOutputStream* parameter_buffer);
+    void WriteFunctionCall(format::ApiCallId               call_id,
+                           format::ThreadId                thread_id,
+                           const util::MemoryOutputStream* parameter_buffer);
 
     VulkanOptimizationData* optimization_data_;
     decode::VulkanDecoder   decoder;
