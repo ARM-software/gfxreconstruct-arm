@@ -3006,6 +3006,22 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
             // Remove enabled extensions that are not available on the replay device, but
             // that can still be safely ignored.
             feature_util::RemoveIgnorableExtensions(available_extensions, &modified_extensions);
+            std::string diff;
+            for (const auto name : modified_extensions)
+            {
+                if (std::find_if(available_extensions.begin(),
+                                 available_extensions.end(),
+                                 [name](VkExtensionProperties property) {
+                                     return util::platform::StringCompare(name, property.extensionName) == 0;
+                                 }) != available_extensions.end())
+                {
+                    diff = diff + " " + name;
+                }
+            }
+            if (diff != "")
+            {
+                GFXRECON_LOG_WARNING("Extensions %s is not supported on device but requested", diff.c_str());
+            }
         }
     }
     else
