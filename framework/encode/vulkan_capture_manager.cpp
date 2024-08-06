@@ -1749,11 +1749,39 @@ void VulkanCaptureManager::PostProcess_vkCreateSwapchainKHR(VkResult            
         auto new_swapchain_wrapper           = GetWrapper<SwapchainKHRWrapper>(*pSwapchain);
         old_swapchain_wrapper->new_swapchain = new_swapchain_wrapper;
         new_swapchain_wrapper->old_swapchain = old_swapchain_wrapper;
+    }
+}
 
-        // Iterate over the images acquired from this swapchain, and add the new swaphchain as parent swapchain
-        for (ImageWrapper* image : old_swapchain_wrapper->child_images)
+void VulkanCaptureManager::PostProcess_vkGetSwapchainImagesKHR(VkResult       result,
+                                                               VkDevice       device,
+                                                               VkSwapchainKHR swapchain,
+                                                               uint32_t*      pSwapchainImageCount,
+                                                               VkImage*       pSwapchainImages)
+{
+    if (!pSwapchainImages)
+    {
+        return;
+    }
+
+    SwapchainKHRWrapper* swapchain_wrapper = GetWrapper<SwapchainKHRWrapper>(swapchain);
+    // Iterate over the images acquired from this swapchain, and add the new swaphchain as parent swapchain
+    if (!swapchain_wrapper->old_swapchain)
+    {
+        return;
+    }
+    SwapchainKHRWrapper* old_swapchain = swapchain_wrapper->old_swapchain;
+
+    for (uint32_t image = 0; image < *pSwapchainImageCount; ++image)
+    {
+        ImageWrapper* image_wrapper = GetWrapper<ImageWrapper>(pSwapchainImages[image]);
+        for (ImageWrapper* wrapper : old_swapchain->child_images)
         {
-            image->parent_swapchains.insert(new_swapchain_wrapper->handle);
+            if (image_wrapper->handle_id == wrapper->handle_id)
+            {
+                // New swapchain got the same image as old swapchain, need to update parent swapchains
+                image_wrapper->parent_swapchains.insert(old_swapchain->handle);
+                wrapper->parent_swapchains.insert(swapchain_wrapper->handle);
+            }
         }
     }
 }

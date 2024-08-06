@@ -248,6 +248,15 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateSwapchainKHR>
         manager->PostProcess_vkCreateSwapchainKHR(args...);
     }
 };
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetSwapchainImagesKHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkGetSwapchainImagesKHR(args...);
+    }
+};
 
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkAcquireNextImageKHR>

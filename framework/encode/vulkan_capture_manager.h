@@ -381,6 +381,12 @@ class VulkanCaptureManager : public CaptureManager
                                           const VkAllocationCallbacks*    pAllocator,
                                           VkSwapchainKHR*                 pSwapchain);
 
+    void PostProcess_vkGetSwapchainImagesKHR(VkResult       result,
+                                             VkDevice       device,
+                                             VkSwapchainKHR swapchain,
+                                             uint32_t*      pSwapchainImageCount,
+                                             VkImage*       pSwapchainImages);
+
     void PostProcess_vkEnumeratePhysicalDevices(VkResult          result,
                                                 VkInstance        instance,
                                                 uint32_t*         pPhysicalDeviceCount,
