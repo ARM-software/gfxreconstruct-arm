@@ -3018,12 +3018,12 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
                                  available_extensions.end(),
                                  [name](VkExtensionProperties property) {
                                      return util::platform::StringCompare(name, property.extensionName) == 0;
-                                 }) != available_extensions.end())
+                                 }) == available_extensions.end())
                 {
                     diff = diff + " " + name;
                 }
             }
-            if (diff != "")
+            if (!diff.empty())
             {
                 GFXRECON_LOG_WARNING("Extensions %s is not supported on device but requested", diff.c_str());
             }
