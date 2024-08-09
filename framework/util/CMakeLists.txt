@@ -34,6 +34,8 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/buffer_editor_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_modifier_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/buffer_writer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/buffer_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/compressor.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.cpp
@@ -45,7 +47,6 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/file_path.h
                     ${CMAKE_CURRENT_LIST_DIR}/file_path.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/hash.h
-                    ${CMAKE_CURRENT_LIST_DIR}/hash.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/image_writer.h
                     ${CMAKE_CURRENT_LIST_DIR}/image_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/json_util.h
@@ -67,12 +68,16 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/output_stream.h
                     ${CMAKE_CURRENT_LIST_DIR}/page_guard_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/page_guard_manager.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/page_guard_manager_uffd.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/page_status_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/platform.h
                     ${CMAKE_CURRENT_LIST_DIR}/settings_loader.h
                     ${CMAKE_CURRENT_LIST_DIR}/settings_loader.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/options.h
                     ${CMAKE_CURRENT_LIST_DIR}/options.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/spirv_helper.h
+                    ${CMAKE_CURRENT_LIST_DIR}/spirv_parsing_util.h
+                    ${CMAKE_CURRENT_LIST_DIR}/spirv_parsing_util.cpp
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/interception/hooking_detours.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/interception/hooking_detours.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/interception/interception_util.h>
@@ -102,6 +107,7 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/custom_common_to_string.cpp
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_string.h
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_string.cpp
+                    ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_stype_util.h
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_loader.h>
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_loader.cpp>
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_keysyms_loader.h>
@@ -119,7 +125,7 @@ target_include_directories(gfxrecon_util
                            PUBLIC
                                ${CMAKE_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
-target_link_libraries(gfxrecon_util platform_specific vulkan_registry nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
+target_link_libraries(gfxrecon_util platform_specific vulkan_registry spirv_registry spirv-reflect-static nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_link_libraries(gfxrecon_util $<$<BOOL:${WIN32}>:version.lib>)
 
 if (UNIX AND NOT APPLE)

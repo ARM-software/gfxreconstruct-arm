@@ -1867,38 +1867,6 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSet2KHR(
     }
 }
 
-void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            commandBuffer,
-    StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo)
-{
-    assert(pPushDescriptorSetWithTemplateInfo != nullptr);
-
-    if (!pPushDescriptorSetWithTemplateInfo->IsNull() && (pPushDescriptorSetWithTemplateInfo->HasData()))
-    {
-        auto pPushDescriptorSetWithTemplateInfo_ptr = pPushDescriptorSetWithTemplateInfo->GetMetaStructPointer();
-        const VkBaseInStructure* pnext_header = nullptr;
-        if (pPushDescriptorSetWithTemplateInfo_ptr->pNext != nullptr)
-        {
-            pnext_header = reinterpret_cast<const VkBaseInStructure*>(pPushDescriptorSetWithTemplateInfo_ptr->pNext->GetPointer());
-        }
-        while (pnext_header)
-        {
-            switch (pnext_header->sType)
-            {
-                default:
-                    break;
-                case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
-                {
-                    auto pnext_value = reinterpret_cast<const Decoded_VkPipelineLayoutCreateInfo*>(pPushDescriptorSetWithTemplateInfo_ptr->pNext->GetPointer());
-                    break;
-                }
-            }
-            pnext_header = pnext_header->pNext;
-        }
-    }
-}
-
 void VulkanReferencedResourceConsumer::Process_vkCmdSetDescriptorBufferOffsets2EXT(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,

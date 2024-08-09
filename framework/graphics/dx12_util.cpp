@@ -32,6 +32,12 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(graphics)
 GFXRECON_BEGIN_NAMESPACE(dx12)
 
+UINT GetTexturePitch(UINT64 width)
+{
+    return (width * graphics::BytesPerPixel + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) /
+           D3D12_TEXTURE_DATA_PITCH_ALIGNMENT * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+}
+
 void TakeScreenshot(std::unique_ptr<graphics::DX12ImageRenderer>& image_renderer,
                     ID3D12CommandQueue*                           queue,
                     IDXGISwapChain*                               swapchain,
@@ -76,8 +82,7 @@ void TakeScreenshot(std::unique_ptr<graphics::DX12ImageRenderer>& image_renderer
                 {
                     D3D12_RESOURCE_DESC fb_desc = frame_buffer_resource->GetDesc();
 
-                    auto pitch = (fb_desc.Width * graphics::BytesPerPixel + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) /
-                                 D3D12_TEXTURE_DATA_PITCH_ALIGNMENT * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+                    auto pitch = GetTexturePitch(fb_desc.Width);
 
                     graphics::CpuImage captured_image = {};
 
@@ -132,7 +137,8 @@ void TakeScreenshot(std::unique_ptr<graphics::DX12ImageRenderer>& image_renderer
                                                                           static_cast<unsigned int>(fb_desc.Height),
                                                                           datasize,
                                                                           std::data(captured_image.data),
-                                                                          static_cast<unsigned int>(pitch)))
+                                                                          static_cast<unsigned int>(pitch),
+                                                                          util::imagewriter::kFormat_RGBA))
                                     {
                                         GFXRECON_LOG_ERROR(
                                             "Screenshot could not be created: failed to write PNG file %s",
@@ -349,7 +355,11 @@ void GetAccelerationStructureInputsBufferEntries(D3D12_BUILD_RAYTRACING_ACCELERA
                 }
                 else
                 {
-                    GFXRECON_LOG_ERROR("D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC's vertex data has 0 byte size.");
+                    GFXRECON_LOG_DEBUG("D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC's vertex data has 0 byte size. "
+                                       "(vertex count: %u, vertex stride in bytes: %" PRIu64
+                                       "). Skipping acceleration structure input data for this desc.",
+                                       triangles_desc.VertexCount,
+                                       triangles_desc.VertexBuffer.StrideInBytes);
                 }
             }
             else if (geom_desc->Type == D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS)

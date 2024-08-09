@@ -26,9 +26,9 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanBufferTracker::VulkanBufferTracker(const encode::DeviceTable* device_table,
-                                         VkDevice                   device,
-                                         VulkanResourceAllocator*   allocator) :
+VulkanBufferTracker::VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
+                                         VkDevice                         device,
+                                         VulkanResourceAllocator*         allocator) :
     device_(device),
     allocator_(allocator)
 {
@@ -128,7 +128,7 @@ BufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress
     }
 }
 
-void VulkanBufferTracker::InitializeFunctionPointers(const encode::DeviceTable* device_table)
+void VulkanBufferTracker::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
 {
     functions_.get_buffer_device_address =
         (device_table->GetBufferDeviceAddress != gfxrecon::encode::noop::GetBufferDeviceAddress)

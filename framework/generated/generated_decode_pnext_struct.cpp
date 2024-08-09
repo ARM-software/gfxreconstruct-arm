@@ -29,8 +29,8 @@
 
 #include "decode/custom_vulkan_struct_decoders.h"
 #include "decode/decode_allocator.h"
-#include "decode/pnext_node.h"
-#include "decode/pnext_typed_node.h"
+#include "decode/vulkan_pnext_node.h"
+#include "decode/vulkan_pnext_typed_node.h"
 #include "generated/generated_vulkan_struct_decoders.h"
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "util/logging.h"
@@ -2113,6 +2113,18 @@ size_t DecodePNextStruct(const uint8_t* parameter_buffer, size_t buffer_size,  P
                 break;
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT:
                 (*pNext) = DecodeAllocator::Allocate<PNextTypedNode<Decoded_VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT>>();
+                bytes_read = (*pNext)->Decode(parameter_buffer, buffer_size);
+                break;
+            case VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV:
+                (*pNext) = DecodeAllocator::Allocate<PNextTypedNode<Decoded_VkLatencySubmissionPresentIdNV>>();
+                bytes_read = (*pNext)->Decode(parameter_buffer, buffer_size);
+                break;
+            case VK_STRUCTURE_TYPE_SWAPCHAIN_LATENCY_CREATE_INFO_NV:
+                (*pNext) = DecodeAllocator::Allocate<PNextTypedNode<Decoded_VkSwapchainLatencyCreateInfoNV>>();
+                bytes_read = (*pNext)->Decode(parameter_buffer, buffer_size);
+                break;
+            case VK_STRUCTURE_TYPE_LATENCY_SURFACE_CAPABILITIES_NV:
+                (*pNext) = DecodeAllocator::Allocate<PNextTypedNode<Decoded_VkLatencySurfaceCapabilitiesNV>>();
                 bytes_read = (*pNext)->Decode(parameter_buffer, buffer_size);
                 break;
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_RENDER_AREAS_FEATURES_QCOM:

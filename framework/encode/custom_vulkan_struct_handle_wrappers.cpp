@@ -29,6 +29,7 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
+GFXRECON_BEGIN_NAMESPACE(vulkan_wrappers)
 
 static const VkDescriptorImageInfo* UnwrapDescriptorImageInfoStructArrayHandles(VkDescriptorType             type,
                                                                                 const VkDescriptorImageInfo* values,
@@ -147,5 +148,6 @@ void UnwrapStructHandles(VkAccelerationStructureBuildGeometryInfoKHR* value, Han
     }
 }
 
+GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

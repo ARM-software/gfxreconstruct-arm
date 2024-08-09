@@ -45,7 +45,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanAccelerationStructureBuilder
 {
   public:
-    VulkanAccelerationStructureBuilder(const encode::DeviceTable*                       device_table,
+    VulkanAccelerationStructureBuilder(const encode::VulkanDeviceTable*                 device_table,
                                        const PhysicalDeviceInfo*                        physical_device_info,
                                        VkDevice                                         device,
                                        VulkanResourceAllocator*                         allocator,
@@ -139,7 +139,7 @@ class VulkanAccelerationStructureBuilder
                                              VkBuffer                              dst_buffer);
 
   private:
-    void InitializeFunctionPointers(const encode::DeviceTable* device_table);
+    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };
@@ -229,14 +229,15 @@ class VulkanAccelerationStructureBuilder
                             const VkDescriptorUpdateTemplateEntryKHR&          template_update_entry,
                             gfxrecon::decode::DescriptorUpdateTemplateDecoder* data)
         {
-            write_      = VkWriteDescriptorSet{ .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                                .pNext           = nullptr,
-                                                .dstSet          = descriptor_set,
-                                                .dstBinding      = template_update_entry.dstBinding,
-                                                .dstArrayElement = template_update_entry.dstArrayElement,
-                                                .descriptorCount =
+            write_ = VkWriteDescriptorSet{ .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                           .pNext           = nullptr,
+                                           .dstSet          = descriptor_set,
+                                           .dstBinding      = template_update_entry.dstBinding,
+                                           .dstArrayElement = template_update_entry.dstArrayElement,
+                                           .descriptorCount =
                                                static_cast<uint32_t>(data->GetAccelerationStructureKHRCount()),
-                                                .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR };
+                                           .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR };
+
             p_next_data = VkWriteDescriptorSetAccelerationStructureKHR{
                 .sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
                 .pNext                      = nullptr,

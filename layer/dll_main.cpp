@@ -60,9 +60,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 __attribute__((constructor)) static void create_trace_layer()
 {
-    gfxrecon::encode::VulkanCaptureManager::SetLayerFuncs(gfxrecon::dispatch_CreateInstance,
-                                                          gfxrecon::dispatch_CreateDevice,
-                                                          gfxrecon::EnumerateInstanceExtensionProperties);
+    gfxrecon::encode::VulkanCaptureManager::SetLayerFuncs(gfxrecon::vulkan_entry::dispatch_CreateInstance,
+                                                          gfxrecon::vulkan_entry::dispatch_CreateDevice,
+                                                          gfxrecon::vulkan_entry::EnumerateInstanceExtensionProperties);
 }
 
 __attribute__((destructor)) static void destroy_trace_layer()

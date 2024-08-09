@@ -1310,7 +1310,6 @@ struct Decoded_VkBindMemoryStatusKHR;
 struct Decoded_VkBindDescriptorSetsInfoKHR;
 struct Decoded_VkPushConstantsInfoKHR;
 struct Decoded_VkPushDescriptorSetInfoKHR;
-struct Decoded_VkPushDescriptorSetWithTemplateInfoKHR;
 struct Decoded_VkSetDescriptorBufferOffsetsInfoEXT;
 struct Decoded_VkBindDescriptorBufferEmbeddedSamplersInfoEXT;
 
@@ -1320,7 +1319,6 @@ size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBindDescriptorSetsInfoKHR* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPushConstantsInfoKHR* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPushDescriptorSetInfoKHR* wrapper);
-size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPushDescriptorSetWithTemplateInfoKHR* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSetDescriptorBufferOffsetsInfoEXT* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBindDescriptorBufferEmbeddedSamplersInfoEXT* wrapper);
 
@@ -2471,6 +2469,26 @@ size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded
 struct Decoded_VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT;
 
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT* wrapper);
+
+struct Decoded_VkLatencySleepModeInfoNV;
+struct Decoded_VkLatencySleepInfoNV;
+struct Decoded_VkSetLatencyMarkerInfoNV;
+struct Decoded_VkLatencyTimingsFrameReportNV;
+struct Decoded_VkGetLatencyMarkerInfoNV;
+struct Decoded_VkLatencySubmissionPresentIdNV;
+struct Decoded_VkSwapchainLatencyCreateInfoNV;
+struct Decoded_VkOutOfBandQueueTypeInfoNV;
+struct Decoded_VkLatencySurfaceCapabilitiesNV;
+
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkLatencySleepModeInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkLatencySleepInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSetLatencyMarkerInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkLatencyTimingsFrameReportNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkGetLatencyMarkerInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkLatencySubmissionPresentIdNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkSwapchainLatencyCreateInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkOutOfBandQueueTypeInfoNV* wrapper);
+size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkLatencySurfaceCapabilitiesNV* wrapper);
 
 struct Decoded_VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM;
 struct Decoded_VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM;

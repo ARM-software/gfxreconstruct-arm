@@ -218,9 +218,10 @@ Usage:
                         [--onhb | --omit-null-hardware-buffers]
                         [-m <mode> | --memory-translation <mode>]
                         [--fw <width,height> | --force-windowed <width,height>]
+                        [--fwo <x,y> | --force-windowed-origin <x,y>]
                         [--log-level <level>] [--log-file <file>] [--log-debugview]
                         [--batching-memory-usage <pct>]
-                        [--api <api>] <file>
+                        [--dump-resources <submit-index,command-index,drawcall-index> <file>
 
 Required arguments:
   <file>                Path to the capture file to replay.
@@ -281,12 +282,8 @@ Optional arguments:
                         original capture devices.
 
 Windows-only:
-  --api <api>           Use the specified API for replay
-                        Available values are:
-                            vulkan      Replay with the Vulkan API enabled.
-                            d3d12       Replay with the Direct3D API enabled.
-                            all         Replay with both the Vulkan and Direct3D 12 APIs
-                                        enabled. This is the default.
+  --fwo <x,y>           Force windowed mode if not already, and allow setting of a custom window location.
+                        (Same as --force-windowed-origin)
 
 Vulkan-only:
   --sfa                 Skip vkAllocateMemory, vkAllocateCommandBuffers, and
@@ -348,6 +345,12 @@ D3D12-only:
                                for batching and does not guarantee overall max memory usage.
                                Acceptable values range from 0 to 100 (default: 80). 0 means no batching,
                                100 means use all available system and GPU memory.
+  --dump-resources <submit-index,command-index,drawcall-index>
+                                Output binaray resources for a specific drawcall.
+                                Include vertex, index, const buffer, shader resource, render target,
+                                and depth stencil. And for before and after drawcall.
+                                Arguments becomes three indices, submit index, command index,
+                                drawcall index. The command index is based on its in ExecuteCommandLists.
 ```
 
 

@@ -91,8 +91,8 @@ def parse_args():
         help='Build target configuration. Can be one of: {0}'.format(
             ', '.join(CONFIGURATIONS)))
     arg_parser.add_argument('-j', '--parallel', dest='jobs',
-            action='store', default="1",
-            help='Specify a parallel build level. Requires CMake 3.12 or above')
+            action='store', default=None,
+            help='Specify a parallel build level. Level 0 is equivalent to the use of all logical CPUs')
     arg_parser.add_argument(
         '--clean', dest='clean', action='store_true', default=False,
         help='Clean the build targets')

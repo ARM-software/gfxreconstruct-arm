@@ -829,6 +829,16 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSetWi
 };
 
 template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushDescriptorSetWithTemplate2KHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdPushDescriptorSetWithTemplate2KHR(args...);
+    }
+};
+
+template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkResetDescriptorPool>
 {
     template <typename... Args>
@@ -1228,6 +1238,16 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdInsertDebugUtilsLab
 };
 
 template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateShaderModule>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCreateShaderModule(args...);
+    }
+};
+
+template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateDevice>
 {
     template <typename... Args>
@@ -1236,6 +1256,7 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateDevice>
         manager->PostProcess_vkCreateDevice(args...);
     }
 };
+
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateSemaphore>
 {
@@ -1324,15 +1345,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateImageView>
     static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
     {
         manager->PostProcess_vkCreateImageView(args...);
-    }
-};
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateShaderModule>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
-    {
-        manager->PostProcess_vkCreateShaderModule(args...);
     }
 };
 template <>

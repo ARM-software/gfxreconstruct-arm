@@ -31,8 +31,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanVirtualSwapchain : public VulkanSwapchain
 {
   public:
-    VulkanVirtualSwapchain(bool performance_mode);
-
     virtual ~VulkanVirtualSwapchain() override {}
 
     virtual VkResult CreateSwapchainKHR(VkResult                              original_result,
@@ -41,7 +39,7 @@ class VulkanVirtualSwapchain : public VulkanSwapchain
                                         const VkSwapchainCreateInfoKHR*       create_info,
                                         const VkAllocationCallbacks*          allocator,
                                         HandlePointerDecoder<VkSwapchainKHR>* swapchain,
-                                        const encode::DeviceTable*            device_table) override;
+                                        const encode::VulkanDeviceTable*      device_table) override;
 
     virtual void DestroySwapchainKHR(PFN_vkDestroySwapchainKHR    func,
                                      const DeviceInfo*            device_info,
@@ -107,6 +105,10 @@ class VulkanVirtualSwapchain : public VulkanSwapchain
                                     uint32_t                     image_memory_barrier_count,
                                     const VkImageMemoryBarrier*  image_memory_barriers) override;
 
+    virtual void CmdPipelineBarrier2(PFN_vkCmdPipelineBarrier2 func,
+                                     CommandBufferInfo*        command_buffer_info,
+                                     const VkDependencyInfo*   pDependencyInfo) override;
+
     virtual void ProcessSetSwapchainImageStateCommand(const DeviceInfo* device_info,
                                                       SwapchainKHRInfo* swapchain_info,
                                                       uint32_t          last_presented_image,
@@ -167,8 +169,6 @@ class VulkanVirtualSwapchain : public VulkanSwapchain
 
     // Create an unordered map to associate the swapchain resource data with a particular Vulkan swapchain
     std::unordered_map<VkSwapchainKHR, std::unique_ptr<SwapchainResourceData>> swapchain_resources_;
-
-    bool performance_mode_{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

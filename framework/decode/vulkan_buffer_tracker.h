@@ -36,7 +36,9 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanBufferTracker
 {
   public:
-    VulkanBufferTracker(const encode::DeviceTable* device_table, VkDevice device, VulkanResourceAllocator* allocator);
+    VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
+                        VkDevice                         device,
+                        VulkanResourceAllocator*         allocator);
 
     ~VulkanBufferTracker();
 
@@ -55,7 +57,7 @@ class VulkanBufferTracker
     void OnDestroyBuffer(const BufferInfo* buffer_info);
 
   private:
-    void InitializeFunctionPointers(const encode::DeviceTable* device_table);
+    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkGetBufferDeviceAddress get_buffer_device_address{ nullptr };

@@ -53,6 +53,7 @@ typedef uint64_t SizeTEncodeType;
 typedef uint64_t AddressEncodeType;
 typedef uint8_t  CharEncodeType;  // Encoding type for UTF-8 strings.
 typedef uint16_t WCharEncodeType; // Encoding type for LPCWSTR (UTF-16) strings.
+typedef uint32_t FormatEncodeType;
 
 typedef HandleEncodeType HandleId;
 typedef uint64_t         ThreadId;
@@ -62,11 +63,13 @@ const size_t   kUuidSize                  = 16;
 const size_t   kMaxPhysicalDeviceNameSize = 256;
 const HandleId kNullHandleId              = 0;
 const size_t   kAdapterDescriptionSize    = 128;
+const int8_t   kNoneIndex                 = -1;
 
 /// Label for operation annotation, which captures parameters used by tools
 /// operating on a capture file.
-const char* const kAnnotationLabelOperation     = "operation";
-const char* const kAnnotationLabelReplayOptions = "replayopts";
+const char* const kAnnotationLabelOperation       = "operation";
+const char* const kAnnotationLabelReplayOptions   = "replayopts";
+const char* const kAnnotationLabelRemovedResource = "removed-resource";
 
 const char* const kOperationAnnotationGfxreconstructVersion = "gfxrecon-version";
 const char* const kOperationAnnotationVulkanVersion         = "vulkan-version";

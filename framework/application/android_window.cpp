@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018,2020 Valve Corporation
 ** Copyright (c) 2018,2020 LunarG, Inc.
+** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -121,10 +122,10 @@ VkExtent2D AndroidWindow::GetSize() const
     return { width_, height_ };
 }
 
-VkResult AndroidWindow::CreateSurface(const encode::InstanceTable* table,
-                                      VkInstance                   instance,
-                                      VkFlags                      flags,
-                                      VkSurfaceKHR*                pSurface)
+VkResult AndroidWindow::CreateSurface(const encode::VulkanInstanceTable* table,
+                                      VkInstance                         instance,
+                                      VkFlags                            flags,
+                                      VkSurfaceKHR*                      pSurface)
 {
     if (table != nullptr)
     {
@@ -138,7 +139,7 @@ VkResult AndroidWindow::CreateSurface(const encode::InstanceTable* table,
     return VK_ERROR_INITIALIZATION_FAILED;
 }
 
-void AndroidWindow::DestroySurface(const encode::InstanceTable* table, VkInstance instance, VkSurfaceKHR surface)
+void AndroidWindow::DestroySurface(const encode::VulkanInstanceTable* table, VkInstance instance, VkSurfaceKHR surface)
 {
     if (table != nullptr)
     {
@@ -153,13 +154,14 @@ AndroidWindowFactory::AndroidWindowFactory(AndroidContext* android_context) : an
 
 AndroidWindowFactory::~AndroidWindowFactory() {}
 
-decode::Window*
-AndroidWindowFactory::Create(const int32_t x, const int32_t y, const uint32_t width, const uint32_t height)
+decode::Window* AndroidWindowFactory::Create(
+    const int32_t x, const int32_t y, const uint32_t width, const uint32_t height, bool force_windowed)
 {
     GFXRECON_UNREFERENCED_PARAMETER(x);
     GFXRECON_UNREFERENCED_PARAMETER(y);
     GFXRECON_UNREFERENCED_PARAMETER(width);
     GFXRECON_UNREFERENCED_PARAMETER(height);
+    GFXRECON_UNREFERENCED_PARAMETER(force_windowed);
 
     return android_context_->GetWindow();
 }
@@ -170,9 +172,9 @@ void AndroidWindowFactory::Destroy(decode::Window* window)
     GFXRECON_UNREFERENCED_PARAMETER(window);
 }
 
-VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const encode::InstanceTable* table,
-                                                                    VkPhysicalDevice             physical_device,
-                                                                    uint32_t                     queue_family_index)
+VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const encode::VulkanInstanceTable* table,
+                                                                    VkPhysicalDevice                   physical_device,
+                                                                    uint32_t queue_family_index)
 {
     GFXRECON_UNREFERENCED_PARAMETER(table);
     GFXRECON_UNREFERENCED_PARAMETER(physical_device);

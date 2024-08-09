@@ -96,6 +96,7 @@ class VulkanStructHandleWrappersBodyGenerator(BaseGenerator):
         self.newline()
         write('GFXRECON_BEGIN_NAMESPACE(gfxrecon)', file=self.outFile)
         write('GFXRECON_BEGIN_NAMESPACE(encode)', file=self.outFile)
+        write('GFXRECON_BEGIN_NAMESPACE(vulkan_wrappers)', file=self.outFile)
 
     def endFile(self):
         """Method override."""
@@ -196,6 +197,7 @@ class VulkanStructHandleWrappersBodyGenerator(BaseGenerator):
         write('}', file=self.outFile)
 
         self.newline()
+        write('GFXRECON_END_NAMESPACE(vulkan_wrappers)', file=self.outFile)
         write('GFXRECON_END_NAMESPACE(encode)', file=self.outFile)
         write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
 

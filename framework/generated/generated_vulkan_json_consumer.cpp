@@ -6105,20 +6105,6 @@ void VulkanExportJsonConsumer::Process_vkCmdPushDescriptorSet2KHR(
     WriteBlockEnd();
 }
 
-void VulkanExportJsonConsumer::Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            commandBuffer,
-    StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdPushDescriptorSetWithTemplate2KHR");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-        FieldToJson(args["pPushDescriptorSetWithTemplateInfo"], pPushDescriptorSetWithTemplateInfo, json_options);
-    WriteBlockEnd();
-}
-
 void VulkanExportJsonConsumer::Process_vkCmdSetDescriptorBufferOffsets2EXT(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,
@@ -10090,6 +10076,83 @@ void VulkanExportJsonConsumer::Process_vkGetDynamicRenderingTilePropertiesQCOM(
         HandleToJson(args["device"], device, json_options);
         FieldToJson(args["pRenderingInfo"], pRenderingInfo, json_options);
         FieldToJson(args["pProperties"], pProperties, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkSetLatencySleepModeNV(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkLatencySleepModeInfoNV>* pSleepModeInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkSetLatencySleepModeNV");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["swapchain"], swapchain, json_options);
+        FieldToJson(args["pSleepModeInfo"], pSleepModeInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkLatencySleepNV(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkLatencySleepInfoNV>* pSleepInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkLatencySleepNV");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["swapchain"], swapchain, json_options);
+        FieldToJson(args["pSleepInfo"], pSleepInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkSetLatencyMarkerNV(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkSetLatencyMarkerInfoNV>* pLatencyMarkerInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkSetLatencyMarkerNV");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["swapchain"], swapchain, json_options);
+        FieldToJson(args["pLatencyMarkerInfo"], pLatencyMarkerInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetLatencyTimingsNV(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkGetLatencyMarkerInfoNV>* pLatencyMarkerInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetLatencyTimingsNV");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["swapchain"], swapchain, json_options);
+        FieldToJson(args["pLatencyMarkerInfo"], pLatencyMarkerInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkQueueNotifyOutOfBandNV(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            queue,
+    StructPointerDecoder<Decoded_VkOutOfBandQueueTypeInfoNV>* pQueueTypeInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkQueueNotifyOutOfBandNV");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["queue"], queue, json_options);
+        FieldToJson(args["pQueueTypeInfo"], pQueueTypeInfo, json_options);
     WriteBlockEnd();
 }
 

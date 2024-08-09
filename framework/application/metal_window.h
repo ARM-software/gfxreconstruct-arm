@@ -45,7 +45,8 @@ class MetalWindow : public decode::Window
                 const int32_t      xpos,
                 const int32_t      ypos,
                 const uint32_t     width,
-                const uint32_t     height) override;
+                const uint32_t     height,
+                bool               force_windowed = false) override;
 
     bool Destroy() override;
 
@@ -67,12 +68,12 @@ class MetalWindow : public decode::Window
 
     VkExtent2D GetSize() const override;
 
-    VkResult CreateSurface(const encode::InstanceTable* table,
-                           VkInstance                   instance,
-                           VkFlags                      flags,
-                           VkSurfaceKHR*                pSurface) override;
+    VkResult CreateSurface(const encode::VulkanInstanceTable* table,
+                           VkInstance                         instance,
+                           VkFlags                            flags,
+                           VkSurfaceKHR*                      pSurface) override;
 
-    void DestroySurface(const encode::InstanceTable* table, VkInstance instance, VkSurfaceKHR surface) override;
+    void DestroySurface(const encode::VulkanInstanceTable* table, VkInstance instance, VkSurfaceKHR surface) override;
 
   private:
     GFXReconWindowDelegate* window_delegate_;
@@ -90,13 +91,17 @@ class MetalWindowFactory : public decode::WindowFactory
 
     const char* GetSurfaceExtensionName() const override { return VK_EXT_METAL_SURFACE_EXTENSION_NAME; }
 
-    decode::Window* Create(const int32_t x, const int32_t y, const uint32_t width, const uint32_t height) override;
+    decode::Window* Create(const int32_t  x,
+                           const int32_t  y,
+                           const uint32_t width,
+                           const uint32_t height,
+                           bool           force_windowed = false) override;
 
     void Destroy(decode::Window* window) override;
 
-    VkBool32 GetPhysicalDevicePresentationSupport(const encode::InstanceTable* table,
-                                                  VkPhysicalDevice             physical_device,
-                                                  uint32_t                     queue_family_index) override;
+    VkBool32 GetPhysicalDevicePresentationSupport(const encode::VulkanInstanceTable* table,
+                                                  VkPhysicalDevice                   physical_device,
+                                                  uint32_t                           queue_family_index) override;
 
   private:
     MetalContext* metal_context_;

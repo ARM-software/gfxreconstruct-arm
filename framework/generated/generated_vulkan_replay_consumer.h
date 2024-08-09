@@ -2521,11 +2521,6 @@ class VulkanReplayConsumer : public VulkanReplayConsumerBase
         format::HandleId                            commandBuffer,
         StructPointerDecoder<Decoded_VkPushDescriptorSetInfoKHR>* pPushDescriptorSetInfo) override;
 
-    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo) override;
-
     virtual void Process_vkCmdSetDescriptorBufferOffsets2EXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -4105,6 +4100,37 @@ class VulkanReplayConsumer : public VulkanReplayConsumerBase
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkRenderingInfo>* pRenderingInfo,
         StructPointerDecoder<Decoded_VkTilePropertiesQCOM>* pProperties) override;
+
+    virtual void Process_vkSetLatencySleepModeNV(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkLatencySleepModeInfoNV>* pSleepModeInfo) override;
+
+    virtual void Process_vkLatencySleepNV(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkLatencySleepInfoNV>* pSleepInfo) override;
+
+    virtual void Process_vkSetLatencyMarkerNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkSetLatencyMarkerInfoNV>* pLatencyMarkerInfo) override;
+
+    virtual void Process_vkGetLatencyTimingsNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkGetLatencyMarkerInfoNV>* pLatencyMarkerInfo) override;
+
+    virtual void Process_vkQueueNotifyOutOfBandNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            queue,
+        StructPointerDecoder<Decoded_VkOutOfBandQueueTypeInfoNV>* pQueueTypeInfo) override;
 
     virtual void Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
         const ApiCallInfo&                          call_info,

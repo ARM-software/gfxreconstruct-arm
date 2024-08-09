@@ -47,6 +47,7 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
+GFXRECON_BEGIN_NAMESPACE(vulkan_wrappers)
 
 void UnwrapStructHandles(VkBufferMemoryBarrier* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -466,8 +467,6 @@ void UnwrapStructHandles(VkPushConstantsInfoKHR* value, HandleUnwrapMemory* unwr
 
 void UnwrapStructHandles(VkPushDescriptorSetInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkPushDescriptorSetWithTemplateInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
 void UnwrapStructHandles(VkSetDescriptorBufferOffsetsInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkBindDescriptorBufferEmbeddedSamplersInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
@@ -860,6 +859,10 @@ void UnwrapStructHandles(VkPhysicalDevicePipelineLibraryGroupHandlesFeaturesEXT*
 
 void UnwrapStructHandles(VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkLatencySleepInfoNV* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkLatencySubmissionPresentIdNV* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM* value, HandleUnwrapMemory* unwrap_memory);
@@ -921,7 +924,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedHandles<ParentWrapper, CoParentWrapper, PhysicalDeviceWrapper>(parent, co_parent, value->physicalDevices, value->physicalDeviceCount, get_id);
+        vulkan_wrappers::CreateWrappedHandles<ParentWrapper, CoParentWrapper, vulkan_wrappers::PhysicalDeviceWrapper>(parent, co_parent, value->physicalDevices, value->physicalDeviceCount, get_id);
     }
 }
 
@@ -930,7 +933,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedHandle<ParentWrapper, CoParentWrapper, DisplayKHRWrapper>(parent, co_parent, &value->display, get_id);
+        vulkan_wrappers::CreateWrappedHandle<ParentWrapper, CoParentWrapper, vulkan_wrappers::DisplayKHRWrapper>(parent, co_parent, &value->display, get_id);
     }
 }
 
@@ -939,7 +942,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedHandle<ParentWrapper, CoParentWrapper, DisplayKHRWrapper>(parent, co_parent, &value->currentDisplay, get_id);
+        vulkan_wrappers::CreateWrappedHandle<ParentWrapper, CoParentWrapper, vulkan_wrappers::DisplayKHRWrapper>(parent, co_parent, &value->currentDisplay, get_id);
     }
 }
 
@@ -948,7 +951,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedHandle<ParentWrapper, CoParentWrapper, DisplayModeKHRWrapper>(parent, co_parent, &value->displayMode, get_id);
+        vulkan_wrappers::CreateWrappedHandle<ParentWrapper, CoParentWrapper, vulkan_wrappers::DisplayModeKHRWrapper>(parent, co_parent, &value->displayMode, get_id);
     }
 }
 
@@ -957,7 +960,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayProperties, get_id);
+        vulkan_wrappers::CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayProperties, get_id);
     }
 }
 
@@ -966,7 +969,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayPlaneProperties, get_id);
+        vulkan_wrappers::CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayPlaneProperties, get_id);
     }
 }
 
@@ -975,7 +978,7 @@ void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typen
 {
     if (value != nullptr)
     {
-        CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayModeProperties, get_id);
+        vulkan_wrappers::CreateWrappedStructHandles<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->displayModeProperties, get_id);
     }
 }
 
@@ -1035,6 +1038,7 @@ const T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemor
     return values;
 }
 
+GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

@@ -25,6 +25,7 @@
 #define GFXRECON_DECODE_METADATA_JSON_CONSUMER_H
 
 #include "util/defines.h"
+#include "util/file_path.h"
 #include "format/format_json.h"
 #include "generated/generated_vulkan_struct_to_json.h"
 
@@ -92,6 +93,22 @@ class MetadataJsonConsumer : public Base
             FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
             FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
         }
+        WriteBlockEnd();
+    }
+
+    virtual void Process_ExeFileInfo(gfxrecon::util::filepath::FileInfo& info) override
+    {
+        const util::JsonOptions& json_options = GetOptions();
+        auto&                    jdata        = WriteMetaCommandStart("ExeFileInfo");
+        FieldToJson(jdata["product_version"], info.ProductVersion, json_options);
+        FieldToJson(jdata["file_version"], info.FileVersion, json_options);
+        FieldToJson(jdata["app_version"], info.AppVersion, json_options);
+        FieldToJson(jdata["app_name"], info.AppName, json_options);
+        FieldToJson(jdata["company_name"], info.CompanyName, json_options);
+        FieldToJson(jdata["file_description"], info.FileDescription, json_options);
+        FieldToJson(jdata["internal_name"], info.InternalName, json_options);
+        FieldToJson(jdata["original_filename"], info.OriginalFilename, json_options);
+        FieldToJson(jdata["product_name"], info.ProductName, json_options);
         WriteBlockEnd();
     }
 

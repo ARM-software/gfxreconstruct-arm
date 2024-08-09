@@ -27,6 +27,9 @@
 **
 */
 
+#ifndef  GFXRECON_GENERATED_VULKAN_REFERENCED_RESOURCE_CONSUMER_H
+#define  GFXRECON_GENERATED_VULKAN_REFERENCED_RESOURCE_CONSUMER_H
+
 #include "decode/vulkan_referenced_resource_consumer_base.h"
 #include "util/defines.h"
 
@@ -477,11 +480,6 @@ class VulkanReferencedResourceConsumer : public VulkanReferencedResourceConsumer
         format::HandleId                            commandBuffer,
         StructPointerDecoder<Decoded_VkPushDescriptorSetInfoKHR>* pPushDescriptorSetInfo) override;
 
-    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo) override;
-
     virtual void Process_vkCmdSetDescriptorBufferOffsets2EXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -708,3 +706,5 @@ class VulkanReferencedResourceConsumer : public VulkanReferencedResourceConsumer
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
+
+#endif

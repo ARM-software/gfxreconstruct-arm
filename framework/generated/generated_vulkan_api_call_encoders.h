@@ -1983,10 +1983,6 @@ VKAPI_ATTR void VKAPI_CALL CmdPushDescriptorSet2KHR(
     VkCommandBuffer                             commandBuffer,
     const VkPushDescriptorSetInfoKHR*           pPushDescriptorSetInfo);
 
-VKAPI_ATTR void VKAPI_CALL CmdPushDescriptorSetWithTemplate2KHR(
-    VkCommandBuffer                             commandBuffer,
-    const VkPushDescriptorSetWithTemplateInfoKHR* pPushDescriptorSetWithTemplateInfo);
-
 VKAPI_ATTR void VKAPI_CALL CmdSetDescriptorBufferOffsets2EXT(
     VkCommandBuffer                             commandBuffer,
     const VkSetDescriptorBufferOffsetsInfoEXT*  pSetDescriptorBufferOffsetsInfo);
@@ -3227,6 +3223,30 @@ VKAPI_ATTR VkResult VKAPI_CALL GetDynamicRenderingTilePropertiesQCOM(
     VkDevice                                    device,
     const VkRenderingInfo*                      pRenderingInfo,
     VkTilePropertiesQCOM*                       pProperties);
+
+VKAPI_ATTR VkResult VKAPI_CALL SetLatencySleepModeNV(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    const VkLatencySleepModeInfoNV*             pSleepModeInfo);
+
+VKAPI_ATTR VkResult VKAPI_CALL LatencySleepNV(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    const VkLatencySleepInfoNV*                 pSleepInfo);
+
+VKAPI_ATTR void VKAPI_CALL SetLatencyMarkerNV(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    const VkSetLatencyMarkerInfoNV*             pLatencyMarkerInfo);
+
+VKAPI_ATTR void VKAPI_CALL GetLatencyTimingsNV(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    VkGetLatencyMarkerInfoNV*                   pLatencyMarkerInfo);
+
+VKAPI_ATTR void VKAPI_CALL QueueNotifyOutOfBandNV(
+    VkQueue                                     queue,
+    const VkOutOfBandQueueTypeInfoNV*           pQueueTypeInfo);
 
 VKAPI_ATTR void VKAPI_CALL CmdSetAttachmentFeedbackLoopEnableEXT(
     VkCommandBuffer                             commandBuffer,

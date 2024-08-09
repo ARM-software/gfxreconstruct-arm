@@ -26,7 +26,7 @@
 
 #include "encode/handle_unwrap_memory.h"
 #include "encode/vulkan_handle_wrappers.h"
-#include "vulkan_scoped_destroy_lock.h"
+#include "scoped_destroy_lock.h"
 #include "format/format.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_dispatch_table.h"
@@ -41,6 +41,7 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
+GFXRECON_BEGIN_NAMESPACE(vulkan_wrappers)
 
 #if VK_USE_64_BIT_PTR_DEFINES == 1
 #define UINT64_TO_VK_HANDLE(handle_type, value) reinterpret_cast<handle_type>(value)
@@ -138,14 +139,14 @@ uint64_t GetWrappedId(uint64_t, VkObjectType object_type);
 
 uint64_t GetWrappedId(uint64_t object, VkDebugReportObjectTypeEXT object_type);
 
-inline const InstanceTable* GetInstanceTable(VkInstance handle)
+inline const VulkanInstanceTable* GetInstanceTable(VkInstance handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<InstanceWrapper>(handle);
     return &wrapper->layer_table;
 }
 
-inline const InstanceTable* GetInstanceTable(VkPhysicalDevice handle)
+inline const VulkanInstanceTable* GetInstanceTable(VkPhysicalDevice handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<PhysicalDeviceWrapper>(handle);
@@ -153,14 +154,14 @@ inline const InstanceTable* GetInstanceTable(VkPhysicalDevice handle)
     return wrapper->layer_table_ref;
 }
 
-inline const DeviceTable* GetDeviceTable(VkDevice handle)
+inline const VulkanDeviceTable* GetDeviceTable(VkDevice handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<DeviceWrapper>(handle);
     return &wrapper->layer_table;
 }
 
-inline const DeviceTable* GetDeviceTable(VkQueue handle)
+inline const VulkanDeviceTable* GetDeviceTable(VkQueue handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<QueueWrapper>(handle);
@@ -168,7 +169,7 @@ inline const DeviceTable* GetDeviceTable(VkQueue handle)
     return wrapper->layer_table_ref;
 }
 
-inline const DeviceTable* GetDeviceTable(VkCommandBuffer handle)
+inline const VulkanDeviceTable* GetDeviceTable(VkCommandBuffer handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<CommandBufferWrapper>(handle);
@@ -302,11 +303,12 @@ inline void CreateWrappedHandle<InstanceWrapper, NoParentWrapper, PhysicalDevice
 }
 
 template <>
-inline void CreateWrappedHandle<PhysicalDeviceWrapper, NoParentWrapper, DeviceWrapper>(
-    VkPhysicalDevice,            // Unused for device creation.
-    NoParentWrapper::HandleType, // VkDevice does not have a co-parent.
-    VkDevice*       handle,
-    PFN_GetHandleId get_id)
+inline void CreateWrappedHandle<PhysicalDeviceWrapper,
+                                NoParentWrapper,
+                                DeviceWrapper>(VkPhysicalDevice,            // Unused for device creation.
+                                               NoParentWrapper::HandleType, // VkDevice does not have a co-parent.
+                                               VkDevice*       handle,
+                                               PFN_GetHandleId get_id)
 {
     CreateWrappedDispatchHandle<PhysicalDeviceWrapper, DeviceWrapper>(VK_NULL_HANDLE, handle, get_id);
 }
@@ -378,11 +380,12 @@ inline void CreateWrappedHandle<DeviceWrapper, CommandPoolWrapper, CommandBuffer
 }
 
 template <>
-inline void CreateWrappedHandle<DeviceWrapper, DescriptorPoolWrapper, DescriptorSetWrapper>(
-    VkDevice, // Unused for descriptor set creation.
-    VkDescriptorPool co_parent,
-    VkDescriptorSet* handle,
-    PFN_GetHandleId  get_id)
+inline void CreateWrappedHandle<DeviceWrapper,
+                                DescriptorPoolWrapper,
+                                DescriptorSetWrapper>(VkDevice, // Unused for descriptor set creation.
+                                                      VkDescriptorPool co_parent,
+                                                      VkDescriptorSet* handle,
+                                                      PFN_GetHandleId  get_id)
 {
     assert(co_parent != VK_NULL_HANDLE);
     assert(handle != nullptr);
@@ -439,11 +442,12 @@ inline void CreateWrappedHandle<PhysicalDeviceWrapper, NoParentWrapper, DisplayK
 // Override for images retrieved from a swapchain, which requires the handle wrapper to be owned by a parent to ensure
 // the wrapper memory is released when the parent is destroyed.
 template <>
-inline void
-CreateWrappedHandle<DeviceWrapper, SwapchainKHRWrapper, ImageWrapper>(VkDevice, // Unused for swapchain image retrieval.
-                                                                      VkSwapchainKHR  co_parent,
-                                                                      VkImage*        handle,
-                                                                      PFN_GetHandleId get_id)
+inline void CreateWrappedHandle<DeviceWrapper,
+                                SwapchainKHRWrapper,
+                                ImageWrapper>(VkDevice, // Unused for swapchain image retrieval.
+                                              VkSwapchainKHR  co_parent,
+                                              VkImage*        handle,
+                                              PFN_GetHandleId get_id)
 {
     assert(co_parent != VK_NULL_HANDLE);
     assert(handle != nullptr);
@@ -486,11 +490,12 @@ CreateWrappedHandle<DeviceWrapper, SwapchainKHRWrapper, ImageWrapper>(VkDevice, 
 // Override for display mode creation/retrieval, which requires the handle wrapper to be owned by a parent to ensure
 // the wrapper memory is released when the parent is destroyed.
 template <>
-inline void CreateWrappedHandle<PhysicalDeviceWrapper, DisplayKHRWrapper, DisplayModeKHRWrapper>(
-    VkPhysicalDevice, // Unused for display mode creation.
-    VkDisplayKHR      co_parent,
-    VkDisplayModeKHR* handle,
-    PFN_GetHandleId   get_id)
+inline void CreateWrappedHandle<PhysicalDeviceWrapper,
+                                DisplayKHRWrapper,
+                                DisplayModeKHRWrapper>(VkPhysicalDevice, // Unused for display mode creation.
+                                                       VkDisplayKHR      co_parent,
+                                                       VkDisplayModeKHR* handle,
+                                                       PFN_GetHandleId   get_id)
 {
     assert(co_parent != VK_NULL_HANDLE);
     assert(handle != nullptr);
@@ -708,6 +713,7 @@ inline void ResetDescriptorPoolWrapper(VkDescriptorPool handle)
     wrapper->child_sets.clear();
 }
 
+GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

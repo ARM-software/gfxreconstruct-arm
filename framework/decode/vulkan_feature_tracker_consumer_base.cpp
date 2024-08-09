@@ -346,7 +346,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
             pCreateInfoDec->ppEnabledExtensionNames = extensions;
             pCreateInfoDec->enabledExtensionCount   = extensions_count;
 
-            parameter_buffer_->Reset();
+            parameter_buffer_->Clear();
 
             gfxrecon::encode::ParameterEncoder encoder(parameter_buffer_);
             EncodeStructPtr(&encoder, pCreateInfo->GetPointer());
@@ -458,7 +458,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
 
     if (parameter_buffer_)
     {
-        parameter_buffer_->Reset();
+        parameter_buffer_->Clear();
 
         gfxrecon::encode::ParameterEncoder encoder(parameter_buffer_);
         encoder.EncodeHandleIdValue(physicalDevice);

@@ -46,7 +46,7 @@ class VulkanInternalBufferManager
         ~BufferInfoWrapper() { allocator_->DestroyBuffer(info_.handle, nullptr, info_.allocator_data); }
     };
 
-    VulkanInternalBufferManager(const encode::DeviceTable*              device_table,
+    VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
                                 VkDevice                                device,
                                 VulkanResourceAllocator*                allocator,
                                 const VkPhysicalDeviceMemoryProperties& properties);
@@ -65,7 +65,7 @@ class VulkanInternalBufferManager
     VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
 
   private:
-    void InitializeFunctionPointers(const encode::DeviceTable* device_table);
+    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkGetBufferDeviceAddress      get_buffer_device_address{ nullptr };

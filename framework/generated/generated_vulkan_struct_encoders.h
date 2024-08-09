@@ -685,7 +685,6 @@ void EncodeStruct(ParameterEncoder* encoder, const VkBindMemoryStatusKHR& value)
 void EncodeStruct(ParameterEncoder* encoder, const VkBindDescriptorSetsInfoKHR& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkPushConstantsInfoKHR& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkPushDescriptorSetInfoKHR& value);
-void EncodeStruct(ParameterEncoder* encoder, const VkPushDescriptorSetWithTemplateInfoKHR& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkSetDescriptorBufferOffsetsInfoEXT& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkBindDescriptorBufferEmbeddedSamplersInfoEXT& value);
 
@@ -1262,6 +1261,16 @@ void EncodeStruct(ParameterEncoder* encoder, const VkPhysicalDeviceShaderCoreBui
 void EncodeStruct(ParameterEncoder* encoder, const VkPhysicalDevicePipelineLibraryGroupHandlesFeaturesEXT& value);
 
 void EncodeStruct(ParameterEncoder* encoder, const VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT& value);
+
+void EncodeStruct(ParameterEncoder* encoder, const VkLatencySleepModeInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkLatencySleepInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkSetLatencyMarkerInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkLatencyTimingsFrameReportNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkGetLatencyMarkerInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkLatencySubmissionPresentIdNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkSwapchainLatencyCreateInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkOutOfBandQueueTypeInfoNV& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkLatencySurfaceCapabilitiesNV& value);
 
 void EncodeStruct(ParameterEncoder* encoder, const VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM& value);

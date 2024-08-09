@@ -2451,23 +2451,6 @@ void MapStructHandles(Decoded_VkPushDescriptorSetInfoKHR* wrapper, const VulkanO
     }
 }
 
-void MapStructHandles(Decoded_VkPushDescriptorSetWithTemplateInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
-{
-    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
-    {
-        VkPushDescriptorSetWithTemplateInfoKHR* value = wrapper->decoded_value;
-
-        if (wrapper->pNext)
-        {
-            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
-        }
-
-        value->descriptorUpdateTemplate = handle_mapping::MapHandle<DescriptorUpdateTemplateInfo>(wrapper->descriptorUpdateTemplate, object_info_table, &VulkanObjectInfoTable::GetDescriptorUpdateTemplateInfo);
-
-        value->layout = handle_mapping::MapHandle<PipelineLayoutInfo>(wrapper->layout, object_info_table, &VulkanObjectInfoTable::GetPipelineLayoutInfo);
-    }
-}
-
 void MapStructHandles(Decoded_VkSetDescriptorBufferOffsetsInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
@@ -4654,6 +4637,27 @@ void MapStructHandles(Decoded_VkPhysicalDeviceDynamicRenderingUnusedAttachmentsF
     }
 }
 
+void MapStructHandles(Decoded_VkLatencySleepInfoNV* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkLatencySleepInfoNV* value = wrapper->decoded_value;
+
+        value->signalSemaphore = handle_mapping::MapHandle<SemaphoreInfo>(wrapper->signalSemaphore, object_info_table, &VulkanObjectInfoTable::GetSemaphoreInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkLatencySubmissionPresentIdNV* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
@@ -5769,6 +5773,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV:
+            MapStructHandles(reinterpret_cast<Decoded_VkLatencySubmissionPresentIdNV*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_RENDER_AREAS_FEATURES_QCOM:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceMultiviewPerViewRenderAreasFeaturesQCOM*>(wrapper), object_info_table);

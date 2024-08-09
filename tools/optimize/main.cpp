@@ -21,7 +21,7 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#include "project_version.h"
+#include PROJECT_VERSION_HEADER_FILE
 #include "file_optimizer.h"
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
@@ -316,6 +316,12 @@ int main(int argc, const char** argv)
             bool detected_d3d12  = false;
             bool detected_vulkan = false;
             gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
+
+            if ((!detected_d3d12) && (!detected_vulkan))
+            {
+                // Detect with no block limit
+                gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, true);
+            }
 
             if (detected_d3d12)
             {

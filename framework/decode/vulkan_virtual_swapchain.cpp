@@ -23,6 +23,7 @@
 #include "decode/vulkan_virtual_swapchain.h"
 
 #include "decode/vulkan_resource_allocator.h"
+#include "decode/decoder_util.h"
 
 #include "util/marking_layers.h"
 
@@ -30,10 +31,6 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-VulkanVirtualSwapchain::VulkanVirtualSwapchain(bool performance_mode) :
-    VulkanSwapchain(), performance_mode_(performance_mode)
-{}
 
 bool VulkanVirtualSwapchain::AddSwapchainResourceData(VkSwapchainKHR swapchain)
 {
@@ -53,7 +50,7 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainKHR(VkResult                    
                                                     const VkSwapchainCreateInfoKHR*       create_info,
                                                     const VkAllocationCallbacks*          allocator,
                                                     HandlePointerDecoder<VkSwapchainKHR>* swapchain,
-                                                    const encode::DeviceTable*            device_table)
+                                                    const encode::VulkanDeviceTable*      device_table)
 {
     VkDevice                 device = VK_NULL_HANDLE;
     VkSurfaceCapabilitiesKHR surfCapabilities{};
@@ -249,7 +246,8 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainResourceData(const DeviceInfo*  
                           swapchain_info->capture_id);
     }
     util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    device_table_->GetDeviceQueue(device, copy_queue_family_index, 0, &initial_copy_queue);
+
+    initial_copy_queue = GetDeviceQueue(device_table_, device_info, copy_queue_family_index, 0);
     util::MarkingLayersUtil::instance().EndInjected(device_info);
     if (initial_copy_queue == VK_NULL_HANDLE)
     {
@@ -635,8 +633,9 @@ VkResult VulkanVirtualSwapchain::AcquireNextImageKHR(VkResult                  o
     }
 
     result = func(device, swapchain, timeout, semaphore, fence, image_index);
-    if (result != VK_SUCCESS)
+    if ((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR))
     {
+        // TODO: Add some handling of optimization with VK_SUBOPTIMAL_KHR.
         GFXRECON_LOG_ERROR("Virtual swapchain failed AcquireNextImageKHR 0x%08x for swapchain (ID = %" PRIu64 ")",
                            result,
                            swapchain_info->capture_id);
@@ -660,8 +659,9 @@ VkResult VulkanVirtualSwapchain::AcquireNextImage2KHR(VkResult                  
     }
 
     VkResult result = func(device, acquire_info, image_index);
-    if (result != VK_SUCCESS)
+    if ((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR))
     {
+        // TODO: Add some handling of optimization with VK_SUBOPTIMAL_KHR.
         GFXRECON_LOG_ERROR("Virtual swapchain failed AcquireNextImage2KHR 0x%08x for swapchain (ID = %" PRIu64 ")",
                            result,
                            swapchain_info->capture_id);
@@ -680,6 +680,13 @@ VkResult VulkanVirtualSwapchain::QueuePresentKHR(VkResult                       
     if (queue_info == nullptr)
     {
         return VK_ERROR_FEATURE_NOT_PRESENT;
+    }
+    else if (swapchain_options_.skip_additional_present_blts)
+    {
+        // If we're to skip the BLT, just go ahead and perform the present even thought it won't
+        // produce the valid image to the screen.  The intent for this path is mostly for performance
+        // evaluation.
+        return func(queue_info->handle, present_info);
     }
 
     VkQueue  queue              = queue_info->handle;
@@ -844,7 +851,7 @@ VkResult VulkanVirtualSwapchain::QueuePresentKHR(VkResult                       
                                      1 };
         VkImageCopy image_copy   = { subresource, offset, subresource, offset, image_extent };
 
-        if (!performance_mode_)
+        if (!swapchain_options_.skip_additional_present_blts)
         {
             // NOTE: vkCmdCopyImage works on Queues of types including Graphics, Compute
             //       and Transfer.  So should work on any queues we get a vkQueuePresentKHR from.
@@ -987,6 +994,21 @@ void VulkanVirtualSwapchain::CmdPipelineBarrier(PFN_vkCmdPipelineBarrier     fun
          buffer_memory_barriers,
          image_memory_barrier_count,
          image_memory_barriers);
+}
+
+void VulkanVirtualSwapchain::CmdPipelineBarrier2(PFN_vkCmdPipelineBarrier2 func,
+                                                 CommandBufferInfo*        command_buffer_info,
+                                                 const VkDependencyInfo*   pDependencyInfo)
+{
+
+    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+
+    if (command_buffer_info != nullptr)
+    {
+        command_buffer = command_buffer_info->handle;
+    }
+
+    func(command_buffer, pDependencyInfo);
 }
 
 VkResult VulkanVirtualSwapchain::CreateVirtualSwapchainImage(const DeviceInfo*        device_info,

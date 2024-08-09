@@ -26,7 +26,7 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::DeviceTable*              device_table,
+VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
                                                          VkDevice                                device,
                                                          VulkanResourceAllocator*                allocator,
                                                          const VkPhysicalDeviceMemoryProperties& memory_properties) :
@@ -137,7 +137,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     return entry;
 }
 
-void VulkanInternalBufferManager::InitializeFunctionPointers(const encode::DeviceTable* device_table)
+void VulkanInternalBufferManager::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
 {
     functions_.get_buffer_device_address =
         (device_table->GetBufferDeviceAddress != gfxrecon::encode::noop::GetBufferDeviceAddress)

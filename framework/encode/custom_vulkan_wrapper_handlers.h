@@ -3,7 +3,7 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
-
+using namespace vulkan_wrappers;
 struct CustomVulkanStateTable
 {
     using WrapperHandle = format::HandleId;

@@ -39,6 +39,7 @@
 #if defined(D3D12_SUPPORT)
 #include "generated/generated_dx12_decoder.h"
 #include "generated/generated_dx12_replay_consumer.h"
+#include "decode/dx12_browse_consumer.h"
 #ifdef GFXRECON_AGS_SUPPORT
 #include "decode/custom_ags_consumer_base.h"
 #include "decode/custom_ags_decoder.h"
@@ -47,13 +48,11 @@
 #include "decode/dx12_tracking_consumer.h"
 #include "graphics/dx12_util.h"
 #endif
+#include "parse_dump_resources_cli.h"
 
 #include <exception>
 #include <memory>
 #include <stdexcept>
-#include <string>
-#include <vector>
-#include <utility>
 
 #if defined(D3D12_SUPPORT)
 
@@ -89,6 +88,32 @@ void WaitForExit() {}
 #endif
 
 const char kLayerEnvVar[] = "VK_INSTANCE_LAYERS";
+
+#if defined(D3D12_SUPPORT)
+bool BrowseFile(const std::string&                           input_filename,
+                const gfxrecon::decode::DumpResourcesTarget& dump_resources_target,
+                gfxrecon::decode::TrackDumpDrawcall&         out_track_dump_target)
+{
+    gfxrecon::decode::TrackDumpDrawcall* track_dump_target = nullptr;
+
+    gfxrecon::decode::FileProcessor file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        gfxrecon::decode::Dx12BrowseConsumer dx12_browse_consumer;
+        gfxrecon::decode::Dx12Decoder        dx12_decoder;
+
+        dx12_browse_consumer.SetDumpTarget(dump_resources_target);
+
+        dx12_decoder.AddConsumer(&dx12_browse_consumer);
+        file_processor.AddDecoder(&dx12_decoder);
+        file_processor.ProcessAllFrames();
+        track_dump_target = dx12_browse_consumer.GetTrackDumpTarget();
+        GFXRECON_ASSERT((track_dump_target != nullptr));
+        out_track_dump_target = *track_dump_target;
+    }
+    return (track_dump_target != nullptr);
+}
+#endif
 
 int main(int argc, const char** argv)
 {
@@ -157,6 +182,12 @@ int main(int argc, const char** argv)
 
             uint32_t measurement_start_frame = 0;
             uint32_t measurement_end_frame   = 0;
+            // Process --dump-resources arg.
+            if (!gfxrecon::parse_dump_resources::parse_dump_resources_arg(vulkan_replay_options))
+            {
+                GFXRECON_LOG_FATAL("There was an error while parsing dump resources indices. Terminating.");
+                return -1;
+            }
 
             bool        quit_after_measurement_frame_range = false;
             bool        flush_measurement_frame_range      = false;
@@ -196,9 +227,16 @@ int main(int argc, const char** argv)
             }
 
 #if defined(D3D12_SUPPORT)
-            gfxrecon::decode::DxReplayOptions    dx_replay_options = GetDxReplayOptions(arg_parser);
+            gfxrecon::decode::DxReplayOptions    dx_replay_options = GetDxReplayOptions(arg_parser, filename);
             gfxrecon::decode::Dx12ReplayConsumer dx12_replay_consumer(application, dx_replay_options);
             gfxrecon::decode::Dx12Decoder        dx12_decoder;
+
+            if (dx_replay_options.enable_dump_resources)
+            {
+                gfxrecon::decode::TrackDumpDrawcall track_dump_target;
+                BrowseFile(filename, dx_replay_options.dump_resources_target, track_dump_target);
+                dx12_replay_consumer.SetDumpTarget(track_dump_target);
+            }
 
 #ifdef GFXRECON_AGS_SUPPORT
             gfxrecon::decode::AgsReplayConsumer ags_replay_consumer;
@@ -275,6 +313,15 @@ int main(int argc, const char** argv)
                 {
 #if defined(D3D12_SUPPORT)
                     dx12_replay_consumer.PostReplay();
+                    if (!dx_replay_options.screenshot_ranges.empty() && !file_processor.UsesFrameMarkers() &&
+                        (dx12_replay_consumer.GetDXGITestPresentCount() > 0))
+                    {
+                        GFXRECON_LOG_WARNING_ONCE(
+                            "This capture contains %" PRIu32
+                            " calls to IDXGISwapChain::Present with flag DXGI_PRESENT_TEST and no frame end markers. "
+                            "Screenshot frame indexing may have changed since capture.",
+                            dx12_replay_consumer.GetDXGITestPresentCount());
+                    }
 #endif
 
                     fps_info.LogMeasurements();
