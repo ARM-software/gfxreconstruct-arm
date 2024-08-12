@@ -1486,6 +1486,11 @@ class VulkanCaptureManager : public ApiCaptureManager
                                           const VkAllocationCallbacks*    pAllocator,
                                           VkShaderModule*                 pShaderModule);
 
+    void PostProcess_vkDestroyBuffer(VkDevice device, VkBuffer buffer, const VkAllocationCallbacks* callbacks);
+    void PostProcess_vkDestroyAccelerationStructureKHR(VkDevice                     device,
+                                                       VkAccelerationStructureKHR   acceleration_structure,
+                                                       const VkAllocationCallbacks* callbacks);
+
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
 #endif

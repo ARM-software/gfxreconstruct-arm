@@ -23,6 +23,7 @@ class VulkanDeviceAddressTracker
 
     void TrackBufferDeviceAddress(format::HandleId buffer_id, uint64_t buffer_size, VkDeviceAddress address);
     void TrackAccelerationStructureDeviceAddress(format::HandleId id, VkDeviceAddress address);
+    void StopTracking(format::HandleId object_id);
     std::vector<format::AddressLocationInfo> GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
                                                                        const DeviceMemoryWrapper*   memory,
                                                                        const void*                  start_address,
