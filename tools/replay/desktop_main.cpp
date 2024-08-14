@@ -225,6 +225,9 @@ int main(int argc, const char** argv)
                 vulkan_decoder.AddConsumer(&vulkan_replay_consumer);
                 file_processor->AddDecoder(&vulkan_decoder);
             }
+            file_processor->SetPrintBlockInfoFlag(vulkan_replay_options.enable_print_block_info,
+                                                  vulkan_replay_options.block_index_from,
+                                                  vulkan_replay_options.block_index_to);
 
 #if defined(D3D12_SUPPORT)
             gfxrecon::decode::DxReplayOptions    dx_replay_options = GetDxReplayOptions(arg_parser, filename);
@@ -313,7 +316,7 @@ int main(int argc, const char** argv)
                 {
 #if defined(D3D12_SUPPORT)
                     dx12_replay_consumer.PostReplay();
-                    if (!dx_replay_options.screenshot_ranges.empty() && !file_processor.UsesFrameMarkers() &&
+                    if (!dx_replay_options.screenshot_ranges.empty() && !file_processor->UsesFrameMarkers() &&
                         (dx12_replay_consumer.GetDXGITestPresentCount() > 0))
                     {
                         GFXRECON_LOG_WARNING_ONCE(

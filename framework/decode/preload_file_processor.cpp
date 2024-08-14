@@ -23,7 +23,6 @@
 
 #include "decode/preload_file_processor.h"
 #include "util/logging.h"
-#include <algorithm>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -32,81 +31,19 @@ PreloadFileProcessor::PreloadFileProcessor() : status_(PreloadStatus::kInactive)
 
 void PreloadFileProcessor::PreloadNextFrames(size_t count)
 {
-    // Reserve enough memory to cover entire frame range
-    {
-        gfxrecon::decode::FileProcessor file_processor(UINT64_MAX);
-        file_processor.Initialize(filename_);
-
-        while (file_processor.GetCurrentFrameNumber() < current_frame_number_ + count &&
-               file_processor.ProcessNextFrame())
-        {
-            GFXRECON_LOG_DEBUG(
-                "Frame %zu size %zu", file_processor.GetCurrentFrameNumber(), file_processor.GetNumBytesRead());
-        }
-
-        count = file_processor.GetCurrentFrameNumber() - current_frame_number_;
-
-        preload_buffer_.Reserve(file_processor.GetNumBytesRead() - bytes_read_);
-        GFXRECON_LOG_INFO("Preloading reserved %zu bytes", file_processor.GetNumBytesRead() - bytes_read_);
-    }
-
     status_ = PreloadStatus::kRecord;
-    for (preload_frame_number_ = 0; preload_frame_number_ < count; ++preload_frame_number_)
+    while (--count != 0U)
     {
-        size_t next_chunk_size = GetNextBufferChunkSize();
-        if (next_chunk_size > 0)
-        {
-            while (next_chunk_size > 1 && !preload_buffer_.Reserve(next_chunk_size))
-            {
-                next_chunk_size -= next_chunk_size / 10;
-            }
-            GFXRECON_LOG_INFO("Preloading reserved additional %zu bytes", next_chunk_size);
-        }
         ProcessNextFrame();
     }
     status_ = PreloadStatus::kReplay;
 }
 
-size_t PreloadFileProcessor::GetNextBufferChunkSize()
-{
-    const size_t kMegabyte        = 1 << 20;
-    size_t       bytes_to_reserve = 0;
-    const size_t current_average_frame_size =
-        bytes_read_ / std::max(current_frame_number_ + preload_frame_number_, (size_t)1);
-    size_t       average_frame_size   = std::max(current_average_frame_size, kMegabyte);
-    const size_t buffer_capacity_left = preload_buffer_.Capacity() - preload_buffer_.Size();
-
-    if (buffer_capacity_left < average_frame_size)
-    {
-        bytes_to_reserve = average_frame_size;
-    }
-    return bytes_to_reserve;
-}
-
 PreloadFileProcessor::PreloadBuffer::PreloadBuffer() : replay_offset_(0) {}
 
-size_t PreloadFileProcessor::PreloadBuffer::Size()
+void PreloadFileProcessor::PreloadBuffer::Reserve(size_t size)
 {
-    return container_.size();
-}
-
-size_t PreloadFileProcessor::PreloadBuffer::Capacity()
-{
-    return container_.capacity();
-}
-
-bool PreloadFileProcessor::PreloadBuffer::Reserve(size_t size)
-{
-    bool result = true;
-    try
-    {
-        container_.reserve(container_.size() + size);
-    }
-    catch (std::exception e)
-    {
-        result = false;
-    }
-    return result;
+    container_.reserve(container_.size() + size);
 }
 
 size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t destination_size)
@@ -140,6 +77,7 @@ bool PreloadFileProcessor::ProcessBlocks()
 
             if (status_ != PreloadStatus::kRecord)
             {
+                // Since block_index isn't relevant during recording, skip setting it in the decoders
                 for (auto* decoder : decoders_)
                 {
                     decoder->SetCurrentBlockIndex(block_index_);
@@ -269,64 +207,46 @@ bool PreloadFileProcessor::ProcessBlocks()
                 }
                 else if (block_header.type == format::BlockType::kFrameMarkerBlock)
                 {
-                    if (status_ == PreloadStatus::kRecord)
+                    format::MarkerType marker_type  = format::MarkerType::kUnknownMarker;
+                    uint64_t           frame_number = 0;
+
+                    success = ReadBytes(&marker_type, sizeof(marker_type));
+
+                    if (success)
                     {
-                        format::MarkerType marker_type = format::MarkerType::kUnknownMarker;
-                        success                        = ReadBytes(&marker_type, sizeof(marker_type));
-                        if (!success)
+                        const auto is_frame_delimiter = IsFrameDelimiter(block_header.type, marker_type);
+                        if (status_ == PreloadStatus::kRecord)
                         {
-                            HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
+                            preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
+                            preload_buffer_.Add(&block_header);
+                            preload_buffer_.Add(&marker_type);
+                            size_t parameters_size  = block_header.size - sizeof(marker_type);
+                            auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
+                            success                 = ReadBytes(parameter_buffer, parameters_size);
+                            if (!success)
+                            {
+                                HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
+                            }
+                            if (is_frame_delimiter)
+                            {
+                                break;
+                            }
                         }
-
-                        preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                        preload_buffer_.Add(&block_header);
-                        preload_buffer_.Add(&marker_type);
-                        size_t parameters_size  = block_header.size - sizeof(marker_type);
-                        auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                        success                 = ReadBytes(parameter_buffer, parameters_size);
-                        if (!success)
-                        {
-                            HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
-                        }
-                        if (IsFrameDelimiter(block_header.type, marker_type))
-                        {
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        format::MarkerType marker_type  = format::MarkerType::kUnknownMarker;
-                        uint64_t           frame_number = 0;
-
-                        success = ReadBytes(&marker_type, sizeof(marker_type));
-
-                        if (success)
+                        else
                         {
                             success = ProcessFrameMarker(block_header, marker_type);
-
-                            // Break from loop on frame delimiter.
-                            if (IsFrameDelimiter(block_header.type, marker_type))
+                            if (is_frame_delimiter)
                             {
-                                // If the capture file contains frame markers, it will have a frame marker for every
-                                // frame-ending API call such as vkQueuePresentKHR. If this is the first frame marker
-                                // encountered, reset the frame count and ignore frame-ending API calls in
-                                // IsFrameDelimiter(format::ApiCallId call_id).
-                                if (!capture_uses_frame_markers_)
-                                {
-                                    capture_uses_frame_markers_ = true;
-                                    current_frame_number_       = kFirstFrame;
-                                }
-
                                 // Make sure to increment the frame number on the way out.
                                 ++current_frame_number_;
                                 ++block_index_;
                                 break;
                             }
                         }
-                        else
-                        {
-                            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read frame marker header");
-                        }
+                    }
+                    else
+                    {
+                        HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read frame marker header");
                     }
                 }
                 else if (block_header.type == format::BlockType::kStateMarkerBlock)

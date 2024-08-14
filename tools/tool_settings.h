@@ -118,8 +118,6 @@ const char kFormatArgument[]                      = "--format";
 const char kIncludeBinariesOption[]               = "--include-binaries";
 const char kExpandFlagsOption[]                   = "--expand-flags";
 const char kFilePerFrameOption[]                  = "--file-per-frame";
-const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
-const char kWaitBeforePresent[]                   = "--wait-before-present";
 const char kSkipGetFenceStatus[]                  = "--skip-get-fence-status";
 const char kSkipGetFenceRanges[]                  = "--skip-get-fence-ranges";
 const char kFrameRange[]                          = "--frame-range";
@@ -128,7 +126,10 @@ const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
 const char kMarkingLayersArgument[]               = "--marking-layers";
-
+const char kWaitBeforePresent[]                   = "--wait-before-present";
+const char kPrintBlockInfoAllOption[]             = "--pbi-all";
+const char kPrintBlockInfosArgument[]             = "--pbis";
+const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -900,6 +901,24 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
         options.flush_inside_measurement_range = true;
     }
 
+    if (arg_parser.IsOptionSet(kPrintBlockInfoAllOption))
+    {
+        options.enable_print_block_info = true;
+    }
+    else if (arg_parser.IsArgumentSet(kPrintBlockInfosArgument))
+    {
+        options.enable_print_block_info = true;
+        const auto& value               = arg_parser.GetArgumentValue(kPrintBlockInfosArgument);
+
+        if (!value.empty())
+        {
+            std::vector<gfxrecon::util::UintRange> block_ranges =
+                gfxrecon::util::GetUintRanges(value.c_str(), "Print block information");
+            options.block_index_from = block_ranges[0].first;
+            options.block_index_to   = block_ranges[1].first;
+        }
+    }
+
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);
     if (!override_gpu.empty())
     {
@@ -1067,11 +1086,6 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
             gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRanges);
     }
 
-    if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
-    {
-        replay_options.preload_measurement_range = true;
-    }
-
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
     replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
@@ -1081,6 +1095,10 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     if (arg_parser.IsOptionSet(kWaitBeforePresent))
     {
         replay_options.wait_before_present = true;
+    }
+    if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
+    {
+        replay_options.preload_measurement_range = true;
     }
 
     replay_options.dump_resources              = arg_parser.GetArgumentValue(kDumpResourcesArgument);

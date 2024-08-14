@@ -95,15 +95,16 @@ struct VulkanReplayOptions : public ReplayOptions
     util::ScreenshotFormat                          dump_resources_image_format{ util::ScreenshotFormat::kBmp };
 
     // Flag to quickly check whether the feature is enabled or not
-    bool                     dumping_resources{ false };
-    bool                     dump_resources_before{ false };
-    bool                     dump_resources_dump_depth{ false };
-    int                      dump_resources_color_attachment_index{ kUnspecifiedColorAttachment };
-    float                    dump_resources_scale{ 1.0f };
-    bool                     dump_resources_dump_vertex_index_buffer{ false };
-    bool                     dump_resources_json_per_command{ false };
-    bool                     dump_resources_dump_immutable_resources{ false };
-    bool                     dump_resources_dump_all_image_subresources{ false };
+    bool  dumping_resources{ false };
+    bool  dump_resources_before{ false };
+    bool  dump_resources_dump_depth{ false };
+    int   dump_resources_color_attachment_index{ kUnspecifiedColorAttachment };
+    float dump_resources_scale{ 1.0f };
+    bool  dump_resources_dump_vertex_index_buffer{ false };
+    bool  dump_resources_json_per_command{ false };
+    bool  dump_resources_dump_immutable_resources{ false };
+    bool  dump_resources_dump_all_image_subresources{ false };
+
     std::vector<std::string> marking_layers_names;
 };
 
