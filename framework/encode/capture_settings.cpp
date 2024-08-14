@@ -142,7 +142,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define EXPERIMENTAL_RAYTRACING_FASTFORWARDING_UPPER         "EXPERIMENTAL_RAYTRACING_FASTFORWARDING"
 #define BUFFER_USAGES_TO_IGNORE_LOWER                        "buffer_usages_to_ignore"
 #define BUFFER_USAGES_TO_IGNORE_UPPER                        "BUFFER_USAGES_TO_IGNORE"
-
+#define CAPTURE_PACKAGE_NAME_LOWER                           "capture_package_name"
+#define CAPTURE_PACKAGE_NAME_UPPER                           "CAPTURE_PACKAGE_NAME"
 
 
 #if defined(__ANDROID__)
@@ -209,7 +210,7 @@ const char kAnnotationDescriptorEnvVar[]                     = GFXRECON_OPTION_S
 const char kFenceQueryDelayEnvVar[]                          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY);
 const char kExperimentalRaytracingFastforwardingEnvVar[]     = GFXRECON_OPTION_STR(EXPERIMENTAL_RAYTRACING_FASTFORWARDING);
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
-
+const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
 
 #if defined(__ANDROID__)
 const char kCaptureAndroidTriggerEnvVar[]                    = GFXRECON_OPTION_STR(CAPTURE_ANDROID_TRIGGER);
@@ -267,6 +268,7 @@ const std::string kOptionKeyAnnotationDescriptor                     = std::stri
 const std::string kOptionFenceQueryDelay                             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LOWER);
 const std::string kOptionExperimentalRaytracingFastforwarding        = std::string(kSettingsFilter) + std::string(EXPERIMENTAL_RAYTRACING_FASTFORWARDING_LOWER);
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
+const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
 
 
 #if defined(GFXRECON_ENABLE_LZ4_COMPRESSION)
@@ -430,6 +432,8 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
         options, kExperimentalRaytracingFastforwardingEnvVar, kOptionExperimentalRaytracingFastforwarding);
 
     LoadSingleOptionEnvVar(options, kBufferUsagesToIgnoreEnvVar, kOptionBufferUsagesToIgnore);
+
+    LoadSingleOptionEnvVar(options, kCapturePackageNameEnvVar, kOptionCapturePackageName);
 }
 
 void CaptureSettings::LoadOptionsFile(OptionsMap* options)
@@ -610,6 +614,9 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
                         settings->trace_settings_.experimental_raytracing_fastforwarding);
     settings->trace_settings_.buffer_usages_to_ignore =
         ParseBufferUsages(FindOption(options, kOptionBufferUsagesToIgnore));
+
+    settings->trace_settings_.capture_package_name =
+        FindOption(options, kOptionCapturePackageName, settings->trace_settings_.capture_package_name);
 }
 
 void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* settings)
