@@ -316,7 +316,7 @@ int main(int argc, const char** argv)
                 {
 #if defined(D3D12_SUPPORT)
                     dx12_replay_consumer.PostReplay();
-                    if (!dx_replay_options.screenshot_ranges.empty() && !file_processor.UsesFrameMarkers() &&
+                    if (!dx_replay_options.screenshot_ranges.empty() && !file_processor->UsesFrameMarkers() &&
                         (dx12_replay_consumer.GetDXGITestPresentCount() > 0))
                     {
                         GFXRECON_LOG_WARNING_ONCE(

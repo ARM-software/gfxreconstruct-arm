@@ -83,7 +83,6 @@ bool FileProcessor::Initialize(const std::string& filename)
 
         if (success)
         {
-            filename_    = filename;
             error_state_ = kErrorNone;
         }
         else

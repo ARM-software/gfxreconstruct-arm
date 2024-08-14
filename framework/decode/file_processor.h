@@ -145,7 +145,6 @@ class FileProcessor
     AnnotationHandler*       annotation_handler_;
     Error                    error_state_;
     uint64_t                 bytes_read_;
-    std::string              filename_;
     bool                     capture_uses_frame_markers_;
 
     /// @brief Incremented at the end of every block successfully processed.
