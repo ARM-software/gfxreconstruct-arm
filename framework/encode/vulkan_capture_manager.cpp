@@ -1842,6 +1842,12 @@ void VulkanCaptureManager::PostProcess_vkGetSwapchainImagesKHR(VkResult       re
         return;
     }
     SwapchainKHRWrapper* old_swapchain = swapchain_wrapper->old_swapchain;
+    auto                 old_swapchain_wrapper = GetWrapper<SwapchainKHRWrapper>(old_swapchain->handle);
+    if (old_swapchain_wrapper == nullptr)
+    {
+        swapchain_wrapper->old_swapchain = nullptr;
+        return;
+    }
 
     for (uint32_t image = 0; image < *pSwapchainImageCount; ++image)
     {

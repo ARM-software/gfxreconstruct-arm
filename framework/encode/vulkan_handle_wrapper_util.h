@@ -466,14 +466,22 @@ inline void CreateWrappedHandle<DeviceWrapper,
     // Filter old swapchain images
     if (parent_wrapper->old_swapchain)
     {
-        for (auto old_image : parent_wrapper->old_swapchain->child_images)
+        auto old_swapchain_wrapper = GetWrapper<SwapchainKHRWrapper>(parent_wrapper->old_swapchain->handle);
+        if (old_swapchain_wrapper)
         {
-            if ((old_image != nullptr) && (*handle == old_image->handle))
+            for (auto old_image : parent_wrapper->old_swapchain->child_images)
             {
-                wrapper = old_image;
-                parent_wrapper->child_images.push_back(wrapper);
-                return;
+                if ((old_image != nullptr) && (*handle == old_image->handle))
+                {
+                    wrapper = old_image;
+                    parent_wrapper->child_images.push_back(wrapper);
+                    return;
+                }
             }
+        }
+        else
+        {
+            parent_wrapper->old_swapchain = nullptr;
         }
     }
 
