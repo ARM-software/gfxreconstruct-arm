@@ -301,11 +301,11 @@ class VulkanAccelerationStructureBuilder
 
     VulkanInternalBufferManager internal_buffer_manager_;
 
-    VkQueue                                                  queue_with_buffer_write = VK_NULL_HANDLE;
+    VkQueue                                                  queue_with_buffer_write_ = VK_NULL_HANDLE;
     std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
 
-    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write;
-    std::vector<DescriptorUpdateBufferEntries>                          deferred_inspection_buffers;
+    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write_;
+    std::vector<DescriptorUpdateBufferEntries>                          deferred_inspection_buffers_;
 
     struct DoubleBufferScratch
     {
@@ -357,9 +357,9 @@ class VulkanAccelerationStructureBuilder
                        std::vector<std::tuple<uint32_t,
                                               std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>,
                                               std::vector<VkAccelerationStructureKHR>>>>
-        compacted_sizes_unprocessed;
+        compacted_sizes_unprocessed_;
     // map containing relation between uncompacted AS capture id and the size of compacted AS
-    std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> compacted_sizes_processed;
+    std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize> compacted_sizes_processed_;
 
     CommandExecuteObjects cmd_execute_obj_;
 

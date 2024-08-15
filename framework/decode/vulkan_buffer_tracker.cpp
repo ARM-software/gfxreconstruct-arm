@@ -42,8 +42,9 @@ VulkanBufferTracker::~VulkanBufferTracker()
 
 void VulkanBufferTracker::SetBufferInfo(BufferInfo* buffer_info)
 {
-    auto existing_buffer = std::find_if(
-        buffers_.begin(), buffers_.end(), [&](const auto& entry) { return entry->handle == buffer_info->handle; });
+    auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+        return entry->handle == buffer_info->handle;
+    });
 
     // Handle reuse, update the data in the entry
     if (existing_buffer != buffers_.end())
@@ -89,33 +90,57 @@ void VulkanBufferTracker::UpdateBufferDeviceAddress(VkDeviceAddress& address)
         return;
 
     VkDeviceSize offset = 0;
-    auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
+    auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
         // TODO: allocator_->GetBufferSize(entry->allocator_data) and entry->size should have the same data. This is not
         // true on FF. Investigate why and remove the allocator_ call.
-        auto buffer_size = allocator_->GetBufferSize(entry->allocator_data);
-        return entry->capture_address <= address && (entry->capture_address + buffer_size) > address;
+        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        if (entry->capture_address == address)
+        {
+            return true;
+        }
+        else if (entry->capture_address <= address && (entry->capture_address + buffer_size) > address)
+        {
+            return true;
+        }
+        return false;
     });
     GFXRECON_ASSERT(buffer != buffers_.end());
     offset  = address - (*buffer)->capture_address;
     address = (*buffer)->replay_address + offset;
 }
 
-BufferInfo* VulkanBufferTracker::GetBufferByRuntimeDeviceAddress(VkDeviceAddress runtime_address)
+BufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address)
 {
     // Try to find buffer by runtime device address
-    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-        auto buffer_size = allocator_->GetBufferSize(entry->allocator_data);
-        return entry->replay_address <= runtime_address && (entry->replay_address + buffer_size) > runtime_address;
+    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        if (entry->replay_address == replay_address)
+        {
+            return true;
+        }
+        else if (entry->replay_address <= replay_address && (entry->replay_address + buffer_size) > replay_address)
+        {
+            return true;
+        }
+        return false;
     });
     GFXRECON_ASSERT(buffer != buffers_.end());
     return *buffer;
 }
 
-BufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress original_address)
+BufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address)
 {
-    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-        auto buffer_size = allocator_->GetBufferSize(entry->allocator_data);
-        return entry->capture_address <= original_address && (entry->capture_address + buffer_size) > original_address;
+    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        if (entry->capture_address == capture_address)
+        {
+            return true;
+        }
+        else if (entry->capture_address <= capture_address && (entry->capture_address + buffer_size) > capture_address)
+        {
+            return true;
+        }
+        return false;
     });
     if (buffer != buffers_.end())
     {
