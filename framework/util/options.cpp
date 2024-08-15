@@ -71,6 +71,11 @@ std::vector<UintRange> GetUintRanges(const char* args, const char* option_name, 
             {
                 values.push_back(value);
             }
+            else if (values.empty() && value.length() == 1 && value == "*")
+            {
+                values.push_back(value);
+                break;
+            }
             else
             {
                 GFXRECON_LOG_WARNING("Ignoring invalid range \"%s\" for %s, which contains non-numeric values",
@@ -89,6 +94,15 @@ std::vector<UintRange> GetUintRanges(const char* args, const char* option_name, 
             {
                 if (std::count(range.begin(), range.end(), '-') == 0)
                 {
+                    if (values[0] == "*")
+                    {
+                        uint_range.first = 1;
+                        uint_range.last  = UINT32_MAX;
+                        ranges.clear();
+                        ranges.emplace_back(std::move(uint_range));
+                        GFXRECON_LOG_INFO("Enable %s for all frames", option_name);
+                        return ranges;
+                    }
                     uint_range.first = std::stoi(values[0]);
                     uint_range.last  = uint_range.first;
                 }
