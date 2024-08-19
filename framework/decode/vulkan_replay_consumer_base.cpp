@@ -10135,6 +10135,24 @@ void VulkanReplayConsumerBase::GetImportedSemaphores(
     }
 }
 
+void VulkanReplayConsumerBase::SignalShadowSemaphore(SemaphoreInfo*                     semaphore_info,
+                                                     std::vector<const SemaphoreInfo*>* shadow_semaphores)
+{
+    if (semaphore_info->shadow_signaled == true)
+    {
+        // If found, unsignal the semaphore to represent it being used.
+        shadow_semaphores->push_back(semaphore_info);
+        semaphore_info->shadow_signaled = false;
+        shadow_semaphores_.erase(semaphore_info->handle);
+    }
+    else if (semaphore_info->signaled)
+    {
+        // If the semaphore was signaled with VkSubmitInfo we need to wait on it
+        // and mark that it has been waited on
+        semaphore_info->signaled = false;
+    }
+}
+
 void VulkanReplayConsumerBase::GetShadowSemaphores(const HandlePointerDecoder<VkSemaphore>& semaphore_data,
                                                    std::vector<const SemaphoreInfo*>*       shadow_semaphores)
 {
@@ -10148,12 +10166,9 @@ void VulkanReplayConsumerBase::GetShadowSemaphores(const HandlePointerDecoder<Vk
         for (uint32_t i = 0; i < count; ++i)
         {
             SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_ids[i]);
-            if ((semaphore_info != nullptr) && (semaphore_info->shadow_signaled == true))
+            if (semaphore_info != nullptr)
             {
-                // If found, unsignal the semaphore to represent it being used.
-                shadow_semaphores->push_back(semaphore_info);
-                semaphore_info->shadow_signaled = false;
-                shadow_semaphores_.erase(semaphore_info->handle);
+                SignalShadowSemaphore(semaphore_info, shadow_semaphores);
             }
         }
     }
@@ -10173,12 +10188,9 @@ void VulkanReplayConsumerBase::GetShadowSemaphores(
         for (uint32_t i = 0; i < count; ++i)
         {
             SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_infos[i].semaphore);
-            if ((semaphore_info != nullptr) && (semaphore_info->shadow_signaled == true))
+            if (semaphore_info != nullptr)
             {
-                // If found, unsignal the semaphore to represent it being used.
-                shadow_semaphores->push_back(semaphore_info);
-                semaphore_info->shadow_signaled = false;
-                shadow_semaphores_.erase(semaphore_info->handle);
+                SignalShadowSemaphore(semaphore_info, shadow_semaphores);
             }
         }
     }
@@ -10273,10 +10285,17 @@ void VulkanReplayConsumerBase::GetNonForwardProgress(const HandlePointerDecoder<
 
         for (uint32_t i = 0; i < count; ++i)
         {
-            const SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_ids[i]);
+            SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_ids[i]);
             if ((semaphore_info != nullptr) && (semaphore_info->forward_progress == false))
             {
-                non_forward_progress_semaphores->push_back(semaphore_info);
+                if (semaphore_info->signaled == false)
+                {
+                    semaphore_info->signaled = true;
+                }
+                else
+                {
+                    non_forward_progress_semaphores->push_back(semaphore_info);
+                }
             }
         }
     }
@@ -10295,10 +10314,17 @@ void VulkanReplayConsumerBase::GetNonForwardProgress(
 
         for (uint32_t i = 0; i < count; ++i)
         {
-            const SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_infos[i].semaphore);
+            SemaphoreInfo* semaphore_info = object_info_table_.GetSemaphoreInfo(semaphore_infos[i].semaphore);
             if ((semaphore_info != nullptr) && (semaphore_info->forward_progress == false))
             {
-                non_forward_progress_semaphores->push_back(semaphore_info);
+                if (semaphore_info->signaled == false)
+                {
+                    semaphore_info->signaled = true;
+                }
+                else
+                {
+                    non_forward_progress_semaphores->push_back(semaphore_info);
+                }
             }
         }
     }
