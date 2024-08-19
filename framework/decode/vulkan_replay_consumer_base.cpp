@@ -2700,7 +2700,7 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
             modified_extensions.erase(iter);
             faked_extensions_.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
-
+        
         if (options_.remove_unsupported_features)
         {
             // Remove enabled extensions that are not available from the replay instance.
@@ -2727,10 +2727,10 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
 
     // Enable validation layer and create a debug messenger if the enable_validation_layer replay option is set.
     VkDebugUtilsMessengerCreateInfoEXT messenger_create_info{};
-    std::vector<VkLayerProperties>     available_layers;
-    if (feature_util::GetInstanceLayers(instance_layer_proc, &available_layers) == VK_SUCCESS)
+    if (options_.enable_validation_layer)
     {
-        if (options_.enable_validation_layer)
+        std::vector<VkLayerProperties> available_layers;
+        if (feature_util::GetInstanceLayers(instance_layer_proc, &available_layers) == VK_SUCCESS)
         {
             if (feature_util::IsSupportedLayer(available_layers, kValidationLayerName))
             {
@@ -2882,31 +2882,13 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
     std::vector<format::HandleId> capture_device_group;
     const auto*                   capture_next = decoded_capture_create_info->pNext;
 
-    while (capture_next)
+    const auto* decoded_capture_device_group_create_info =
+        GetPNextMetaStruct<Decoded_VkDeviceGroupDeviceCreateInfo>(decoded_capture_create_info->pNext);
+    if (decoded_capture_device_group_create_info != nullptr)
     {
-        const auto* value = reinterpret_cast<const VkBaseInStructure*>(capture_next->GetPointer());
-
-        switch (value->sType)
-        {
-            case VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO:
-            {
-                const auto* decoded_value = reinterpret_cast<const Decoded_VkDeviceGroupDeviceCreateInfo*>(
-                    capture_next->GetMetaStructPointer());
-                if (decoded_value != nullptr)
-                {
-                    const auto  len        = decoded_value->pPhysicalDevices.GetLength();
-                    const auto* handle_ids = decoded_value->pPhysicalDevices.GetPointer();
-                    std::copy(handle_ids, handle_ids + len, std::back_inserter(capture_device_group));
-                }
-                break;
-            }
-            default:
-                break;
-        }
-
-        const auto* base_decoded_value =
-            reinterpret_cast<const Decoded_VkBaseOutStructure*>(capture_next->GetMetaStructPointer());
-        capture_next = base_decoded_value->pNext;
+        const auto  len        = decoded_capture_device_group_create_info->pPhysicalDevices.GetLength();
+        const auto* handle_ids = decoded_capture_device_group_create_info->pPhysicalDevices.GetPointer();
+        std::copy(handle_ids, handle_ids + len, std::back_inserter(capture_device_group));
     }
 
     VkDeviceGroupDeviceCreateInfo modified_device_group_create_info = {};
