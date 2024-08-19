@@ -1142,6 +1142,7 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
                 GFXRECON_LOG_WARNING_ONCE("Mapping of descriptor update buffer has failed");
                 GFXRECON_LOG_DEBUG("Mapping of descriptor update buffer (capture id %u) has failed",
                                    descriptor_update_buffers.infos_[buffer_idx]->capture_id);
+                util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
                 continue;
             }
 
