@@ -12731,7 +12731,7 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingAttachmentLocationsKHR(
 
 VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndicesKHR(
     VkCommandBuffer                             commandBuffer,
-    const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo)
+    const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo)
 {
     VulkanCaptureManager* manager = VulkanCaptureManager::Get();
     GFXRECON_ASSERT(manager != nullptr);
@@ -12747,22 +12747,22 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndicesKHR(
         shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
     }
 
-    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pInputAttachmentIndexInfo);
 
     auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR);
     if (encoder)
     {
         encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
-        EncodeStructPtr(encoder, pLocationInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingInputAttachmentIndicesKHRHandles, pLocationInfo);
+        EncodeStructPtr(encoder, pInputAttachmentIndexInfo);
+        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingInputAttachmentIndicesKHRHandles, pInputAttachmentIndexInfo);
     }
 
     auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pLocationInfo, handle_unwrap_memory);
+    const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInputAttachmentIndexInfo, handle_unwrap_memory);
 
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pLocationInfo_unwrapped);
+    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pInputAttachmentIndexInfo_unwrapped);
 
-    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
+    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pInputAttachmentIndexInfo);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL WaitForPresentKHR(

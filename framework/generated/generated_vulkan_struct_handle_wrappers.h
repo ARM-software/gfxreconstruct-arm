@@ -471,6 +471,10 @@ void UnwrapStructHandles(VkSetDescriptorBufferOffsetsInfoEXT* value, HandleUnwra
 
 void UnwrapStructHandles(VkBindDescriptorBufferEmbeddedSamplersInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkPhysicalDeviceMaintenance7FeaturesKHR* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkDebugMarkerObjectNameInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkDebugMarkerObjectTagInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
@@ -596,6 +600,8 @@ void UnwrapStructHandles(VkMemoryPriorityAllocateInfoEXT* value, HandleUnwrapMem
 void UnwrapStructHandles(VkPhysicalDeviceDedicatedAllocationImageAliasingFeaturesNV* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPhysicalDeviceBufferDeviceAddressFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkValidationFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPhysicalDeviceCooperativeMatrixFeaturesNV* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -853,6 +859,8 @@ void UnwrapStructHandles(VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV* 
 
 void UnwrapStructHandles(VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPhysicalDevicePipelineLibraryGroupHandlesFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
@@ -889,7 +897,13 @@ void UnwrapStructHandles(VkPhysicalDeviceRawAccessChainsFeaturesNV* value, Handl
 
 void UnwrapStructHandles(VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkPhysicalDeviceRayTracingValidationFeaturesNV* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkPhysicalDeviceImageAlignmentControlFeaturesMESA* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkImageAlignmentControlCreateInfoMESA* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkAccelerationStructureGeometryTrianglesDataKHR* value, HandleUnwrapMemory* unwrap_memory);
 

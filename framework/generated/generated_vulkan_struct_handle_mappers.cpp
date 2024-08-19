@@ -2481,6 +2481,28 @@ void MapStructHandles(Decoded_VkBindDescriptorBufferEmbeddedSamplersInfoEXT* wra
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPhysicalDeviceMaintenance7FeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkDebugMarkerObjectNameInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
@@ -3176,6 +3198,17 @@ void MapStructHandles(Decoded_VkPhysicalDeviceDedicatedAllocationImageAliasingFe
 }
 
 void MapStructHandles(Decoded_VkPhysicalDeviceBufferDeviceAddressFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkValidationFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -4604,6 +4637,17 @@ void MapStructHandles(Decoded_VkPhysicalDeviceExtendedSparseAddressSpaceFeatures
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
@@ -4801,7 +4845,40 @@ void MapStructHandles(Decoded_VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesN
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceRayTracingValidationFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkImageAlignmentControlCreateInfoMESA* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -5309,6 +5386,12 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkBindMemoryStatusKHR*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_7_FEATURES_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceMaintenance7FeaturesKHR*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_IMAGE_CREATE_INFO_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkDedicatedAllocationImageCreateInfoNV*>(wrapper), object_info_table);
             break;
@@ -5449,6 +5532,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceBufferDeviceAddressFeaturesEXT*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkValidationFeaturesEXT*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceCooperativeMatrixFeaturesNV*>(wrapper), object_info_table);
@@ -5765,6 +5851,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_SPARSE_ADDRESS_SPACE_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_FEATURES_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_FEATURES_ARM:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM*>(wrapper), object_info_table);
             break;
@@ -5816,8 +5905,17 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT16_VECTOR_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_REPLICATED_COMPOSITES_FEATURES_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceRayTracingValidationFeaturesNV*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_FEATURES_MESA:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA:
+            MapStructHandles(reinterpret_cast<Decoded_VkImageAlignmentControlCreateInfoMESA*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkWriteDescriptorSetAccelerationStructureKHR*>(wrapper), object_info_table);

@@ -2094,6 +2094,28 @@ void UnwrapStructHandles(VkBindDescriptorBufferEmbeddedSamplersInfoEXT* value, H
     }
 }
 
+void UnwrapStructHandles(VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
+void UnwrapStructHandles(VkPhysicalDeviceMaintenance7FeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
 void UnwrapStructHandles(VkDebugMarkerObjectNameInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value != nullptr)
@@ -2720,6 +2742,17 @@ void UnwrapStructHandles(VkPhysicalDeviceDedicatedAllocationImageAliasingFeature
 }
 
 void UnwrapStructHandles(VkPhysicalDeviceBufferDeviceAddressFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
+void UnwrapStructHandles(VkValidationFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value != nullptr)
     {
@@ -4047,6 +4080,17 @@ void UnwrapStructHandles(VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV* v
     }
 }
 
+void UnwrapStructHandles(VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
 void UnwrapStructHandles(VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value != nullptr)
@@ -4241,7 +4285,40 @@ void UnwrapStructHandles(VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV* va
     }
 }
 
+void UnwrapStructHandles(VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
 void UnwrapStructHandles(VkPhysicalDeviceRayTracingValidationFeaturesNV* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
+void UnwrapStructHandles(VkPhysicalDeviceImageAlignmentControlFeaturesMESA* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = const_cast<void*>(UnwrapPNextStructHandles(value->pNext, unwrap_memory));
+        }
+    }
+}
+
+void UnwrapStructHandles(VkImageAlignmentControlCreateInfoMESA* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value != nullptr)
     {
@@ -5080,6 +5157,21 @@ VkBaseInStructure* CopyPNextStruct(const VkBaseInStructure* base, HandleUnwrapMe
     case VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS_KHR:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkBindMemoryStatusKHR*>(base), 1, unwrap_memory));
         break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_7_FEATURES_KHR:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceMaintenance7FeaturesKHR*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_7_PROPERTIES_KHR:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceMaintenance7PropertiesKHR*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_PROPERTIES_LIST_KHR:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceLayeredApiPropertiesListKHR*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_VULKAN_PROPERTIES_KHR:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceLayeredApiVulkanPropertiesKHR*>(base), 1, unwrap_memory));
+        break;
     case VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkDebugReportCallbackCreateInfoEXT*>(base), 1, unwrap_memory));
         break;
@@ -5893,6 +5985,12 @@ VkBaseInStructure* CopyPNextStruct(const VkBaseInStructure* base, HandleUnwrapMe
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_SPARSE_ADDRESS_SPACE_PROPERTIES_NV:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceExtendedSparseAddressSpacePropertiesNV*>(base), 1, unwrap_memory));
         break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_FEATURES_EXT:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_PROPERTIES_EXT:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceLegacyVertexAttributesPropertiesEXT*>(base), 1, unwrap_memory));
+        break;
     case VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkLayerSettingsCreateInfoEXT*>(base), 1, unwrap_memory));
         break;
@@ -5968,8 +6066,20 @@ VkBaseInStructure* CopyPNextStruct(const VkBaseInStructure* base, HandleUnwrapMe
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT16_VECTOR_FEATURES_NV:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV*>(base), 1, unwrap_memory));
         break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_REPLICATED_COMPOSITES_FEATURES_EXT:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT*>(base), 1, unwrap_memory));
+        break;
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceRayTracingValidationFeaturesNV*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_FEATURES_MESA:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceImageAlignmentControlFeaturesMESA*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_PROPERTIES_MESA:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkPhysicalDeviceImageAlignmentControlPropertiesMESA*>(base), 1, unwrap_memory));
+        break;
+    case VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA:
+        copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkImageAlignmentControlCreateInfoMESA*>(base), 1, unwrap_memory));
         break;
     case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(base), 1, unwrap_memory));
@@ -6250,6 +6360,10 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceMaintenance6FeaturesKHR*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_BIND_MEMORY_STATUS_KHR:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkBindMemoryStatusKHR*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_7_FEATURES_KHR:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceMaintenance7FeaturesKHR*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_IMAGE_CREATE_INFO_NV:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkDedicatedAllocationImageCreateInfoNV*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_DEDICATED_ALLOCATION_MEMORY_ALLOCATE_INFO_NV:
@@ -6344,6 +6458,8 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceDedicatedAllocationImageAliasingFeaturesNV*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceBufferDeviceAddressFeaturesEXT*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkValidationFeaturesEXT*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceCooperativeMatrixFeaturesNV*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COVERAGE_REDUCTION_MODE_FEATURES_NV:
@@ -6554,6 +6670,8 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_SPARSE_ADDRESS_SPACE_FEATURES_NV:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceExtendedSparseAddressSpaceFeaturesNV*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_FEATURES_EXT:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_FEATURES_ARM:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceShaderCoreBuiltinsFeaturesARM*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_LIBRARY_GROUP_HANDLES_FEATURES_EXT:
@@ -6588,8 +6706,14 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceRawAccessChainsFeaturesNV*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT16_VECTOR_FEATURES_NV:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_REPLICATED_COMPOSITES_FEATURES_EXT:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceRayTracingValidationFeaturesNV*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_FEATURES_MESA:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkPhysicalDeviceImageAlignmentControlFeaturesMESA*>(base), unwrap_memory);
+        case VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA:
+            return UnwrapStructPtrHandles(reinterpret_cast<const VkImageAlignmentControlCreateInfoMESA*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR:
             return UnwrapStructPtrHandles(reinterpret_cast<const VkWriteDescriptorSetAccelerationStructureKHR*>(base), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR:

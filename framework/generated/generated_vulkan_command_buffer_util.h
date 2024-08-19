@@ -153,7 +153,7 @@ void TrackCmdDrawIndexedIndirectCountKHRHandles(vulkan_wrappers::CommandBufferWr
 
 void TrackCmdSetRenderingAttachmentLocationsKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingAttachmentLocationInfoKHR* pLocationInfo);
 
-void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo);
+void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo);
 
 void TrackCmdEncodeVideoKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkVideoEncodeInfoKHR* pEncodeInfo);
 

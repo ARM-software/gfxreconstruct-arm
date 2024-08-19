@@ -941,11 +941,11 @@ void TrackCmdSetRenderingAttachmentLocationsKHRHandles(vulkan_wrappers::CommandB
     }
 }
 
-void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo)
+void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo)
 {
     assert(wrapper != nullptr);
 
-    if (pLocationInfo != nullptr)
+    if (pInputAttachmentIndexInfo != nullptr)
     {
     }
 }

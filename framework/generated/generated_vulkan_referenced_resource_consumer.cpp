@@ -1376,13 +1376,13 @@ void VulkanReferencedResourceConsumer::Process_vkCmdSetRenderingAttachmentLocati
 void VulkanReferencedResourceConsumer::Process_vkCmdSetRenderingInputAttachmentIndicesKHR(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,
-    StructPointerDecoder<Decoded_VkRenderingInputAttachmentIndexInfoKHR>* pLocationInfo)
+    StructPointerDecoder<Decoded_VkRenderingInputAttachmentIndexInfoKHR>* pInputAttachmentIndexInfo)
 {
-    assert(pLocationInfo != nullptr);
+    assert(pInputAttachmentIndexInfo != nullptr);
 
-    if (!pLocationInfo->IsNull() && (pLocationInfo->HasData()))
+    if (!pInputAttachmentIndexInfo->IsNull() && (pInputAttachmentIndexInfo->HasData()))
     {
-        auto pLocationInfo_ptr = pLocationInfo->GetMetaStructPointer();
+        auto pInputAttachmentIndexInfo_ptr = pInputAttachmentIndexInfo->GetMetaStructPointer();
     }
 }
 
