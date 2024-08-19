@@ -794,6 +794,11 @@ optional arguments:
                         unspecified screenshots will use the swapchain images
                         dimensions. If --screenshot-scale is also specified then
                         this option is ignored.
+  --tsp <script-file>, --trigger-script-path <script-file>
+                        Path to script file.
+  --tsf <frame-ranges>, --trigger-script-frame <frame-ranges>
+                        Trigger script for the specified frames.Target frames are
+                        specified as a comma separated list of frame ranges.
   --sfa, --skip-failed-allocations
                         Skip vkAllocateMemory, vkAllocateCommandBuffers, and
                         vkAllocateDescriptorSets calls that failed during

@@ -130,6 +130,8 @@ const char kWaitBeforePresent[]                   = "--wait-before-present";
 const char kPrintBlockInfoAllOption[]             = "--pbi-all";
 const char kPrintBlockInfosArgument[]             = "--pbis";
 const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
+const char kTriggerScriptNameArgument[]           = "--trigger-script-path";
+const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -692,6 +694,34 @@ GetScreenshotRanges(const gfxrecon::util::ArgumentParser& arg_parser)
     }
 
     return ranges;
+}
+
+static std::vector<std::pair<uint32_t, uint32_t>>
+GetTriggerScriptRanges(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    std::vector<std::pair<uint32_t, uint32_t>> ranges;
+
+    const auto& value = arg_parser.GetArgumentValue(kTriggerScriptFrameArgument);
+
+    if (!value.empty())
+    {
+        std::vector<gfxrecon::util::UintRange> frame_ranges =
+            gfxrecon::util::GetUintRanges(value.c_str(), "trigger script frames");
+
+        for (uint32_t i = 0; i < frame_ranges.size(); ++i)
+        {
+            std::pair<uint32_t, uint32_t> range;
+            range.first  = frame_ranges[i].first;
+            range.second = frame_ranges[i].last;
+            ranges.emplace_back(range);
+        }
+    }
+    return ranges;
+}
+
+static std::string GetTriggerScriptName(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    return arg_parser.GetArgumentValue(kTriggerScriptNameArgument);
 }
 
 static void

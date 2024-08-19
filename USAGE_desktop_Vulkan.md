@@ -551,6 +551,8 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--screenshots <N1(-N2),...>] [--screenshot-format <format>]
                         [--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]
                         [--screenshot-scale SCALE] [--screenshot-size WIDTHxHEIGHT]
+                        [--tsp <script-file> | --trigger-script-path <script-file>]
+                        [--tsf <frame-ranges> | --trigger-script-frame <frame-ranges>]
                         [--sfa | --skip-failed-allocations] [--replace-shaders <dir>]
                         [--opcd | --omit-pipeline-cache-data] [--wsi <platform>]
                         [--surface-index <N>] [--remove-unsupported] [--validate]
@@ -634,6 +636,11 @@ Optional arguments:
                         unspecified screenshots will use the swapchain images
                         dimensions. If --screenshot-scale is also specified then
                         this option is ignored.
+  --tsp <script-file>, --trigger-script-path <script-file>
+                        Path to script file.
+  --tsf <frame-ranges>, --trigger-script-frame <frame-ranges>
+                        Trigger script for the specified frames.Target frames are
+                        specified as a comma separated list of frame ranges.
   --sfa                 Skip vkAllocateMemory, vkAllocateCommandBuffers, and
                         vkAllocateDescriptorSets calls that failed during
                         capture (same as --skip-failed-allocations).

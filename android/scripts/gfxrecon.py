@@ -94,6 +94,8 @@ def CreateReplayParser():
     parser.add_argument('--log-file', metavar='DEVICE_FILE', help='Write log messages to a file at the specified path instead of logcat (forwarded to replay tool)')
     parser.add_argument('--pause-frame', metavar='N', help='Pause after replaying frame number N (forwarded to replay tool)')
     parser.add_argument('--paused', action='store_true', default=False, help='Pause after replaying the first frame (same as "--pause-frame 1"; forwarded to replay tool)')
+    parser.add_argument('--trigger-script-path', metavar='DEVICE_FILE', help='Path to the script needed to trigger)')
+    parser.add_argument('--trigger-script-frame', metavar='RANGES', help='Frame ranges to trigger the script.)')
     parser.add_argument('--screenshot-all', action='store_true', default=False, help='Generate screenshots for all frames.  When this option is specified, --screenshots is ignored (forwarded to replay tool)')
     parser.add_argument('--screenshots', metavar='RANGES', help='Generate screenshots for the specified frames.  Target frames are specified as a comma separated list of frame ranges.  A frame range can be specified as a single value, to specify a single frame, or as two hyphenated values, to specify the first and last frames to process.  Frame ranges should be specified in ascending order and cannot overlap.  Note that frame numbering is 1-based (i.e. the first frame is frame 1).  Example: 200,301-305 will generate six screenshots (forwarded to replay tool)')
     parser.add_argument('--screenshot-format', metavar='FORMAT', choices=['bmp', 'png'], help='Image file format to use for screenshot generation.  Available formats are: bmp, png (forwarded to replay tool)')
@@ -181,6 +183,14 @@ def MakeExtrasString(args):
     if args.screenshot_dir:
         arg_list.append('--screenshot-dir')
         arg_list.append('{}'.format(args.screenshot_dir))
+
+    if args.trigger_script_frame:
+        arg_list.append('--trigger-script-frame')
+        arg_list.append('{}'.format(args.trigger_script_frame))
+
+    if args.trigger_script_path:
+        arg_list.append('--trigger-script-path')
+        arg_list.append('{}'.format(args.trigger_script_path))
 
     if args.screenshot_prefix:
         arg_list.append('--screenshot-prefix')

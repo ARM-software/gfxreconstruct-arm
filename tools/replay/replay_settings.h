@@ -46,7 +46,7 @@ const char kArguments[] =
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--"
     "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-format,--dump-resources-dir,"
-    "--dump-resources-dump-color-attachment-index,--pbis";
+    "--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|--trigger-script-frame";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -106,6 +106,8 @@ static void PrintUsage(const char* exe_name)
 #endif
 #else
     GFXRECON_WRITE_CONSOLE("\t\t\t[--log-level <level>] [--log-file <file>]");
+    GFXRECON_WRITE_CONSOLE(
+        "\t\t\t[--tsp | --trigger-script-path <script-file>] [--tsf | --trigger-script-frame <frame-ranges>]");
 #endif
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dsf | --disable-subpass-fusion]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--marking-tools <N1,...>]");
@@ -181,6 +183,13 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
     GFXRECON_WRITE_CONSOLE("       \t\t\tdisplayed when abort() is called (Windows debug only).");
 #endif
+#else
+    GFXRECON_WRITE_CONSOLE(" --trigger-script-path <script-file>");
+    GFXRECON_WRITE_CONSOLE("          \t\tPath to script file.");
+    GFXRECON_WRITE_CONSOLE(" --trigger-script-frame <frame-ranges>");
+    GFXRECON_WRITE_CONSOLE("          \t\tTrigger script for the specified frames.");
+    GFXRECON_WRITE_CONSOLE("          \t\tTarget frames are specified as a comma separated");
+    GFXRECON_WRITE_CONSOLE("          \t\tlist of frame ranges. * is for all frames");
 #endif
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("Vulkan only:")

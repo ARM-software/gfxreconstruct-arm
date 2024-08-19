@@ -156,6 +156,8 @@ void android_main(struct android_app* app)
                 decoder.AddConsumer(&replay_consumer);
                 file_processor->AddDecoder(&decoder);
                 application->SetPauseFrame(GetPauseFrame(arg_parser));
+                application->SetTriggerScriptName(GetTriggerScriptName(arg_parser));
+                application->SetTriggerScriptFrame(GetTriggerScriptRanges(arg_parser));
 
                 // Warn if the capture layer is active.
                 CheckActiveLayers(kLayerProperty);
