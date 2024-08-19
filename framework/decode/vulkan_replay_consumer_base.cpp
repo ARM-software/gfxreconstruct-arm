@@ -2700,7 +2700,7 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
             modified_extensions.erase(iter);
             faked_extensions_.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
-        
+
         if (options_.remove_unsupported_features)
         {
             // Remove enabled extensions that are not available from the replay instance.
