@@ -27,11 +27,12 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
+                                                         const PhysicalDeviceInfo*               physical_device_info,
                                                          VkDevice                                device,
                                                          VulkanResourceAllocator*                allocator,
                                                          const VkPhysicalDeviceMemoryProperties& memory_properties) :
-    device_(device),
-    allocator_(allocator), physical_device_memory_properties_(memory_properties)
+    physical_device_info_(physical_device_info),
+    device_(device), allocator_(allocator), physical_device_memory_properties_(memory_properties)
 {
     InitializeFunctionPointers(device_table);
 }
@@ -72,7 +73,7 @@ void VulkanInternalBufferManager::SetBufferInfo(BufferInfo* buffer_info)
     }
     else
     {
-        buffers_.push_back(std::make_unique<BufferInfoWrapper>(*buffer_info, allocator_));
+        buffers_.push_back(std::make_unique<BufferInfoWrapper>(*buffer_info, allocator_, physical_device_info_));
     }
 }
 
@@ -87,7 +88,10 @@ VkDeviceAddress VulkanInternalBufferManager::GetBufferDeviceAddress(VkBuffer buf
     VkDeviceAddress result = 0;
 
     assert(functions_.get_buffer_device_address != gfxrecon::encode::noop::GetBufferDeviceAddress);
+
+    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     result = functions_.get_buffer_device_address(device_, &info);
+    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
     return result;
 }
@@ -107,6 +111,8 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     create_info.pQueueFamilyIndices   = nullptr;
 
     VulkanResourceAllocator::ResourceData buffer_allocator_data;
+    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+
     allocator_->CreateBufferDirect(&create_info, nullptr, &buffer, &buffer_allocator_data);
 
     VkMemoryRequirements requirements{};
@@ -128,11 +134,13 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     allocator_->AllocateMemoryDirect(&allocate_info, nullptr, &memory, &memory_allocator_data);
 
     allocator_->BindBufferMemoryDirect(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
+    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
-    std::unique_ptr<BufferInfoWrapper> entry = std::make_unique<BufferInfoWrapper>(BufferInfo(), allocator_);
-    entry->info_.allocator_data              = buffer_allocator_data;
-    entry->info_.replay_address              = GetBufferDeviceAddress(buffer);
-    entry->info_.handle                      = buffer;
+    std::unique_ptr<BufferInfoWrapper> entry =
+        std::make_unique<BufferInfoWrapper>(BufferInfo(), allocator_, physical_device_info_);
+    entry->info_.allocator_data = buffer_allocator_data;
+    entry->info_.replay_address = GetBufferDeviceAddress(buffer);
+    entry->info_.handle         = buffer;
 
     return entry;
 }

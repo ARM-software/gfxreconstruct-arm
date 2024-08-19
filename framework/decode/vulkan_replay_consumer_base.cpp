@@ -3151,7 +3151,7 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
         instance_table->GetPhysicalDeviceFeatures2(physical_device, &device_features);
 
         buffer_tracker_[*pDevice->GetPointer()] =
-            std::make_unique<VulkanBufferTracker>(device_table, *replay_device, allocator);
+            std::make_unique<VulkanBufferTracker>(device_table, physical_device_info, *replay_device, allocator);
 
         acceleration_structure_builders_[*pDevice->GetPointer()] = std::make_unique<VulkanAccelerationStructureBuilder>(
             device_table,
@@ -8707,6 +8707,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyAccelerationStructureKHR(
             command_buffer_info->handle, pInfo->GetPointer());
     }
 }
+
 void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
     PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
     CommandBufferInfo*                                command_buffer_info,
