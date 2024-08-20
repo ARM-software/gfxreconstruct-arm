@@ -281,6 +281,10 @@ class CommonCaptureManager
     bool                                GetDisableDxrSetting() const { return disable_dxr_; }
     auto                                GetAccelStructPaddingSetting() const { return accel_struct_padding_; }
     bool GetExperimentalRaytracingFastforwardingSetting() const { return experimental_raytracing_fastforwarding_; }
+    bool GetForceFifoPresentModeSetting() const
+    {
+        return force_fifo_present_mode_;
+    }
 
     util::Compressor*      GetCompressor() { return compressor_.get(); }
     std::mutex&            GetMappedMemoryLock() { return mapped_memory_lock_; }
@@ -418,6 +422,7 @@ class CommonCaptureManager
     static std::function<void()>            delete_instance_func_;
     uint32_t                                fence_query_delay_;
     bool                                    experimental_raytracing_fastforwarding_;
+    bool                                    force_fifo_present_mode_;
     std::vector<uint64_t>                   buffer_usages_to_ignore_;
     struct
     {

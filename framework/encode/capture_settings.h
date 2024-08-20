@@ -122,6 +122,7 @@ class CaptureSettings
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };
         bool                         experimental_raytracing_fastforwarding{ true };
+        bool                         force_fifo_present_mode{ true };
 
         // An optimization for the page_guard memory tracking mode that eliminates the need for shadow memory by
         // overriding vkAllocateMemory so that all host visible allocations use the external memory extension with a
