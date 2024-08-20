@@ -48,9 +48,9 @@ class VulkanBufferTracker
 
     void UpdateBufferDeviceAddress(VkDeviceAddress& address);
 
-    BufferInfo* GetBufferByRuntimeDeviceAddress(VkDeviceAddress runtime_address);
+    BufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address);
 
-    BufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress original_address);
+    BufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address);
 
     VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
 

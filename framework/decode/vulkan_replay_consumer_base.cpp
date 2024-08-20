@@ -5161,6 +5161,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
                 TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
         }
     }
+
     return result;
 }
 

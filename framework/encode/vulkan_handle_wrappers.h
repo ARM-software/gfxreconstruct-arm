@@ -492,7 +492,6 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
     VkBool32                                          local_dimming_enable_AMD{ false };
 };
 
-// This is not exactly a good type naming, as it is really used as TLAS wrapper exclusively
 struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStructureKHR>
 {
     // State tracking info for buffers with device addresses.
@@ -505,19 +504,35 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
 
     VkAccelerationStructureTypeKHR type_;
     // Only used when tracking
-    struct InstanceBufferData
+
+    struct ASInputBuffer
     {
-        format::HandleId                                handle_id;
-        bool                                            destroyed{ false };
-        std::vector<VkAccelerationStructureInstanceKHR> instances;
+        // Required data to correctly create a buffer
+        VkBuffer           handle{ VK_NULL_HANDLE };
+        format::HandleId   handle_id{ format::kNullHandleId };
+        DeviceWrapper*     bind_device{ nullptr };
+        uint32_t           queue_family_index{ 0 };
+        VkDeviceSize       created_size{ 0 };
+        VkBufferUsageFlags usage{ 0 };
+
+        bool destroyed{ false };
+
+        VkDeviceAddress capture_address{ 0 };
+        VkDeviceAddress actual_address{ 0 };
+
+        std::vector<uint8_t> bytes;
+
+        VkMemoryRequirements memory_requirements{};
+        format::HandleId     bind_memory{};
+        VkDeviceMemory       bind_memory_handle{ VK_NULL_HANDLE };
     };
+
     struct AccelerationStructureKHRBuildCommandData
     {
-        format::HandleId                                      device;
         VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
         HandleUnwrapMemory                                    geometry_info_memory;
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
-        std::vector<InstanceBufferData>                       instance_buffers;
+        std::vector<ASInputBuffer>                            input_buffers;
     };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };
     std::optional<AccelerationStructureKHRBuildCommandData> latest_build_command_{ std::nullopt };

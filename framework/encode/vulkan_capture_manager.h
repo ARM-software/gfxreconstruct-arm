@@ -1471,12 +1471,16 @@ class VulkanCaptureManager : public ApiCaptureManager
         EndFrame();
     }
 
-    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress addr, const VkBufferDeviceAddressInfo* pInfo)
+    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress address, const VkBufferDeviceAddressInfo* pInfo)
     {
-        if (addr != 0)
+        if (address != 0)
         {
             BufferWrapper* wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pInfo->buffer);
-            address_tracker.TrackBufferDeviceAddress(wrapper->handle_id, wrapper->created_size, addr);
+            address_tracker.TrackBufferDeviceAddress(wrapper->handle_id, wrapper->created_size, address);
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackGetBufferDeviceAddress(address, pInfo);
+            }
         }
     }
 

@@ -35,6 +35,7 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "util/memory_output_stream.h"
+#include "graphics/vulkan_resources_util.h"
 
 #include "vulkan/vulkan.h"
 
@@ -428,6 +429,8 @@ class VulkanStateTracker
                                                            VkQueryPool                       queryPool,
                                                            uint32_t                          firstQuery);
 
+    void TrackGetBufferDeviceAddress(VkDeviceAddress address, const VkBufferDeviceAddressInfo* pInfo);
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                        parent_handle,
@@ -509,8 +512,11 @@ class VulkanStateTracker
     std::unordered_map<VkDeviceAddress, const vulkan_wrappers::DeviceMemoryWrapper*> device_memory_addresses_map;
 
     // Keeps track of acceleration structures' device addresses
-    bool experimental_raytracing_fastforwarding_{ true };
     std::unordered_map<VkDeviceAddress, vulkan_wrappers::AccelerationStructureKHRWrapper*> as_device_addresses_map;
+    std::unordered_map<VkBuffer, std::pair<VkDeviceAddress, VkDeviceAddress>>              buffer_addresses_map;
+
+    bool                                                                experimental_raytracing_fastforwarding_{ true };
+    std::unordered_map<format::HandleId, graphics::VulkanResourcesUtil> resource_utils;
 };
 
 GFXRECON_END_NAMESPACE(encode)
