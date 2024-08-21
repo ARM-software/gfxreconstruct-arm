@@ -44,7 +44,8 @@ VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
                                     ray_tracing_pipeline_properties.shaderGroupHandleAlignment),
     acceleration_structure_features_(acceleration_structure_features), buffer_tracker_(buffer_tracker),
     buffers_(buffer_tracker_->GetBuffers()),
-    internal_buffer_manager_(device_table, device_, allocator_, physical_device_memory_properties_)
+    internal_buffer_manager_(
+        device_table, physical_device_info, device_, allocator_, physical_device_memory_properties_)
 {
     InitializeFunctionPointers(device_table);
     InitializeInternalExecObjects();
@@ -578,12 +579,10 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             {
                 // Create the replacement entry and link it to original one
                 // TODO: Create storage buffer with usage flags and sharing mode like the original storage buffer
-                util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
                 std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> storage =
                     internal_buffer_manager_.CreateBuffer(size_info.accelerationStructureSize,
                                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-                util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
                 VkAccelerationStructureKHR replacement_as =
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->info_.handle);
@@ -615,12 +614,10 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             // Build the destination structure, if not already built
             if (!dst_entry->replacement_acceleration_struct_)
             {
-                util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
                 std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> storage =
                     internal_buffer_manager_.CreateBuffer(size_info.accelerationStructureSize,
                                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-                util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
                 VkAccelerationStructureKHR replacement_as =
                     CreateAccelerationStructure(geometry_infos[i], range_infos[i], size_info, storage->info_.handle);
 
@@ -643,6 +640,7 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
         UpdateScratchDeviceAddress(geometry_infos[i], scratch_size);
         UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
+
     functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
 }
 
@@ -677,10 +675,8 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
         }
         else
         {
-            util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
             const auto& new_scratch = scratch_entries->second.emplace_back(internal_buffer_manager_.CreateBuffer(
                 scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-            util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
             new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
             geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
         }
@@ -689,10 +685,8 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
     {
         auto [it, inserted] = scratch_double_buffer_.scratches_current.emplace(
             capture_id, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
-        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
         auto& new_scratch = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
             scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
         new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
         geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
     }
@@ -769,12 +763,10 @@ void VulkanAccelerationStructureBuilder::CmdCopyAccelerationStructure(VkCommandB
                     original_entry->replacement_acceleration_struct_->size_info_.accelerationStructureSize;
             }
 
-            util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
             std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> storage =
                 internal_buffer_manager_.CreateBuffer(compacted_as_size,
                                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-            util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
             VkAccelerationStructureBuildSizesInfoKHR size_info{};
             size_info.accelerationStructureSize = compacted_as_size;
 
@@ -825,13 +817,11 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
 
     if (VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR == query_type)
     {
-        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
         std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> staging_buffer_entry =
             internal_buffer_manager_.CreateBuffer(
                 sizeof(uint64_t) * count,
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
         // keep track of relation between AS to be compacted and the query pool that handles the results (the order of
         // AS is also important)
         auto [it, inserted] = compacted_sizes_unprocessed_.emplace(
@@ -842,6 +832,7 @@ void VulkanAccelerationStructureBuilder::CmdWriteAccelerationStructuresPropertie
         it->second.push_back({ first_query, std::move(staging_buffer_entry), acc_str_to_process });
     }
 }
+
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetActualDeviceAddress(VkAccelerationStructureKHR handle)
 {
     AccelerationStructureEntry* entry = GetAccelerationStructureEntry(handle);

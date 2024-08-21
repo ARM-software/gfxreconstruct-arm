@@ -37,6 +37,7 @@ class VulkanBufferTracker
 {
   public:
     VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
+                        const PhysicalDeviceInfo*        physical_device_info,
                         VkDevice                         device,
                         VulkanResourceAllocator*         allocator);
 
@@ -64,10 +65,11 @@ class VulkanBufferTracker
     };
 
   private:
-    Functions                functions_;
-    VkDevice                 device_;
-    VulkanResourceAllocator* allocator_;
-    std::vector<BufferInfo*> buffers_;
+    Functions                 functions_;
+    VkDevice                  device_;
+    VulkanResourceAllocator*  allocator_;
+    const PhysicalDeviceInfo* physical_device_info_;
+    std::vector<BufferInfo*>  buffers_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

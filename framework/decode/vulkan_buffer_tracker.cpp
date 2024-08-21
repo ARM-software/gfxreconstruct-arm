@@ -21,16 +21,18 @@
 */
 #include "graphics/vulkan_resources_util.h"
 #include "decode/vulkan_buffer_tracker.h"
+#include "util/marking_layers.h"
 #include <algorithm>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanBufferTracker::VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
+                                         const PhysicalDeviceInfo*        physical_device_info,
                                          VkDevice                         device,
                                          VulkanResourceAllocator*         allocator) :
-    device_(device),
-    allocator_(allocator)
+    physical_device_info_(physical_device_info),
+    device_(device), allocator_(allocator)
 {
     InitializeFunctionPointers(device_table);
 }
@@ -79,7 +81,10 @@ VkDeviceAddress VulkanBufferTracker::GetBufferDeviceAddress(VkBuffer buffer)
     VkDeviceAddress result = 0;
 
     assert(functions_.get_buffer_device_address != gfxrecon::encode::noop::GetBufferDeviceAddress);
+
+    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     result = functions_.get_buffer_device_address(device_, &info);
+    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
     return result;
 }
