@@ -129,6 +129,7 @@ const char kMarkingLayersArgument[]               = "--marking-layers";
 const char kWaitBeforePresent[]                   = "--wait-before-present";
 const char kPrintBlockInfoAllOption[]             = "--pbi-all";
 const char kPrintBlockInfosArgument[]             = "--pbis";
+const char kNumPipelineCreationJobs[]             = "--pipeline-creation-jobs";
 const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
 const char kTriggerScriptNameArgument[]           = "--trigger-script-path";
 const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
@@ -949,6 +950,11 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
         }
     }
 
+    if (arg_parser.IsArgumentSet(kNumPipelineCreationJobs))
+    {
+        options.num_pipeline_creation_jobs = std::stoi(arg_parser.GetArgumentValue(kNumPipelineCreationJobs));
+    }
+
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);
     if (!override_gpu.empty())
     {
@@ -1125,10 +1131,6 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     if (arg_parser.IsOptionSet(kWaitBeforePresent))
     {
         replay_options.wait_before_present = true;
-    }
-    if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
-    {
-        replay_options.preload_measurement_range = true;
     }
 
     replay_options.dump_resources              = arg_parser.GetArgumentValue(kDumpResourcesArgument);

@@ -31,22 +31,19 @@ const char kOptions[] =
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
     "screenshot-all,--onhb|--omit-null-hardware-buffers,--vssb|--virtual-swapchain-skip-blit,--preload-measurement-"
     "range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--qamr|--quit-after-"
-    "measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-"
-    "range,--use-captured-swapchain-indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-"
-    "fallback,--use-cached-psos,--"
-    "dx12-override-object-names,--offscreen-swapchain-frame-boundary, --wait-before-present "
-    "--dump-resources-before-draw,"
-    "--dump-resources-dump-depth-attachment,--dump-"
-    "resources-dump-vertex-index-buffers,--dump-resources-json-output-per-command,--dump-resources-dump-immutable-"
-    "resources,--dump-resources-dump-all-image-subresources,--pbi-all";
+    "measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-range,--use-captured-swapchain-"
+    "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,--dx12-"
+    "override-object-names,--offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,--"
+    "dump-resources-dump-depth-attachment,--dump-resources-dump-vertex-index-buffers,--dump-resources-json-output-per-"
+    "command,--dump-resources-dump-immutable-resources,--dump-resources-dump-all-image-subresources,--pbi-all";
 const char kArguments[] =
     "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
-    "get-fence-status,--sgfr|--"
-    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-format,--dump-resources-dir,"
-    "--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|--trigger-script-frame";
+    "get-fence-status,--sgfr|--skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-"
+    "format,--dump-resources-dir,--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|"
+    "--trigger-script-frame,--pcj|--pipeline-creation-jobs";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -369,6 +366,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tDump immutable shader resources.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-dump-all-image-subresources");
     GFXRECON_WRITE_CONSOLE("          \t\tDump all available mip levels and layers when dumping images.");
+    GFXRECON_WRITE_CONSOLE("  --pcj\t\t\tSpecify the number of pipeline-creation-jobs or background-threads.");
+    GFXRECON_WRITE_CONSOLE("       \t\t\tDefault is 0.");
+    GFXRECON_WRITE_CONSOLE("       \t\t\t(same as --pipeline-creation-jobs");
 
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")

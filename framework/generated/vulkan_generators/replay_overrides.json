@@ -58,9 +58,6 @@
     "vkGetPipelineCacheData": "OverrideGetPipelineCacheData",
     "vkCreatePipelineCache": "OverrideCreatePipelineCache",
     "vkDestroyPipelineCache": "OverrideDestroyPipelineCache",
-    "vkCreateGraphicsPipelines": "OverrideCreateGraphicsPipelines",
-    "vkCreateComputePipelines": "OverrideCreateComputePipelines",
-    "vkDestroyPipeline": "OverrideDestroyPipeline",
     "vkResetDescriptorPool": "OverrideResetDescriptorPool",
     "vkCreateDescriptorUpdateTemplate": "OverrideCreateDescriptorUpdateTemplate",
     "vkCreateDescriptorUpdateTemplateKHR": "OverrideCreateDescriptorUpdateTemplate",
@@ -137,6 +134,11 @@
     "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",
     "vkCmdCopyBuffer": "OverrideCmdCopyBuffer",
     "vkCmdPushConstants": "OverrideCmdPushConstants",
-    "vkCmdUpdateBuffer": "OverrideCmdUpdateBuffer"
+    "vkCmdUpdateBuffer": "OverrideCmdUpdateBuffer",
+    "vkCreateGraphicsPipelines": "OverrideCreateGraphicsPipelines",
+    "vkCreateComputePipelines": "OverrideCreateComputePipelines",
+    "vkDestroyShaderModule": "OverrideDestroyShaderModule",
+    "vkDestroyPipeline": "OverrideDestroyPipeline",
+    "vkDestroyRenderPass": "OverrideDestroyRenderPass"
   }
 }

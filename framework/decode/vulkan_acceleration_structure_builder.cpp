@@ -210,10 +210,10 @@ bool VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
     }
 }
 
-void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(uint32_t              descriptor_write_count,
-                                                              VkWriteDescriptorSet* descriptor_writes,
-                                                              uint32_t              descriptor_copy_count,
-                                                              VkCopyDescriptorSet*  descriptor_copies)
+void VulkanAccelerationStructureBuilder::UpdateDescriptorSets(uint32_t                    descriptor_write_count,
+                                                              const VkWriteDescriptorSet* descriptor_writes,
+                                                              uint32_t                    descriptor_copy_count,
+                                                              const VkCopyDescriptorSet*  descriptor_copies)
 {
     GFXRECON_UNREFERENCED_PARAMETER(descriptor_copy_count);
     GFXRECON_UNREFERENCED_PARAMETER(descriptor_copies);
@@ -685,7 +685,7 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
     {
         auto [it, inserted] = scratch_double_buffer_.scratches_current.emplace(
             capture_id, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
-        auto& new_scratch = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
+        auto& new_scratch                        = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
             scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
         geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;

@@ -55,10 +55,10 @@ class VulkanAccelerationStructureBuilder
                                        VulkanBufferTracker*                             buffer_tracker);
 
     ~VulkanAccelerationStructureBuilder();
-    void UpdateDescriptorSets(uint32_t              descriptor_write_count,
-                              VkWriteDescriptorSet* descriptor_writes,
-                              uint32_t              descriptor_copy_count,
-                              VkCopyDescriptorSet*  descriptor_copies);
+    void UpdateDescriptorSets(uint32_t                    descriptor_write_count,
+                              const VkWriteDescriptorSet* descriptor_writes,
+                              uint32_t                    descriptor_copy_count,
+                              const VkCopyDescriptorSet*  descriptor_copies);
 
     void
          StoreDeferredDeviceAddressBufferUpdates(const std::vector<BufferInfo*>&                   buffer_infos,

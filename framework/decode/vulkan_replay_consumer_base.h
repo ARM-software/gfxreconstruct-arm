@@ -46,10 +46,10 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
+#include "util/threadpool.h"
 
 #include "application/application.h"
 
-#include "graphics/dx12_gpu_va_map.h"
 #include "vulkan/vulkan.h"
 
 #include <algorithm>
@@ -74,9 +74,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
   public:
     VulkanReplayConsumerBase(std::shared_ptr<application::Application> application, const VulkanReplayOptions& options);
 
-    virtual ~VulkanReplayConsumerBase() override;
+    ~VulkanReplayConsumerBase() override;
 
-    virtual void Process_ExeFileInfo(util::filepath::FileInfo& info_record) override
+    void SetCurrentBlockIndex(uint64_t block_index) override;
+
+    void Process_ExeFileInfo(util::filepath::FileInfo& info_record) override
     {
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
     }
@@ -339,6 +341,104 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     {
         handle_mapping::AddHandleArray(parent_id, ids, ids_len, handles, handles_len, &object_info_table_, AddFunc);
     }
+
+    template <typename T>
+    void AddHandlesAsync(format::HandleId        parent_id,
+                         const format::HandleId* ids,
+                         size_t                  ids_len,
+                         void (VulkanObjectInfoTable::*AddFunc)(T&&),
+                         std::function<handle_create_result_t<typename T::HandleType>()> create_function)
+    {
+        if (create_function)
+        {
+            std::shared_future<handle_create_result_t<typename T::HandleType>> result_future =
+                background_queue_.post(std::move(create_function));
+
+            // poll in case there are no worker-threads
+            background_queue_.poll();
+
+            handle_mapping::AddHandleArrayAsync(
+                parent_id, ids, ids_len, &object_info_table_, AddFunc, std::move(result_future));
+        }
+    }
+
+    template <typename T>
+    void AddHandlesAsync(format::HandleId        parent_id,
+                         const format::HandleId* ids,
+                         size_t                  ids_len,
+                         std::vector<T>&&        initial_infos,
+                         void (VulkanObjectInfoTable::*AddFunc)(T&&),
+                         std::function<handle_create_result_t<typename T::HandleType>()> create_function)
+    {
+        if (create_function)
+        {
+            std::shared_future<handle_create_result_t<typename T::HandleType>> result_future =
+                background_queue_.post(std::move(create_function));
+
+            // poll in case there are no worker-threads
+            background_queue_.poll();
+
+            handle_mapping::AddHandleArrayAsync(parent_id,
+                                                ids,
+                                                ids_len,
+                                                &object_info_table_,
+                                                std::move(initial_infos),
+                                                AddFunc,
+                                                std::move(result_future));
+        }
+    }
+
+    //! track arbitrary handles that are currently used by asynchronous operations
+    void TrackAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
+    {
+        for (const auto& handle : async_handles)
+        {
+            // check to avoid overwriting existing handle-destructors
+            if (async_inflight_handles_.count(handle) == 0)
+            {
+                async_inflight_handles_[handle] = {};
+            }
+        }
+    }
+
+    //! clear handles that are currently used by asynchronous operations,
+    //! invoke stored deletion-functions
+    void ClearAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
+    {
+        for (const auto& handle : async_handles)
+        {
+            auto it = async_inflight_handles_.find(handle);
+            if (it != async_inflight_handles_.end())
+            {
+                const auto& [tracked_handle, destroy_fn] = *it;
+                if (destroy_fn)
+                {
+                    destroy_fn();
+                }
+                async_inflight_handles_.erase(it);
+            }
+        }
+    }
+
+    //! schedules deletion of already tracked handles
+    void DestroyAsyncHandle(format::HandleId handle, std::function<void()> destroy_fn)
+    {
+        auto it = async_inflight_handles_.find(handle);
+
+        if (it != async_inflight_handles_.end())
+        {
+            it->second = std::move(destroy_fn);
+        }
+    }
+
+    //! return true if this handle is currently being tracked (was passed to 'TrackAsyncHandles' earlier)
+    bool IsUsedByAsyncTask(uint64_t handle) const { return async_inflight_handles_.count(handle) > 0; }
+
+    //! returns true if asynchronous operations should be used at all
+    bool UseAsyncOperations() { return options_.num_pipeline_creation_jobs != 0 && !options_.dumping_resources; }
+
+    //! returns a thread-safe queue, that is polled on the main-thread, at the beginning of a new block
+    util::ThreadPool& MainThreadQueue() { return main_thread_queue_; }
 
     template <typename S, typename T>
     void AddPoolHandles(format::HandleId              parent_id,
@@ -820,11 +920,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       const PipelineCacheInfo*                                   pipeline_cache_info,
                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
-    void OverrideDestroyPipeline(PFN_vkDestroyPipeline                                      func,
-                                 const DeviceInfo*                                          device_info,
-                                 const PipelineInfo*                                        pipeline_info,
-                                 const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
-
     VkResult OverrideResetDescriptorPool(PFN_vkResetDescriptorPool  func,
                                          VkResult                   original_result,
                                          const DeviceInfo*          device_info,
@@ -1284,6 +1379,31 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                  VkDeviceSize             dataSize,
                                  PointerDecoder<uint8_t>* pData);
 
+    void OverrideDestroyPipeline(PFN_vkDestroyPipeline                                      func,
+                                 const DeviceInfo*                                          device_info,
+                                 PipelineInfo*                                              pipeline_info,
+                                 const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideDestroyRenderPass(PFN_vkDestroyRenderPass                                    func,
+                                   const DeviceInfo*                                          device_info,
+                                   RenderPassInfo*                                            renderpass_info,
+                                   const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideDestroyShaderModule(PFN_vkDestroyShaderModule                                  func,
+                                     const DeviceInfo*                                          device_info,
+                                     ShaderModuleInfo*                                          shader_module_info,
+                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    std::function<handle_create_result_t<VkPipeline>()>
+    AsyncCreateGraphicsPipelines(const ApiCallInfo&                                          call_info,
+                                 VkResult                                                    returnValue,
+                                 const DeviceInfo*                                           device_info,
+                                 const PipelineCacheInfo*                                    pipeline_cache_info,
+                                 uint32_t                                                    createInfoCount,
+                                 StructPointerDecoder<Decoded_VkGraphicsPipelineCreateInfo>* pCreateInfos,
+                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>*        pAllocator,
+                                 HandlePointerDecoder<VkPipeline>*                           pPipelines);
+
     const VulkanReplayOptions options_;
 
     VulkanReplayDumpResources resource_dumper;
@@ -1453,6 +1573,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unique_ptr<VulkanSwapchain>                                           swapchain_;
     std::string                                                                screenshot_file_prefix_;
     graphics::FpsInfo*                                                         fps_info_;
+
+    util::ThreadPool                                            main_thread_queue_;
+    util::ThreadPool                                            background_queue_;
+    std::unordered_map<format::HandleId, std::function<void()>> async_inflight_handles_;
 
     // Imported semaphores are semaphores that are used to track external memory.
     // During replay, the external memory is not present (we have no Fds or handles to valid
