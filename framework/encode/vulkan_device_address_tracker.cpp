@@ -27,6 +27,11 @@ void VulkanDeviceAddressTracker::TrackAccelerationStructureDeviceAddress(format:
     tracked_objects[id]  = loc;
 }
 
+void VulkanDeviceAddressTracker::StopTracking(format::HandleId object_id)
+{
+    tracked_objects.erase(object_id);
+}
+
 std::vector<format::AddressLocationInfo>
 VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
                                                       const DeviceMemoryWrapper*   memory,

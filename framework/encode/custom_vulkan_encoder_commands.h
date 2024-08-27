@@ -1302,6 +1302,27 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateBuffer>
         manager->PostProcess_vkCreateBuffer(args...);
     }
 };
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyBuffer>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkDestroyBuffer(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyAccelerationStructureKHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkDestroyAccelerationStructureKHR(args...);
+    }
+};
+
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateImage>
 {

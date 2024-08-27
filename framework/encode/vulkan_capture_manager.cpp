@@ -3449,5 +3449,28 @@ void VulkanCaptureManager::PreProcess_vkCmdUpdateBuffer(
     }
 }
 
+void VulkanCaptureManager::PostProcess_vkDestroyBuffer(VkDevice                     device,
+                                                       VkBuffer                     buffer,
+                                                       const VkAllocationCallbacks* callbacks)
+{
+    BufferWrapper* wrapper = GetWrapper<BufferWrapper>(buffer);
+    if (wrapper == nullptr)
+    {
+        return;
+    }
+    address_tracker.StopTracking(wrapper->handle_id);
+}
+
+void VulkanCaptureManager::PostProcess_vkDestroyAccelerationStructureKHR(
+    VkDevice device, VkAccelerationStructureKHR acceleration_structure, const VkAllocationCallbacks* callbacks)
+{
+    AccelerationStructureKHRWrapper* wrapper = GetWrapper<AccelerationStructureKHRWrapper>(acceleration_structure);
+    if (wrapper == nullptr)
+    {
+        return;
+    }
+    address_tracker.StopTracking(wrapper->handle_id);
+}
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
