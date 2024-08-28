@@ -89,7 +89,8 @@ VulkanStateWriter::VulkanStateWriter(util::FileOutputStream*                  ou
                                      format::ThreadId                         thread_id,
                                      const std::function<format::HandleId()>& get_unique_id_callback) :
     output_stream_(output_stream),
-    compressor_(compressor), thread_id_(thread_id), encoder_(&parameter_stream_), get_unique_id(get_unique_id_callback)
+    compressor_(compressor), thread_id_(thread_id), encoder_(&parameter_stream_), get_unique_id(get_unique_id_callback),
+    mock_address_counter_(std::numeric_limits<VkDeviceSize>::max() - 1)
 {
     assert(output_stream != nullptr);
 }
@@ -1232,9 +1233,8 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
     allocate_info.allocationSize = buffer.memory_requirements.size;
 
     VkMemoryAllocateFlagsInfo memory_allocate_flags_info{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO, nullptr };
-    memory_allocate_flags_info.flags =
-        VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
-    allocate_info.pNext = &memory_allocate_flags_info;
+    memory_allocate_flags_info.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    allocate_info.pNext              = &memory_allocate_flags_info;
 
     uint32_t              mem_type_index = 0;
     VkMemoryPropertyFlags desired_flags{};
@@ -1246,29 +1246,6 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
                                   &found_flags);
     allocate_info.memoryTypeIndex = mem_type_index;
     buffer.bind_memory            = get_unique_id();
-
-    device_wrapper->layer_table.AllocateMemory(
-        device_wrapper->handle, &allocate_info, alloc_callbacks, &buffer.bind_memory_handle);
-    device_wrapper->layer_table.BindBufferMemory(device_wrapper->handle, buffer.handle, buffer.bind_memory_handle, 0);
-
-    VkBufferDeviceAddressInfoKHR pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR, nullptr, buffer.handle };
-    buffer.actual_address = device_wrapper->layer_table.GetBufferDeviceAddressKHR(device_wrapper->handle, &pInfo);
-
-    VkDeviceMemoryOpaqueCaptureAddressInfo info{ VK_STRUCTURE_TYPE_DEVICE_MEMORY_OPAQUE_CAPTURE_ADDRESS_INFO,
-                                                 nullptr,
-                                                 buffer.bind_memory_handle };
-
-    uint64_t address = 0;
-    if (device_wrapper->physical_device->instance_api_version >= VK_MAKE_VERSION(1, 2, 0))
-    {
-        address = device_wrapper->layer_table.GetDeviceMemoryOpaqueCaptureAddress(device_wrapper->handle, &info);
-    }
-    else
-    {
-        address = device_wrapper->layer_table.GetDeviceMemoryOpaqueCaptureAddressKHR(device_wrapper->handle, &info);
-    }
-
-    WriteSetOpaqueAddressCommand(device_wrapper->handle_id, buffer.bind_memory, address);
 
     parameter_stream_.Clear();
     encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
@@ -1286,6 +1263,10 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
     encoder_.EncodeEnumValue(VK_SUCCESS);
     WriteFunctionCall(format::ApiCall_vkBindBufferMemory, &parameter_stream_);
     parameter_stream_.Clear();
+
+    VkBufferDeviceAddressInfoKHR pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR, nullptr, buffer.handle };
+    mock_address_counter_ -= buffer.memory_requirements.size;
+    buffer.actual_address = mock_address_counter_;
 
     // Manual encoding because tmp objects are not in the state table
     encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
@@ -1350,7 +1331,6 @@ void VulkanStateWriter::WriteDestroyASInputBuffer(ASInputBuffer& buffer)
     encoder_.EncodeHandleIdValue(buffer.handle_id);
     EncodeStructPtr(&encoder_, callbacks);
     WriteFunctionCall(format::ApiCall_vkDestroyBuffer, &parameter_stream_);
-    device_wrapper->layer_table.DestroyBuffer(device_wrapper->handle, buffer.handle, callbacks);
 
     parameter_stream_.Clear();
 
@@ -1358,7 +1338,6 @@ void VulkanStateWriter::WriteDestroyASInputBuffer(ASInputBuffer& buffer)
     encoder_.EncodeHandleIdValue(buffer.bind_memory);
     EncodeStructPtr(&encoder_, callbacks);
     WriteFunctionCall(format::ApiCall_vkFreeMemory, &parameter_stream_);
-    device_wrapper->layer_table.FreeMemory(device_wrapper->handle, buffer.bind_memory_handle, callbacks);
 
     parameter_stream_.Clear();
 }
@@ -1533,30 +1512,40 @@ void VulkanStateWriter::UpdateAddresses(AccelerationStructureBuildCommandData& c
     std::vector<VkDeviceAddress*> addresses_to_replace;
     for (uint32_t g = 0; g < command.geometry_info.geometryCount; ++g)
     {
-        switch (command.geometry_info.pGeometries[g].geometryType)
+        VkAccelerationStructureGeometryKHR& geometry =
+            const_cast<VkAccelerationStructureGeometryKHR&>(command.geometry_info.pGeometries[g]);
+        switch (geometry.geometryType)
         {
             case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_TRIANGLES_KHR:
             {
-                addresses_to_replace = {
-                    const_cast<VkDeviceAddress*>(
-                        &command.geometry_info.pGeometries[g].geometry.triangles.vertexData.deviceAddress),
-                    const_cast<VkDeviceAddress*>(
-                        &command.geometry_info.pGeometries[g].geometry.triangles.indexData.deviceAddress),
-                    const_cast<VkDeviceAddress*>(
-                        &command.geometry_info.pGeometries[g].geometry.triangles.transformData.deviceAddress)
-                };
+                addresses_to_replace.push_back(&geometry.geometry.triangles.vertexData.deviceAddress);
+                addresses_to_replace.push_back(&geometry.geometry.triangles.indexData.deviceAddress);
+                addresses_to_replace.push_back(&geometry.geometry.triangles.transformData.deviceAddress);
+                VkBaseOutStructure* p_next =
+                    reinterpret_cast<VkBaseOutStructure*>(const_cast<void*>(geometry.geometry.triangles.pNext));
+                if (p_next != nullptr &&
+                    p_next->sType == VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT)
+                {
+                    auto opacity_micromap =
+                        reinterpret_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(p_next);
+                    addresses_to_replace.push_back(&opacity_micromap->indexBuffer.deviceAddress);
+                }
+
                 break;
             }
             case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_AABBS_KHR:
             {
-                addresses_to_replace = { const_cast<VkDeviceAddress*>(
-                    &command.geometry_info.pGeometries[g].geometry.aabbs.data.deviceAddress) };
+                addresses_to_replace.push_back(&geometry.geometry.aabbs.data.deviceAddress);
                 break;
             }
             case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_INSTANCES_KHR:
             {
-                addresses_to_replace = { const_cast<VkDeviceAddress*>(
-                    &command.geometry_info.pGeometries[g].geometry.instances.data.deviceAddress) };
+                addresses_to_replace.push_back(&geometry.geometry.instances.data.deviceAddress);
+                break;
+            }
+            case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_MAX_ENUM_KHR:
+            {
+                GFXRECON_LOG_ERROR("Unrecognized VkGeometryType");
                 break;
             }
         }

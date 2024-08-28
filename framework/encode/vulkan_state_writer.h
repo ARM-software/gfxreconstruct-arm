@@ -414,6 +414,7 @@ class VulkanStateWriter
     ParameterEncoder                  encoder_;
     uint64_t                          blocks_written_;
     std::function<format::HandleId()> get_unique_id;
+    VkDeviceAddress                   mock_address_counter_;
 };
 
 GFXRECON_END_NAMESPACE(encode)
