@@ -25,12 +25,12 @@
 #define GFXRECON_UTIL_VULKAN_MODIFIER_BASE_H
 
 #include "generated/generated_vulkan_consumer.h"
-#include "util/buffer_editor_base.h"
+#include "util/call_modifier_base.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
-class VulkanModifierBase : public decode::VulkanConsumer, public util::BufferEditorBase
+class VulkanModifierBase : public decode::VulkanConsumer, public util::CallModifierBase
 {
   public:
     virtual ~VulkanModifierBase() override {}

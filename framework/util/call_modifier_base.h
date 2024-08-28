@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2024 LunarG, Inc.
 ** Copyright (c) 2024 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
@@ -21,8 +21,8 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
-#define GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
+#ifndef GFXRECON_UTIL_CALL_MODIFIER_BASE_H
+#define GFXRECON_UTIL_CALL_MODIFIER_BASE_H
 
 #include "util/defines.h"
 #include "format/format.h"
@@ -33,7 +33,7 @@ GFXRECON_BEGIN_NAMESPACE(util)
 
 // Facilitates communication between file optimizer and modificators
 // Provides access to buffers and information on types of modification
-class BufferEditorBase
+class CallModifierBase
 {
   public:
     struct NewCallData
@@ -55,18 +55,37 @@ class BufferEditorBase
         new_pre_calls_.clear();
     }
 
+    // Move new call data to the end of input vector
+    // The source data becomes invalid and its container is cleared
+    virtual void AppendPostCalls(std::vector<std::unique_ptr<NewCallData>>& post_calls)
+    {
+        post_calls.insert(post_calls.end(),
+                          std::make_move_iterator(new_post_calls_.begin()),
+                          std::make_move_iterator(new_post_calls_.end()));
+        new_post_calls_.clear();
+    }
+
     virtual bool GetDeleteCurrentCall()
     {
-        bool delete_current_call_tmp = delete_current_call;
-        delete_current_call          = false;
-        return delete_current_call_tmp;
+        bool result = delete_current_call;
+        // reset the delete flag
+        delete_current_call = false;
+        return result;
     }
+
+    virtual bool CanOptimize() = 0;
 
   protected:
     NewCallData* CreatePreCall()
     {
         new_pre_calls_.push_back(std::make_unique<NewCallData>());
         return new_pre_calls_.back().get();
+    }
+
+    NewCallData* CreatePostCall()
+    {
+        new_post_calls_.push_back(std::make_unique<NewCallData>());
+        return new_post_calls_.back().get();
     }
 
     // Points to parameter buffer that can be modified
@@ -77,9 +96,12 @@ class BufferEditorBase
 
     // Vector of new calls to add before currently processed call
     std::vector<std::unique_ptr<NewCallData>> new_pre_calls_;
+
+    // Vector of new calls to add before currently processed call
+    std::vector<std::unique_ptr<NewCallData>> new_post_calls_;
 };
 
 GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_UTIL_BUFFER_EDITOR_BASE_H
+#endif // GFXRECON_UTIL_CALL_MODIFIER_BASE_H
