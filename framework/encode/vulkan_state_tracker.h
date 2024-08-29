@@ -522,6 +522,8 @@ class VulkanStateTracker
     std::unordered_map<VkBuffer, std::pair<VkDeviceAddress, VkDeviceAddress>>              buffer_addresses_map;
 
     std::unordered_map<format::HandleId, graphics::VulkanResourcesUtil> resource_utils;
+
+    uint64_t acceleration_structure_command_index_{ 0 };
 };
 
 GFXRECON_END_NAMESPACE(encode)

@@ -1392,92 +1392,83 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
 // Rename this to represent the whole acc structure prepare process
 void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const VulkanStateTable& state_table)
 {
-    std::unordered_map<format::HandleId, AccelerationStructureCommands> commands;
-    size_t                                                              max_resource_size = 0;
-    state_table.VisitWrappers([&](const AccelerationStructureKHRWrapper* wrapper) {
+    std::unordered_map<format::HandleId, std::vector<AccelerationStructureKHRCommand*>> as_commands;
+    size_t                                                                              max_resource_size = 0;
+    state_table.VisitWrappers([&](AccelerationStructureKHRWrapper* wrapper) {
         assert(wrapper != nullptr);
 
         auto [per_device_container, inserted] =
-            commands.try_emplace(wrapper->device_id, AccelerationStructureCommands{});
-        std::vector<AccelerationStructureBuildCommandData>* build_container  = nullptr;
-        std::vector<AccelerationStructureBuildCommandData>* update_container = nullptr;
-
-        if (wrapper->type_ == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
-        {
-            build_container  = &per_device_container->second.blas_build;
-            update_container = &per_device_container->second.blas_update;
-        }
-        else if (wrapper->type_ == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
-        {
-            build_container  = &per_device_container->second.tlas_build;
-            update_container = &per_device_container->second.tlas_update;
-        }
+            as_commands.try_emplace(wrapper->device_id, std::vector<AccelerationStructureKHRCommand*>{});
 
         if (wrapper->latest_build_command_)
         {
-            build_container->emplace_back(wrapper->latest_build_command_.value());
-            for (const ASInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
+            for (const ASInputBuffer& buffer : wrapper->latest_build_command_->build_command_data_->input_buffers)
             {
-                max_resource_size = std::max(max_resource_size, buffer.bytes.size());
+                if (buffer.destroyed)
+                    max_resource_size = std::max(max_resource_size, buffer.bytes.size());
             }
+            per_device_container->second.push_back(&wrapper->latest_build_command_.value());
         }
 
         if (wrapper->latest_update_command_)
         {
-            update_container->emplace_back(wrapper->latest_update_command_.value());
-            for (const ASInputBuffer& buffer : wrapper->latest_update_command_->input_buffers)
+            for (const ASInputBuffer& buffer : wrapper->latest_update_command_->build_command_data_->input_buffers)
             {
-                max_resource_size = std::max(max_resource_size, buffer.bytes.size());
+                if (buffer.destroyed)
+                    max_resource_size = std::max(max_resource_size, buffer.bytes.size());
             }
+            per_device_container->second.push_back(&wrapper->latest_update_command_.value());
         }
 
         if (wrapper->latest_copy_command_)
         {
-            per_device_container->second.copies.infos.push_back(wrapper->latest_copy_command_.value().info);
+            per_device_container->second.push_back(&wrapper->latest_copy_command_.value());
         }
 
         if (wrapper->latest_write_properties_command_)
         {
-            per_device_container->second.write_properties.push_back(AccelerationStructureWritePropertiesCommandData{
-                wrapper->latest_write_properties_command_->query_type, wrapper->handle_id });
+            per_device_container->second.push_back(&wrapper->latest_write_properties_command_.value());
         }
     });
 
-    for (auto& [device, commands] : commands)
+    for (auto& [device, commands] : as_commands)
+    {
+        std::sort(commands.begin(),
+                  commands.end(),
+                  [](const AccelerationStructureKHRCommand* a, const AccelerationStructureKHRCommand* b) {
+                      return a->cmd_index_ < b->cmd_index_;
+                  });
+    }
+    for (auto& [device, commands] : as_commands)
     {
         BeginAccelerationStructuresSection(device, max_resource_size);
-        for (uint32_t cmd_index = 0; cmd_index < commands.blas_build.size(); ++cmd_index)
+        for (AccelerationStructureKHRCommand* command : commands)
         {
-            WriteAccelerationStructureBuildState(device, commands.blas_build[cmd_index]);
-        }
-
-        for (uint32_t cmd_index = 0; cmd_index < commands.write_properties.size(); ++cmd_index)
-        {
-            EncodeAccelerationStructureWritePropertiesCommand(device, commands.write_properties[cmd_index]);
-        }
-
-        EncodeAccelerationStructureCopyMetaCommand(device, commands.copies);
-
-        for (uint32_t cmd_index = 0; cmd_index < commands.tlas_build.size(); ++cmd_index)
-        {
-            WriteAccelerationStructureBuildState(device, commands.tlas_build[cmd_index]);
-        }
-
-        for (uint32_t cmd_index = 0; cmd_index < commands.blas_update.size(); ++cmd_index)
-        {
-            WriteAccelerationStructureBuildState(device, commands.blas_update[cmd_index]);
-        }
-
-        for (uint32_t cmd_index = 0; cmd_index < commands.tlas_update.size(); ++cmd_index)
-        {
-            WriteAccelerationStructureBuildState(device, commands.tlas_update[cmd_index]);
+            switch (command->type_)
+            {
+                case AccelerationStructureKHRCommandType::BuildUpdate:
+                {
+                    WriteAccelerationStructureBuildState(device, *command->build_command_data_);
+                    break;
+                }
+                case AccelerationStructureKHRCommandType::Copy:
+                {
+                    EncodeAccelerationStructureCopyMetaCommand(device, *command->copy_command_data_);
+                    break;
+                }
+                case AccelerationStructureKHRCommandType::WriteProperties:
+                {
+                    EncodeAccelerationStructureWritePropertiesCommand(device, *command->write_properties_command_data_);
+                    break;
+                }
+            }
         }
         EndAccelerationStructureSection(device);
     }
 }
 
-void VulkanStateWriter::WriteAccelerationStructureBuildState(const gfxrecon::format::HandleId&      device,
-                                                             AccelerationStructureBuildCommandData& command)
+void VulkanStateWriter::WriteAccelerationStructureBuildState(const gfxrecon::format::HandleId&         device,
+                                                             AccelerationStructureKHRBuildCommandData& command)
 {
     for (ASInputBuffer& buffer : command.input_buffers)
     {
@@ -1501,8 +1492,7 @@ void VulkanStateWriter::WriteAccelerationStructureBuildState(const gfxrecon::for
         WriteDestroyASInputBuffer(buffer);
     }
 }
-
-void VulkanStateWriter::UpdateAddresses(AccelerationStructureBuildCommandData& command)
+void VulkanStateWriter::UpdateAddresses(AccelerationStructureKHRBuildCommandData& command)
 {
     if (command.input_buffers.empty())
     {
@@ -1568,7 +1558,7 @@ void VulkanStateWriter::UpdateAddresses(AccelerationStructureBuildCommandData& c
 }
 
 void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
-    format::HandleId device_id, const AccelerationStructureBuildCommandData& command)
+    format::HandleId device_id, const AccelerationStructureKHRBuildCommandData& command)
 {
     parameter_stream_.Clear();
 
@@ -1593,8 +1583,8 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
     ++blocks_written_;
 }
 
-void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(format::HandleId device_id,
-                                                                   const AccelerationStructureCopyCommandData& command)
+void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(
+    format::HandleId device_id, const AccelerationStructureKHRCopyCommandData& command)
 {
     parameter_stream_.Clear();
 
@@ -1605,7 +1595,7 @@ void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(format::Handl
         format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kVulkanCopyAccelerationStructuresCommand);
 
     encoder_.EncodeHandleIdValue(device_id);
-    EncodeStructArray(&encoder_, command.infos.data(), command.infos.size());
+    EncodeStructArray(&encoder_, &command.info, 1);
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 
@@ -1618,7 +1608,7 @@ void VulkanStateWriter::EncodeAccelerationStructureCopyMetaCommand(format::Handl
 }
 
 void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
-    format::HandleId device_id, const AccelerationStructureWritePropertiesCommandData& command)
+    format::HandleId device_id, const AccelerationStructureKHRWritePropertiesCommandData& command)
 {
     parameter_stream_.Clear();
 

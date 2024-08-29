@@ -359,45 +359,31 @@ class VulkanStateWriter
 
     void WriteAccelerationStructureStateMetaCommands(const VulkanStateTable& state_table);
 
-    using AccelerationStructureBuildCommandData =
+    using AccelerationStructureKHRCommand = AccelerationStructureKHRWrapper::AccelerationStructureKHRCommand;
+    using AccelerationStructureKHRBuildCommandData =
         AccelerationStructureKHRWrapper::AccelerationStructureKHRBuildCommandData;
+    using AccelerationStructureKHRCopyCommandData =
+        AccelerationStructureKHRWrapper::AccelerationStructureKHRCopyCommandData;
+    using AccelerationStructureKHRWritePropertiesCommandData =
+        AccelerationStructureKHRWrapper::AccelerationStructureKHRWritePropertiesCommandData;
+    using AccelerationStructureKHRCommandType = AccelerationStructureKHRWrapper::AccelerationStructureKHRCommandType;
 
-    void WriteAccelerationStructureBuildState(const gfxrecon::format::HandleId&      device,
-                                              AccelerationStructureBuildCommandData& command);
+    void WriteAccelerationStructureBuildState(const gfxrecon::format::HandleId&         device,
+                                              AccelerationStructureKHRBuildCommandData& command);
 
-    void EncodeAccelerationStructureBuildMetaCommand(format::HandleId                             device_id,
-                                                     const AccelerationStructureBuildCommandData& command);
+    void EncodeAccelerationStructureBuildMetaCommand(format::HandleId                                device_id,
+                                                     const AccelerationStructureKHRBuildCommandData& command);
 
-    struct AccelerationStructureCopyCommandData
-    {
-        std::vector<VkCopyAccelerationStructureInfoKHR> infos;
-    };
-    void EncodeAccelerationStructureCopyMetaCommand(format::HandleId                            device_id,
-                                                    const AccelerationStructureCopyCommandData& command);
+    void EncodeAccelerationStructureCopyMetaCommand(format::HandleId                               device_id,
+                                                    const AccelerationStructureKHRCopyCommandData& command);
 
-    struct AccelerationStructureWritePropertiesCommandData
-    {
-        VkQueryType      query_type;
-        format::HandleId acceleration_structure;
-    };
-    void
-    EncodeAccelerationStructureWritePropertiesCommand(format::HandleId                                       device_id,
-                                                      const AccelerationStructureWritePropertiesCommandData& command);
+    void EncodeAccelerationStructureWritePropertiesCommand(
+        format::HandleId device_id, const AccelerationStructureKHRWritePropertiesCommandData& command);
 
     void WriteGetAccelerationStructureDeviceAddressKHRCall(const VulkanStateTable&                state_table,
                                                            const AccelerationStructureKHRWrapper* wrapper);
 
-    void UpdateAddresses(AccelerationStructureBuildCommandData& command);
-
-    struct AccelerationStructureCommands
-    {
-        std::vector<AccelerationStructureBuildCommandData>           blas_build;
-        std::vector<AccelerationStructureBuildCommandData>           tlas_build;
-        std::vector<AccelerationStructureWritePropertiesCommandData> write_properties;
-        AccelerationStructureCopyCommandData                         copies;
-        std::vector<AccelerationStructureBuildCommandData>           blas_update;
-        std::vector<AccelerationStructureBuildCommandData>           tlas_update;
-    };
+    void UpdateAddresses(AccelerationStructureKHRBuildCommandData& command);
 
     void BeginAccelerationStructuresSection(format::HandleId device_id, uint64_t max_resource_size);
     void WriteASInputBufferState(ASInputBuffer& buffer);

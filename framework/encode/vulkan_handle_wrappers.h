@@ -531,25 +531,72 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
     {
         VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
         HandleUnwrapMemory                                    geometry_info_memory;
+        std::vector<HandleUnwrapMemory>                       p_next_memories;
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
         std::vector<ASInputBuffer>                            input_buffers;
     };
-    std::optional<AccelerationStructureKHRBuildCommandData> latest_update_command_{ std::nullopt };
-    std::optional<AccelerationStructureKHRBuildCommandData> latest_build_command_{ std::nullopt };
 
-    struct AccelerationStructureCopyCommandData
+    struct AccelerationStructureKHRCopyCommandData
     {
-        format::HandleId                   device;
         VkCopyAccelerationStructureInfoKHR info;
     };
-    std::optional<AccelerationStructureCopyCommandData> latest_copy_command_{ std::nullopt };
 
-    struct AccelerationStructureWritePropertiesCommandData
+    struct AccelerationStructureKHRWritePropertiesCommandData
     {
-        format::HandleId device;
         VkQueryType      query_type;
+        format::HandleId acceleration_structure;
     };
-    std::optional<AccelerationStructureWritePropertiesCommandData> latest_write_properties_command_{ std::nullopt };
+
+    enum class AccelerationStructureKHRCommandType
+    {
+        BuildUpdate,
+        Copy,
+        WriteProperties
+    };
+
+    struct AccelerationStructureKHRCommand
+    {
+        format::HandleId                                                    device_;
+        uint64_t                                                            cmd_index_;
+        AccelerationStructureKHRCommandType                                 type_;
+        std::unique_ptr<AccelerationStructureKHRBuildCommandData>           build_command_data_;
+        std::unique_ptr<AccelerationStructureKHRCopyCommandData>            copy_command_data_;
+        std::unique_ptr<AccelerationStructureKHRWritePropertiesCommandData> write_properties_command_data_;
+
+        AccelerationStructureKHRCommand(format::HandleId                         device,
+                                        uint64_t                                 cmd_index,
+                                        AccelerationStructureKHRCommandType      type,
+                                        AccelerationStructureKHRBuildCommandData data) :
+            device_(device),
+            cmd_index_(cmd_index), type_(type)
+        {
+            build_command_data_ = std::make_unique<AccelerationStructureKHRBuildCommandData>(std::move(data));
+        }
+        AccelerationStructureKHRCommand(format::HandleId                        device,
+                                        uint64_t                                cmd_index,
+                                        AccelerationStructureKHRCommandType     type,
+                                        AccelerationStructureKHRCopyCommandData data) :
+            device_(device),
+            cmd_index_(cmd_index), type_(type)
+        {
+            copy_command_data_ = std::make_unique<AccelerationStructureKHRCopyCommandData>(std::move(data));
+        }
+        AccelerationStructureKHRCommand(format::HandleId                                   device,
+                                        uint64_t                                           cmd_index,
+                                        AccelerationStructureKHRCommandType                type,
+                                        AccelerationStructureKHRWritePropertiesCommandData data) :
+            device_(device),
+            cmd_index_(cmd_index), type_(type)
+        {
+            write_properties_command_data_ =
+                std::make_unique<AccelerationStructureKHRWritePropertiesCommandData>(std::move(data));
+        }
+    };
+
+    std::optional<AccelerationStructureKHRCommand> latest_update_command_{ std::nullopt };
+    std::optional<AccelerationStructureKHRCommand> latest_build_command_{ std::nullopt };
+    std::optional<AccelerationStructureKHRCommand> latest_copy_command_{ std::nullopt };
+    std::optional<AccelerationStructureKHRCommand> latest_write_properties_command_{ std::nullopt };
 };
 
 struct AccelerationStructureNVWrapper : public HandleWrapper<VkAccelerationStructureNV>
