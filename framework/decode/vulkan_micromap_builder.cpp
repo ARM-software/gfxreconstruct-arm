@@ -38,6 +38,7 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const DeviceInfo*            de
     // inserted by gfxrecon-optimize)
     auto allocator = device_info->allocator.get();
     assert(allocator != nullptr);
+    assert(last_build_sizes_.micromapSize != 0);
 
     std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> bufferInfoWrapper =
         internal_buffer_manager_.CreateBuffer(last_build_sizes_.micromapSize, 0x01020000);

@@ -81,7 +81,6 @@ struct DebugUtilsMessengerEXTWrapper        : public HandleWrapper<VkDebugUtilsM
 struct ValidationCacheEXTWrapper            : public HandleWrapper<VkValidationCacheEXT> {};
 struct IndirectCommandsLayoutNVWrapper      : public HandleWrapper<VkIndirectCommandsLayoutNV> {};
 struct PerformanceConfigurationINTELWrapper : public HandleWrapper<VkPerformanceConfigurationINTEL> {};
-struct MicromapEXTWrapper                   : public HandleWrapper<VkMicromapEXT> {};
 struct OpticalFlowSessionNVWrapper          : public HandleWrapper<VkOpticalFlowSessionNV> {};
 struct VideoSessionKHRWrapper               : public HandleWrapper<VkVideoSessionKHR> {};
 struct VideoSessionParametersKHRWrapper     : public HandleWrapper<VkVideoSessionParametersKHR> {};
@@ -281,6 +280,7 @@ struct RenderPassWrapper : public HandleWrapper<VkRenderPass>
 };
 
 struct AccelerationStructureKHRWrapper;
+struct MicromapEXTWrapper;
 struct CommandPoolWrapper;
 struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
 {
@@ -492,6 +492,28 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
     VkBool32                                          local_dimming_enable_AMD{ false };
 };
 
+struct ASInputBuffer
+{
+    // Required data to correctly create a buffer
+    VkBuffer           handle{ VK_NULL_HANDLE };
+    format::HandleId   handle_id{ format::kNullHandleId };
+    DeviceWrapper*     bind_device{ nullptr };
+    uint32_t           queue_family_index{ 0 };
+    VkDeviceSize       created_size{ 0 };
+    VkBufferUsageFlags usage{ 0 };
+
+    bool destroyed{ false };
+
+    VkDeviceAddress capture_address{ 0 };
+    VkDeviceAddress actual_address{ 0 };
+
+    std::vector<uint8_t> bytes;
+
+    VkMemoryRequirements memory_requirements{};
+    format::HandleId     bind_memory{};
+    VkDeviceMemory       bind_memory_handle{ VK_NULL_HANDLE };
+};
+
 struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStructureKHR>
 {
     // State tracking info for buffers with device addresses.
@@ -504,28 +526,6 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
 
     VkAccelerationStructureTypeKHR type_;
     // Only used when tracking
-
-    struct ASInputBuffer
-    {
-        // Required data to correctly create a buffer
-        VkBuffer           handle{ VK_NULL_HANDLE };
-        format::HandleId   handle_id{ format::kNullHandleId };
-        DeviceWrapper*     bind_device{ nullptr };
-        uint32_t           queue_family_index{ 0 };
-        VkDeviceSize       created_size{ 0 };
-        VkBufferUsageFlags usage{ 0 };
-
-        bool destroyed{ false };
-
-        VkDeviceAddress capture_address{ 0 };
-        VkDeviceAddress actual_address{ 0 };
-
-        std::vector<uint8_t> bytes;
-
-        VkMemoryRequirements memory_requirements{};
-        format::HandleId     bind_memory{};
-        VkDeviceMemory       bind_memory_handle{ VK_NULL_HANDLE };
-    };
 
     struct AccelerationStructureKHRBuildCommandData
     {
@@ -555,6 +555,25 @@ struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStru
 struct AccelerationStructureNVWrapper : public HandleWrapper<VkAccelerationStructureNV>
 {
     // TODO: Determine what additional state tracking is needed.
+};
+
+struct MicromapEXTWrapper : public HandleWrapper<VkMicromapEXT>
+{
+    // State tracking info for buffers with device addresses.
+    DeviceWrapper*   device;
+    format::HandleId device_id{ format::kNullHandleId };
+    VkDeviceAddress  address{ 0 };
+
+    VkMicromapTypeEXT type_;
+
+    struct MicromapBuildCommandData
+    {
+        format::HandleId           device;
+        VkMicromapBuildInfoEXT     geometry_info;
+        HandleUnwrapMemory         geometry_info_memory;
+        std::vector<ASInputBuffer> input_buffers;
+    };
+    std::optional<MicromapBuildCommandData> latest_build_command_{ std::nullopt };
 };
 
 struct PrivateDataSlotWrapper : public HandleWrapper<VkPrivateDataSlot>
