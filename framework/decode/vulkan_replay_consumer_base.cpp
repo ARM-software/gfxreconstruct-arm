@@ -4762,7 +4762,9 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                     if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay &&
                         allocator->SupportsOpaqueDeviceAddresses())
                     {
-                        uses_address             = true;
+
+                        uses_address = true;
+
                         auto opaque_address_pair = device_info->opaque_addresses.find(capture_id);
                         if (opaque_address_pair != device_info->opaque_addresses.end())
                         {
@@ -8551,7 +8553,7 @@ void VulkanReplayConsumerBase::OverrideGetMicromapBuildSizesEXT(
         return;
     }
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
-    else if (!loading_trim_state_)
+    else
     {
         micromap_builders_[device->capture_id]->OnGetMicromapBuildSizes(
             device, buildType, in_pBuildInfo, out_pSizeInfo);
@@ -8651,19 +8653,28 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
 {
     DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
 
+    VkCommandBuffer         command_buffer = command_buffer_info->handle;
+    VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+
     if (device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        VkCommandBuffer         command_buffer = command_buffer_info->handle;
-        VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+        if (loading_trim_state_)
+        {
+            VulkanBufferTracker* buffer_tracker = buffer_tracker_[device_info->capture_id].get();
 
+            for (uint32_t i = 0; i < infoCount; ++i)
+            {
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].data.deviceAddress);
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].triangleArray.deviceAddress);
+            }
+        }
         func(command_buffer, infoCount, infos);
         return;
     }
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
-    else if (!loading_trim_state_)
+    else
     {
-        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(
-            command_buffer_info->handle, infoCount, pInfos->GetPointer());
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(command_buffer, infoCount, infos);
     }
 }
 

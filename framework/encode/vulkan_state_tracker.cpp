@@ -418,6 +418,19 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                     to_extract = { p_infos[info].pGeometries[geometry].geometry.triangles.vertexData.deviceAddress,
                                    p_infos[info].pGeometries[geometry].geometry.triangles.indexData.deviceAddress,
                                    p_infos[info].pGeometries[geometry].geometry.triangles.transformData.deviceAddress };
+
+                    VkBaseOutStructure* pNextStruct =
+                        (VkBaseOutStructure*)(p_infos[info].pGeometries[geometry].geometry.triangles.pNext);
+
+                    VkAccelerationStructureTrianglesOpacityMicromapEXT* micromap_struct =
+                        graphics::GetPNextStruct<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
+                            &(p_infos[info].pGeometries[geometry].geometry.triangles),
+                            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT);
+                    if (micromap_struct != nullptr)
+                    {
+                        to_extract.push_back(micromap_struct->indexBuffer.deviceAddress);
+                    }
+
                     break;
                 }
                 case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_AABBS_KHR:
@@ -453,14 +466,14 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
                 GFXRECON_ASSERT(target_buffer_wrapper != nullptr);
 
-                AccelerationStructureKHRWrapper::ASInputBuffer& buffer = dst_command.input_buffers.emplace_back();
-                buffer.capture_address                                 = address;
-                buffer.handle                                          = target_buffer_wrapper->handle;
-                buffer.handle_id                                       = target_buffer_wrapper->handle_id;
-                buffer.bind_device                                     = target_buffer_wrapper->bind_device;
-                buffer.queue_family_index                              = target_buffer_wrapper->queue_family_index;
-                buffer.created_size                                    = target_buffer_wrapper->created_size;
-                buffer.usage                                           = target_buffer_wrapper->usage;
+                ASInputBuffer& buffer     = dst_command.input_buffers.emplace_back();
+                buffer.capture_address    = address;
+                buffer.handle             = target_buffer_wrapper->handle;
+                buffer.handle_id          = target_buffer_wrapper->handle_id;
+                buffer.bind_device        = target_buffer_wrapper->bind_device;
+                buffer.queue_family_index = target_buffer_wrapper->queue_family_index;
+                buffer.created_size       = target_buffer_wrapper->created_size;
+                buffer.usage              = target_buffer_wrapper->usage;
             }
 
             dst_command.geometry_info = p_infos[info];
@@ -468,6 +481,16 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
             VkAccelerationStructureGeometryKHR* unwrapped = vulkan_trackers::MakeUnwrapStructs(
                 p_infos[info].pGeometries, p_infos[info].geometryCount, &dst_command.geometry_info_memory);
             unwrapped->pNext = vulkan_trackers::TrackStruct(unwrapped->pNext, &dst_command.geometry_info_memory);
+
+            for (uint64_t i = 0; i < p_infos[info].geometryCount; i++)
+            {
+                if (p_infos[info].pGeometries[i].geometryType == VK_GEOMETRY_TYPE_TRIANGLES_KHR)
+                {
+                    unwrapped[i].geometry.triangles.pNext = vulkan_trackers::TrackStruct(
+                        p_infos[info].pGeometries[i].geometry.triangles.pNext, &dst_command.geometry_info_memory);
+                }
+            }
+
             dst_command.geometry_info.pGeometries = unwrapped;
 
             dst_command.build_range_infos.insert(dst_command.build_range_infos.end(),
@@ -504,6 +527,78 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
 
                 cmd_buf_wrapper->tlas_build_info_map.emplace_back(std::make_pair(wrapper, std::move(tlas_info)));
             }
+        }
+    }
+}
+
+void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer               command_buffer,
+                                                   uint32_t                      info_count,
+                                                   const VkMicromapBuildInfoEXT* infos)
+{
+    static uint64_t build_command_index = 0;
+
+    if (info_count == 0 || !infos)
+    {
+        return;
+    }
+
+    CommandBufferWrapper* cmd_buf_wrapper = GetWrapper<CommandBufferWrapper>(command_buffer);
+    for (uint32_t i = 0; i < info_count; ++i)
+    {
+        if (infos[i].dstMicromap == VK_NULL_HANDLE)
+        {
+            continue;
+        }
+        if (infos[i].usageCountsCount == 0 || !infos[i].pUsageCounts)
+        {
+            continue;
+        }
+
+        auto wrapper = GetWrapper<MicromapEXTWrapper>(infos[i].dstMicromap);
+
+        MicromapEXTWrapper::MicromapBuildCommandData dst_command{};
+        // Extract command information for 1 Micromap
+        dst_command.device        = wrapper->device_id;
+        dst_command.geometry_info = infos[i];
+        dst_command.geometry_info_memory.Reset();
+        auto unwrapped = vulkan_trackers::MakeUnwrapStructs(
+            infos[i].pUsageCounts, infos[i].usageCountsCount, &dst_command.geometry_info_memory);
+        dst_command.geometry_info.pUsageCounts = unwrapped;
+
+        for (const VkDeviceAddress address : { infos[i].data.deviceAddress, infos[i].triangleArray.deviceAddress })
+        {
+            if (address == 0)
+            {
+                continue;
+            }
+
+            VkDeviceAddress      target_buffer_device_address = 0;
+            const BufferWrapper* target_buffer_wrapper        = nullptr;
+            for (const auto& [handle, range] : buffer_addresses_map)
+            {
+                if ((range.first <= address) && (range.second > address))
+                {
+                    target_buffer_device_address = range.first;
+                    target_buffer_wrapper        = GetWrapper<BufferWrapper>(handle);
+                    break;
+                }
+            }
+
+            GFXRECON_ASSERT(target_buffer_wrapper != nullptr);
+
+            ASInputBuffer& buffer     = dst_command.input_buffers.emplace_back();
+            buffer.capture_address    = address;
+            buffer.handle             = target_buffer_wrapper->handle;
+            buffer.handle_id          = target_buffer_wrapper->handle_id;
+            buffer.bind_device        = target_buffer_wrapper->bind_device;
+            buffer.queue_family_index = target_buffer_wrapper->queue_family_index;
+            buffer.created_size       = target_buffer_wrapper->created_size;
+            buffer.usage              = target_buffer_wrapper->usage;
+        }
+
+        if (infos[i].mode == VK_BUILD_MICROMAP_MODE_BUILD_EXT)
+        {
+            wrapper->latest_build_command_ = std::move(dst_command);
         }
     }
 }
@@ -1478,6 +1573,18 @@ void VulkanStateTracker::TrackAccelerationStructureKHRDeviceAddress(VkDevice    
     as_device_addresses_map.emplace(address, wrapper);
 }
 
+void VulkanStateTracker::TrackMicromapDeviceAddress(VkDevice device, VkMicromapEXT micromap, VkDeviceAddress address)
+{
+    assert((device != VK_NULL_HANDLE) && (micromap != VK_NULL_HANDLE));
+
+    auto wrapper       = vulkan_wrappers::GetWrapper<vulkan_wrappers::MicromapEXTWrapper>(micromap);
+    wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
+    wrapper->address   = address;
+
+    assert(address);
+    mm_device_addresses_map.emplace(address, wrapper);
+}
+
 void VulkanStateTracker::TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address)
 {
     assert((device != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
@@ -1672,6 +1779,18 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::AccelerationStructureKHRW
     }
 }
 
+void VulkanStateTracker::DestroyState(MicromapEXTWrapper* wrapper)
+{
+    assert(wrapper != nullptr);
+    wrapper->create_parameters = nullptr;
+
+    const auto& entry = mm_device_addresses_map.find(wrapper->address);
+    if (entry != mm_device_addresses_map.end())
+    {
+        mm_device_addresses_map.erase(entry);
+    }
+}
+
 void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               command_buffer_count,
                                                      const VkCommandBuffer* command_buffers)
 {
@@ -1829,7 +1948,36 @@ void gfxrecon::encode::VulkanStateTracker::DestroyState(gfxrecon::encode::Buffer
             {
                 continue;
             }
-            for (AccelerationStructureKHRWrapper::ASInputBuffer& buffer : (*command)->input_buffers)
+            for (ASInputBuffer& buffer : (*command)->input_buffers)
+            {
+                if (wrapper->handle_id == buffer.handle_id)
+                {
+                    buffer.destroyed              = true;
+                    auto [resource_util, created] = resource_utils.try_emplace(
+                        buffer.bind_device->handle_id,
+                        graphics::VulkanResourcesUtil(buffer.bind_device->handle,
+                                                      buffer.bind_device->physical_device->handle,
+                                                      buffer.bind_device->layer_table,
+                                                      *buffer.bind_device->physical_device->layer_table_ref,
+                                                      buffer.bind_device->physical_device->memory_properties));
+                    buffer.bind_device->layer_table.GetBufferMemoryRequirements(
+                        buffer.bind_device->handle, buffer.handle, &buffer.memory_requirements);
+                    resource_util->second.ReadFromBufferResource(
+                        buffer.handle, buffer.created_size, 0, buffer.queue_family_index, buffer.bytes);
+                }
+            }
+        }
+    });
+
+    state_table_.VisitWrappers([&wrapper, this](gfxrecon::encode::MicromapEXTWrapper* mm_wrapper) {
+        GFXRECON_ASSERT(mm_wrapper);
+        for (auto& command : { &mm_wrapper->latest_build_command_ })
+        {
+            if (!command || !command->has_value())
+            {
+                continue;
+            }
+            for (ASInputBuffer& buffer : (*command)->input_buffers)
             {
                 if (wrapper->handle_id == buffer.handle_id)
                 {
