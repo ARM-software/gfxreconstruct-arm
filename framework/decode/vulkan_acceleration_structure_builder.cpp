@@ -432,7 +432,6 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
 {
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     VkResult result;
-
     cmd_execute_obj_.device_               = device_;
     cmd_execute_obj_.free_command_buffers_ = functions_.free_command_buffers;
     cmd_execute_obj_.destroy_command_pool_ = functions_.destroy_command_pool;

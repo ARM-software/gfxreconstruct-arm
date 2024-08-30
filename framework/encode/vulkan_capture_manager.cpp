@@ -979,6 +979,60 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
     return result;
 }
 
+VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice                       device,
+                                                         const VkMicromapCreateInfoEXT* pCreateInfo,
+                                                         const VkAllocationCallbacks*   pAllocator,
+                                                         VkMicromapEXT*                 pMicromap)
+{
+    auto                           handle_unwrap_memory  = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
+    auto                           device_wrapper        = GetWrapper<DeviceWrapper>(device);
+    VkDevice                       device_unwrapped      = device_wrapper->handle;
+    const VulkanDeviceTable*       device_table          = GetDeviceTable(device);
+    const VkMicromapCreateInfoEXT* pCreateInfo_unwrapped = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
+
+    VkResult result;
+    if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+    {
+        // Add flag to allow for opaque address capture
+        VkMicromapCreateInfoEXT modified_create_info = (*pCreateInfo_unwrapped);
+        modified_create_info.createFlags |= VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
+        result = device_table->CreateMicromapEXT(device_unwrapped, &modified_create_info, pAllocator, pMicromap);
+    }
+    else
+    {
+        result = device_table->CreateMicromapEXT(device_unwrapped, pCreateInfo_unwrapped, pAllocator, pMicromap);
+    }
+
+    if ((result == VK_SUCCESS) && (pMicromap != nullptr))
+    {
+        CreateWrappedHandle<DeviceWrapper, NoParentWrapper, MicromapEXTWrapper>(
+            device, NoParentWrapper::kHandleValue, pMicromap, GetUniqueId);
+
+        auto micromap_wrapper = GetWrapper<MicromapEXTWrapper>(*pMicromap);
+
+        VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                  nullptr,
+                                                  pCreateInfo->buffer };
+        VkDeviceAddress           address =
+            device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+
+        if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+        {
+            // save address to use as pCreateInfo->deviceAddress during replay
+            WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+            }
+        }
+        micromap_wrapper->device = device_wrapper;
+        micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
+    }
+
+    return result;
+}
+
 void VulkanCaptureManager::OverrideCmdBuildAccelerationStructuresKHR(
     VkCommandBuffer                                        commandBuffer,
     uint32_t                                               infoCount,
@@ -992,6 +1046,19 @@ void VulkanCaptureManager::OverrideCmdBuildAccelerationStructuresKHR(
 
     const VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(commandBuffer);
     device_table->CmdBuildAccelerationStructuresKHR(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
+}
+
+void VulkanCaptureManager::OverrideCmdBuildMicromapsEXT(VkCommandBuffer               commandBuffer,
+                                                        uint32_t                      infoCount,
+                                                        const VkMicromapBuildInfoEXT* pInfos)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackMicromapBuildCommand(commandBuffer, infoCount, pInfos);
+    }
+
+    const VulkanDeviceTable* device_table = GetDeviceTable(commandBuffer);
+    device_table->CmdBuildMicromapsEXT(commandBuffer, infoCount, pInfos);
 }
 
 void VulkanCaptureManager::OverrideCmdCopyAccelerationStructureKHR(VkCommandBuffer command_buffer,
@@ -1841,7 +1908,7 @@ void VulkanCaptureManager::PostProcess_vkGetSwapchainImagesKHR(VkResult       re
     {
         return;
     }
-    SwapchainKHRWrapper* old_swapchain = swapchain_wrapper->old_swapchain;
+    SwapchainKHRWrapper* old_swapchain         = swapchain_wrapper->old_swapchain;
     auto                 old_swapchain_wrapper = GetWrapper<SwapchainKHRWrapper>(old_swapchain->handle);
     if (old_swapchain_wrapper == nullptr)
     {

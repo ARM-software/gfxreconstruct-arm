@@ -389,11 +389,16 @@ class VulkanStateTracker
                                                     VkAccelerationStructureKHR accel_struct,
                                                     VkDeviceAddress            address);
 
+    void TrackMicromapDeviceAddress(VkDevice device, VkMicromapEXT micromap, VkDeviceAddress address);
+
     void
     TrackAccelerationStructureBuildCommand(VkCommandBuffer                                        command_buffer,
                                            uint32_t                                               info_count,
                                            const VkAccelerationStructureBuildGeometryInfoKHR*     infos,
                                            const VkAccelerationStructureBuildRangeInfoKHR* const* pp_buildRange_infos);
+
+    void
+    TrackMicromapBuildCommand(VkCommandBuffer commandBuffer, uint32_t infoCount, const VkMicromapBuildInfoEXT* pInfos);
 
     void TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address);
 
@@ -503,6 +508,8 @@ class VulkanStateTracker
 
     void DestroyState(vulkan_wrappers::BufferWrapper* wrapper);
 
+    void DestroyState(vulkan_wrappers::MicromapEXTWrapper* wrapper);
+
     void TrackQuerySubmissions(vulkan_wrappers::CommandBufferWrapper* command_wrapper);
 
     std::mutex       state_table_mutex_;
@@ -513,6 +520,7 @@ class VulkanStateTracker
 
     // Keeps track of acceleration structures' device addresses
     std::unordered_map<VkDeviceAddress, vulkan_wrappers::AccelerationStructureKHRWrapper*> as_device_addresses_map;
+    std::unordered_map<VkDeviceAddress, vulkan_wrappers::MicromapEXTWrapper*>              mm_device_addresses_map;
     std::unordered_map<VkBuffer, std::pair<VkDeviceAddress, VkDeviceAddress>>              buffer_addresses_map;
 
     bool                                                                experimental_raytracing_fastforwarding_{ true };
