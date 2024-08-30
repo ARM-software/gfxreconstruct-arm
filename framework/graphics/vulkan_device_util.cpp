@@ -142,6 +142,33 @@ VulkanDeviceUtil::EnableRequiredPhysicalDeviceFeatures(uint32_t                 
                     instance_api_version, instance_table, physical_device, buffer_address_features);
             }
             break;
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT:
+            {
+                // Enable micromapCaptureReplay
+                auto micromap_features = reinterpret_cast<VkPhysicalDeviceOpacityMicromapFeaturesEXT*>(current_struct);
+
+                micromapCaptureReplay_ptr      = (&micromap_features->micromapCaptureReplay);
+                micromapCaptureReplay_original = micromap_features->micromapCaptureReplay;
+
+                if (micromap_features->micromap && !micromap_features->micromapCaptureReplay)
+                {
+                    // Get micromap properties
+                    VkPhysicalDeviceOpacityMicromapFeaturesEXT supported_features{
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT, nullptr
+                    };
+                    GetPhysicalDeviceFeatures(
+                        instance_api_version, instance_table, physical_device, supported_features);
+
+                    // Enable micromapCaptureReplay if it is supported
+                    if (supported_features.micromapCaptureReplay)
+                    {
+                        micromap_features->micromapCaptureReplay = VK_TRUE;
+                    }
+                }
+
+                result.feature_micromapCaptureReplay = micromap_features->micromapCaptureReplay;
+            }
+            break;
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR:
             {
                 // Enable accelerationStructureCaptureReplay
@@ -226,6 +253,11 @@ void VulkanDeviceUtil::RestoreModifiedPhysicalDeviceFeatures()
     {
         (*bufferDeviceAddressCaptureReplay_ptr) = bufferDeviceAddressCaptureReplay_original;
         bufferDeviceAddressCaptureReplay_ptr    = nullptr;
+    }
+    if (micromapCaptureReplay_ptr != nullptr)
+    {
+        (*micromapCaptureReplay_ptr) = micromapCaptureReplay_original;
+        micromapCaptureReplay_ptr    = nullptr;
     }
     if (accelerationStructureCaptureReplay_ptr != nullptr)
     {

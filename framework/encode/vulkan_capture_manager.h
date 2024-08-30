@@ -294,11 +294,20 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                     const VkAllocationCallbacks*                pAllocator,
                                                     VkAccelerationStructureKHR* pAccelerationStructureKHR);
 
+    VkResult OverrideCreateMicromapEXT(VkDevice                       device,
+                                       const VkMicromapCreateInfoEXT* pCreateInfo,
+                                       const VkAllocationCallbacks*   pAllocator,
+                                       VkMicromapEXT*                 pMicromap);
+
     void
     OverrideCmdBuildAccelerationStructuresKHR(VkCommandBuffer                                        commandBuffer,
                                               uint32_t                                               infoCount,
                                               const VkAccelerationStructureBuildGeometryInfoKHR*     pInfos,
                                               const VkAccelerationStructureBuildRangeInfoKHR* const* ppBuildRangeInfos);
+
+    void OverrideCmdBuildMicromapsEXT(VkCommandBuffer               commandBuffer,
+                                      uint32_t                      infoCount,
+                                      const VkMicromapBuildInfoEXT* pInfos);
 
     VkResult OverrideAllocateMemory(VkDevice                     device,
                                     const VkMemoryAllocateInfo*  pAllocateInfo,

@@ -9058,17 +9058,17 @@ void VulkanReplayConsumer::Process_vkCreateMicromapEXT(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkMicromapEXT>*        pMicromap)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    const VkMicromapCreateInfoEXT* in_pCreateInfo = pCreateInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+
     MapStructHandles(pCreateInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
     if (!pMicromap->IsNull()) { pMicromap->SetHandleLength(1); }
-    VkMicromapEXT* out_pMicromap = pMicromap->GetHandlePointer();
+    MicromapEXTInfo handle_info;
+    pMicromap->SetConsumerData(0, &handle_info);
 
-    VkResult replay_result = GetDeviceTable(in_device)->CreateMicromapEXT(in_device, in_pCreateInfo, in_pAllocator, out_pMicromap);
-    CheckResult("vkCreateMicromapEXT", returnValue, replay_result, call_info, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    VkResult replay_result = OverrideCreateMicromapEXT(GetDeviceTable(in_device->handle)->CreateMicromapEXT, returnValue, in_device, pCreateInfo, pAllocator, pMicromap);
+    CheckResult("vkCreateMicromapEXT", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 
-    AddHandle<MicromapEXTInfo>(device, pMicromap->GetPointer(), out_pMicromap, &VulkanObjectInfoTable::AddMicromapEXTInfo);
+    AddHandle<MicromapEXTInfo>(device, pMicromap->GetPointer(), pMicromap->GetHandlePointer(), std::move(handle_info), &VulkanObjectInfoTable::AddMicromapEXTInfo);
 }
 
 void VulkanReplayConsumer::Process_vkDestroyMicromapEXT(
@@ -9077,11 +9077,10 @@ void VulkanReplayConsumer::Process_vkDestroyMicromapEXT(
     format::HandleId                            micromap,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    VkMicromapEXT in_micromap = MapHandle<MicromapEXTInfo>(micromap, &VulkanObjectInfoTable::GetMicromapEXTInfo);
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+    auto in_micromap = GetObjectInfoTable().GetMicromapEXTInfo(micromap);
 
-    GetDeviceTable(in_device)->DestroyMicromapEXT(in_device, in_micromap, in_pAllocator);
+    OverrideDestroyMicromapEXT(GetDeviceTable(in_device->handle)->DestroyMicromapEXT, in_device, in_micromap, pAllocator);
     RemoveHandle(micromap, &VulkanObjectInfoTable::RemoveMicromapEXTInfo);
 }
 
@@ -9091,15 +9090,15 @@ void VulkanReplayConsumer::Process_vkCmdBuildMicromapsEXT(
     uint32_t                                    infoCount,
     StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    const VkMicromapBuildInfoEXT* in_pInfos = pInfos->GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
+
     MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
 
-    GetDeviceTable(in_commandBuffer)->CmdBuildMicromapsEXT(in_commandBuffer, infoCount, in_pInfos);
+    OverrideCmdBuildMicromapsEXT(GetDeviceTable(in_commandBuffer->handle)->CmdBuildMicromapsEXT, in_commandBuffer, infoCount, pInfos);
 
     if (options_.dumping_resources)
     {
-        resource_dumper.Process_vkCmdBuildMicromapsEXT(call_info, GetDeviceTable(in_commandBuffer)->CmdBuildMicromapsEXT, in_commandBuffer, infoCount, in_pInfos);
+        resource_dumper.Process_vkCmdBuildMicromapsEXT(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdBuildMicromapsEXT, in_commandBuffer->handle, infoCount, pInfos->GetPointer());
     }
 }
 
@@ -9279,13 +9278,13 @@ void VulkanReplayConsumer::Process_vkGetMicromapBuildSizesEXT(
     StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pBuildInfo,
     StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo)
 {
-    VkDevice in_device = MapHandle<DeviceInfo>(device, &VulkanObjectInfoTable::GetDeviceInfo);
-    const VkMicromapBuildInfoEXT* in_pBuildInfo = pBuildInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetDeviceInfo(device);
+
     MapStructHandles(pBuildInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    VkMicromapBuildSizesInfoEXT* out_pSizeInfo = pSizeInfo->IsNull() ? nullptr : pSizeInfo->AllocateOutputData(1, { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT, nullptr });
+    pSizeInfo->IsNull() ? nullptr : pSizeInfo->AllocateOutputData(1, { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT, nullptr });
     InitializeOutputStructPNext(pSizeInfo);
 
-    GetDeviceTable(in_device)->GetMicromapBuildSizesEXT(in_device, buildType, in_pBuildInfo, out_pSizeInfo);
+    OverrideGetMicromapBuildSizesEXT(GetDeviceTable(in_device->handle)->GetMicromapBuildSizesEXT, in_device, buildType, pBuildInfo, pSizeInfo);
 }
 
 void VulkanReplayConsumer::Process_vkCmdDrawClusterHUAWEI(

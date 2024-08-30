@@ -226,6 +226,7 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
 
     acceleration_structure_builders_.clear();
     buffer_tracker_.clear();
+    micromap_builders_.clear();
 
     // Cleanup screenshot resources before destroying device.
     object_info_table_.VisitDeviceInfo([this](const DeviceInfo* info) {
@@ -3175,6 +3176,14 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
             ray_tracing_pipeline_properties,
             acceleration_structure_features,
             buffer_tracker_[*pDevice->GetPointer()].get());
+
+        micromap_builders_[*pDevice->GetPointer()] =
+            std::make_unique<VulkanMicromapBuilder>(device_table,
+                                                    physical_device_info,
+                                                    *replay_device,
+                                                    allocator,
+                                                    *physical_device_info->replay_device_info->memory_properties,
+                                                    buffer_tracker_[*pDevice->GetPointer()].get());
     }
 
     // Restore modified property/feature create info values to the original application values
@@ -3213,7 +3222,8 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
 
         if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
         {
-            auto builder = acceleration_structure_builders_.erase(device_info->capture_id);
+            auto acc_builder = acceleration_structure_builders_.erase(device_info->capture_id);
+            auto mm_builder  = micromap_builders_.erase(device_info->capture_id);
         }
 
         device_info->allocator->Destroy();
@@ -4762,6 +4772,8 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                         else
                         {
                             // We also consider the mock address to be an address override
+                            // Not really an address override, but should skip adding the stuff about opaque address
+                            // into the allocate
                             address_override_found = true;
                         }
                     }
@@ -5522,6 +5534,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         if (!allocator->SupportsOpaqueDeviceAddresses())
         {
             acceleration_structure_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
+            micromap_builders_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
             buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
             tracked_addresses_.erase(buffer_info->capture_id);
         }
@@ -8524,6 +8537,88 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
     return result;
 }
 
+void VulkanReplayConsumerBase::OverrideGetMicromapBuildSizesEXT(
+    PFN_vkGetMicromapBuildSizesEXT                             func,
+    const DeviceInfo*                                          device,
+    VkAccelerationStructureBuildTypeKHR                        buildType,
+    StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
+    StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo)
+{
+    VkMicromapBuildInfoEXT*      in_pBuildInfo = pBuildInfo->GetPointer();
+    VkMicromapBuildSizesInfoEXT* out_pSizeInfo = pSizeInfo->GetPointer();
+
+    if (device->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        func(device->handle, buildType, in_pBuildInfo, out_pSizeInfo);
+        return;
+    }
+    // Use the builder when the rebind allocator is selected and the trimming is done / not used
+    else
+    {
+        micromap_builders_[device->capture_id]->OnGetMicromapBuildSizes(
+            device, buildType, in_pBuildInfo, out_pSizeInfo);
+    }
+}
+
+VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
+    PFN_vkCreateMicromapEXT                                      func,
+    VkResult                                                     original_result,
+    const DeviceInfo*                                            device_info,
+    const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+    HandlePointerDecoder<VkMicromapEXT>*                         pMicromap)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    assert((device_info != nullptr) && (pCreateInfo != nullptr) && (pMicromap != nullptr) && !pMicromap->IsNull() &&
+           (pMicromap->GetHandlePointer() != nullptr));
+
+    VkResult result             = VK_SUCCESS;
+    auto     replay_micromap    = pMicromap->GetHandlePointer();
+    auto     capture_id         = (*pMicromap->GetPointer());
+    auto     replay_create_info = pCreateInfo->GetPointer();
+    VkDevice device             = device_info->handle;
+    auto     device_table       = GetDeviceTable(device);
+    assert(device_table != nullptr);
+
+    auto            device_map_entry = device_info->opaque_addresses.find(capture_id);
+    VkDeviceAddress device_address;
+    if (device_map_entry != device_info->opaque_addresses.end())
+    {
+        device_address = device_map_entry->second;
+    }
+    else
+    {
+        // TODO: Investigate here why opaque dev addr is not available for micromap
+        VkBufferDeviceAddressInfo buffer_info{ .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                               .pNext  = nullptr,
+                                               .buffer = replay_create_info->buffer };
+        device_address = device_table->GetBufferDeviceAddressKHR(device, &buffer_info) + replay_create_info->offset;
+        GFXRECON_LOG_DEBUG(
+            "Opaque device address is not available for VkMicromapCreateInfoEXT object (ID = %" PRIu64 ")", capture_id);
+    }
+
+    VkMicromapCreateInfoEXT modified_create_info = (*replay_create_info);
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        // Set opaque device address
+        modified_create_info.createFlags |= VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
+        modified_create_info.deviceAddress = device_address;
+
+        result = device_table->CreateMicromapEXT(
+            device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_micromap);
+    }
+    else
+    {
+        modified_create_info.createFlags &= ~VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
+        modified_create_info.deviceAddress = 0;
+        micromap_builders_[device_info->capture_id]->OnCreateMicromap(
+            device_info, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_micromap);
+    }
+
+    return result;
+}
+
 void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
     PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
     CommandBufferInfo*                                                         command_buffer_info,
@@ -8547,6 +8642,39 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->CmdBuildAccelerationStructures(
             command_buffer, infoCount, infos, build_range_infos);
+    }
+}
+
+void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
+    PFN_vkCmdBuildMicromapsEXT                            func,
+    CommandBufferInfo*                                    command_buffer_info,
+    uint32_t                                              infoCount,
+    StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos)
+{
+    DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
+
+    VkCommandBuffer         command_buffer = command_buffer_info->handle;
+    VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        if (loading_trim_state_)
+        {
+            VulkanBufferTracker* buffer_tracker = buffer_tracker_[device_info->capture_id].get();
+
+            for (uint32_t i = 0; i < infoCount; ++i)
+            {
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].data.deviceAddress);
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].triangleArray.deviceAddress);
+            }
+        }
+        func(command_buffer, infoCount, infos);
+        return;
+    }
+    // Use the builder when the rebind allocator is selected and the trimming is done / not used
+    else
+    {
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(command_buffer, infoCount, infos);
     }
 }
 
@@ -9571,6 +9699,34 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
     }
 
     func(device_info->handle, acceleration_structure, GetAllocationCallbacks(pAllocator));
+}
+
+void VulkanReplayConsumerBase::OverrideDestroyMicromapEXT(
+    PFN_vkDestroyMicromapEXT                             func,
+    const DeviceInfo*                                    device_info,
+    const MicromapEXTInfo*                               micromap_info,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    VkMicromapEXT                         micromap       = VK_NULL_HANDLE;
+    VulkanResourceAllocator::ResourceData allocator_data = 0;
+
+    if (micromap_info != nullptr)
+    {
+        micromap = micromap_info->handle;
+    }
+
+    if (!allocator->SupportsOpaqueDeviceAddresses())
+    {
+        micromap_builders_[device_info->capture_id]->OnDestroyMicromap(micromap_info);
+        tracked_addresses_.erase(micromap_info->capture_id);
+    }
+
+    func(device_info->handle, micromap, GetAllocationCallbacks(pAllocator));
 }
 
 // We want to allow skipping the query for tool properties because the capture layer actually adds this extension
