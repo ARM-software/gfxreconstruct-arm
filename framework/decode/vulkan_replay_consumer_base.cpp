@@ -4774,6 +4774,8 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                         else
                         {
                             // We also consider the mock address to be an address override
+                            // Not really an address override, but should skip adding the stuff about opaque address
+                            // into the allocate
                             address_override_found = true;
                         }
                     }
@@ -8686,19 +8688,28 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
 {
     DeviceInfo* device_info = object_info_table_.GetDeviceInfo(command_buffer_info->parent_id);
 
+    VkCommandBuffer         command_buffer = command_buffer_info->handle;
+    VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+
     if (device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
-        VkCommandBuffer         command_buffer = command_buffer_info->handle;
-        VkMicromapBuildInfoEXT* infos          = pInfos->GetPointer();
+        if (loading_trim_state_)
+        {
+            VulkanBufferTracker* buffer_tracker = buffer_tracker_[device_info->capture_id].get();
 
+            for (uint32_t i = 0; i < infoCount; ++i)
+            {
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].data.deviceAddress);
+                buffer_tracker->UpdateBufferDeviceAddress(infos[i].triangleArray.deviceAddress);
+            }
+        }
         func(command_buffer, infoCount, infos);
         return;
     }
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
-    else if (!loading_trim_state_)
+    else
     {
-        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(
-            command_buffer_info->handle, infoCount, pInfos->GetPointer());
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdBuildMicromaps(command_buffer, infoCount, infos);
     }
 }
 
