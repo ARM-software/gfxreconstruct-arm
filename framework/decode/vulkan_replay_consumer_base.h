@@ -1641,6 +1641,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
 
+    bool           use_acceleration_structure_builder_;
     bool           device_fault_supported_;
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
