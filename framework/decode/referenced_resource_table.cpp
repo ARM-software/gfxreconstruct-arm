@@ -35,6 +35,15 @@ void ReferencedResourceTable::AddResource(format::HandleId resource_id)
     }
 }
 
+void ReferencedResourceTable::AddPreservedResource(format::HandleId resource_id)
+{
+    if (resource_id != format::kNullHandleId)
+    {
+        auto result                = resources_.emplace(resource_id, std::make_shared<ResourceInfo>());
+        result.first->second->used = true;
+    }
+}
+
 void ReferencedResourceTable::AddResource(format::HandleId parent_id, format::HandleId resource_id, bool add_children)
 {
     if ((parent_id != format::kNullHandleId) && (resource_id != format::kNullHandleId))
