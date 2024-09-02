@@ -42,6 +42,8 @@ class ReferencedResourceTable
   public:
     void AddResource(format::HandleId resource_id);
 
+    void AddPreservedResource(format::HandleId parent_id);
+
     void AddResource(format::HandleId parent_id, format::HandleId resource_id, bool add_children = false);
 
     void AddResource(size_t parent_id_count, const format::HandleId* parent_ids, format::HandleId resource_id);

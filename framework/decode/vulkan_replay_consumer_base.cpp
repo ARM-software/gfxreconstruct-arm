@@ -4762,7 +4762,9 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                     if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay &&
                         allocator->SupportsOpaqueDeviceAddresses())
                     {
-                        uses_address             = true;
+
+                        uses_address = true;
+
                         auto opaque_address_pair = device_info->opaque_addresses.find(capture_id);
                         if (opaque_address_pair != device_info->opaque_addresses.end())
                         {
