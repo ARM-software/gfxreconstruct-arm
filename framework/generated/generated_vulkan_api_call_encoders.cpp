@@ -21370,16 +21370,8 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateMicromapEXT(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateMicromapEXT>::Dispatch(manager, device, pCreateInfo, pAllocator, pMicromap);
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkMicromapCreateInfoEXT* pCreateInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
-
-    VkResult result = vulkan_wrappers::GetDeviceTable(device)->CreateMicromapEXT(device, pCreateInfo_unwrapped, pAllocator, pMicromap);
-
-    if (result >= 0)
-    {
-        vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper, vulkan_wrappers::NoParentWrapper, vulkan_wrappers::MicromapEXTWrapper>(device, vulkan_wrappers::NoParentWrapper::kHandleValue, pMicromap, VulkanCaptureManager::GetUniqueId);
-    }
-    else
+    VkResult result = manager->OverrideCreateMicromapEXT(device, pCreateInfo, pAllocator, pMicromap);
+    if (result < 0)
     {
         omit_output_data = true;
     }
@@ -21468,10 +21460,7 @@ VKAPI_ATTR void VKAPI_CALL CmdBuildMicromapsEXT(
         manager->EndCommandApiCallCapture(commandBuffer, TrackCmdBuildMicromapsEXTHandles, infoCount, pInfos);
     }
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkMicromapBuildInfoEXT* pInfos_unwrapped = vulkan_wrappers::UnwrapStructArrayHandles(pInfos, infoCount, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdBuildMicromapsEXT(commandBuffer, infoCount, pInfos_unwrapped);
+    manager->OverrideCmdBuildMicromapsEXT(commandBuffer, infoCount, pInfos);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBuildMicromapsEXT>::Dispatch(manager, commandBuffer, infoCount, pInfos);
 }

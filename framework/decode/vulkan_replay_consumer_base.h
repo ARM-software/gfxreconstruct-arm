@@ -47,6 +47,7 @@
 #include "util/logging.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
 #include "util/threadpool.h"
+#include "decode/vulkan_micromap_builder.h"
 
 #include "application/application.h"
 
@@ -1172,12 +1173,30 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                         pAccelerationStructureKHR);
 
+    VkResult OverrideCreateMicromapEXT(PFN_vkCreateMicromapEXT                                      func,
+                                       VkResult                                                     original_result,
+                                       const DeviceInfo*                                            device_info,
+                                       const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
+                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
+
+    void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
+                                          const DeviceInfo*                                          device,
+                                          VkAccelerationStructureBuildTypeKHR                        buildType,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo);
+
     void OverrideCmdBuildAccelerationStructuresKHR(
         PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
         CommandBufferInfo*                                                         command_buffer_info,
         uint32_t                                                                   infoCount,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos);
+
+    void OverrideCmdBuildMicromapsEXT(PFN_vkCmdBuildMicromapsEXT                            func,
+                                      CommandBufferInfo*                                    command_buffer_info,
+                                      uint32_t                                              infoCount,
+                                      StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
 
     void
     OverrideCmdCopyAccelerationStructureKHR(PFN_vkCmdCopyAccelerationStructureKHR func,
@@ -1337,6 +1356,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                  uint32_t                                                       width,
                                  uint32_t                                                       height,
                                  uint32_t                                                       depth);
+    void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
+                                    const DeviceInfo*                                    device_info,
+                                    const MicromapEXTInfo*                               micromap_info,
+                                    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
     void OverrideUpdateDescriptorSets(PFN_vkUpdateDescriptorSets                          func,
                                       const DeviceInfo*                                   device_info,
                                       uint32_t                                            descriptor_write_count,
@@ -1610,8 +1634,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::vector<const char*>                                                            faked_extensions_;
     // map acceleration structure builders for each device
     std::unordered_map<format::HandleId, std::unique_ptr<VulkanAccelerationStructureBuilder>>
-                                                                               acceleration_structure_builders_;
-    std::unordered_map<format::HandleId, std::unique_ptr<VulkanBufferTracker>> buffer_tracker_;
+                                                                                 acceleration_structure_builders_;
+    std::unordered_map<format::HandleId, std::unique_ptr<VulkanBufferTracker>>   buffer_tracker_;
+    std::unordered_map<format::HandleId, std::unique_ptr<VulkanMicromapBuilder>> micromap_builders_;
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;

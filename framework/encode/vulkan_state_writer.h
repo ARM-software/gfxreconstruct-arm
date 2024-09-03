@@ -145,6 +145,8 @@ class VulkanStateWriter
 
     void WriteAccelerationStructureKHRState(const VulkanStateTable& state_table);
 
+    void WriteMicromapEXTState(const VulkanStateTable& state_table);
+
     void WriteDeferredOperationJoinCommand(format::HandleId device_id, format::HandleId deferred_operation_id);
 
     void
@@ -397,7 +399,6 @@ class VulkanStateWriter
         std::vector<AccelerationStructureBuildCommandData>           tlas_update;
     };
 
-    using ASInputBuffer = AccelerationStructureKHRWrapper::ASInputBuffer;
     void BeginAccelerationStructuresSection(format::HandleId device_id, uint64_t max_resource_size);
     void WriteASInputBufferState(ASInputBuffer& buffer);
     void WriteASInputMemoryState(ASInputBuffer& buffer);
