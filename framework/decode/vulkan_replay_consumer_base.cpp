@@ -9702,6 +9702,10 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
     {
         acceleration_structure = acceleration_structure_info->handle;
     }
+    else
+    {
+        return;
+    }
 
     if (use_acceleration_structure_builder_)
     {
