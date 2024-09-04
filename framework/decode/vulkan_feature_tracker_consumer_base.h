@@ -23,7 +23,8 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
   public:
     VulkanFeatureTrackerConsumerBase();
 
-    bool ProcessFeaturesAndExtensions();
+    bool CanOptimize() override;
+
     void PrintAllFeatures();
 
     virtual void Process_vkCreateInstance(const ApiCallInfo&                                   call_info,
@@ -230,7 +231,6 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
     void PrintCore13Features(VkPhysicalDeviceVulkan13Features core13);
 
   private:
-
     std::vector<std::string> core10_members_as_strings_;
     VkPhysicalDeviceFeatures core10_{};
     VkPhysicalDeviceFeatures capture_core10_{};

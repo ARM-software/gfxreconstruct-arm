@@ -1004,7 +1004,7 @@ void VulkanFeatureTrackerConsumerBase::checkSwapchainColorspaceEXT(VkColorSpaceK
     }
 }
 
-bool VulkanFeatureTrackerConsumerBase::ProcessFeaturesAndExtensions()
+bool VulkanFeatureTrackerConsumerBase::CanOptimize()
 {
     bool result = false;
 
