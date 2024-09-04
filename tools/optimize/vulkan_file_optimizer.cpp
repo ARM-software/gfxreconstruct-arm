@@ -139,8 +139,8 @@ void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call
     size_t                               data_size           = 0;
     const void*                          data_pointer        = nullptr;
 
-    auto compressor                  = GetCompressor();
-    auto compressed_parameter_buffer = GetCompressedParameterBuffer();
+    util::Compressor*     compressor                  = GetCompressor();
+    std::vector<uint8_t>& compressed_parameter_buffer = GetCompressedParameterBuffer();
 
     if (compressor != nullptr)
     {
