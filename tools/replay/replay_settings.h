@@ -43,7 +43,7 @@ const char kArguments[] =
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-"
     "format,--dump-resources-dir,--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|"
-    "--trigger-script-frame,--pcj|--pipeline-creation-jobs";
+    "--trigger-script-frame,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-pipeline-cache";
 
 static void PrintUsage(const char* exe_name)
 {
