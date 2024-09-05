@@ -432,8 +432,8 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t memory_id,
     }
 }
 
-void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                             const format::AddressLocationInfo*           infos)
+void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                              const format::AddressLocationInfo*           infos)
 {
     const DeviceInfo*        device_info = object_info_table_.GetDeviceInfo(header.relation_id);
     const DeviceMemoryInfo*  memory_info = nullptr;

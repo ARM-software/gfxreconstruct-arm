@@ -744,8 +744,8 @@ void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t memory_id
     memory_info->InsertFilledMemorySizesList(size);
 }
 
-void VulkanResourceTrackingConsumer::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                                   const format::AddressLocationInfo* infos){};
+void VulkanResourceTrackingConsumer::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                                    const format::AddressLocationInfo* infos){};
 
 // Util function for sorting: compares two resources according to the trace binding offset number.
 bool CompareOffset(TrackedResourceInfo* resource1, TrackedResourceInfo* resource2)
