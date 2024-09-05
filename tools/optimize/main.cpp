@@ -165,11 +165,11 @@ GetVulkanOptimizationData(const std::string& input_filename)
 
         resref_consumer.GetReferencedResourceIds(nullptr, &result->unreferenced_ids);
 
-        if (feature_tracker_consumer->ProcessFeaturesAndExtensions())
+        if (feature_tracker_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(feature_tracker_consumer));
         }
-        if (micromap_modifier_consumer->PostProcessingPossible())
+        if (micromap_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(micromap_modifier_consumer));
         }

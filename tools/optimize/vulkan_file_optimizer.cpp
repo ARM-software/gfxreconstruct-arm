@@ -85,7 +85,10 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     // The same parameter buffer will be passed to next modifier in chain
     bool delete_current_call = false;
 
-    std::vector<std::unique_ptr<util::BufferEditorBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+
+    // This vector owns new call data to be inserted after currently processed call
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
 
     for (auto& modifier : optimization_data_->modifiers)
     {
@@ -97,6 +100,7 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
         decoder.RemoveConsumer(modifier.get());
         delete_current_call |= modifier->GetDeleteCurrentCall();
         modifier->AppendPreCalls(new_pre_calls);
+        modifier->AppendPostCalls(new_post_calls);
     }
 
     for (auto& new_call : new_pre_calls)
@@ -109,6 +113,12 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     {
         WriteFunctionCall(call_id, call_info.thread_id, &buffer);
     }
+
+    for (auto& new_call : new_post_calls)
+    {
+        WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+    }
+
     return success;
 }
 
@@ -129,8 +139,8 @@ void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call
     size_t                               data_size           = 0;
     const void*                          data_pointer        = nullptr;
 
-    auto compressor                  = GetCompressor();
-    auto compressed_parameter_buffer = GetCompressedParameterBuffer();
+    util::Compressor*     compressor                  = GetCompressor();
+    std::vector<uint8_t>& compressed_parameter_buffer = GetCompressedParameterBuffer();
 
     if (compressor != nullptr)
     {

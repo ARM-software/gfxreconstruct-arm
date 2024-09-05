@@ -23,7 +23,7 @@ class VulkanMicromapModifier : public util::VulkanModifierBase
   public:
     VulkanMicromapModifier();
 
-    bool PostProcessingPossible();
+    bool CanOptimize() override;
 
     virtual void Process_vkCreateMicromapEXT(const ApiCallInfo&                                     call_info,
                                              VkResult                                               returnValue,

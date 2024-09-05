@@ -102,7 +102,7 @@ void VulkanMicromapModifier::Process_vkGetMicromapBuildSizesEXT(
     // delete_current_call = true;
 }
 
-bool VulkanMicromapModifier::PostProcessingPossible()
+bool VulkanMicromapModifier::CanOptimize()
 {
     bool result = (!handle_to_build_info_.empty());
 
