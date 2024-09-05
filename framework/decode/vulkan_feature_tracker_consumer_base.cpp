@@ -1054,7 +1054,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessInstanceExtensions()
 
     if (detected_unused_extension)
     {
-        consumer_output_log_ = "Instance Extensions to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Instance Extensions to be removed:\r\n" + output_log;
     }
 
     return detected_unused_extension;
@@ -1086,7 +1086,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessDeviceExtensions()
 
     if (detected_unused_extension)
     {
-        consumer_output_log_ = "Device Extensions to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Device Extensions to be removed:\r\n" + output_log;
     }
 
     return detected_unused_extension;
@@ -1119,7 +1119,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessCore10Features()
     if (detected_unused_feature)
     {
 
-        consumer_output_log_ = "Core10 Features to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Core10 Features to be removed:\r\n" + output_log;
     }
 
     return detected_unused_feature;
@@ -1155,7 +1155,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessCore11Features()
 
     if (detected_unused_feature)
     {
-        consumer_output_log_ = "Core11 Features to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Core11 Features to be removed:\r\n" + output_log;
     }
 
     return detected_unused_feature;
@@ -1191,7 +1191,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessCore12Features()
 
     if (detected_unused_feature)
     {
-        consumer_output_log_ = "Core12 Features to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Core12 Features to be removed:\r\n" + output_log;
     }
 
     return detected_unused_feature;
@@ -1227,7 +1227,7 @@ bool VulkanFeatureTrackerConsumerBase::ProcessCore13Features()
 
     if (detected_unused_feature)
     {
-        consumer_output_log_ = "Core13 Features to be removed:\r\n" + output_log;
+        consumer_output_log_ += "Core13 Features to be removed:\r\n" + output_log;
     }
 
     return detected_unused_feature;
