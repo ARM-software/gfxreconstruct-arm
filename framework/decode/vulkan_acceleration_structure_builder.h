@@ -296,9 +296,6 @@ class VulkanAccelerationStructureBuilder
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
     VulkanBufferTracker* buffer_tracker_;
-    // TODO: buffers_ is only used by fast forwarding flow. Check if it's necessary and remove if possible
-    std::vector<BufferInfo*>* buffers_;
-
     VulkanInternalBufferManager internal_buffer_manager_;
 
     VkQueue                                                  queue_with_buffer_write_ = VK_NULL_HANDLE;

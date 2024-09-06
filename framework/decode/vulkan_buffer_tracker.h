@@ -43,8 +43,6 @@ class VulkanBufferTracker
 
     ~VulkanBufferTracker();
 
-    std::vector<BufferInfo*>* GetBuffers() { return &buffers_; }
-
     void SetBufferInfo(BufferInfo* buffer_info);
 
     void UpdateBufferDeviceAddress(VkDeviceAddress& address);
