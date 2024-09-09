@@ -2976,6 +2976,18 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
             });
             modified_extensions.erase(iter);
             faked_extensions_.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+
+            VkBaseOutStructure* current = reinterpret_cast<VkBaseOutStructure*>(&modified_create_info);
+
+            while (current->pNext != nullptr)
+            {
+                if (current->pNext->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAME_BOUNDARY_FEATURES_EXT)
+                {
+                    current->pNext = current->pNext->pNext;
+                    break;
+                }
+                current = current->pNext;
+            }
         }
 
         if (feature_util::IsSupportedExtension(available_extensions, VK_EXT_DEVICE_FAULT_EXTENSION_NAME))

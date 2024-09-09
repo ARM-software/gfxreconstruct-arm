@@ -684,6 +684,10 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
     const char* const*       extensions      = pCreateInfo_unwrapped->ppEnabledExtensionNames;
     std::vector<const char*> modified_extensions;
 
+    std::vector<VkExtensionProperties> supported_extensions;
+    feature_util::GetDeviceExtensions(
+        physicalDevice, instance_table->EnumerateDeviceExtensionProperties, &supported_extensions);
+
     bool has_ext_mem      = false;
     bool has_ext_mem_host = false;
 
@@ -716,6 +720,39 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
         if (!has_ext_mem_host)
         {
             modified_extensions.push_back(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+        }
+    }
+
+    // Check if VK_EXT_frame_boundary need to be faked (querried but not actually supported by the capture device)
+    VkBaseOutStructure*                       frame_boundary_features_parent = nullptr;
+    VkPhysicalDeviceFrameBoundaryFeaturesEXT* frame_boundary_features        = nullptr;
+    if (feature_util::IsSupportedExtension(modified_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME) &&
+        !feature_util::IsSupportedExtension(supported_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
+    {
+        auto iter = std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
+            return util::platform::StringCompare(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME, extension) == 0;
+        });
+        modified_extensions.erase(iter);
+        singleton_->faked_extensions_.push_back(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+
+        frame_boundary_features_parent = (VkBaseOutStructure*)pCreateInfo_unwrapped;
+
+        while (frame_boundary_features_parent->pNext != nullptr &&
+               frame_boundary_features_parent->pNext->sType !=
+                   VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAME_BOUNDARY_FEATURES_EXT)
+        {
+            frame_boundary_features_parent = frame_boundary_features_parent->pNext;
+        }
+
+        if (frame_boundary_features_parent->pNext == nullptr)
+        {
+            frame_boundary_features_parent = nullptr;
+        }
+        else
+        {
+            frame_boundary_features =
+                reinterpret_cast<VkPhysicalDeviceFrameBoundaryFeaturesEXT*>(frame_boundary_features_parent->pNext);
+            frame_boundary_features_parent->pNext = frame_boundary_features_parent->pNext->pNext;
         }
     }
 
@@ -782,6 +819,11 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
                    wrapper->queue_family_creation_flags.end());
             wrapper->queue_family_creation_flags[queue_create_info->queueFamilyIndex] = queue_create_info->flags;
         }
+    }
+
+    if (frame_boundary_features != nullptr)
+    {
+        frame_boundary_features_parent->pNext = reinterpret_cast<VkBaseOutStructure*>(frame_boundary_features);
     }
 
     // Restore modified property/feature create info values to the original application values
