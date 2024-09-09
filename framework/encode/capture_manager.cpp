@@ -377,7 +377,6 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     queue_zero_only_                        = trace_settings.queue_zero_only;
     allow_pipeline_compile_required_        = trace_settings.allow_pipeline_compile_required;
     fence_query_delay_                      = trace_settings.fence_query_delay;
-    experimental_raytracing_fastforwarding_ = trace_settings.experimental_raytracing_fastforwarding;
     force_fifo_present_mode_                = trace_settings.force_fifo_present_mode;
     buffer_usages_to_ignore_                = trace_settings.buffer_usages_to_ignore;
 
@@ -1450,11 +1449,6 @@ void CommonCaptureManager::WriteCaptureOptions(std::string& operation_annotation
     {
         buffer += "\n    \"queue-zero-only\": ";
         buffer += queue_zero_only_ ? "true," : "false,";
-    }
-    if (experimental_raytracing_fastforwarding_ != default_settings.experimental_raytracing_fastforwarding)
-    {
-        buffer += "\n    \"experimental-raytracing-fastforwarding\": ";
-        buffer += experimental_raytracing_fastforwarding_ ? "true," : "false,";
     }
     if (force_fifo_present_mode_ != default_settings.force_fifo_present_mode)
     {
