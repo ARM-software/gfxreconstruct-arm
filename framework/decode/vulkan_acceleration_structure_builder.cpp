@@ -44,7 +44,6 @@ VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
     raytracing_pipeline_properties_(ray_tracing_pipeline_properties.shaderGroupHandleSize,
                                     ray_tracing_pipeline_properties.shaderGroupHandleAlignment),
     acceleration_structure_features_(acceleration_structure_features), buffer_tracker_(buffer_tracker),
-    buffers_(buffer_tracker_->GetBuffers()),
     internal_buffer_manager_(
         device_table, physical_device_info, device_, allocator_, physical_device_memory_properties_)
 {

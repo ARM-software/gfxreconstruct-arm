@@ -43,7 +43,8 @@ const char kArguments[] =
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-"
     "format,--dump-resources-dir,--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|"
-    "--trigger-script-frame,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-pipeline-cache";
+    "--trigger-script-frame,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-pipeline-cache,--marking-"
+    "layers";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -107,7 +108,7 @@ static void PrintUsage(const char* exe_name)
         "\t\t\t[--tsp | --trigger-script-path <script-file>] [--tsf | --trigger-script-frame <frame-ranges>]");
 #endif
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dsf | --disable-subpass-fusion]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--marking-tools <N1,...>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--marking-layers <N1,...>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t<file>\n");
 
     GFXRECON_WRITE_CONSOLE("Required arguments:");

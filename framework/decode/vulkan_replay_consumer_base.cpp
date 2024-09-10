@@ -432,8 +432,8 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t memory_id,
     }
 }
 
-void VulkanReplayConsumerBase::ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                             const format::AddressLocationInfo*           infos)
+void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                              const format::AddressLocationInfo*           infos)
 {
     const DeviceInfo*        device_info = object_info_table_.GetDeviceInfo(header.relation_id);
     const DeviceMemoryInfo*  memory_info = nullptr;
@@ -2743,10 +2743,11 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
 
     // Enable validation layer and create a debug messenger if the enable_validation_layer replay option is set.
     VkDebugUtilsMessengerCreateInfoEXT messenger_create_info{};
-    if (options_.enable_validation_layer)
+    std::vector<VkLayerProperties>     available_layers;
+
+    if (feature_util::GetInstanceLayers(instance_layer_proc, &available_layers) == VK_SUCCESS)
     {
-        std::vector<VkLayerProperties> available_layers;
-        if (feature_util::GetInstanceLayers(instance_layer_proc, &available_layers) == VK_SUCCESS)
+        if (options_.enable_validation_layer)
         {
             if (feature_util::IsSupportedLayer(available_layers, kValidationLayerName))
             {

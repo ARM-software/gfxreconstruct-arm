@@ -1527,8 +1527,6 @@ class VulkanCaptureManager : public ApiCaptureManager
     virtual void CreateStateTracker() override
     {
         state_tracker_ = std::make_unique<VulkanStateTracker>();
-        state_tracker_->SetExperimentalRaytracingFastforwarding(
-            common_manager_->GetExperimentalRaytracingFastforwardingSetting());
     }
 
     virtual void DestroyStateTracker() override { state_tracker_ = nullptr; }

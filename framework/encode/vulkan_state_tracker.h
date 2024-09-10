@@ -422,8 +422,6 @@ class VulkanStateTracker
 
     void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
-    void SetExperimentalRaytracingFastforwarding(bool value) { experimental_raytracing_fastforwarding_ = value; };
-
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
 
@@ -523,7 +521,6 @@ class VulkanStateTracker
     std::unordered_map<VkDeviceAddress, vulkan_wrappers::MicromapEXTWrapper*>              mm_device_addresses_map;
     std::unordered_map<VkBuffer, std::pair<VkDeviceAddress, VkDeviceAddress>>              buffer_addresses_map;
 
-    bool                                                                experimental_raytracing_fastforwarding_{ true };
     std::unordered_map<format::HandleId, graphics::VulkanResourcesUtil> resource_utils;
 };
 

@@ -65,8 +65,6 @@ class VulkanInternalBufferManager
 
     ~VulkanInternalBufferManager();
 
-    std::vector<std::unique_ptr<BufferInfoWrapper>>* GetBuffers() { return &buffers_; }
-
     void AddEntry(std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>& buffer_entry);
 
     void SetBufferInfo(BufferInfo* buffer_info);

@@ -79,12 +79,12 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void ProcessFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
-                                               const format::AddressLocationInfo*           infos) override
+    virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                const format::AddressLocationInfo*           infos) override
     {
         using namespace util;
         const JsonOptions& json_options = GetOptions();
-        auto&              jdata        = WriteMetaCommandStart("FixDeviceAddresCommand");
+        auto&              jdata        = WriteMetaCommandStart("FixDeviceAddressCommand");
         HandleToJson(jdata["relation_id"], header.relation_id, json_options);
         for (int i = 0; i < header.num_of_locations; i++)
         {

@@ -89,7 +89,7 @@ void VulkanDecoderBase::DispatchFixDeviceAddresCommand(const format::FixDeviceAd
 {
     for (auto consumer : consumers_)
     {
-        consumer->ProcessFixDeviceAddresCommand(header, infos);
+        consumer->ProcessFixDeviceAddressCommand(header, infos);
     }
 }
 
