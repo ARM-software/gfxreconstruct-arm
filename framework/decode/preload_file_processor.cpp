@@ -32,7 +32,7 @@ PreloadFileProcessor::PreloadFileProcessor() : status_(PreloadStatus::kInactive)
 void PreloadFileProcessor::PreloadNextFrames(size_t count)
 {
     status_ = PreloadStatus::kRecord;
-    while (--count != 0U)
+    while (count-- != 0U)
     {
         ProcessNextFrame();
     }
