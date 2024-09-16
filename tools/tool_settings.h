@@ -807,7 +807,8 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
         }
         else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) != 0)
         {
-            GFXRECON_LOG_WARNING("Ignoring unrecognized memory translation option \"%s\"", value.c_str());
+            GFXRECON_LOG_FATAL("Unrecognized memory translation option \"%s\"", value.c_str());
+            exit(EXIT_FAILURE);
         }
     }
 
