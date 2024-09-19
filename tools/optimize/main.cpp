@@ -26,6 +26,7 @@
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
 #include "decode/vulkan_micromap_modifier.h"
+#include "decode/vulkan_skia_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -150,10 +151,12 @@ GetVulkanOptimizationData(const std::string& input_filename)
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
         auto feature_tracker_consumer   = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
         auto micromap_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+        auto vulkan_skia_modifier_consuer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
+        decoder.AddConsumer(vulkan_skia_modifier_consuer.get());
 
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
@@ -172,6 +175,10 @@ GetVulkanOptimizationData(const std::string& input_filename)
         if (micromap_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(micromap_modifier_consumer));
+        }
+        if (vulkan_skia_modifier_consuer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(vulkan_skia_modifier_consuer));
         }
     }
     return result;

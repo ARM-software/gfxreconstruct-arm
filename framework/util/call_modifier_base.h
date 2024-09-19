@@ -72,6 +72,7 @@ class CallModifierBase
         delete_current_call = false;
         return result;
     }
+    virtual bool GetDeleteCurrentCall(uint64_t index) { return false; }
 
     virtual bool CanOptimize() = 0;
 
