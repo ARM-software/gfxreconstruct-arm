@@ -1000,9 +1000,12 @@ CaptureSettings::FenceQueryDelayUnit CaptureSettings::ParseFenceQueryDelayUnit(c
     }
     else
     {
-        GFXRECON_LOG_WARNING(
-            "Unrecognized fence query delay unit '%s'. The replay will continue with the default value.",
-            value_string.c_str());
+        if (!value_string.empty())
+        {
+            GFXRECON_LOG_WARNING(
+                "Unrecognized fence query delay unit '%s'. The replay will continue with the default value.",
+                value_string.c_str());
+        }
 
         return default_value;
     }
