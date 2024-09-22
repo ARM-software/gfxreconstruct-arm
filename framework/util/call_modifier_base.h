@@ -76,6 +76,11 @@ class CallModifierBase
     virtual bool CanOptimize() = 0;
 
   protected:
+    bool IsModificationPass()
+    {
+        return parameter_buffer_ != nullptr;
+    }
+
     NewCallData* CreatePreCall()
     {
         new_pre_calls_.push_back(std::make_unique<NewCallData>());

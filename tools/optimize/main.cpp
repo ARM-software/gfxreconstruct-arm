@@ -44,6 +44,7 @@
 #include "util/argument_parser.h"
 #include "util/logging.h"
 #include "util/date_time.h"
+#include "vulkan_raytracing_optimizer.h"
 
 #include "vulkan/vulkan.h"
 
@@ -148,12 +149,15 @@ GetVulkanOptimizationData(const std::string& input_filename)
     {
         gfxrecon::decode::VulkanDecoder                    decoder;
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-        auto feature_tracker_consumer   = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
-        auto micromap_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+
+        auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+        auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+        auto raytracing_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanRaytracingOptimizer();
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
+        decoder.AddConsumer(raytracing_modifier_consumer.get());
 
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
@@ -172,6 +176,10 @@ GetVulkanOptimizationData(const std::string& input_filename)
         if (micromap_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(micromap_modifier_consumer));
+        }
+        if (raytracing_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(raytracing_modifier_consumer));
         }
     }
     return result;
