@@ -2126,5 +2126,10 @@ bool FileProcessor::IsFrameDelimiter(format::ApiCallId call_id) const
     }
 }
 
+bool FileProcessor::IsFileValid() const
+{
+    return (file_descriptor_ && !feof(file_descriptor_) && !ferror(file_descriptor_));
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -34,7 +34,10 @@ void PreloadFileProcessor::PreloadNextFrames(size_t count)
     status_ = PreloadStatus::kRecord;
     while (count-- != 0U)
     {
-        ProcessNextFrame();
+        if (!ProcessNextFrame())
+        {
+            break;
+        }
     }
     status_ = PreloadStatus::kReplay;
 }
@@ -364,6 +367,21 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
         bytes_read_ += bytes_read;
     }
     return bytes_read == buffer_size;
+}
+
+bool PreloadFileProcessor::IsFileValid() const
+{
+    switch (status_)
+    {
+        case PreloadStatus::kInactive:
+        case PreloadStatus::kRecord:
+            return FileProcessor::IsFileValid();
+        case PreloadStatus::kReplay:
+            return (GetErrorState() == Error::kErrorNone);
+        default:
+            GFXRECON_LOG_ERROR("A preload status has been forgotten in this switch case.");
+            return false;
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)
