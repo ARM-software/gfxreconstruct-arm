@@ -6511,12 +6511,9 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
     GFXRECON_UNREFERENCED_PARAMETER(original_result);
 
     GFXRECON_ASSERT((device_info != nullptr) && (pCreateInfo != nullptr) && (pPipelineCache != nullptr) &&
-                    (pPipelineCache->GetHandlePointer() != nullptr));
+                    (pPipelineCache->GetHandlePointer() != nullptr) && (pCreateInfo->GetPointer() != nullptr));
 
-    auto replay_create_info = pCreateInfo->GetPointer();
-    GFXRECON_ASSERT(replay_create_info != nullptr);
-
-    VkResult result;
+    VkPipelineCacheCreateInfo override_create_info = *pCreateInfo->GetPointer();
 
     // If pipeline cache must be loaded from file
 
@@ -6525,7 +6522,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
         std::vector<char> pipelineCacheData;
         LoadPipelineCache(*pPipelineCache->GetPointer(), pipelineCacheData);
 
-        VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
         if (!pipelineCacheData.empty())
         {
             override_create_info.initialDataSize = pipelineCacheData.size();
@@ -6539,62 +6535,33 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
             override_create_info.initialDataSize = 0;
             override_create_info.pInitialData    = nullptr;
         }
-
-        result = func(device_info->handle,
-                      &override_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
     }
 
     // If pipeline cache must not be loaded
 
     else if (options_.omit_pipeline_cache_data)
     {
-        // Make a shallow copy of the create info structure and clear the cache data.
-        VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
-
-        if (replay_create_info->initialDataSize != 0)
+        if (override_create_info.initialDataSize != 0)
         {
             omitted_pipeline_cache_data_ = true;
         }
 
         override_create_info.initialDataSize = 0;
         override_create_info.pInitialData    = nullptr;
-
-        result = func(device_info->handle,
-                      &override_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
     }
 
-    // If pipeline cache must be loaded from capture file
+    // If tracked pipeline cache data can be used
 
-    else
-    {
-        result = func(device_info->handle,
-                      replay_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
-    }
-
-    // If we are creating a pipeline cache file, add this pipeline cache to the tracked list
-
-    if (!options_.save_pipeline_cache_filename.empty())
-    {
-        tracked_pipeline_caches_.emplace(*pPipelineCache->GetPointer(),
-                                         std::make_pair(device_info, *pPipelineCache->GetHandlePointer()));
-    }
-    auto& create_info = *pCreateInfo->GetPointer();
-    if ((create_info.pInitialData != nullptr) && (create_info.initialDataSize != 0))
+    else if ((override_create_info.pInitialData != nullptr) && (override_create_info.initialDataSize != 0))
     {
         // This vkCreatePipelineCache call has initial pipeline cache data, the data is valid for capture time,
         // but it might not be valid for replay time if considering platform/driver version change. So in the
         // following process, we'll try to find corresponding replay time pipeline cache data.
         matched_replay_cache_data_exist_  = false;
         capture_pipeline_cache_data_hash_ = gfxrecon::util::hash::GenerateCheckSum<uint32_t>(
-            reinterpret_cast<const uint8_t*>(create_info.pInitialData), create_info.initialDataSize);
-        capture_pipeline_cache_data_      = const_cast<void*>(create_info.pInitialData);
-        capture_pipeline_cache_data_size_ = create_info.initialDataSize;
+            reinterpret_cast<const uint8_t*>(override_create_info.pInitialData), override_create_info.initialDataSize);
+        capture_pipeline_cache_data_      = const_cast<void*>(override_create_info.pInitialData);
+        capture_pipeline_cache_data_size_ = override_create_info.initialDataSize;
 
         object_info_table_.VisitPipelineCacheInfo([this](const PipelineCacheInfo* pipeline_cache_info) {
             GFXRECON_ASSERT(pipeline_cache_info != nullptr);
@@ -6632,14 +6599,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
 
         if (matched_replay_cache_data_exist_)
         {
-            VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
-            override_create_info.initialDataSize           = matched_replay_cache_data_.size();
-            override_create_info.pInitialData              = matched_replay_cache_data_.data();
-
-            return func(device_info->handle,
-                        &override_create_info,
-                        GetAllocationCallbacks(pAllocator),
-                        pPipelineCache->GetHandlePointer());
+            override_create_info.initialDataSize = matched_replay_cache_data_.size();
+            override_create_info.pInitialData    = matched_replay_cache_data_.data();
         }
         else
         {
@@ -6650,10 +6611,22 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
         }
     }
 
-    return func(device_info->handle,
-                replay_create_info,
-                GetAllocationCallbacks(pAllocator),
-                pPipelineCache->GetHandlePointer());
+    // Actual pipeline cache creation call
+
+    VkResult result = func(device_info->handle,
+                           &override_create_info,
+                           GetAllocationCallbacks(pAllocator),
+                           pPipelineCache->GetHandlePointer());
+
+    // If we are creating a pipeline cache file, add this pipeline cache to the tracked list
+
+    if (!options_.save_pipeline_cache_filename.empty())
+    {
+        tracked_pipeline_caches_.emplace(*pPipelineCache->GetPointer(),
+                                         std::make_pair(device_info, *pPipelineCache->GetHandlePointer()));
+    }
+
+    return result;
 }
 
 void VulkanReplayConsumerBase::OverrideDestroyPipelineCache(
