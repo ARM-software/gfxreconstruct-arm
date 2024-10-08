@@ -189,13 +189,13 @@ void Application::SetPaused(bool paused)
     if (file_processor_ != nullptr && paused_ != paused)
     {
         uint32_t current_frame = file_processor_->GetCurrentFrameNumber();
-        if (paused_)
+        if (paused)
         {
             GFXRECON_LOG_INFO("Paused at frame %u", current_frame);
         }
         else
         {
-            GFXRECON_LOG_INFO("Unpaused from frame %u", current_frame);
+            GFXRECON_LOG_INFO("Resumed from frame %u", current_frame);
         }
     }
 
