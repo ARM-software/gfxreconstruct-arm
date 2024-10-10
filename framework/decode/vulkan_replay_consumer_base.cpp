@@ -11069,8 +11069,12 @@ VkResult VulkanReplayConsumerBase::OverrideCreateGraphicsPipelines(
 
     // Forward the call with the adequate pipeline cache
 
-    VkResult replay_result = func(
-        in_device, in_pipeline_cache, create_info_count, in_p_create_infos, in_p_allocation_callbacks, out_pipelines);
+    VkResult replay_result = func(in_device,
+                                  override_pipeline_cache,
+                                  create_info_count,
+                                  in_p_create_infos,
+                                  in_p_allocation_callbacks,
+                                  out_pipelines);
 
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
 
