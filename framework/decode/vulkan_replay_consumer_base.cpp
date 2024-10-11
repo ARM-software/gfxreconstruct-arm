@@ -3825,7 +3825,12 @@ void VulkanReplayConsumerBase::OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer        
         {
             // Register potential staging write to instance buffer data
             acceleration_structure_builders_[device_info->capture_id]->RegisterInstanceBufferStagingUpdate(
-                command_buffer_info->handle, src_buffer->allocator_data, in_pRegions->srcOffset, dst_buffer->handle);
+                command_buffer_info->handle,
+                src_buffer,
+                in_pRegions->srcOffset,
+                dst_buffer,
+                in_pRegions->dstOffset,
+                in_pRegions->size);
         }
     }
 
@@ -5557,6 +5562,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
 
         buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
     }
+    buffer_info = nullptr;
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
 }
 
@@ -9248,6 +9254,11 @@ VkResult VulkanReplayConsumerBase::OverrideResetCommandBuffer(PFN_vkResetCommand
         resource_dumper.ResetCommandBuffer((command_buffer));
     }
 
+    if (use_acceleration_structure_builder_)
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->OnResetCommandBuffer(command_buffer);
+    }
+
     return func(command_buffer, flags);
 }
 
@@ -9267,6 +9278,17 @@ VkResult VulkanReplayConsumerBase::OverrideResetCommandPool(PFN_vkResetCommandPo
             assert(cb_info != nullptr);
 
             resource_dumper.ResetCommandBuffer(cb_info->handle);
+        }
+    }
+
+    if (use_acceleration_structure_builder_ && original_result >= 0)
+    {
+        for (auto& cb_id : pool_info->child_ids)
+        {
+            CommandBufferInfo* cb_info = object_info_table_.GetCommandBufferInfo(cb_id);
+            assert(cb_info != nullptr);
+
+            acceleration_structure_builders_[cb_info->parent_id]->OnResetCommandBuffer(cb_info->handle);
         }
     }
 
@@ -9291,6 +9313,17 @@ void VulkanReplayConsumerBase::OverrideDestroyCommandPool(
             assert(cb_info != nullptr);
 
             resource_dumper.ResetCommandBuffer(cb_info->handle);
+        }
+    }
+
+    if (use_acceleration_structure_builder_ && pool_info != nullptr)
+    {
+        for (auto& cb_id : pool_info->child_ids)
+        {
+            CommandBufferInfo* cb_info = object_info_table_.GetCommandBufferInfo(cb_id);
+            assert(cb_info != nullptr);
+
+            acceleration_structure_builders_[cb_info->parent_id]->OnResetCommandBuffer(cb_info->handle);
         }
     }
 
@@ -10913,13 +10946,12 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
                 buffer_infos.emplace_back(info);
                 descriptor_buffer_infos.emplace_back(descriptor_write.pBufferInfo);
             }
+            if (contains_build_input && buffer_infos.size() > 1)
+            {
+                acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
+                    buffer_infos, descriptor_buffer_infos);
+            }
         }
-        if (contains_build_input && buffer_infos.size() > 1)
-        {
-            acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
-                buffer_infos, descriptor_buffer_infos);
-        }
-
         acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
             descriptor_write_count, in_pDescriptorWrites, descriptor_copy_count, in_pDescriptorCopies);
     }
