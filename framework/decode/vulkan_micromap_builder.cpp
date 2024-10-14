@@ -13,7 +13,9 @@ VulkanMicromapBuilder::VulkanMicromapBuilder(const encode::VulkanDeviceTable*   
                                              const VkPhysicalDeviceMemoryProperties& properties,
                                              VulkanBufferTracker*                    buffer_tracker) :
     buffer_tracker_(buffer_tracker),
+    allocator_(allocator), physical_device_info_(physical_device_info),
     internal_buffer_manager_(device_table, physical_device_info, device, allocator, properties)
+
 {
     InitializeFunctionPointers(device_table);
 }
@@ -29,19 +31,86 @@ void VulkanMicromapBuilder::OnGetMicromapBuildSizes(const DeviceInfo*           
     last_build_sizes_ = *size_info;
 }
 
+void VulkanMicromapBuilder::OnMicromapCompactionDependencyCommand(VkMicromapEXT                        parent,
+                                                                  const std::vector<format::HandleId>& children)
+{
+    for (uint64_t i = 0; i < children.size(); i++)
+    {
+        compaction_child_to_parent_dependency_[children[i]] = parent;
+    }
+}
+
 VkResult VulkanMicromapBuilder::OnCreateMicromap(const DeviceInfo*            device_info,
                                                  VkMicromapCreateInfoEXT*     info,
                                                  const VkAllocationCallbacks* pAllocator,
+                                                 format::HandleId             capture_id,
                                                  VkMicromapEXT*               handle)
 {
     // Create new storage buffer for Micromap based on previously recorded vkGetMicromapBuildSizesEXT (this call must be
     // inserted by gfxrecon-optimize)
     auto allocator = device_info->allocator.get();
     assert(allocator != nullptr);
-    assert(last_build_sizes_.micromapSize != 0);
+
+    VkMicromapBuildSizesInfoEXT sizes = last_build_sizes_;
+    last_build_sizes_                 = {};
+
+    if (compaction_child_to_parent_dependency_.count(capture_id) != 0)
+    {
+        VkMicromapEXT parent = compaction_child_to_parent_dependency_[capture_id];
+        sizes                = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+        // compaction flow
+        if (compacted_sizes_processed_.count(parent) != 0)
+        {
+            sizes.micromapSize = compacted_sizes_processed_[parent];
+        }
+        else
+        {
+            // Handling for results (only in case of vkCmdCopyQueryPoolResults)
+            for (auto it = compacted_sizes_unprocessed_.begin(); it != compacted_sizes_unprocessed_.end(); ++it)
+            {
+                std::vector<PreProcessingCompactionInfo>& vector = it->second;
+                for (uint64_t i = 0; i < vector.size(); i++)
+                {
+                    auto&                       buffer       = vector[i].buffer_info_wrapper;
+                    auto                        first_query  = vector[i].first_query;
+                    std::vector<VkMicromapEXT>& vector_of_mm = vector[i].parents;
+
+                    std::vector<uint64_t> vector_of_mm_sizes(vector_of_mm.size(), 0);
+                    uint64_t              buffer_size = vector_of_mm_sizes.size() * sizeof(uint64_t);
+
+                    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+                    void*    mapped;
+                    VkResult mapping_result =
+                        allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->info_.allocator_data);
+                    GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
+
+                    util::platform::MemoryCopy(vector_of_mm_sizes.data(), buffer_size, mapped, buffer_size);
+
+                    allocator_->UnmapResourceMemoryDirect(buffer->info_.allocator_data);
+                    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+
+                    // This assert may get hit if the opacity micromaps were not build and the optimized sizes are
+                    // not known. This situation can happen if gpu is mocked and the assert can be triggered in debug
+                    // mode only
+                    GFXRECON_ASSERT(vector_of_mm_sizes != std::vector<uint64_t>(vector_of_mm.size(), 0));
+
+                    // add results to compacted_sizes_processed map
+                    for (uint64_t j = 0; j < vector_of_mm.size(); j++)
+                    {
+                        compacted_sizes_processed_.try_emplace(vector_of_mm[j], vector_of_mm_sizes[j]);
+                    }
+                }
+            }
+            assert(compacted_sizes_processed_.count(parent) != 0);
+            sizes.micromapSize = compacted_sizes_processed_[parent];
+        }
+    }
+
+    assert(sizes.micromapSize != 0);
 
     std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> bufferInfoWrapper =
-        internal_buffer_manager_.CreateBuffer(last_build_sizes_.micromapSize, 0x01020000);
+        internal_buffer_manager_.CreateBuffer(
+            sizes.micromapSize, VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
     info->size   = allocator->GetBufferSize(bufferInfoWrapper->info_.allocator_data);
     info->buffer = bufferInfoWrapper->info_.handle;
@@ -50,7 +119,7 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const DeviceInfo*            de
     VkResult result = functions_.create_micromap(device_info->handle, info, pAllocator, handle);
     assert(result == VK_SUCCESS);
 
-    micromaps_[*handle] = { last_build_sizes_, std::move(bufferInfoWrapper) };
+    micromaps_[*handle] = { capture_id, sizes, std::move(bufferInfoWrapper) };
     return result;
 }
 
@@ -193,11 +262,130 @@ void VulkanMicromapBuilder::OnDestroyMicromap(const MicromapEXTInfo* micromap_in
     micromaps_.erase(micromap_info->handle);
 }
 
+void VulkanMicromapBuilder::OnCmdWriteMicromapsProperties(VkCommandBuffer command_buffer,
+                                                          uint32_t        count,
+                                                          VkMicromapEXT*  micromaps,
+                                                          VkQueryType     query_type,
+                                                          VkQueryPool     pool,
+                                                          uint32_t        first_query)
+{
+    if (query_type != VK_QUERY_TYPE_MICROMAP_COMPACTED_SIZE_EXT)
+    {
+        return;
+    }
+
+    std::vector<VkMicromapEXT> handles_to_process(micromaps, micromaps + count);
+
+    std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> staging_buffer_entry =
+        internal_buffer_manager_.CreateBuffer(
+            sizeof(uint64_t) * count,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+    // keep track of relation between MM to be compacted and the query pool that handles the results (the order of
+    // MM is also important)
+
+    auto [it, inserted] = compacted_sizes_unprocessed_.emplace(pool, std::vector<PreProcessingCompactionInfo>());
+    it->second.push_back({ first_query, std::move(staging_buffer_entry), handles_to_process });
+}
+
+// inject vkCmdCopyQueryPoolResults command that copies the results to internal buffer in the expected format
+// processing of the results happens in OnCreateMicromap
+void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info,
+                                                      const QueryPoolInfo*     query_pool_info)
+{
+    if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
+    {
+        return;
+    }
+
+    std::vector<PreProcessingCompactionInfo>& unprocessed = compacted_sizes_unprocessed_[query_pool_info->handle];
+
+    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+    for (uint64_t i = 0; i < unprocessed.size(); i++)
+    {
+        PreProcessingCompactionInfo& pre_processed{ unprocessed[i] };
+
+        functions_.cmd_copy_query_pool_results(command_buffer_info->handle,
+                                               query_pool_info->handle,
+                                               pre_processed.first_query,
+                                               pre_processed.parents.size(),
+                                               pre_processed.buffer_info_wrapper->info_.handle,
+                                               0,
+                                               8,
+                                               VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+
+        VkBufferMemoryBarrier buffer_memory_barrier{};
+        buffer_memory_barrier.sType         = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        buffer_memory_barrier.pNext         = nullptr;
+        buffer_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        buffer_memory_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        buffer_memory_barrier.buffer        = pre_processed.buffer_info_wrapper->info_.handle;
+        buffer_memory_barrier.offset        = 0;
+        buffer_memory_barrier.size          = pre_processed.parents.size();
+
+        functions_.cmd_pipeline_barrier(command_buffer_info->handle,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        VK_PIPELINE_STAGE_HOST_BIT,
+                                        0,
+                                        0,
+                                        nullptr,
+                                        1,
+                                        &buffer_memory_barrier,
+                                        0,
+                                        nullptr);
+    }
+    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+}
+
+// inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
+// processed map
+void VulkanMicromapBuilder::OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info)
+{
+    if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
+    {
+        return;
+    }
+
+    auto& unprocessed = compacted_sizes_unprocessed_[query_pool_info->handle];
+
+    for (uint64_t i = 0; i < unprocessed.size(); i++)
+    {
+        PreProcessingCompactionInfo& pre_processed{ unprocessed[i] };
+        std::vector<VkMicromapEXT>&  vector_of_mm{ pre_processed.parents };
+
+        std::vector<uint64_t> vector_of_mm_sizes(pre_processed.parents.size(), 0);
+
+        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+
+        functions_.get_query_pool_results(device_info->handle,
+                                          query_pool_info->handle,
+                                          pre_processed.first_query,
+                                          vector_of_mm.size(),
+                                          vector_of_mm_sizes.size() * sizeof(uint64_t),
+                                          vector_of_mm_sizes.data(),
+                                          8,
+                                          VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+
+        GFXRECON_ASSERT(vector_of_mm_sizes != std::vector<uint64_t>(vector_of_mm.size(), 0));
+
+        // add results to compacted_sizes_processed map
+        for (uint64_t j = 0; j < vector_of_mm.size(); j++)
+        {
+            compacted_sizes_processed_.try_emplace(vector_of_mm[j], vector_of_mm_sizes[j]);
+        }
+    }
+    compacted_sizes_unprocessed_.erase(query_pool_info->handle);
+}
+
 void VulkanMicromapBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
 {
-    functions_.get_micromap_build_sizes = device_table->GetMicromapBuildSizesEXT;
-    functions_.create_micromap          = device_table->CreateMicromapEXT;
-    functions_.cmd_build_micromaps      = device_table->CmdBuildMicromapsEXT;
+    functions_.get_micromap_build_sizes    = device_table->GetMicromapBuildSizesEXT;
+    functions_.create_micromap             = device_table->CreateMicromapEXT;
+    functions_.cmd_build_micromaps         = device_table->CmdBuildMicromapsEXT;
+    functions_.cmd_copy_query_pool_results = device_table->CmdCopyQueryPoolResults;
+    functions_.cmd_pipeline_barrier        = device_table->CmdPipelineBarrier;
+    functions_.get_query_pool_results      = device_table->GetQueryPoolResults;
 }
 
 GFXRECON_END_NAMESPACE(decode)

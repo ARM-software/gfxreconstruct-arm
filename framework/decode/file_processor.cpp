@@ -1820,50 +1820,36 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         success = success && ReadBytes(&header.dependency_type, sizeof(header.dependency_type));
         success = success && ReadBytes(&header.parent_id, sizeof(header.parent_id));
         success = success && ReadBytes(&header.child_count, sizeof(header.child_count));
+        std::vector<format::HandleId> children;
+        children.resize(header.child_count);
+        for (uint32_t i = 0; i < header.child_count; ++i)
+        {
+            success = success && ReadBytes(&children[i], sizeof(children[i]));
+        }
 
         if (success)
         {
-            switch (header.dependency_type)
+            for (auto decoder : decoders_)
             {
-                case format::kAccelerationStructuresDependency:
+                if (decoder->SupportsMetaDataId(meta_data_id))
                 {
-                    std::vector<format::HandleId> blases;
-                    blases.resize(header.child_count);
-
-                    for (uint32_t i = 0; i < header.child_count; ++i)
+                    switch (header.dependency_type)
                     {
-                        success = success && ReadBytes(&blases[i], sizeof(blases[i]));
-                    }
-
-                    if (success)
-                    {
-                        for (auto decoder : decoders_)
-                        {
-                            if (decoder->SupportsMetaDataId(meta_data_id))
-                            {
-                                decoder->DispatchSetTlasToBlasDependencyCommand(header.parent_id, blases);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        HandleBlockReadError(kErrorReadingBlockHeader,
-                                             "Failed to read TLAS to BLAS dependency meta-data block header");
+                        case format::kAccelerationStructuresDependency:
+                            decoder->DispatchSetTlasToBlasDependencyCommand(header.parent_id, children);
+                            break;
+                        case format::kMicromapCompactionDependency:
+                            decoder->DispatchMicromapCompactionDependencyCommand(header.parent_id, children);
+                            break;
+                        default:
+                            GFXRECON_LOG_WARNING("Unrecognized parent to child dependency type");
                     }
                 }
-                break;
-
-                default:
-                    success = false;
-                    HandleBlockReadError(kErrorReadingBlockHeader,
-                                         "Corrupted parent to child dependency meta-data block header");
-                    break;
             }
         }
         else
         {
-            HandleBlockReadError(kErrorReadingBlockHeader,
-                                 "Failed to read parent to child dependency meta-data block header");
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read parent to child dependency meta-data");
         }
     }
     else if (meta_data_type == format::MetaDataType::kVulkanBuildAccelerationStructuresCommand)

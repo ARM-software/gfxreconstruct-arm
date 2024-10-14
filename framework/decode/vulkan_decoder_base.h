@@ -188,6 +188,9 @@ class VulkanDecoderBase : public ApiDecoder
     virtual void DispatchSetTlasToBlasDependencyCommand(format::HandleId                     tlas,
                                                         const std::vector<format::HandleId>& blases) override;
 
+    virtual void DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                             const std::vector<format::HandleId>& children) override;
+
     virtual void DispatchInitDx12AccelerationStructureCommand(
         const format::InitDx12AccelerationStructureCommandHeader&       command_header,
         std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,

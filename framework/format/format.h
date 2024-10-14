@@ -659,7 +659,8 @@ struct Dx12RuntimeInfoCommandHeader
 enum ParentToChildDependencyType : uint32_t
 {
     kUnknownDependency                = 0,
-    kAccelerationStructuresDependency = 1
+    kAccelerationStructuresDependency = 1,
+    kMicromapCompactionDependency     = 2
 };
 
 struct ParentToChildDependencyHeader

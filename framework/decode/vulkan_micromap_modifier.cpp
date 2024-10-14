@@ -44,26 +44,50 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(
         return;
     }
 
-    format::HandleId handle = *pMicromap->GetPointer();
+    format::HandleId micromap_id = *pMicromap->GetPointer();
 
-    assert(handle_to_build_info_.count(handle) == 1);
+    assert(handle_id_to_build_info_.count(micromap_id) == 1);
 
-    auto new_call       = CreatePreCall();
-    new_call->type      = NewCallDataType::ApiCall;
-    new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkGetMicromapBuildSizesEXT;
-    new_call->thread_id = 1;
-    gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
-    encoder.EncodeHandleIdValue(device);
+    if (handle_id_to_build_info_[micromap_id].is_first_built)
+    {
+        auto new_call       = CreatePreCall();
+        new_call->type      = NewCallDataType::ApiCall;
+        new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkGetMicromapBuildSizesEXT;
+        new_call->thread_id = 1;
+        gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+        encoder.EncodeHandleIdValue(device);
 
-    VkMicromapBuildInfoEXT pBuildInfo = handle_to_build_info_[handle].info;
-    pBuildInfo.pUsageCounts           = handle_to_build_info_[handle].usages.data();
-    // TODO:Encoding a handle that doesn't exist yet is not possible. Find a workaround around that for the future
-    // pBuildInfo.dstMicromap            = (VkMicromapEXT)handle;
-    const VkMicromapBuildSizesInfoEXT pSizeInfo{ VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+        VkMicromapBuildInfoEXT pBuildInfo = handle_id_to_build_info_[micromap_id].info;
+        pBuildInfo.pUsageCounts           = handle_id_to_build_info_[micromap_id].usages.data();
+        // TODO:Encoding a handle that doesn't exist yet is not possible. Find a workaround around that for the future
+        // pBuildInfo.dstMicromap            = (VkMicromapEXT)micromap_id;
+        const VkMicromapBuildSizesInfoEXT pSizeInfo{ VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
 
-    encoder.EncodeEnumValue(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR);
-    encode::EncodeStructPtr(&encoder, &pBuildInfo);
-    encode::EncodeStructPtr(&encoder, &pSizeInfo);
+        encoder.EncodeEnumValue(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR);
+        encode::EncodeStructPtr(&encoder, &pBuildInfo);
+        encode::EncodeStructPtr(&encoder, &pSizeInfo);
+    }
+    else
+    {
+
+        format::ParentToChildDependencyHeader header;
+
+        header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        header.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
+                                                                 format::MetaDataType::kParentToChildDependency);
+        header.thread_id                     = 1;
+        header.dependency_type               = format::ParentToChildDependencyType::kMicromapCompactionDependency;
+        header.parent_id                     = handle_id_to_build_info_[micromap_id].source_of_compaction;
+        header.child_count                   = 1;
+
+        auto new_call = CreatePreCall();
+
+        new_call->type = util::CallModifierBase::NewCallDataType::MetaDataCall;
+        // Encode Struct
+        new_call->parameter_buffer.Write(&header, sizeof(header));
+        // Encode Child
+        new_call->parameter_buffer.Write(&micromap_id, sizeof(micromap_id));
+    }
 }
 
 void VulkanMicromapModifier::Process_vkCmdBuildMicromapsEXT(
@@ -81,13 +105,16 @@ void VulkanMicromapModifier::Process_vkCmdBuildMicromapsEXT(
 
     for (uint64_t i = 0; i < infoCount; i++)
     {
-        if (handle_to_build_info_.count(pInfosDec[i].dstMicromap) == 0)
+        if (handle_id_to_build_info_.count(pInfosDec[i].dstMicromap) == 0)
         {
-            handle_to_build_info_[pInfosDec[i].dstMicromap] = { *pInfosDec[i].decoded_value,
-                                                                std::vector<VkMicromapUsageEXT>(
-                                                                    pInfosDec[i].decoded_value->pUsageCounts,
-                                                                    pInfosDec[i].decoded_value->pUsageCounts +
-                                                                        pInfosDec[i].decoded_value->usageCountsCount) };
+            handle_id_to_build_info_[pInfosDec[i].dstMicromap].is_first_built = true;
+            handle_id_to_build_info_[pInfosDec[i].dstMicromap].info           = *pInfosDec[i].decoded_value;
+            handle_id_to_build_info_[pInfosDec[i].dstMicromap].usages         = std::vector<VkMicromapUsageEXT>(
+                pInfosDec[i].decoded_value->pUsageCounts,
+                pInfosDec[i].decoded_value->pUsageCounts + pInfosDec[i].decoded_value->usageCountsCount);
+
+            handle_id_to_build_info_[pInfosDec[i].dstMicromap].is_first_copied      = false;
+            handle_id_to_build_info_[pInfosDec[i].dstMicromap].source_of_compaction = format::kNullHandleId;
         }
     }
 }
@@ -103,9 +130,37 @@ void VulkanMicromapModifier::Process_vkGetMicromapBuildSizesEXT(
     // delete_current_call = true;
 }
 
+void VulkanMicromapModifier::Process_vkCmdCopyMicromapEXT(const ApiCallInfo& call_info,
+                                                          format::HandleId   commandBuffer,
+                                                          StructPointerDecoder<Decoded_VkCopyMicromapInfoEXT>* pInfo)
+{
+
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    auto pInfosDec = pInfo->GetMetaStructPointer();
+
+    if (pInfosDec->decoded_value->mode != VK_COPY_MICROMAP_MODE_COMPACT_EXT)
+    {
+        return;
+    }
+
+    if (handle_id_to_build_info_.count(pInfosDec->dst) == 0)
+    {
+        handle_id_to_build_info_[pInfosDec->dst].is_first_built = false;
+        handle_id_to_build_info_[pInfosDec->dst].info           = {};
+        handle_id_to_build_info_[pInfosDec->dst].usages         = {};
+
+        handle_id_to_build_info_[pInfosDec->dst].is_first_copied      = true;
+        handle_id_to_build_info_[pInfosDec->dst].source_of_compaction = pInfosDec->src;
+    }
+}
+
 bool VulkanMicromapModifier::CanOptimize()
 {
-    bool result = (!handle_to_build_info_.empty());
+    bool result = (!handle_id_to_build_info_.empty());
 
     return result;
 }

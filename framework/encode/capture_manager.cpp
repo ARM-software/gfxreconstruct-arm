@@ -1564,7 +1564,6 @@ void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation
     if (!IsCaptureApp())
         return;
 
-    gfxrecon::format::kOperationAnnotationCaptureParameters;
     nlohmann::ordered_json         capture_options;
     CaptureSettings::TraceSettings default_settings = default_settings_.GetTraceSettings();
 

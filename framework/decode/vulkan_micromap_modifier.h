@@ -44,14 +44,22 @@ class VulkanMicromapModifier : public util::VulkanModifierBase
                                        StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
                                        StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo) override;
 
+    virtual void Process_vkCmdCopyMicromapEXT(const ApiCallInfo&                                   call_info,
+                                              format::HandleId                                     commandBuffer,
+                                              StructPointerDecoder<Decoded_VkCopyMicromapInfoEXT>* pInfo) override;
+
   private:
     struct BuildInfoMicromaps
     {
+        bool                            is_first_built;
         VkMicromapBuildInfoEXT          info;
         std::vector<VkMicromapUsageEXT> usages;
+
+        bool             is_first_copied;
+        format::HandleId source_of_compaction;
     };
 
-    std::unordered_map<format::HandleId, BuildInfoMicromaps> handle_to_build_info_{};
+    std::unordered_map<format::HandleId, BuildInfoMicromaps> handle_id_to_build_info_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)
