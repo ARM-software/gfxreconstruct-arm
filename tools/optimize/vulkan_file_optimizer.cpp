@@ -106,7 +106,18 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
 
     for (auto& new_call : new_pre_calls)
     {
-        WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
     }
 
     // TODO: Write buffer with calls to add pre/post current call
@@ -117,7 +128,18 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
 
     for (auto& new_call : new_post_calls)
     {
-        WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
     }
 
     return success;
@@ -190,6 +212,19 @@ void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call
     WriteBytes(header_pointer, header_size);
 
     // Write parameter data.
+    WriteBytes(data_pointer, data_size);
+}
+
+void VulkanFileOptimizer::WriteMetaCommand(const util::MemoryOutputStream* parameter_buffer)
+{
+    // Since Metacommands use Custom Structs and are not compressed we do the whole encoding on the modifier side
+
+    assert(parameter_buffer != nullptr);
+
+    const void* data_pointer = reinterpret_cast<const void*>(parameter_buffer->GetData());
+    size_t      data_size    = parameter_buffer->GetDataSize();
+
+    // Write Custom Metacommand Struct + Extra data the metacommand may use.
     WriteBytes(data_pointer, data_size);
 }
 

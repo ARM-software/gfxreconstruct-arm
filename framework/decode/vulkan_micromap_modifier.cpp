@@ -49,6 +49,7 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(
     assert(handle_to_build_info_.count(handle) == 1);
 
     auto new_call       = CreatePreCall();
+    new_call->type      = NewCallDataType::ApiCall;
     new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkGetMicromapBuildSizesEXT;
     new_call->thread_id = 1;
     gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
