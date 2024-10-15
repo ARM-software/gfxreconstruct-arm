@@ -27,6 +27,8 @@
 #include "application/application.h"
 #include "decode/file_processor.h"
 #include "decode/preload_file_processor.h"
+#include "decode/vulkan_preload_file_processor.h"
+#include "decode/decode_api_detection.h"
 #include "decode/vulkan_replay_options.h"
 #include "decode/vulkan_tracked_object_info_table.h"
 #include "generated/generated_vulkan_decoder.h"
@@ -156,9 +158,25 @@ int main(int argc, const char** argv)
 
         std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
+        bool preload_detected_d3d12  = false;
+        bool preload_detected_vulkan = false;
+        gfxrecon::decode::DetectAPIs(filename, preload_detected_d3d12, preload_detected_vulkan);
+
         if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
         {
-            file_processor = std::make_unique<gfxrecon::decode::PreloadFileProcessor>();
+            if(preload_detected_d3d12)
+            {
+                file_processor = std::make_unique<gfxrecon::decode::PreloadFileProcessor>();
+            }
+            else if(preload_detected_vulkan)
+            {
+                file_processor = std::make_unique<gfxrecon::decode::VulkanPreloadFileProcessor>();
+            }
+            else
+            {
+                GFXRECON_WRITE_CONSOLE("Replay has encountered a fatal error and cannot continue: No API detected.");
+            }
+            
         }
         else
         {
@@ -225,6 +243,14 @@ int main(int argc, const char** argv)
                 vulkan_decoder.AddConsumer(&vulkan_replay_consumer);
                 file_processor->AddDecoder(&vulkan_decoder);
             }
+
+            gfxrecon::decode::VulkanPreloadDecoder vulkan_preload_decoder;
+            if(arg_parser.IsOptionSet(kPreloadMeasurementRangeOption) && !preload_detected_d3d12)
+            {
+                dynamic_cast<gfxrecon::decode::VulkanPreloadFileProcessor*>(file_processor.get())->SetPreloadDecoder(&vulkan_preload_decoder);
+                dynamic_cast<gfxrecon::decode::VulkanPreloadFileProcessor*>(file_processor.get())->SetConsumer(&vulkan_replay_consumer);
+            }
+
             file_processor->SetPrintBlockInfoFlag(vulkan_replay_options.enable_print_block_info,
                                                   vulkan_replay_options.block_index_from,
                                                   vulkan_replay_options.block_index_to);

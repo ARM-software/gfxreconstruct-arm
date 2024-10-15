@@ -89,7 +89,7 @@ class FileProcessor
 
     // Returns true if there are more frames to process, false if all frames have been processed or an error has
     // occurred.  Use GetErrorState() to determine error condition.
-    bool ProcessNextFrame();
+    virtual bool ProcessNextFrame();
 
     // Returns false if processing failed.  Use GetErrorState() to determine error condition for failure case.
     bool ProcessAllFrames();
@@ -156,33 +156,32 @@ class FileProcessor
 
     /// @brief Incremented at the end of every block successfully processed.
     uint64_t block_index_;
-
-  private:
-    bool ProcessFileHeader();
-
-    virtual bool ProcessBlocks();
-
     bool ReadParameterBuffer(size_t buffer_size);
 
     bool ReadCompressedParameterBuffer(size_t  compressed_buffer_size,
                                        size_t  expected_uncompressed_size,
                                        size_t* uncompressed_buffer_size);
 
+  private:
+    bool ProcessFileHeader();
+
+    virtual bool ProcessBlocks();
+
     bool IsFileHeaderValid() const { return (file_header_.fourcc == GFXRECON_FOURCC); }
 
   protected:
     virtual bool IsFileValid() const;
+    std::vector<uint8_t>                parameter_buffer_;
+    std::vector<uint8_t>                compressed_parameter_buffer_;
+    uint64_t                            first_frame_;
 
   private:
     format::FileHeader                  file_header_;
     std::vector<format::FileOptionPair> file_options_;
     format::EnabledOptions              enabled_options_;
-    std::vector<uint8_t>                parameter_buffer_;
-    std::vector<uint8_t>                compressed_parameter_buffer_;
     util::Compressor*                   compressor_;
     uint64_t                            api_call_index_;
     uint64_t                            block_limit_;
-    uint64_t                            first_frame_;
     bool                                enable_print_block_info_{ false };
     int64_t                             block_index_from_{ 0 };
     int64_t                             block_index_to_{ 0 };

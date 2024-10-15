@@ -26,7 +26,7 @@
 #include "application/android_context.h"
 #include "application/android_window.h"
 #include "decode/file_processor.h"
-#include "decode/preload_file_processor.h"
+#include "decode/vulkan_preload_file_processor.h"
 #include "decode/vulkan_replay_options.h"
 #include "decode/vulkan_tracked_object_info_table.h"
 #include "format/format.h"
@@ -107,7 +107,7 @@ void android_main(struct android_app* app)
         {
             std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor =
                 arg_parser.IsOptionSet(kPreloadMeasurementRangeOption)
-                    ? std::make_unique<gfxrecon::decode::PreloadFileProcessor>()
+                    ? std::make_unique<gfxrecon::decode::VulkanPreloadFileProcessor>()
                     : std::make_unique<gfxrecon::decode::FileProcessor>();
 
             if (!file_processor->Initialize(filename))
@@ -162,6 +162,13 @@ void android_main(struct android_app* app)
                 application->SetPauseFrame(GetPauseFrame(arg_parser));
                 application->SetTriggerScriptName(GetTriggerScriptName(arg_parser));
                 application->SetTriggerScriptFrame(GetTriggerScriptRanges(arg_parser));
+
+                gfxrecon::decode::VulkanPreloadDecoder vulkan_preload_decoder;
+                if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
+                {
+                    dynamic_cast<gfxrecon::decode::VulkanPreloadFileProcessor*>(file_processor.get())->SetPreloadDecoder(&vulkan_preload_decoder);
+                    dynamic_cast<gfxrecon::decode::VulkanPreloadFileProcessor*>(file_processor.get())->SetConsumer(&replay_consumer);
+                }
 
                 // Warn if the capture layer is active.
                 CheckActiveLayers(kLayerProperty);
