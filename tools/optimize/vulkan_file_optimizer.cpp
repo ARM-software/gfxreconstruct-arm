@@ -22,6 +22,7 @@
 */
 
 #include "tools/optimize/vulkan_file_optimizer.h"
+#include "decode/vulkan_skia_modifier.h"
 #include "framework/format/format_util.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -190,6 +191,24 @@ void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call
 
     // Write parameter data.
     WriteBytes(data_pointer, data_size);
+}
+
+bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
+{
+    uint64_t index               = GetCurrentBlockIndex();
+    bool     delete_current_call = false;
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        delete_current_call |= modifier->GetDeleteCurrentCall(index);
+    }
+    if (delete_current_call)
+    {
+        SkipBytes(static_cast<size_t>(block_header.size - sizeof(meta_data_id)));
+        return true;
+    }
+    FileOptimizer::ProcessMetaData(block_header, meta_data_id);
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

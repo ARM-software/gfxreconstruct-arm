@@ -3048,16 +3048,13 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
     graphics::VulkanDevicePropertyFeatureInfo property_feature_info = device_util.EnableRequiredPhysicalDeviceFeatures(
         physical_device_info->parent_api_version, instance_table, physical_device, &modified_create_info);
 
-    // Remove unsupported features
-    if (options_.remove_unsupported_features)
-    {
-        feature_util::CheckUnsupportedFeatures(physical_device,
-                                               instance_table->GetPhysicalDeviceFeatures,
-                                               instance_table->GetPhysicalDeviceFeatures2,
-                                               modified_create_info.pNext,
-                                               modified_create_info.pEnabledFeatures,
-                                               options_.remove_unsupported_features);
-    }
+    // Abort on/Remove unsupported features
+    feature_util::CheckUnsupportedFeatures(physical_device,
+                                           instance_table->GetPhysicalDeviceFeatures,
+                                           instance_table->GetPhysicalDeviceFeatures2,
+                                           modified_create_info.pNext,
+                                           modified_create_info.pEnabledFeatures,
+                                           options_.remove_unsupported_features);
 
     // Forward device creation to next layer/driver
     result =
@@ -3627,23 +3624,6 @@ VkResult VulkanReplayConsumerBase::OverrideWaitForFences(PFN_vkWaitForFences    
     const VkFence*       modified_fences      = nullptr;
     std::vector<VkFence> valid_fences;
 
-    // Check if the call is in a frame range for being skipped (see --skip-get-fence-ranges, --skip-get-fence-status)
-    bool           in_skip_range = options_.skip_get_fence_ranges.empty();
-    const uint32_t current_frame = application_->GetCurrentFrameNumber() + 1;
-    for (const util::UintRange& range : options_.skip_get_fence_ranges)
-    {
-        if (current_frame >= range.first && current_frame <= range.last)
-        {
-            in_skip_range = true;
-            break;
-        }
-    }
-
-    if (in_skip_range && options_.skip_get_fence_status == SkipGetFenceStatus::SkipAll)
-    {
-        return result;
-    }
-
     // Check for fences that need to be removed.
     if (shadow_fences_.empty())
     {
@@ -3675,23 +3655,42 @@ VkResult VulkanReplayConsumerBase::OverrideWaitForFences(PFN_vkWaitForFences    
         modified_fences      = valid_fences.data();
     }
 
-    if (original_result == VK_SUCCESS)
+    // If the timeout is 0, then we suppose this "wait for fence" is in fact a "get fence status" and should be skipped
+    // accordingly.
+    bool in_skip_range = false;
+    if (timeout == 0)
     {
-        // Ensure that wait for fences waits until the fences have been signaled (or error occurs) by changing the
-        // timeout to UINT64_MAX.
-        if (modified_fence_count > 0)
+        // Check if the call is in a frame range for being skipped (see --skip-get-fence-ranges,
+        // --skip-get-fence-status)
+        in_skip_range                = options_.skip_get_fence_ranges.empty();
+        const uint32_t current_frame = application_->GetCurrentFrameNumber() + 1;
+        for (const util::UintRange& range : options_.skip_get_fence_ranges)
         {
-            result = func(device, modified_fence_count, modified_fences, waitAll, std::numeric_limits<uint64_t>::max());
+            if (current_frame >= range.first && current_frame <= range.last)
+            {
+                in_skip_range = true;
+                break;
+            }
         }
     }
-    else
-    {
-        if (in_skip_range && options_.skip_get_fence_status == SkipGetFenceStatus::SkipUnsuccessful)
-        {
-            return result;
-        }
 
-        if (original_result == VK_TIMEOUT)
+    if (in_skip_range && options_.skip_get_fence_status == SkipGetFenceStatus::SkipAll)
+    {
+        // Nothing.
+    }
+    else if (modified_fence_count > 0)
+    {
+        if (original_result == VK_SUCCESS)
+        {
+            // Ensure that wait for fences waits until the fences have been signaled (or error occurs) by changing the
+            // timeout to UINT64_MAX.
+            result = func(device, modified_fence_count, modified_fences, waitAll, std::numeric_limits<uint64_t>::max());
+        }
+        else if (in_skip_range && options_.skip_get_fence_status == SkipGetFenceStatus::SkipUnsuccessful)
+        {
+            // Nothing.
+        }
+        else if (original_result == VK_TIMEOUT)
         {
             // Try to get a timeout result with a 0 timeout.
             result = func(device, modified_fence_count, modified_fences, waitAll, 0);
@@ -3716,6 +3715,11 @@ VkResult VulkanReplayConsumerBase::OverrideGetFenceStatus(PFN_vkGetFenceStatus f
     VkDevice device = device_info->handle;
     VkFence  fence  = fence_info->handle;
 
+    if (shadow_fences_.find(fence) != shadow_fences_.end())
+    {
+        return result;
+    }
+
     // Check if the call is in a frame range for being skipped (see --skip-get-fence-ranges, --skip-get-fence-status)
     bool           in_skip_range = options_.skip_get_fence_ranges.empty();
     const uint32_t current_frame = application_->GetCurrentFrameNumber() + 1;
@@ -3735,17 +3739,17 @@ VkResult VulkanReplayConsumerBase::OverrideGetFenceStatus(PFN_vkGetFenceStatus f
         return result;
     }
 
-    if (shadow_fences_.find(fence) != shadow_fences_.end())
-    {
-        return result;
-    }
+    result = func(device, fence);
 
-    // If you find this loop to be infinite consider adding a limit in the same way
-    // it is done for GetEventStatus and GetQueryPoolResults.
-    do
+    // We don't want the replay to continue if fence was ready at capture time but is not at replay time because future
+    // calls might use the resources depending on that fence...
+    if (original_result == VK_SUCCESS && result == VK_NOT_READY)
     {
-        result = func(device, fence);
-    } while ((original_result == VK_SUCCESS) && (result == VK_NOT_READY));
+        const encode::VulkanDeviceTable* device_table = GetDeviceTable(device);
+        GFXRECON_ASSERT(device_table != nullptr);
+
+        result = device_table->WaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    }
 
     return result;
 }
@@ -3821,7 +3825,12 @@ void VulkanReplayConsumerBase::OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer        
         {
             // Register potential staging write to instance buffer data
             acceleration_structure_builders_[device_info->capture_id]->RegisterInstanceBufferStagingUpdate(
-                command_buffer_info->handle, src_buffer->allocator_data, in_pRegions->srcOffset, dst_buffer->handle);
+                command_buffer_info->handle,
+                src_buffer,
+                in_pRegions->srcOffset,
+                dst_buffer,
+                in_pRegions->dstOffset,
+                in_pRegions->size);
         }
     }
 
@@ -5553,6 +5562,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
 
         buffer_tracker_[device_info->capture_id]->OnDestroyBuffer(buffer_info);
     }
+    buffer_info = nullptr;
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
 }
 
@@ -6507,21 +6517,17 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
     GFXRECON_UNREFERENCED_PARAMETER(original_result);
 
     GFXRECON_ASSERT((device_info != nullptr) && (pCreateInfo != nullptr) && (pPipelineCache != nullptr) &&
-                    (pPipelineCache->GetHandlePointer() != nullptr));
+                    (pPipelineCache->GetHandlePointer() != nullptr) && (pCreateInfo->GetPointer() != nullptr));
 
-    auto replay_create_info = pCreateInfo->GetPointer();
-    GFXRECON_ASSERT(replay_create_info != nullptr);
-
-    VkResult result;
+    VkPipelineCacheCreateInfo override_create_info = *pCreateInfo->GetPointer();
 
     // If pipeline cache must be loaded from file
 
+    std::vector<char> pipelineCacheData;
     if (!options_.load_pipeline_cache_filename.empty())
     {
-        std::vector<char> pipelineCacheData;
         LoadPipelineCache(*pPipelineCache->GetPointer(), pipelineCacheData);
 
-        VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
         if (!pipelineCacheData.empty())
         {
             override_create_info.initialDataSize = pipelineCacheData.size();
@@ -6535,62 +6541,33 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
             override_create_info.initialDataSize = 0;
             override_create_info.pInitialData    = nullptr;
         }
-
-        result = func(device_info->handle,
-                      &override_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
     }
 
     // If pipeline cache must not be loaded
 
     else if (options_.omit_pipeline_cache_data)
     {
-        // Make a shallow copy of the create info structure and clear the cache data.
-        VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
-
-        if (replay_create_info->initialDataSize != 0)
+        if (override_create_info.initialDataSize != 0)
         {
             omitted_pipeline_cache_data_ = true;
         }
 
         override_create_info.initialDataSize = 0;
         override_create_info.pInitialData    = nullptr;
-
-        result = func(device_info->handle,
-                      &override_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
     }
 
-    // If pipeline cache must be loaded from capture file
+    // If tracked pipeline cache data can be used
 
-    else
-    {
-        result = func(device_info->handle,
-                      replay_create_info,
-                      GetAllocationCallbacks(pAllocator),
-                      pPipelineCache->GetHandlePointer());
-    }
-
-    // If we are creating a pipeline cache file, add this pipeline cache to the tracked list
-
-    if (!options_.save_pipeline_cache_filename.empty())
-    {
-        tracked_pipeline_caches_.emplace(*pPipelineCache->GetPointer(),
-                                         std::make_pair(device_info, *pPipelineCache->GetHandlePointer()));
-    }
-    auto& create_info = *pCreateInfo->GetPointer();
-    if ((create_info.pInitialData != nullptr) && (create_info.initialDataSize != 0))
+    else if ((override_create_info.pInitialData != nullptr) && (override_create_info.initialDataSize != 0))
     {
         // This vkCreatePipelineCache call has initial pipeline cache data, the data is valid for capture time,
         // but it might not be valid for replay time if considering platform/driver version change. So in the
         // following process, we'll try to find corresponding replay time pipeline cache data.
         matched_replay_cache_data_exist_  = false;
         capture_pipeline_cache_data_hash_ = gfxrecon::util::hash::GenerateCheckSum<uint32_t>(
-            reinterpret_cast<const uint8_t*>(create_info.pInitialData), create_info.initialDataSize);
-        capture_pipeline_cache_data_      = const_cast<void*>(create_info.pInitialData);
-        capture_pipeline_cache_data_size_ = create_info.initialDataSize;
+            reinterpret_cast<const uint8_t*>(override_create_info.pInitialData), override_create_info.initialDataSize);
+        capture_pipeline_cache_data_      = const_cast<void*>(override_create_info.pInitialData);
+        capture_pipeline_cache_data_size_ = override_create_info.initialDataSize;
 
         object_info_table_.VisitPipelineCacheInfo([this](const PipelineCacheInfo* pipeline_cache_info) {
             GFXRECON_ASSERT(pipeline_cache_info != nullptr);
@@ -6628,14 +6605,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
 
         if (matched_replay_cache_data_exist_)
         {
-            VkPipelineCacheCreateInfo override_create_info = (*replay_create_info);
-            override_create_info.initialDataSize           = matched_replay_cache_data_.size();
-            override_create_info.pInitialData              = matched_replay_cache_data_.data();
-
-            return func(device_info->handle,
-                        &override_create_info,
-                        GetAllocationCallbacks(pAllocator),
-                        pPipelineCache->GetHandlePointer());
+            override_create_info.initialDataSize = matched_replay_cache_data_.size();
+            override_create_info.pInitialData    = matched_replay_cache_data_.data();
         }
         else
         {
@@ -6646,10 +6617,22 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
         }
     }
 
-    return func(device_info->handle,
-                replay_create_info,
-                GetAllocationCallbacks(pAllocator),
-                pPipelineCache->GetHandlePointer());
+    // Actual pipeline cache creation call
+
+    VkResult result = func(device_info->handle,
+                           &override_create_info,
+                           GetAllocationCallbacks(pAllocator),
+                           pPipelineCache->GetHandlePointer());
+
+    // If we are creating a pipeline cache file, add this pipeline cache to the tracked list
+
+    if (!options_.save_pipeline_cache_filename.empty())
+    {
+        tracked_pipeline_caches_.emplace(*pPipelineCache->GetPointer(),
+                                         std::make_pair(device_info, *pPipelineCache->GetHandlePointer()));
+    }
+
+    return result;
 }
 
 void VulkanReplayConsumerBase::OverrideDestroyPipelineCache(
@@ -9271,6 +9254,11 @@ VkResult VulkanReplayConsumerBase::OverrideResetCommandBuffer(PFN_vkResetCommand
         resource_dumper.ResetCommandBuffer((command_buffer));
     }
 
+    if (use_acceleration_structure_builder_)
+    {
+        acceleration_structure_builders_[command_buffer_info->parent_id]->OnResetCommandBuffer(command_buffer);
+    }
+
     return func(command_buffer, flags);
 }
 
@@ -9290,6 +9278,17 @@ VkResult VulkanReplayConsumerBase::OverrideResetCommandPool(PFN_vkResetCommandPo
             assert(cb_info != nullptr);
 
             resource_dumper.ResetCommandBuffer(cb_info->handle);
+        }
+    }
+
+    if (use_acceleration_structure_builder_ && original_result >= 0)
+    {
+        for (auto& cb_id : pool_info->child_ids)
+        {
+            CommandBufferInfo* cb_info = object_info_table_.GetCommandBufferInfo(cb_id);
+            assert(cb_info != nullptr);
+
+            acceleration_structure_builders_[cb_info->parent_id]->OnResetCommandBuffer(cb_info->handle);
         }
     }
 
@@ -9314,6 +9313,17 @@ void VulkanReplayConsumerBase::OverrideDestroyCommandPool(
             assert(cb_info != nullptr);
 
             resource_dumper.ResetCommandBuffer(cb_info->handle);
+        }
+    }
+
+    if (use_acceleration_structure_builder_ && pool_info != nullptr)
+    {
+        for (auto& cb_id : pool_info->child_ids)
+        {
+            CommandBufferInfo* cb_info = object_info_table_.GetCommandBufferInfo(cb_id);
+            assert(cb_info != nullptr);
+
+            acceleration_structure_builders_[cb_info->parent_id]->OnResetCommandBuffer(cb_info->handle);
         }
     }
 
@@ -10638,7 +10648,7 @@ void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vecto
     if (error)
     {
         GFXRECON_LOG_ERROR("Could not open pipeline cache file '%s' for loading. Error: '%s'",
-                           options_.save_pipeline_cache_filename.c_str(),
+                           options_.load_pipeline_cache_filename.c_str(),
                            strerror(error));
         return;
     }
@@ -10936,13 +10946,12 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
                 buffer_infos.emplace_back(info);
                 descriptor_buffer_infos.emplace_back(descriptor_write.pBufferInfo);
             }
+            if (contains_build_input && buffer_infos.size() > 1)
+            {
+                acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
+                    buffer_infos, descriptor_buffer_infos);
+            }
         }
-        if (contains_build_input && buffer_infos.size() > 1)
-        {
-            acceleration_structure_builders_[device_info->capture_id]->StoreDeferredDeviceAddressBufferUpdates(
-                buffer_infos, descriptor_buffer_infos);
-        }
-
         acceleration_structure_builders_[device_info->capture_id]->UpdateDescriptorSets(
             descriptor_write_count, in_pDescriptorWrites, descriptor_copy_count, in_pDescriptorCopies);
     }
@@ -11092,8 +11101,12 @@ VkResult VulkanReplayConsumerBase::OverrideCreateGraphicsPipelines(
 
     // Forward the call with the adequate pipeline cache
 
-    VkResult replay_result = func(
-        in_device, in_pipeline_cache, create_info_count, in_p_create_infos, in_p_allocation_callbacks, out_pipelines);
+    VkResult replay_result = func(in_device,
+                                  override_pipeline_cache,
+                                  create_info_count,
+                                  in_p_create_infos,
+                                  in_p_allocation_callbacks,
+                                  out_pipelines);
 
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
 

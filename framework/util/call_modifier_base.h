@@ -72,10 +72,15 @@ class CallModifierBase
         delete_current_call = false;
         return result;
     }
+    virtual bool GetDeleteCurrentCall(uint64_t index) { return false; }
 
     virtual bool CanOptimize() = 0;
 
   protected:
+    void SetDeleteCurrentCall() { delete_current_call = true; }
+
+    bool IsModificationPass() const { return parameter_buffer_ != nullptr; }
+
     NewCallData* CreatePreCall()
     {
         new_pre_calls_.push_back(std::make_unique<NewCallData>());

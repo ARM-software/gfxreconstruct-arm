@@ -39,7 +39,7 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
     HandlePointerDecoder<VkMicromapEXT>*                   pMicromap)
 {
-    if (parameter_buffer_ == nullptr)
+    if (!IsModificationPass())
     {
         return;
     }
@@ -71,7 +71,7 @@ void VulkanMicromapModifier::Process_vkCmdBuildMicromapsEXT(
     uint32_t                                              infoCount,
     StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos)
 {
-    if (parameter_buffer_ != nullptr)
+    if (IsModificationPass())
     {
         return;
     }

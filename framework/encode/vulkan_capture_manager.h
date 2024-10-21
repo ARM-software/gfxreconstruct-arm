@@ -349,6 +349,8 @@ class VulkanCaptureManager : public ApiCaptureManager
     VkResult OverrideWaitForFences(
         VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout);
 
+    VkResult OverrideGetFenceStatus(VkDevice device, VkFence fence);
+
     void OverrideCmdBeginDebugUtilsLabelEXT(VkCommandBuffer commandBuffer, const VkDebugUtilsLabelEXT* pLabelInfo);
 
     void OverrideCmdEndDebugUtilsLabelEXT(VkCommandBuffer commandBuffer);
@@ -631,22 +633,6 @@ class VulkanCaptureManager : public ApiCaptureManager
             FenceWrapper* wrapper = GetWrapper<FenceWrapper>(pFences[i]);
             assert(wrapper != nullptr);
             wrapper->query_delay = 0;
-        }
-    }
-
-    void PostProcess_vkGetFenceStatus(VkResult& result, VkDevice device, VkFence fence)
-    {
-        GFXRECON_UNREFERENCED_PARAMETER(device);
-
-        if (result == VK_SUCCESS)
-        {
-            FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
-            assert(wrapper != nullptr);
-            if (wrapper->query_delay != 0)
-            {
-                --wrapper->query_delay;
-                result = VK_NOT_READY;
-            }
         }
     }
 
@@ -1588,6 +1574,8 @@ class VulkanCaptureManager : public ApiCaptureManager
     bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
+
+    virtual void EndFrame() override;
 
   private:
     void QueueSubmitWriteFillMemoryCmd();

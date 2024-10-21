@@ -133,10 +133,20 @@ class VulkanAccelerationStructureBuilder
 
     VkDeviceAddress GetActualDeviceAddress(VkAccelerationStructureKHR handle);
 
-    void RegisterInstanceBufferStagingUpdate(VkCommandBuffer                       command_buffer,
-                                             VulkanResourceAllocator::ResourceData src_buffer_allocator_data,
-                                             VkDeviceSize                          src_offset,
-                                             VkBuffer                              dst_buffer);
+    void RegisterInstanceBufferStagingUpdate(VkCommandBuffer   command_buffer,
+                                             const BufferInfo* src_buffer,
+                                             VkDeviceSize      src_offset,
+                                             const BufferInfo* dst_buffer,
+                                             VkDeviceSize      dst_offset,
+                                             VkDeviceSize      size);
+
+    void OnResetCommandBuffer(VkCommandBuffer command_buffer)
+    {
+        trace_rays_.erase(command_buffer);
+        instance_buffer_direct_updates_.erase(command_buffer);
+        queued_instance_buffer_indirect_staging_updates_.erase(command_buffer);
+        scratch_instance_buffer_indirect_staging_updates_.erase(command_buffer);
+    }
 
   private:
     void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
@@ -255,13 +265,15 @@ class VulkanAccelerationStructureBuilder
         }
     };
 
-    struct DescriptorUpdateBufferEntries
+    struct InstanceBufferIndirectPipelineUpdateInfo
     {
-        DescriptorUpdateBufferEntries() = default;
-        DescriptorUpdateBufferEntries(uint32_t size) : size_(size), infos_(size), offsets_(size), ranges_(size) {}
+        InstanceBufferIndirectPipelineUpdateInfo() = default;
+        explicit InstanceBufferIndirectPipelineUpdateInfo(uint32_t size) :
+            size_(size), buffer_infos_(size), offsets_(size), ranges_(size)
+        {}
 
         uint32_t                  size_{};
-        std::vector<BufferInfo*>  infos_;
+        std::vector<BufferInfo*>  buffer_infos_;
         std::vector<VkDeviceSize> offsets_;
         std::vector<VkDeviceSize> ranges_;
     };
@@ -295,14 +307,14 @@ class VulkanAccelerationStructureBuilder
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    VulkanBufferTracker* buffer_tracker_;
+    VulkanBufferTracker*        buffer_tracker_;
     VulkanInternalBufferManager internal_buffer_manager_;
 
     VkQueue                                                  queue_with_buffer_write_ = VK_NULL_HANDLE;
     std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
 
     std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write_;
-    std::vector<DescriptorUpdateBufferEntries>                          deferred_inspection_buffers_;
+    std::vector<InstanceBufferIndirectPipelineUpdateInfo>               instance_buffer_indirect_pipeline_updates_;
 
     struct DoubleBufferScratch
     {
@@ -335,18 +347,47 @@ class VulkanAccelerationStructureBuilder
     };
     std::unordered_map<VkCommandBuffer, std::vector<CmdTraceRaysEntry>> trace_rays_;
 
-    std::unordered_map<
-        VkCommandBuffer,
-        std::vector<
-            std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkAccelerationStructureBuildRangeInfoKHR>>>
-        instance_buffer_updates_;
+    struct InstanceBufferDirectUpdateInfo
+    {
+        InstanceBufferDirectUpdateInfo(const BufferInfo*                        info,
+                                       VkDeviceSize                             offset,
+                                       VkAccelerationStructureBuildRangeInfoKHR build_range) :
+            buffer_info_(info),
+            offset_(offset), build_range_(build_range)
+        {}
+        const BufferInfo*                        buffer_info_;
+        VkDeviceSize                             offset_;
+        VkAccelerationStructureBuildRangeInfoKHR build_range_;
+    };
+
+    std::unordered_map<VkCommandBuffer, std::vector<InstanceBufferDirectUpdateInfo>> instance_buffer_direct_updates_;
 
     // holds data needed in the scenario of instance data being passed through a staging buffer:
     // instance data gets written to buffer A and then copied via vkCmdCopyBuffer to buffer B, whilst being in
     // the same command buffer as the tlas build command using that data
-    std::unordered_map<VkCommandBuffer,
-                       std::vector<std::tuple<VulkanResourceAllocator::ResourceData, VkDeviceSize, VkBuffer>>>
-        instance_buffer_staging_updates_;
+
+    struct InstanceBufferIndirectStagingUpdateInfo
+    {
+        InstanceBufferIndirectStagingUpdateInfo(const BufferInfo* src_info,
+                                                VkDeviceSize      src_offset,
+                                                const BufferInfo* dst_info,
+                                                VkDeviceSize      dst_offset,
+                                                VkDeviceSize      size) :
+            src_info_(src_info),
+            src_offset_(src_offset), dst_info_(dst_info), dst_offset_(dst_offset), size_(size)
+        {}
+        const BufferInfo* src_info_;
+        VkDeviceSize      src_offset_;
+        const BufferInfo* dst_info_;
+        VkDeviceSize      dst_offset_;
+        VkDeviceSize      size_;
+    };
+
+    std::unordered_map<VkCommandBuffer, std::vector<InstanceBufferIndirectStagingUpdateInfo>>
+        scratch_instance_buffer_indirect_staging_updates_;
+
+    std::unordered_map<VkCommandBuffer, std::vector<InstanceBufferIndirectStagingUpdateInfo>>
+        queued_instance_buffer_indirect_staging_updates_;
 
     // holds information gathered during vkCmdCopyQueryPoolResults that needs to be processed before
     // vkCmdCopyAccelerationStructureKHR in order to know replacement AS compressed sizes
@@ -381,13 +422,14 @@ class VulkanAccelerationStructureBuilder
     GetAccelerationStructureSizeInfo(VkAccelerationStructureBuildGeometryInfoKHR* geometry_info,
                                      VkAccelerationStructureBuildRangeInfoKHR*    range_info);
 
-    void UpdateInstanceBuffer(VkCommandBuffer                                  command_buffer,
-                              VkAccelerationStructureGeometryInstancesDataKHR& instances,
-                              const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
+    void QueueInstanceBufferUpdate(VkCommandBuffer                                  command_buffer,
+                                   VkAccelerationStructureGeometryInstancesDataKHR& instances,
+                                   const VkAccelerationStructureBuildRangeInfoKHR&  build_range);
 
-    void UpdateInstanceBufferContent(VulkanResourceAllocator::ResourceData    instance_buffer_allocator_data,
-                                     VkDeviceSize                             offset,
-                                     VkAccelerationStructureBuildRangeInfoKHR build_range);
+    bool UpdateInstanceBufferIndirectStaging(const InstanceBufferIndirectStagingUpdateInfo& info);
+    bool UpdateInstanceBufferIndirectPipeline(InstanceBufferIndirectPipelineUpdateInfo& info);
+
+    void UpdateInstanceBufferDirect(const InstanceBufferDirectUpdateInfo& info);
 
     void InitializeInternalExecObjects();
     void BeginCommandBuffer();

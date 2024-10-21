@@ -164,8 +164,8 @@ bool CommonCaptureManager::LockedCreateInstance(ApiCaptureManager*           api
         GFXRECON_LOG_INFO("Initializing GFXReconstruct capture layer");
         GFXRECON_LOG_INFO("  GFXReconstruct Version %s", GFXRECON_PROJECT_VERSION_STRING);
 
-        CaptureSettings::TraceSettings trace_settings = capture_settings_.GetTraceSettings();
-        std::string                    base_filename  = trace_settings.capture_file;
+        CaptureSettings::TraceSettings trace_settings       = capture_settings_.GetTraceSettings();
+        std::string                    base_filename        = trace_settings.capture_file;
         std::string                    capture_package_name = trace_settings.capture_package_name;
         GFXRECON_LOG_INFO("capture_package_name = %s", capture_package_name.c_str());
         if (!capture_package_name.empty())
@@ -358,27 +358,28 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
 {
     bool success = true;
 
-    base_filename_                          = base_filename;
-    file_options_                           = trace_settings.capture_file_options;
-    timestamp_filename_                     = trace_settings.time_stamp_file;
-    memory_tracking_mode_                   = trace_settings.memory_tracking_mode;
-    force_file_flush_                       = trace_settings.force_flush;
-    debug_layer_                            = trace_settings.debug_layer;
-    debug_device_lost_                      = trace_settings.debug_device_lost;
-    debug_set_objects_name_                 = trace_settings.debug_set_objects_name;
-    screenshots_enabled_                    = !trace_settings.screenshot_ranges.empty();
-    screenshot_format_                      = trace_settings.screenshot_format;
-    screenshot_indices_                     = CalcScreenshotIndices(trace_settings.screenshot_ranges);
-    screenshot_prefix_                      = PrepScreenshotPrefix(trace_settings.screenshot_dir);
-    disable_dxr_                            = trace_settings.disable_dxr;
-    accel_struct_padding_                   = trace_settings.accel_struct_padding;
-    iunknown_wrapping_                      = trace_settings.iunknown_wrapping;
-    force_command_serialization_            = trace_settings.force_command_serialization;
-    queue_zero_only_                        = trace_settings.queue_zero_only;
-    allow_pipeline_compile_required_        = trace_settings.allow_pipeline_compile_required;
-    fence_query_delay_                      = trace_settings.fence_query_delay;
-    force_fifo_present_mode_                = trace_settings.force_fifo_present_mode;
-    buffer_usages_to_ignore_                = trace_settings.buffer_usages_to_ignore;
+    base_filename_                   = base_filename;
+    file_options_                    = trace_settings.capture_file_options;
+    timestamp_filename_              = trace_settings.time_stamp_file;
+    memory_tracking_mode_            = trace_settings.memory_tracking_mode;
+    force_file_flush_                = trace_settings.force_flush;
+    debug_layer_                     = trace_settings.debug_layer;
+    debug_device_lost_               = trace_settings.debug_device_lost;
+    debug_set_objects_name_          = trace_settings.debug_set_objects_name;
+    screenshots_enabled_             = !trace_settings.screenshot_ranges.empty();
+    screenshot_format_               = trace_settings.screenshot_format;
+    screenshot_indices_              = CalcScreenshotIndices(trace_settings.screenshot_ranges);
+    screenshot_prefix_               = PrepScreenshotPrefix(trace_settings.screenshot_dir);
+    disable_dxr_                     = trace_settings.disable_dxr;
+    accel_struct_padding_            = trace_settings.accel_struct_padding;
+    iunknown_wrapping_               = trace_settings.iunknown_wrapping;
+    force_command_serialization_     = trace_settings.force_command_serialization;
+    queue_zero_only_                 = trace_settings.queue_zero_only;
+    allow_pipeline_compile_required_ = trace_settings.allow_pipeline_compile_required;
+    fence_query_delay_               = trace_settings.fence_query_delay;
+    fence_query_delay_unit_          = trace_settings.fence_query_delay_unit;
+    force_fifo_present_mode_         = trace_settings.force_fifo_present_mode;
+    buffer_usages_to_ignore_         = trace_settings.buffer_usages_to_ignore;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;
@@ -1444,6 +1445,16 @@ void CommonCaptureManager::WriteCaptureOptions(std::string& operation_annotation
     if (fence_query_delay_ != default_settings.fence_query_delay)
     {
         buffer += "\n    \"fence-query-delay\": " + std::to_string(fence_query_delay_) + ',';
+        buffer += "\n    \"fence-query-delay-unit\": \"";
+        if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kCalls)
+        {
+            buffer += "calls";
+        }
+        else if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kFrames)
+        {
+            buffer += "frames";
+        }
+        buffer += "\",";
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {

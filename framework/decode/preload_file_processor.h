@@ -86,6 +86,8 @@ class PreloadFileProcessor : public FileProcessor
     bool ProcessBlocks() override;
 
     bool ReadBytes(void* buffer, size_t buffer_size) override;
+
+    bool IsFileValid() const override;
 };
 
 GFXRECON_END_NAMESPACE(decode)

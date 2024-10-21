@@ -170,7 +170,8 @@ class FileProcessor
 
     bool IsFileHeaderValid() const { return (file_header_.fourcc == GFXRECON_FOURCC); }
 
-    bool IsFileValid() const { return (file_descriptor_ && !feof(file_descriptor_) && !ferror(file_descriptor_)); }
+  protected:
+    virtual bool IsFileValid() const;
 
   private:
     format::FileHeader                  file_header_;

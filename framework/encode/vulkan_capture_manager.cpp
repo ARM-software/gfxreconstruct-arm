@@ -1734,32 +1734,68 @@ void VulkanCaptureManager::OverrideGetPhysicalDeviceQueueFamilyProperties2KHR(
 VkResult VulkanCaptureManager::OverrideWaitForFences(
     VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout)
 {
-    if (timeout == UINT64_MAX)
+    // If the timeout is 0, then we suppose this "wait for fence" is in fact a "get fence status" and should be delayed
+    // accordingly.
+    if (timeout == 0)
     {
-        // If the caller signals that it explicitly intends to wait until success, then it is less likely to handle a
-        // timeout return value here.
-        return GetDeviceTable(device)->WaitForFences(device, fenceCount, pFences, waitAll, timeout);
-    }
+        bool delay = false;
 
-    bool delay = false;
-    for (uint32_t i = 0; i < fenceCount; ++i)
-    {
-        FenceWrapper* wrapper = GetWrapper<FenceWrapper>(pFences[i]);
-        assert(wrapper != nullptr);
-        if (wrapper->query_delay != 0)
+        for (uint32_t i = 0; i < fenceCount; ++i)
         {
-            // Make sure we decrement every fence, if multiple.
-            delay = true;
-            --wrapper->query_delay;
+            FenceWrapper* wrapper = GetWrapper<FenceWrapper>(pFences[i]);
+            GFXRECON_ASSERT(wrapper != nullptr);
+            if (wrapper->query_delay != 0)
+            {
+                delay = true;
+                if (common_manager_->GetFenceQueryDelayUnit() == CaptureSettings::FenceQueryDelayUnit::kCalls)
+                {
+                    // Go through all fences because we need to decrement counters for each fence !
+                    --wrapper->query_delay;
+                }
+                else
+                {
+                    // We can stop the loop here because there's no counter to decrement
+                    break;
+                }
+            }
+        }
+
+        if (delay)
+        {
+            return VK_TIMEOUT;
+        }
+    }
+    // If timeout is not 0, we suppose this wait for fence is a "wait until signaled" and we reset all the delays to 0
+    // to avoid non-coherent behavior
+    else
+    {
+        for (uint32_t i = 0; i < fenceCount; ++i)
+        {
+            FenceWrapper* wrapper = GetWrapper<FenceWrapper>(pFences[i]);
+            GFXRECON_ASSERT(wrapper != nullptr);
+            wrapper->query_delay = 0;
         }
     }
 
-    if (delay)
+    return GetDeviceTable(device)->WaitForFences(device, fenceCount, pFences, waitAll, timeout);
+}
+
+VkResult VulkanCaptureManager::OverrideGetFenceStatus(VkDevice device, VkFence fence)
+{
+    VkResult result = GetDeviceTable(device)->GetFenceStatus(device, fence);
+
+    if (result == VK_SUCCESS)
     {
-        return VK_TIMEOUT;
+        FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
+        assert(wrapper != nullptr);
+        if (wrapper->query_delay != 0)
+        {
+            --wrapper->query_delay;
+            result = VK_NOT_READY;
+        }
     }
 
-    return GetDeviceTable(device)->WaitForFences(device, fenceCount, pFences, waitAll, timeout);
+    return result;
 }
 
 bool VulkanCaptureManager::IsExtensionBeingFaked(const char* extension)
@@ -3537,6 +3573,18 @@ void VulkanCaptureManager::PostProcess_vkDestroyAccelerationStructureKHR(
         return;
     }
     address_tracker.StopTracking(wrapper->handle_id);
+}
+
+void VulkanCaptureManager::EndFrame()
+{
+    VisitWrappers<FenceWrapper>([&](FenceWrapper* wrapper) {
+        if (wrapper->query_delay != 0)
+        {
+            --wrapper->query_delay;
+        }
+    });
+
+    ApiCaptureManager::EndFrame();
 }
 
 GFXRECON_END_NAMESPACE(encode)

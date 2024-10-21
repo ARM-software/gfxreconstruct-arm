@@ -138,6 +138,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define RV_ANNOTATION_DESCRIPTOR_UPPER                       "RV_ANNOTATION_DESCRIPTOR"
 #define FENCE_QUERY_DELAY_LOWER                              "fence_query_delay"
 #define FENCE_QUERY_DELAY_UPPER                              "FENCE_QUERY_DELAY"
+#define FENCE_QUERY_DELAY_UNIT_LOWER                         "fence_query_delay_unit"
+#define FENCE_QUERY_DELAY_UNIT_UPPER                         "FENCE_QUERY_DELAY_UNIT"
 #define FORCE_FIFO_PRESENT_MODE_LOWER                        "force_fifo_present_mode"
 #define FORCE_FIFO_PRESENT_MODE_UPPER                        "FORCE_FIFO_PRESENT_MODE"
 #define BUFFER_USAGES_TO_IGNORE_LOWER                        "buffer_usages_to_ignore"
@@ -208,6 +210,7 @@ const char kAnnotationRandEnvVar[]                           = GFXRECON_OPTION_S
 const char kAnnotationGPUVAEnvVar[]                          = GFXRECON_OPTION_STR(RV_ANNOTATION_GPUVA);
 const char kAnnotationDescriptorEnvVar[]                     = GFXRECON_OPTION_STR(RV_ANNOTATION_DESCRIPTOR);
 const char kFenceQueryDelayEnvVar[]                          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY);
+const char kFenceQueryDelayUnitEnvVar[]                      = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_UNIT);
 const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
 const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
@@ -266,6 +269,7 @@ const std::string kOptionKeyAnnotationRand                           = std::stri
 const std::string kOptionKeyAnnotationGPUVA                          = std::string(kSettingsFilter) + std::string(RV_ANNOTATION_GPUVA_LOWER);
 const std::string kOptionKeyAnnotationDescriptor                     = std::string(kSettingsFilter) + std::string(RV_ANNOTATION_DESCRIPTOR_LOWER);
 const std::string kOptionFenceQueryDelay                             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LOWER);
+const std::string kOptionFenceQueryDelayUnit                         = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_UNIT_LOWER);
 const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
 const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
@@ -427,6 +431,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kAnnotationGPUVAEnvVar, kOptionKeyAnnotationGPUVA);
     LoadSingleOptionEnvVar(options, kAnnotationDescriptorEnvVar, kOptionKeyAnnotationDescriptor);
     LoadSingleOptionEnvVar(options, kFenceQueryDelayEnvVar, kOptionFenceQueryDelay);
+    LoadSingleOptionEnvVar(options, kFenceQueryDelayUnitEnvVar, kOptionFenceQueryDelayUnit);
 
     LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentModeEnvVar);
 
@@ -608,6 +613,8 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
                                      settings->trace_settings_.rv_anotation_info.descriptor_mask);
     settings->trace_settings_.fence_query_delay =
         ParseIntegerString(FindOption(options, kOptionFenceQueryDelay), settings->trace_settings_.fence_query_delay);
+    settings->trace_settings_.fence_query_delay_unit = ParseFenceQueryDelayUnit(
+        FindOption(options, kOptionFenceQueryDelayUnit), settings->trace_settings_.fence_query_delay_unit);
     settings->trace_settings_.force_fifo_present_mode = ParseBoolString(
         FindOption(options, kOptionForceFifoPresentModeEnvVar), settings->trace_settings_.force_fifo_present_mode);
     settings->trace_settings_.buffer_usages_to_ignore =
@@ -978,6 +985,30 @@ std::vector<uint64_t> CaptureSettings::ParseBufferUsages(const std::string& valu
         result.push_back(mask);
     }
     return result;
+}
+
+CaptureSettings::FenceQueryDelayUnit CaptureSettings::ParseFenceQueryDelayUnit(const std::string&  value_string,
+                                                                               FenceQueryDelayUnit default_value)
+{
+    if (value_string == "calls")
+    {
+        return FenceQueryDelayUnit::kCalls;
+    }
+    else if (value_string == "frames")
+    {
+        return FenceQueryDelayUnit::kFrames;
+    }
+    else
+    {
+        if (!value_string.empty())
+        {
+            GFXRECON_LOG_WARNING(
+                "Unrecognized fence query delay unit '%s'. The replay will continue with the default value.",
+                value_string.c_str());
+        }
+
+        return default_value;
+    }
 }
 
 GFXRECON_END_NAMESPACE(encode)
