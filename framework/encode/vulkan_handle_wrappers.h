@@ -589,12 +589,24 @@ struct MicromapEXTWrapper : public HandleWrapper<VkMicromapEXT>
 
     struct MicromapBuildCommandData
     {
-        format::HandleId           device;
         VkMicromapBuildInfoEXT     micromap_build_info;
         std::unique_ptr<uint8_t[]> micromap_usage_counts_memory;
         std::vector<ASInputBuffer> input_buffers;
     };
+
     std::unique_ptr<MicromapBuildCommandData> latest_build_command_{};
+
+    struct MicromapCopyCommandData
+    {
+        VkCopyMicromapInfoEXT info;
+    };
+    std::unique_ptr<MicromapCopyCommandData> latest_copy_command_{};
+
+    struct MicromapWritePropertiesCommandData
+    {
+        VkQueryType query_type;
+    };
+    std::unique_ptr<MicromapWritePropertiesCommandData> latest_write_properties_command_{};
 };
 
 struct PrivateDataSlotWrapper : public HandleWrapper<VkPrivateDataSlot>

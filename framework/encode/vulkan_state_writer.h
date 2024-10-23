@@ -149,6 +149,29 @@ class VulkanStateWriter
 
     void WriteMicromapEXTState(const VulkanStateTable& state_table);
 
+    struct MicromapsCallInjectionUtilitiesHandles
+    {
+        format::HandleId                 command_pool_id;
+        format::HandleId                 command_buffer_id;
+        format::HandleId                 queue_id;
+        std::vector<MicromapEXTWrapper*> wrappers_build;
+        std::vector<MicromapEXTWrapper*> wrappers_copy;
+        std::vector<MicromapEXTWrapper*> wrappers_write_prop;
+    };
+
+    void WriteMicromapEXTBuild(DeviceWrapper*                          device_wrapper,
+                               MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities);
+
+    void WriteMicromapEXTWriteProperties(DeviceWrapper*                          device_wrapper,
+                                         MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities);
+
+    void WriteMicromapEXTCopy(DeviceWrapper*                          device_wrapper,
+                              MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities);
+
+    void InjectResetBeginCommandBuffer(format::HandleId& command_buffer_id);
+
+    void InjectEndCommandBufferSubmitWaitQueue(format::HandleId& command_buffer_id, format::HandleId& queue_id);
+
     void WriteDeferredOperationJoinCommand(format::HandleId device_id, format::HandleId deferred_operation_id);
 
     void

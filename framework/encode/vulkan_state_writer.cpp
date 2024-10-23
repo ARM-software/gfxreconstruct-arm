@@ -1707,25 +1707,133 @@ void VulkanStateWriter::WriteAccelerationStructureKHRState(const VulkanStateTabl
 }
 void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_table)
 {
+    // Untested for Multiple VkDevice
+
     static const VkAllocationCallbacks* allocation_callbacks = nullptr;
-    std::vector<MicromapEXTWrapper*>    wrappers;
+
+    std::unordered_map<DeviceWrapper*, MicromapsCallInjectionUtilitiesHandles> omm_inject_utilities;
 
     state_table.VisitWrappers([&](MicromapEXTWrapper* wrapper) {
         assert(wrapper != nullptr);
         if (wrapper->latest_build_command_)
         {
-            wrappers.push_back(wrapper);
+            omm_inject_utilities[wrapper->device].wrappers_build.push_back(wrapper);
+        }
+        if (wrapper->latest_copy_command_)
+        {
+            omm_inject_utilities[wrapper->device].wrappers_copy.push_back(wrapper);
+        }
+        if (wrapper->latest_write_properties_command_)
+        {
+            omm_inject_utilities[wrapper->device].wrappers_write_prop.push_back(wrapper);
         }
     });
 
-    if (wrappers.empty())
+    if (omm_inject_utilities.empty())
     {
         return;
     }
 
+    VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };
+    create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    create_info.queueFamilyIndex        = 0;
+
+    VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+    alloc_info.pNext                       = nullptr;
+    alloc_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandBufferCount          = 1;
+
+    for (auto& it : omm_inject_utilities)
+    {
+        it.second.command_pool_id   = get_unique_id();
+        it.second.command_buffer_id = get_unique_id();
+        it.second.queue_id          = get_unique_id();
+
+        // vkGetDeviceQueue
+        parameter_stream_.Clear();
+
+        encoder_.EncodeHandleIdValue(it.first->handle_id);
+        encoder_.EncodeUInt32Value(0);
+        encoder_.EncodeUInt32Value(0);
+        encoder_.EncodeHandleIdPtr(&it.second.queue_id);
+
+        WriteFunctionCall(format::ApiCall_vkGetDeviceQueue, &parameter_stream_);
+
+        // Write the vkCreateCommandPool function call
+        parameter_stream_.Clear();
+
+        encoder_.EncodeHandleIdValue(it.first->handle_id);
+        EncodeStructPtr(&encoder_, &create_info);
+        EncodeStructPtr(&encoder_, allocation_callbacks);
+        encoder_.EncodeHandleIdPtr(&it.second.command_pool_id);
+        encoder_.EncodeEnumValue(VK_SUCCESS);
+        WriteFunctionCall(format::ApiCall_vkCreateCommandPool, &parameter_stream_);
+
+        parameter_stream_.Clear();
+
+        // Write the  vkAllocateCommandBuffers function call
+        // Note the semi-manual encoding of some of the parameters
+        // This is done due to this objects not really existing during capture time
+        // TODO: Write a generator for encoding calls, that would generate <just> the encoding calls, i.e.
+        // calls that encode handle id's directly (splice this code from api_call_encoders)
+        // without all the pre and post actions
+
+        parameter_stream_.Clear();
+
+        encoder_.EncodeHandleIdValue(it.first->handle_id);
+
+        encoder_.EncodeStructPtrPreamble(&alloc_info);
+        encoder_.EncodeEnumValue(alloc_info.sType);
+        EncodePNextStruct(&encoder_, alloc_info.pNext);
+        encoder_.EncodeHandleIdValue(it.second.command_pool_id);
+        encoder_.EncodeEnumValue(alloc_info.level);
+        encoder_.EncodeUInt32Value(alloc_info.commandBufferCount);
+
+        encoder_.EncodeHandleIdArray(&it.second.command_buffer_id, 1);
+        encoder_.EncodeEnumValue(VK_SUCCESS);
+        WriteFunctionCall(format::ApiCall_vkAllocateCommandBuffers, &parameter_stream_);
+        parameter_stream_.Clear();
+
+        WriteMicromapEXTBuild(it.first, it.second);
+
+        WriteMicromapEXTWriteProperties(it.first, it.second);
+
+        WriteMicromapEXTCopy(it.first, it.second);
+
+        parameter_stream_.Clear();
+
+        encoder_.EncodeHandleIdValue(it.first->handle_id);
+        encoder_.EncodeHandleIdValue(it.second.command_pool_id);
+        encoder_.EncodeUInt32Value(1);
+        encoder_.EncodeHandleIdArray(&it.second.command_buffer_id, 1);
+        WriteFunctionCall(format::ApiCall_vkFreeCommandBuffers, &parameter_stream_);
+
+        parameter_stream_.Clear();
+        encoder_.EncodeHandleIdValue(it.first->handle_id);
+        encoder_.EncodeHandleIdValue(it.second.command_pool_id);
+        EncodeStructPtr(&encoder_, allocation_callbacks);
+        WriteFunctionCall(format::ApiCall_vkDestroyCommandPool, &parameter_stream_);
+    }
+}
+
+void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                          device_wrapper,
+                                              MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+{
+    // Untested for Multiple VkDevice
+
+    if (omm_inject_utilities.wrappers_build.empty())
+    {
+        return;
+    }
+
+    format::HandleId&                 command_pool_id   = omm_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id = omm_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id          = omm_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_build    = omm_inject_utilities.wrappers_build;
+
     size_t max_resource_size = 0;
 
-    for (MicromapEXTWrapper* wrapper : wrappers)
+    for (MicromapEXTWrapper* wrapper : wrappers_build)
     {
         for (const ASInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
@@ -1733,57 +1841,9 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
         }
     }
 
-    const DeviceWrapper* device_wrapper = wrappers[0]->device;
-
-    // Write the vkCreateCommandPool function call
-    parameter_stream_.Clear();
-
-    VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };
-    create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    create_info.queueFamilyIndex        = 0;
-    format::HandleId command_pool_id    = get_unique_id();
-
-    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-    EncodeStructPtr(&encoder_, &create_info);
-    EncodeStructPtr(&encoder_, allocation_callbacks);
-    encoder_.EncodeHandleIdPtr(&command_pool_id);
-    encoder_.EncodeEnumValue(VK_SUCCESS);
-    WriteFunctionCall(format::ApiCall_vkCreateCommandPool, &parameter_stream_);
-
-    parameter_stream_.Clear();
-
-    // Write the  vkAllocateCommandBuffers function call
-    // Note the semi-manual encoding of some of the parameters
-    // This is done due to this objects not really existing during capture time
-    // TODO: Write a generator for encoding calls, that would generate <just> the encoding calls, i.e.
-    // calls that encode handle id's directly (splice this code from api_call_encoders)
-    // without all the pre and post actions
-
-    parameter_stream_.Clear();
-    VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-    alloc_info.pNext                       = nullptr;
-    alloc_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount          = 1;
-
-    format::HandleId command_buffer_id = get_unique_id();
-
-    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-
-    encoder_.EncodeStructPtrPreamble(&alloc_info);
-    encoder_.EncodeEnumValue(alloc_info.sType);
-    EncodePNextStruct(&encoder_, alloc_info.pNext);
-    encoder_.EncodeHandleIdValue(command_pool_id);
-    encoder_.EncodeEnumValue(alloc_info.level);
-    encoder_.EncodeUInt32Value(alloc_info.commandBufferCount);
-
-    encoder_.EncodeHandleIdArray(&command_buffer_id, 1);
-    encoder_.EncodeEnumValue(VK_SUCCESS);
-    WriteFunctionCall(format::ApiCall_vkAllocateCommandBuffers, &parameter_stream_);
-    parameter_stream_.Clear();
-
     BeginAccelerationStructuresSection(device_wrapper->handle_id, max_resource_size);
 
-    for (MicromapEXTWrapper* wrapper : wrappers)
+    for (MicromapEXTWrapper* wrapper : wrappers_build)
     {
         for (ASInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
@@ -1834,24 +1894,7 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());
 
-        parameter_stream_.Clear();
-        encoder_.EncodeHandleIdValue(command_buffer_id);
-        encoder_.EncodeFlagsValue(0);
-        encoder_.EncodeEnumValue(VK_SUCCESS);
-        WriteFunctionCall(format::ApiCall_vkResetCommandBuffer, &parameter_stream_);
-
-        // vkBeginCommandBuffer
-        parameter_stream_.Clear();
-
-        VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-        begin_info.pNext                    = nullptr;
-        begin_info.flags                    = 0;
-        begin_info.pInheritanceInfo         = nullptr;
-
-        encoder_.EncodeHandleIdValue(command_buffer_id);
-        EncodeStructPtr(&encoder_, &begin_info);
-        encoder_.EncodeEnumValue(VK_SUCCESS);
-        WriteFunctionCall(format::ApiCall_vkBeginCommandBuffer, &parameter_stream_);
+        InjectResetBeginCommandBuffer(command_buffer_id);
 
         // vkCmdBuildMicromapsEXT
         parameter_stream_.Clear();
@@ -1862,63 +1905,7 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
         EncodeStructArray(&encoder_, &mm_build_info, 1);
         WriteFunctionCall(format::ApiCall_vkCmdBuildMicromapsEXT, &parameter_stream_);
 
-        // vkEndCommandBuffer
-        parameter_stream_.Clear();
-
-        encoder_.EncodeHandleIdValue(command_buffer_id);
-        encoder_.EncodeEnumValue(VK_SUCCESS);
-        WriteFunctionCall(format::ApiCall_vkEndCommandBuffer, &parameter_stream_);
-
-        // vkGetDeviceQueue
-        parameter_stream_.Clear();
-
-        format::HandleId queue_id = get_unique_id();
-
-        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-        encoder_.EncodeUInt32Value(0);
-        encoder_.EncodeUInt32Value(0);
-        encoder_.EncodeHandleIdPtr(&queue_id);
-
-        WriteFunctionCall(format::ApiCall_vkGetDeviceQueue, &parameter_stream_);
-
-        // vkQueueSubmit
-        parameter_stream_.Clear();
-
-        VkSubmitInfo submit_info         = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-        submit_info.pNext                = nullptr;
-        submit_info.waitSemaphoreCount   = 0;
-        submit_info.pWaitSemaphores      = nullptr;
-        submit_info.pWaitDstStageMask    = nullptr;
-        submit_info.commandBufferCount   = 1;
-        submit_info.signalSemaphoreCount = 0;
-        submit_info.pSignalSemaphores    = nullptr;
-
-        encoder_.EncodeHandleIdValue(queue_id);
-        encoder_.EncodeUInt32Value(1);
-
-        encoder_.EncodeStructArrayPreamble(&submit_info, 1);
-        encoder_.EncodeEnumValue(submit_info.sType);
-        EncodePNextStruct(&encoder_, submit_info.pNext);
-        encoder_.EncodeUInt32Value(submit_info.waitSemaphoreCount);
-        encoder_.EncodeHandleIdArray(0, submit_info.waitSemaphoreCount);
-        encoder_.EncodeFlagsArray(submit_info.pWaitDstStageMask, submit_info.waitSemaphoreCount);
-        encoder_.EncodeUInt32Value(submit_info.commandBufferCount);
-        encoder_.EncodeHandleIdArray(&command_buffer_id, submit_info.commandBufferCount);
-        encoder_.EncodeUInt32Value(submit_info.signalSemaphoreCount);
-        encoder_.EncodeHandleIdArray(0, submit_info.signalSemaphoreCount);
-
-        encoder_.EncodeHandleIdValue(0);
-        encoder_.EncodeEnumValue(VK_SUCCESS);
-
-        WriteFunctionCall(format::ApiCall_vkQueueSubmit, &parameter_stream_);
-
-        // vkQueueWaitIdle
-        parameter_stream_.Clear();
-        encoder_.EncodeHandleIdValue(queue_id);
-        encoder_.EncodeEnumValue(VK_SUCCESS);
-
-        WriteFunctionCall(format::ApiCall_vkQueueWaitIdle, &parameter_stream_);
-        parameter_stream_.Clear();
+        InjectEndCommandBufferSubmitWaitQueue(command_buffer_id, queue_id);
 
         for (ASInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
@@ -1929,22 +1916,211 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
             WriteDestroyASInputBuffer(buffer);
         }
     }
-
-    parameter_stream_.Clear();
-
-    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-    encoder_.EncodeHandleIdValue(command_pool_id);
-    encoder_.EncodeUInt32Value(1);
-    encoder_.EncodeHandleIdArray(&command_buffer_id, 1);
-    WriteFunctionCall(format::ApiCall_vkFreeCommandBuffers, &parameter_stream_);
-
-    parameter_stream_.Clear();
-    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-    encoder_.EncodeHandleIdValue(command_pool_id);
-    EncodeStructPtr(&encoder_, allocation_callbacks);
-    WriteFunctionCall(format::ApiCall_vkDestroyCommandPool, &parameter_stream_);
-
     EndAccelerationStructureSection(device_wrapper->handle_id);
+}
+
+void VulkanStateWriter::WriteMicromapEXTWriteProperties(DeviceWrapper*                          device_wrapper,
+                                                        MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+{
+    // Untested for Multiple VkDevice
+
+    if (omm_inject_utilities.wrappers_write_prop.empty())
+    {
+        return;
+    }
+
+    format::HandleId&                 command_pool_id     = omm_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id   = omm_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id            = omm_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_write_prop = omm_inject_utilities.wrappers_write_prop;
+
+    std::vector<format::HandleId> mm_vector;
+
+    for (MicromapEXTWrapper* wrapper : wrappers_write_prop)
+    {
+        mm_vector.push_back(wrapper->handle_id);
+    }
+
+    std::vector<uint64_t> mm_vector_sizes(mm_vector.size(), 0);
+
+    static const VkAllocationCallbacks* allocation_callbacks = nullptr;
+
+    format::HandleId query_pool_id = get_unique_id();
+
+    // Write vkCreateQueryPool
+    parameter_stream_.Clear();
+
+    VkQueryPoolCreateInfo query_pool_info{};
+    query_pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    query_pool_info.pNext              = nullptr;
+    query_pool_info.flags              = 0x0;
+    query_pool_info.queryType          = VK_QUERY_TYPE_MICROMAP_COMPACTED_SIZE_EXT;
+    query_pool_info.queryCount         = mm_vector_sizes.size();
+    query_pool_info.pipelineStatistics = 0x0;
+
+    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+    EncodeStructPtr(&encoder_, &query_pool_info);
+    EncodeStructPtr(&encoder_, allocation_callbacks);
+    encoder_.EncodeHandleIdPtr(&query_pool_id);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCall_vkCreateQueryPool, &parameter_stream_);
+    parameter_stream_.Clear();
+
+    InjectResetBeginCommandBuffer(command_buffer_id);
+
+    // vkCmdResetQueryPool
+    parameter_stream_.Clear();
+    encoder_.EncodeHandleIdValue(command_buffer_id);
+    encoder_.EncodeHandleIdValue(query_pool_id);
+    encoder_.EncodeUInt32Value(0);
+    encoder_.EncodeUInt32Value(mm_vector_sizes.size());
+    WriteFunctionCall(format::ApiCall_vkCmdResetQueryPool, &parameter_stream_);
+    parameter_stream_.Clear();
+
+    InjectEndCommandBufferSubmitWaitQueue(command_buffer_id, queue_id);
+
+    InjectResetBeginCommandBuffer(command_buffer_id);
+
+    // vkCmdWriteMicrom
+    parameter_stream_.Clear();
+
+    encoder_.EncodeHandleIdValue(command_buffer_id);
+    encoder_.EncodeUInt32Value(mm_vector.size());
+    encoder_.EncodeHandleIdArray(mm_vector.data(), mm_vector.size());
+    encoder_.EncodeEnumValue(VK_QUERY_TYPE_MICROMAP_COMPACTED_SIZE_EXT);
+    encoder_.EncodeHandleIdValue(query_pool_id);
+    encoder_.EncodeUInt32Value(0);
+    WriteFunctionCall(format::ApiCall_vkCmdWriteMicromapsPropertiesEXT, &parameter_stream_);
+
+    parameter_stream_.Clear();
+
+    InjectEndCommandBufferSubmitWaitQueue(command_buffer_id, queue_id);
+
+    // vkGetQueryPoolResults
+    parameter_stream_.Clear();
+
+    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+    encoder_.EncodeHandleIdValue(query_pool_id);
+    encoder_.EncodeUInt32Value(0);
+    encoder_.EncodeUInt32Value(mm_vector_sizes.size());
+    encoder_.EncodeSizeTValue(mm_vector_sizes.size() * sizeof(uint64_t));
+    encoder_.EncodeVoidArray(mm_vector_sizes.data(), mm_vector_sizes.size(), false);
+    encoder_.EncodeUInt64Value(8);
+    encoder_.EncodeFlagsValue(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCall_vkGetQueryPoolResults, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteMicromapEXTCopy(DeviceWrapper*                          device_wrapper,
+                                             MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+{
+    // Untested for Multiple VkDevice
+
+    if (omm_inject_utilities.wrappers_copy.empty())
+    {
+        return;
+    }
+
+    format::HandleId&                 command_pool_id   = omm_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id = omm_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id          = omm_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_copy     = omm_inject_utilities.wrappers_copy;
+
+    InjectResetBeginCommandBuffer(command_buffer_id);
+
+    std::vector<MicromapEXTWrapper*> wrapper_copy_dst;
+    for (MicromapEXTWrapper* src : wrappers_copy)
+    {
+        MicromapEXTWrapper* dst = GetWrapper<MicromapEXTWrapper>(src->latest_copy_command_->info.dst);
+        wrapper_copy_dst.push_back(dst);
+        WriteFunctionCall(dst->create_call_id, dst->create_parameters.get());
+        VkCopyMicromapInfoEXT* pInfo = &src->latest_copy_command_->info;
+
+        // vkCmdCopyMicromapEXT
+        parameter_stream_.Clear();
+        encoder_.EncodeHandleIdValue(command_buffer_id);
+        EncodeStructPtr(&encoder_, pInfo);
+        WriteFunctionCall(format::ApiCall_vkCmdCopyMicromapEXT, &parameter_stream_);
+        parameter_stream_.Clear();
+    }
+
+    InjectEndCommandBufferSubmitWaitQueue(command_buffer_id, queue_id);
+}
+
+void VulkanStateWriter::InjectResetBeginCommandBuffer(format::HandleId& command_buffer_id)
+{
+    // vkResetCommandBuffer
+    parameter_stream_.Clear();
+    encoder_.EncodeHandleIdValue(command_buffer_id);
+    encoder_.EncodeFlagsValue(0);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCall_vkResetCommandBuffer, &parameter_stream_);
+
+    // vkBeginCommandBuffer
+    parameter_stream_.Clear();
+
+    VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    begin_info.pNext                    = nullptr;
+    begin_info.flags                    = 0;
+    begin_info.pInheritanceInfo         = nullptr;
+
+    encoder_.EncodeHandleIdValue(command_buffer_id);
+    EncodeStructPtr(&encoder_, &begin_info);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCall_vkBeginCommandBuffer, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::InjectEndCommandBufferSubmitWaitQueue(format::HandleId& command_buffer_id,
+                                                              format::HandleId& queue_id)
+{
+    // vkEndCommandBuffer
+    parameter_stream_.Clear();
+
+    encoder_.EncodeHandleIdValue(command_buffer_id);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCall_vkEndCommandBuffer, &parameter_stream_);
+    parameter_stream_.Clear();
+
+    // vkQueueSubmit
+    parameter_stream_.Clear();
+
+    VkSubmitInfo submit_info         = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+    submit_info.pNext                = nullptr;
+    submit_info.waitSemaphoreCount   = 0;
+    submit_info.pWaitSemaphores      = nullptr;
+    submit_info.pWaitDstStageMask    = nullptr;
+    submit_info.commandBufferCount   = 1;
+    submit_info.signalSemaphoreCount = 0;
+    submit_info.pSignalSemaphores    = nullptr;
+
+    encoder_.EncodeHandleIdValue(queue_id);
+    encoder_.EncodeUInt32Value(1);
+
+    encoder_.EncodeStructArrayPreamble(&submit_info, 1);
+    encoder_.EncodeEnumValue(submit_info.sType);
+    EncodePNextStruct(&encoder_, submit_info.pNext);
+    encoder_.EncodeUInt32Value(submit_info.waitSemaphoreCount);
+    encoder_.EncodeHandleIdArray(0, submit_info.waitSemaphoreCount);
+    encoder_.EncodeFlagsArray(submit_info.pWaitDstStageMask, submit_info.waitSemaphoreCount);
+    encoder_.EncodeUInt32Value(submit_info.commandBufferCount);
+    encoder_.EncodeHandleIdArray(&command_buffer_id, submit_info.commandBufferCount);
+    encoder_.EncodeUInt32Value(submit_info.signalSemaphoreCount);
+    encoder_.EncodeHandleIdArray(0, submit_info.signalSemaphoreCount);
+
+    encoder_.EncodeHandleIdValue(0);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+
+    WriteFunctionCall(format::ApiCall_vkQueueSubmit, &parameter_stream_);
+
+    // vkQueueWaitIdle
+    parameter_stream_.Clear();
+    encoder_.EncodeHandleIdValue(queue_id);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+
+    WriteFunctionCall(format::ApiCall_vkQueueWaitIdle, &parameter_stream_);
+    parameter_stream_.Clear();
 }
 
 void VulkanStateWriter::WriteBufferDeviceAddressCalls(const VulkanStateTable& state_table)

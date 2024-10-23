@@ -462,12 +462,21 @@ class VulkanStateTracker
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
 
+    void TrackMicromapCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info);
+
     void TrackWriteAccelerationStructuresPropertiesCommand(VkCommandBuffer                   commandBuffer,
                                                            uint32_t                          accelerationStructureCount,
                                                            const VkAccelerationStructureKHR* pAccelerationStructures,
                                                            VkQueryType                       queryType,
                                                            VkQueryPool                       queryPool,
                                                            uint32_t                          firstQuery);
+
+    void TrackWriteMicromapsPropertiesCommand(VkCommandBuffer      commandBuffer,
+                                              uint32_t             micromapCount,
+                                              const VkMicromapEXT* pMicromaps,
+                                              VkQueryType          queryType,
+                                              VkQueryPool          queryPool,
+                                              uint32_t             firstQuery);
 
     void TrackGetBufferDeviceAddress(VkDeviceAddress address, const VkBufferDeviceAddressInfo* pInfo);
 

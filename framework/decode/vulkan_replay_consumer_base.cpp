@@ -9001,7 +9001,7 @@ void VulkanReplayConsumerBase::OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdW
     const VkMicromapEXT* pMicromaps_dec = pMicromaps->GetHandlePointer();
     VkQueryPool          query_pool     = query_pool_info->handle;
 
-    if (!loading_trim_state_ && use_acceleration_structure_builder_)
+    if (use_acceleration_structure_builder_)
     {
         micromap_builders_[command_buffer_info->parent_id]->OnCmdWriteMicromapsProperties(
             command_buffer_info->handle,

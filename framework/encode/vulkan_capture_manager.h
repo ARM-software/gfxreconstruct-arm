@@ -386,12 +386,20 @@ class VulkanCaptureManager : public ApiCaptureManager
     void OverrideCmdCopyAccelerationStructureKHR(VkCommandBuffer                           command_buffer,
                                                  const VkCopyAccelerationStructureInfoKHR* pInfo);
 
+    void OverrideCmdCopyMicromapEXT(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* pInfo);
+
     void OverrideCmdWriteAccelerationStructuresPropertiesKHR(VkCommandBuffer commandBuffer,
                                                              uint32_t        accelerationStructureCount,
                                                              const VkAccelerationStructureKHR* pAccelerationStructures,
                                                              VkQueryType                       queryType,
                                                              VkQueryPool                       queryPool,
                                                              uint32_t                          firstQuery);
+    void OverrideCmdWriteMicromapsPropertiesEXT(VkCommandBuffer      commandBuffer,
+                                                uint32_t             micromapCount,
+                                                const VkMicromapEXT* pMicromaps,
+                                                VkQueryType          queryType,
+                                                VkQueryPool          queryPool,
+                                                uint32_t             firstQuery);
 
     void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
                                           VkDevice                        device,
