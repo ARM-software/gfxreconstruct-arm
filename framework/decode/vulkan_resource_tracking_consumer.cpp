@@ -731,10 +731,10 @@ void VulkanResourceTrackingConsumer::Process_vkDestroyImage(
     GetDeviceTable(in_device)->DestroyImage(in_device, in_image, nullptr);
 }
 
-void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t memory_id,
-                                                              uint64_t offset,
-                                                              uint64_t size,
-                                                              uint8_t* data)
+void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t       memory_id,
+                                                              uint64_t       offset,
+                                                              uint64_t       size,
+                                                              const uint8_t* data)
 {
     auto memory_info = GetTrackedObjectInfoTable()->GetTrackedDeviceMemoryInfo(memory_id);
 

@@ -39,7 +39,7 @@ class MetadataConsumerBase
   public:
     virtual void Process_ExeFileInfo(util::filepath::FileInfo& info_record) {}
     virtual void ProcessDisplayMessageCommand(const std::string& message) {}
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) {}
+    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) {}
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos){};
     virtual void

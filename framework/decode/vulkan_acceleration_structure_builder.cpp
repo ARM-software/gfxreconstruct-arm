@@ -946,11 +946,11 @@ VkDeviceAddress VulkanAccelerationStructureBuilder::GetActualDeviceAddress(VkAcc
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetAccelerationStructureDeviceAddress(
     VkAccelerationStructureKHR acceleration_structure)
 {
-    VkAccelerationStructureDeviceAddressInfoKHR info{
-        .sType                 = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-        .pNext                 = nullptr,
-        .accelerationStructure = acceleration_structure
-    };
+    VkAccelerationStructureDeviceAddressInfoKHR info;
+    info.sType                 = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    info.pNext                 = nullptr;
+    info.accelerationStructure = acceleration_structure;
+
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     VkDeviceAddress address = functions_.get_acceleration_structure_device_address(device_, &info);
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
@@ -963,12 +963,16 @@ VkAccelerationStructureKHR VulkanAccelerationStructureBuilder::CreateAcceleratio
     const VkAccelerationStructureBuildSizesInfoKHR& size_info,
     VkBuffer                                        storage)
 {
-    VkAccelerationStructureCreateInfoKHR create_info = {
-        .sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-        .buffer = storage,
-        .size   = size_info.accelerationStructureSize,
-        .type   = geometry_info.type,
-    };
+    VkAccelerationStructureCreateInfoKHR create_info;
+    create_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    create_info.pNext         = nullptr;
+    create_info.createFlags   = 0;
+    create_info.buffer        = storage;
+    create_info.offset        = 0;
+    create_info.size          = size_info.accelerationStructureSize;
+    create_info.type          = geometry_info.type;
+    create_info.deviceAddress = 0;
+
     VkAccelerationStructureKHR acceleration_structure;
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     functions_.create_acceleration_structure(device_, &create_info, nullptr, &acceleration_structure);
@@ -1319,7 +1323,7 @@ void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates
     const std::vector<const VkDescriptorBufferInfo*>& descriptor_buffer_infos)
 {
     InstanceBufferIndirectPipelineUpdateInfo& buffers =
-        instance_buffer_indirect_pipeline_updates_.emplace_back(buffer_infos.size());
+        instance_buffer_indirect_pipeline_updates_.emplace_back(static_cast<uint32_t>(buffer_infos.size()));
 
     for (uint32_t i = 0; i < buffer_infos.size(); ++i)
     {

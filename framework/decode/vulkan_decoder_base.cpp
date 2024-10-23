@@ -74,7 +74,7 @@ void VulkanDecoderBase::DispatchDisplayMessageCommand(format::ThreadId thread_id
 }
 
 void VulkanDecoderBase::DispatchFillMemoryCommand(
-    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data)
+    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data)
 {
     GFXRECON_UNREFERENCED_PARAMETER(thread_id);
 

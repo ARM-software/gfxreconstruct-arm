@@ -48,7 +48,7 @@
 
 #if defined(__linux__)
 #include <dirent.h>
-#elif
+#else
 #include <windows.h>
 #include <TlHelp32.h>
 #endif

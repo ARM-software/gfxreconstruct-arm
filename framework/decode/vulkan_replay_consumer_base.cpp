@@ -64,7 +64,10 @@
 #include <numeric>
 #include <unordered_set>
 #include <future>
+
+#ifdef __linux__
 #include <sys/resource.h>
+#endif
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -305,10 +308,10 @@ void VulkanReplayConsumerBase::ProcessDisplayMessageCommand(const std::string& m
     GFXRECON_LOG_INFO("Trace Message: %s", message.c_str());
 }
 
-void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t memory_id,
-                                                        uint64_t offset,
-                                                        uint64_t size,
-                                                        uint8_t* data)
+void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id,
+                                                        uint64_t       offset,
+                                                        uint64_t       size,
+                                                        const uint8_t* data)
 {
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
@@ -7959,7 +7962,7 @@ void VulkanReplayConsumerBase::LogFrameDebugInfo()
 {
     if (util::Log::WillOutputMessage(util::Log::kDebugSeverity))
     {
-#ifndef WIN32
+#ifdef __linux__
         const long    pages     = sysconf(_SC_AVPHYS_PAGES);
         const long    page_size = sysconf(_SC_PAGE_SIZE);
         const long    available = pages * page_size;
@@ -8586,9 +8589,10 @@ VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
     else
     {
         // TODO: Investigate here why opaque dev addr is not available for micromap
-        VkBufferDeviceAddressInfo buffer_info{ .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-                                               .pNext  = nullptr,
-                                               .buffer = replay_create_info->buffer };
+        VkBufferDeviceAddressInfo buffer_info;
+        buffer_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        buffer_info.pNext  = nullptr;
+        buffer_info.buffer = replay_create_info->buffer;
         device_address = device_table->GetBufferDeviceAddressKHR(device, &buffer_info) + replay_create_info->offset;
         GFXRECON_LOG_DEBUG(
             "Opaque device address is not available for VkMicromapCreateInfoEXT object (ID = %" PRIu64 ")", capture_id);

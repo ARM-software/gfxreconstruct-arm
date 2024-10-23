@@ -335,16 +335,14 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
         {
             auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
 
-            uint32_t extensions_count = output_instance_extensions_vector.size();
-
-            const char* extensions[extensions_count]{};
-            for (uint32_t i = 0; i < extensions_count; i++)
+            std::vector<const char*> extensions(output_instance_extensions_vector.size());
+            for (uint32_t i = 0; i < extensions.size(); i++)
             {
                 extensions[i] = output_instance_extensions_vector[i].c_str();
             }
 
-            pCreateInfoDec->ppEnabledExtensionNames = extensions;
-            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+            pCreateInfoDec->ppEnabledExtensionNames = extensions.data();
+            pCreateInfoDec->enabledExtensionCount   = extensions.size();
 
             parameter_buffer_->Clear();
 

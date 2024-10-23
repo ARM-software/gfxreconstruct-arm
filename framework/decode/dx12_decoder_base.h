@@ -108,6 +108,12 @@ class Dx12DecoderBase : public ApiDecoder
     virtual void DispatchFillMemoryCommand(
         format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
+    virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                const format::AddressLocationInfo*           infos) override
+    {
+        GFXRECON_ASSERT(false); // Not implemented for DX12
+    };
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;

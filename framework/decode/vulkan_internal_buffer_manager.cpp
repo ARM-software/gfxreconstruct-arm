@@ -125,9 +125,11 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     graphics::FindMemoryTypeIndex(
         physical_device_memory_properties_, requirements.memoryTypeBits, desired_flags, &mem_type_index, &found_flags);
 
-    VkMemoryAllocateInfo allocate_info{ .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                        .allocationSize  = requirements.size,
-                                        .memoryTypeIndex = mem_type_index };
+    VkMemoryAllocateInfo allocate_info;
+    allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext           = nullptr;
+    allocate_info.allocationSize  = requirements.size;
+    allocate_info.memoryTypeIndex = mem_type_index;
 
     VkDeviceMemory                      memory{};
     VulkanResourceAllocator::MemoryData memory_allocator_data{};

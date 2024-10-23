@@ -455,7 +455,10 @@ void VulkanSkiaModifier::ProcessSetDevicePropertiesCommand(format::HandleId   ph
     }
 }
 
-void VulkanSkiaModifier::ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data)
+void VulkanSkiaModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
+                                                  uint64_t       offset,
+                                                  uint64_t       size,
+                                                  const uint8_t* data)
 {
     for (auto& e : skia_device2memory)
     {
