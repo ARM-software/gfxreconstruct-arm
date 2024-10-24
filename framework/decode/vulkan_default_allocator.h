@@ -261,12 +261,19 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
 
     virtual bool SupportsExternalMemory() override { return true; }
 
+    virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) override
+    {
+        GFXRECON_ASSERT(alloc_data != 0);
+        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->size;
+    }
+
   protected:
     struct ResourceAllocInfo
     {
         format::HandleId capture_id{ format::kNullHandleId };
         VkDeviceMemory   bound_memory{ VK_NULL_HANDLE };
         VkDeviceSize     bound_offset{ 0 };
+        VkDeviceSize     size{ 0 };
     };
 
     struct MemoryAllocInfo

@@ -84,6 +84,7 @@ VkResult VulkanDefaultAllocator::CreateBuffer(const VkBufferCreateInfo*    creat
     {
         auto resource_alloc_info        = new ResourceAllocInfo;
         resource_alloc_info->capture_id = capture_id;
+        resource_alloc_info->size       = create_info->size;
         (*allocator_data)               = reinterpret_cast<ResourceData>(resource_alloc_info);
 
         result = functions_.create_buffer(device_, create_info, allocation_callbacks, buffer);

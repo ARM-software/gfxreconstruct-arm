@@ -3160,7 +3160,7 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
 
     const encode::VulkanDeviceTable* device_table = GetDeviceTable(*replay_device);
     buffer_tracker_[*pDevice->GetPointer()] =
-        std::make_unique<VulkanBufferTracker>(device_table, physical_device_info, *replay_device, allocator);
+        std::make_unique<VulkanBufferTracker>(device_table, physical_device_info, *replay_device);
 
     if (use_acceleration_structure_builder_)
     {
@@ -5208,6 +5208,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
 
         buffer_info->capture_address = original_buffer_address;
         buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
+        buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
 
         buffer_tracker_[device_info->capture_id]->SetBufferInfo(buffer_info);
         tracked_addresses_[buffer_info->capture_id] =
@@ -5229,6 +5230,7 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
 
     assert((device_info != nullptr) && (pBindInfos != nullptr));
 
+    auto device_table           = GetDeviceTable(device_info->handle);
     auto replay_bind_infos      = pBindInfos->GetPointer();
     auto replay_bind_meta_infos = pBindInfos->GetMetaStructPointer();
     assert((replay_bind_infos != nullptr) && (replay_bind_meta_infos != nullptr));
@@ -5303,8 +5305,17 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
         auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
         if (entry != device_info->opaque_addresses.end())
         {
-            auto memory_device_address   = entry->second;
-            auto original_buffer_address = memory_device_address + memoryOffset;
+            auto                      memory_device_address   = entry->second;
+            auto                      original_buffer_address = memory_device_address + memoryOffset;
+            VkBufferDeviceAddressInfo info                    = {};
+            info.sType                                        = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            info.pNext                                        = nullptr;
+            info.buffer                                       = buffer_info->handle;
+
+            buffer_info->capture_address = original_buffer_address;
+            buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
+            buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
+
             buffer_tracker_[device_info->capture_id]->SetBufferInfo(buffer_info);
             tracked_addresses_[buffer_info->capture_id] =
                 TrackedAddress{ TrackedAddress::Type::Buffer, original_buffer_address };
