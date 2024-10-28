@@ -30,9 +30,6 @@
 #include "util/logging.h"
 #include "util/platform.h"
 
-#include "decode/preload_decode_allocator.h"
-#include "generated/generated_vulkan_struct_packet.h"
-
 #include <cassert>
 #include <numeric>
 

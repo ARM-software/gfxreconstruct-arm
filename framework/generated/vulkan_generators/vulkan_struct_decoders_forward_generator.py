@@ -112,10 +112,3 @@ class VulkanStructDecodersForwardGenerator(BaseGenerator):
                 .format(struct),
                 file=self.outFile
             )
-
-        for struct in self.get_filtered_struct_names():
-            write(
-                'size_t PreloadDecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_{}* wrapper);'
-                .format(struct),
-                file=self.outFile
-            )

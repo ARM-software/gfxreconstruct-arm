@@ -10437,7 +10437,8 @@ void VulkanReplayConsumer::Process_vkCmdWriteAccelerationStructuresPropertiesKHR
 
     if (options_.dumping_resources)
     {
-        // resource_dumper.Process_vkCmdWriteAccelerationStructuresPropertiesKHR(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdWriteAccelerationStructuresPropertiesKHR, in_commandBuffer->handle, accelerationStructureCount, in_pAccelerationStructures->handle, queryType, in_queryPool->handle, firstQuery);
+        //TODO: fix upsteam
+        //resource_dumper.Process_vkCmdWriteAccelerationStructuresPropertiesKHR(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdWriteAccelerationStructuresPropertiesKHR, in_commandBuffer->handle, accelerationStructureCount, in_pAccelerationStructures->handle, queryType, in_queryPool->handle, firstQuery);
     }
 }
 
