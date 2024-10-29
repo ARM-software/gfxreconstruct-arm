@@ -960,6 +960,107 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
+    void PostProcess_vkCmdCopyImage(VkCommandBuffer commandBuffer,
+                                    VkImage,
+                                    VkImageLayout,
+                                    VkImage       dstImage,
+                                    VkImageLayout dstImageLayout,
+                                    uint32_t,
+                                    const VkImageCopy*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyImage2(VkCommandBuffer commandBuffer, const VkCopyImageInfo2* pCopyImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pCopyImageInfo->dstImage, pCopyImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer,
+                                            VkBuffer,
+                                            VkImage       dstImage,
+                                            VkImageLayout dstImageLayout,
+                                            uint32_t,
+                                            const VkBufferImageCopy*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyBufferToImage2(VkCommandBuffer                 commandBuffer,
+                                             const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pCopyBufferToImageInfo->dstImage, pCopyBufferToImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdBlitImage(VkCommandBuffer commandBuffer,
+                                    VkImage,
+                                    VkImageLayout,
+                                    VkImage       dstImage,
+                                    VkImageLayout dstImageLayout,
+                                    uint32_t,
+                                    const VkImageBlit*,
+                                    VkFilter)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdBlitImage2(VkCommandBuffer commandBuffer, const VkBlitImageInfo2* pBlitImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pBlitImageInfo->dstImage, pBlitImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdResolveImage(VkCommandBuffer commandBuffer,
+                                       VkImage,
+                                       VkImageLayout,
+                                       VkImage       dstImage,
+                                       VkImageLayout dstImageLayout,
+                                       uint32_t,
+                                       const VkImageResolve*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdResolveImage2(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pResolveImageInfo->dstImage, pResolveImageInfo->dstImageLayout);
+        }
+    }
+
     void PostProcess_vkCmdPipelineBarrier(VkCommandBuffer commandBuffer,
                                           VkPipelineStageFlags,
                                           VkPipelineStageFlags,

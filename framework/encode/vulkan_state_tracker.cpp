@@ -677,6 +677,21 @@ void VulkanStateTracker::TrackEndRenderPass(VkCommandBuffer command_buffer)
     wrapper->render_pass_framebuffer = nullptr;
 }
 
+void VulkanStateTracker::TrackImageDstLayout(VkCommandBuffer command_buffer,
+                                             VkImage         dst_image,
+                                             VkImageLayout   dst_image_layout)
+{
+    assert(command_buffer != VK_NULL_HANDLE);
+
+    auto command_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(command_buffer);
+
+    assert(command_wrapper != nullptr);
+
+    auto image_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageWrapper>(dst_image);
+
+    command_wrapper->pending_layouts[image_wrapper] = dst_image_layout;
+}
+
 void VulkanStateTracker::TrackExecuteCommands(VkCommandBuffer        command_buffer,
                                               uint32_t               command_buffer_count,
                                               const VkCommandBuffer* command_buffers)
