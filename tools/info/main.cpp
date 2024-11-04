@@ -487,12 +487,6 @@ void PrintVulkanStats(const gfxrecon::decode::VulkanStatsConsumer& vulkan_stats_
             { "Non-default capture options", gfxrecon::format::kOperationAnnotationCaptureParameters }
         };
 
-        GFXRECON_WRITE_CONSOLE("");
-        PrintAnnotations(annotation_recoder.GetAnnotationCount(),
-                         annotation_recoder.GetOperationAnnotationDatas(),
-                         annotation_recoder.GetAnnotations(),
-                         target_annotations);
-
         // TODO: This is the number of recorded draw calls, which will not reflect the number of draw calls
         // executed when recorded once to a command buffer that is submitted/replayed more than once.
         // GFXRECON_WRITE_CONSOLE("\nDraw/dispatch call info:");

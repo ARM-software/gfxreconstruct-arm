@@ -1015,31 +1015,19 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
         WriteExeFileInfo(api_family, info);
 
         // Save parameters of the capture in an annotation.
-        std::string operation_annotation = "{\n"
-                                           "    \"tool\": \"capture\",\n"
-                                           "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationTimestamp;
-        operation_annotation += "\": \"";
-        operation_annotation += util::datetime::UtcNowString();
-        operation_annotation += "\",\n";
-        operation_annotation += "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationGfxreconstructVersion;
-        operation_annotation += "\": \"" GFXRECON_PROJECT_VERSION_STRING "\",\n";
-        operation_annotation += "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationVulkanVersion;
-        operation_annotation += "\": \"";
-        operation_annotation += std::to_string(VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += '.';
-        operation_annotation += std::to_string(VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += '.';
-        operation_annotation += std::to_string(VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += "\"";
+        nlohmann::ordered_json operation_annotation;
+        operation_annotation["tool"] = "capture";
+
+        operation_annotation[format::kOperationAnnotationTimestamp]             = util::datetime::UtcNowString();
+        operation_annotation[format::kOperationAnnotationGfxreconstructVersion] = GFXRECON_PROJECT_VERSION_STRING;
+        operation_annotation[format::kOperationAnnotationVulkanVersion] =
+            std::to_string(VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE)) + '.' +
+            std::to_string(VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE)) + '.' +
+            std::to_string(VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
 
         WriteCaptureOptions(operation_annotation);
-
-        operation_annotation += "\n}";
         ForcedWriteAnnotation(
-            format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.c_str());
+            format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.dump().c_str());
     }
     else
     {
@@ -1363,124 +1351,119 @@ void CommonCaptureManager::AtExit()
     }
 }
 
-void CommonCaptureManager::WriteCaptureOptions(std::string& operation_annotation)
+void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation_annotation)
 {
     if (!IsCaptureApp())
         return;
+
+    gfxrecon::format::kOperationAnnotationCaptureParameters;
+    nlohmann::ordered_json         capture_options;
     CaptureSettings::TraceSettings default_settings = default_settings_.GetTraceSettings();
-    std::string                    buffer;
 
     if (force_file_flush_ != default_settings.force_flush)
     {
-        buffer += "\n    \"file-flush\": ";
-        buffer += force_file_flush_ ? "true," : "false,";
+        capture_options["file-flush"] = force_file_flush_;
     }
 
     if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kUnassisted)
     {
-        buffer += "\n    \"memory-tracking-mode\": \"unassisted\",";
+        capture_options["memory-tracking-mode"] = "unassisted";
     }
     else if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kAssisted)
     {
-        buffer += "\n    \"memory-tracking-mode\": \"assisted\",";
+        capture_options["memory-tracking-mode"] = "assisted";
     }
     else
     {
-        std::string page_guard_options_buffer;
+        nlohmann::ordered_json page_guard_options;
         if (page_guard_copy_on_map_ != default_settings.page_guard_copy_on_map)
         {
-            page_guard_options_buffer += "\n    \"page-guard-copy-on-map\": ";
-            page_guard_options_buffer += page_guard_copy_on_map_ ? "true," : "false,";
+            page_guard_options["page-guard-copy-on-map"] = page_guard_copy_on_map_;
         }
         if (page_guard_separate_read_ != default_settings.page_guard_separate_read)
         {
-            page_guard_options_buffer += "\n    \"page-guard-separate-read\": ";
-            page_guard_options_buffer += page_guard_separate_read_ ? "true," : "false,";
+            page_guard_options["page-guard-separate-read"] = page_guard_separate_read_;
         }
         if (page_guard_external_memory_ != default_settings.page_guard_external_memory)
         {
-            page_guard_options_buffer += "\n    \"page-guard-external-memory\": ";
-            page_guard_options_buffer += page_guard_external_memory_ ? "true," : "false,";
+            page_guard_options["page-guard-external-memory"] = page_guard_external_memory_;
         }
         if (!page_guard_external_memory_ && page_guard_memory_mode_ != PageGuardMemoryMode::kMemoryModeShadowInternal)
         {
-            page_guard_options_buffer += "\n    \"page-guard-persistent-memory\": ";
-            page_guard_options_buffer +=
-                (page_guard_memory_mode_ == PageGuardMemoryMode::kMemoryModeShadowPersistent) ? "true," : "false,";
+            page_guard_options["page-guard-persistent-memory"] =
+                page_guard_memory_mode_ == PageGuardMemoryMode::kMemoryModeShadowPersistent;
         }
         if (page_guard_align_buffer_sizes_ != default_settings.page_guard_align_buffer_sizes)
         {
-            page_guard_options_buffer += "\n    \"page-guard-align-buffer-sizes\": ";
-            page_guard_options_buffer += page_guard_align_buffer_sizes_ ? "true," : "false,";
+            page_guard_options["page-guard-align-buffer-sizes"] = page_guard_align_buffer_sizes_;
         }
         if (page_guard_unblock_sigsegv_ != default_settings.page_guard_unblock_sigsegv)
         {
-            page_guard_options_buffer += "\n    \"page-guard-unblock-sigsegv\": ";
-            page_guard_options_buffer += page_guard_unblock_sigsegv_ ? "true," : "false,";
+            page_guard_options["page-guard-unblock-sigsegv"] = page_guard_unblock_sigsegv_;
         }
         if (page_guard_signal_handler_watcher_ != default_settings.page_guard_signal_handler_watcher)
         {
-            page_guard_options_buffer += "\n    \"page-guard-signal-handler-watcher\": ";
-            page_guard_options_buffer += page_guard_signal_handler_watcher_ ? "true," : "false,";
+            page_guard_options["page-guard-signal-handler-watcher"] = page_guard_signal_handler_watcher_;
         }
         if (page_guard_signal_handler_watcher_max_restores_ !=
             default_settings.page_guard_signal_handler_watcher_max_restores)
         {
-            page_guard_options_buffer += "\n    \"page-guard-signal-handler-watcher-max-restores\": " +
-                                         std::to_string(page_guard_signal_handler_watcher_max_restores_) + ',';
+            page_guard_options["page-guard-signal-handler-watcher-max-restores"] =
+                page_guard_signal_handler_watcher_max_restores_;
         }
 
-        if (!page_guard_options_buffer.empty())
+        if (!page_guard_options.empty())
         {
-            buffer += "\n    \"memory-tracking-mode\": \"page_guard\",";
-            buffer += page_guard_options_buffer;
+            capture_options["memory-tracking-mode"] = "page_guard";
+            capture_options["page-guard-options"]   = page_guard_options;
         }
     }
 
     if (force_command_serialization_ != default_settings.force_command_serialization)
     {
-        buffer += "\n    \"force-command-serialization\": ";
-        buffer += force_command_serialization_ ? "true," : "false,";
+        capture_options["force-command-serialization"] = force_command_serialization_;
     }
     if (fence_query_delay_ != default_settings.fence_query_delay)
     {
-        buffer += "\n    \"fence-query-delay\": " + std::to_string(fence_query_delay_) + ',';
-        buffer += "\n    \"fence-query-delay-unit\": \"";
+        capture_options["fence-query-delay"] = fence_query_delay_;
         if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kCalls)
         {
-            buffer += "calls";
+            capture_options["fence-query-delay-unit"] = "calls";
         }
         else if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kFrames)
         {
-            buffer += "frames";
+            capture_options["fence-query-delay-unit"] = "frames";
         }
-        buffer += "\",";
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {
-        buffer += "\n    \"queue-zero-only\": ";
-        buffer += queue_zero_only_ ? "true," : "false,";
+        capture_options["queue-zero-only"] = queue_zero_only_;
     }
     if (force_fifo_present_mode_ != default_settings.force_fifo_present_mode)
     {
-        buffer += "\n    \"force-fifo-present-mode\": ";
-        buffer += force_fifo_present_mode_ ? "true," : "false,";
+        capture_options["force-fifo-present-mode"] = force_fifo_present_mode_;
     }
 
-    if (buffer.empty())
+    if (buffer_usages_to_ignore_ != default_settings.buffer_usages_to_ignore)
     {
-        return;
+        capture_options["buffer-usages-to-ignore"] = GetIgnoredBufferUsages();
     }
+    if (!capture_options.empty())
+    {
+        operation_annotation[format::kOperationAnnotationCaptureParameters] = capture_options;
+    }
+}
 
-    // Erase the trailing comma
-    buffer.pop_back();
+nlohmann::ordered_json CommonCaptureManager::GetIgnoredBufferUsages()
+{
+    nlohmann::ordered_json::array_t ignored_usages;
+    ignored_usages.reserve(buffer_usages_to_ignore_.size());
 
-    // Add the comma after the vulkan version only if there is something more to write
-    operation_annotation += ",\n    \"";
-    operation_annotation += gfxrecon::format::kOperationAnnotationCaptureParameters;
-    operation_annotation += "\": \n    {";
-    operation_annotation += buffer;
-    operation_annotation += "\n    }";
+    for (uint64_t usage : buffer_usages_to_ignore_)
+    {
+        ignored_usages.push_back(util::BitmaskToString<VkBufferUsageFlagBits>(usage));
+    }
+    return ignored_usages;
 }
 
 GFXRECON_END_NAMESPACE(encode)
