@@ -3096,6 +3096,12 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult            original_resu
     std::vector<std::string> enabled_extensions(modified_create_info.ppEnabledExtensionNames,
                                                 modified_create_info.ppEnabledExtensionNames +
                                                     modified_create_info.enabledExtensionCount);
+
+    if (property_feature_info.feature_bufferDeviceAddressCaptureReplay)
+    {
+        enabled_extensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    }
+
     InitializeResourceAllocator(physical_device_info, *replay_device, enabled_extensions, allocator);
 
     device_info->allocator = std::unique_ptr<VulkanResourceAllocator>(allocator);

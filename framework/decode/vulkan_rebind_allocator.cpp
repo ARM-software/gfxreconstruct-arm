@@ -200,14 +200,16 @@ VkResult VulkanRebindAllocator::Initialize(uint32_t                             
             {
                 create_info.flags |= VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT;
             }
+            else if (entry == VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
+            {
+                create_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+            }
         }
 
         if (have_memory_reqs2 && have_dedicated_allocation)
         {
             create_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
         }
-
-        create_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
         result = vmaCreateAllocator(&create_info, &allocator_);
     }
