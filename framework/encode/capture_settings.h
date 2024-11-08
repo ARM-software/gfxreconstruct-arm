@@ -140,6 +140,7 @@ class CaptureSettings
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
         FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
+        uint64_t                     fence_query_delay_timeout_threshold{ 0 };
         bool                         queue_zero_only{ false };
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };
