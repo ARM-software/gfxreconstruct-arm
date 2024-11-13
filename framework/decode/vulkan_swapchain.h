@@ -48,9 +48,9 @@ class ScreenshotHandler;
 
 struct VulkanSwapchainOptions
 {
-    bool    skip_additional_present_blts{ false };
-    int32_t select_surface_index{ -1 };
-    bool    insert_frame_boundary{ false };
+    bool    virtual_swapchain_skip_blit{ false };
+    int32_t surface_index{ -1 };
+    bool    offscreen_swapchain_frame_boundary{ false };
 };
 
 class VulkanSwapchain
@@ -60,7 +60,7 @@ class VulkanSwapchain
 
     virtual void Clean();
 
-    void SetOptions(VulkanSwapchainOptions& options) { swapchain_options_ = options; }
+    void SetOptions(const VulkanSwapchainOptions& options) { swapchain_options_ = options; }
 
     virtual VkResult CreateSurface(VkResult                            original_result,
                                    InstanceInfo*                       instance_info,

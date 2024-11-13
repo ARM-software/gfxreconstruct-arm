@@ -74,6 +74,7 @@ class CaptureSettings
         kUnknown,
         kFrames,
         kQueueSubmits,
+        kDrawCalls,
     };
 
     enum class FenceQueryDelayUnit
@@ -83,6 +84,15 @@ class CaptureSettings
     };
 
     const static char kDefaultCaptureFileName[];
+
+    struct TrimDrawCalls
+    {
+        // 0-based
+        uint32_t        submit_index{ 0 };
+        uint32_t        command_index{ 0 };
+        util::UintRange draw_call_indices;
+        util::UintRange bundle_draw_call_indices;
+    };
 
     struct ResourveValueAnnotationInfo
     {
@@ -105,6 +115,7 @@ class CaptureSettings
         util::ScreenshotFormat       screenshot_format;
         TrimBoundary                 trim_boundary{ TrimBoundary::kUnknown };
         std::vector<util::UintRange> trim_ranges;
+        TrimDrawCalls                trim_draw_calls;
         std::string                  trim_key;
         uint32_t                     trim_key_frames{ 0 };
         RuntimeTriggerState          runtime_capture_trigger{ kNotUsed };
@@ -197,8 +208,11 @@ class CaptureSettings
 
     static util::Log::Severity ParseLogLevelString(const std::string& value_string, util::Log::Severity default_value);
 
-    static void
-    ParseUintRangeList(const std::string& value_string, std::vector<util::UintRange>* frames, const char* option_name);
+    static void ParseUintRangeList(const std::string&            value_string,
+                                   std::vector<util::UintRange>* frames,
+                                   const char*                   option_name,
+                                   bool                          check_overlap_range = true,
+                                   bool                          allow_zero          = false);
 
     static std::string ParseTrimKeyString(const std::string& value_string);
 

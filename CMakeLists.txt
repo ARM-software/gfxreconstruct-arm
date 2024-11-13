@@ -47,6 +47,7 @@ set(GFXRECONSTRUCT_PROJECT_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 
 
 
+
 option(BUILD_STATIC "Build static binaries for HPC clusters (will not build the tracer library)" OFF)
 
 if (NOT DEFINED HEADLESS)
@@ -130,6 +131,7 @@ if(${GFXRECON_ENABLE_RELEASE_ASSERTS})
 endif()
 
 option(GFXRECON_TOCPP_SUPPORT "Build ToCpp export tool as part of GFXReconstruct builds." TRUE)
+
 if(MSVC)
 
     # The host toolchain architecture (i.e. are the compiler and other tools compiled to ARM/Intel 32bit/64bit binaries):
@@ -168,15 +170,12 @@ if(MSVC)
 
     # Add option to enable/disable launcher and interceptor.
     option(BUILD_LAUNCHER_AND_INTERCEPTOR "Build launcher and interceptor" OFF)
-
-    # Add option to enable/disable D3D12 gfxrecon-convert support.
-    option(CONVERT_EXPERIMENTAL_D3D12 "Build with convert DX12 enabled" OFF)
+	
+    # Enable STL locks to work after building capture libs with certain versions of VS
+    add_definitions(-D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 
     if(${D3D12_SUPPORT})
         add_definitions(-DD3D12_SUPPORT)
-        if(${CONVERT_EXPERIMENTAL_D3D12})
-            add_definitions(-DCONVERT_EXPERIMENTAL_D3D12)
-        endif()
 
         # Check Windows SDK version and print warning if there is a mismatch.
         set(EXPECTED_WIN_SDK_VER "10.0.20348.0")
@@ -204,17 +203,22 @@ if(MSVC)
         if (${GFXRECON_AGS_SUPPORT})
             if (CMAKE_SIZEOF_VOID_P EQUAL 8)
                 find_package(AGS)
-                if (TARGET AGS::AGS)
+                if (AGS_FOUND)
                     add_definitions(-DGFXRECON_AGS_SUPPORT)
 
                     # The value for option GFXRECON_AGS_SUPPORT gets cached so use a non-cached variable
                     # to determine the final result.
                     set(GFXRECON_AGS_SUPPORT_FINAL ON)
-                endif() # TARGET AGS::AGS
+                else()
+                    message(WARNING "GFXRECON_AGS_SUPPORT was requested but the required dependencies were not found. "
+                            "AGS support will be disabled.")
+                endif() # AGS_FOUND
+            else()
+                message(WARNING "GFXRECON_AGS_SUPPORT was requested but is not supported. An x64 build is required. "
+                        "AGS support will be disabled.")
             endif() # CMAKE_SIZEOF_VOID_P EQUAL 8
         endif() # GFXRECON_AGS_SUPPORT
     endif() # D3D12_SUPPORT
-
 
 else(MSVC)
     # Turn off D3D12 support for non MSVC builds.
@@ -329,10 +333,6 @@ if(BUILD_WERROR)
         target_compile_options(platform_specific INTERFACE /WX)
     else()
         target_compile_options(platform_specific INTERFACE -Werror)
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            # TODO: Actually fix these warnings
-            target_compile_options(platform_specific INTERFACE -Wno-error=switch)
-        endif()
     endif()
 endif()
 

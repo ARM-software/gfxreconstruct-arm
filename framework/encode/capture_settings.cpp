@@ -82,6 +82,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define SCREENSHOT_FRAMES_UPPER                              "SCREENSHOT_FRAMES"
 #define CAPTURE_FRAMES_LOWER                                 "capture_frames"
 #define CAPTURE_FRAMES_UPPER                                 "CAPTURE_FRAMES"
+#define CAPTURE_DRAW_CALLS_LOWER                             "capture_draw_calls"
+#define CAPTURE_DRAW_CALLS_UPPER                             "CAPTURE_DRAW_CALLS"
 #define QUIT_AFTER_CAPTURE_FRAMES_LOWER                      "quit_after_capture_frames"
 #define QUIT_AFTER_CAPTURE_FRAMES_UPPER                      "QUIT_AFTER_CAPTURE_FRAMES"
 #define CAPTURE_TRIGGER_LOWER                                "capture_trigger"
@@ -140,13 +142,12 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define FENCE_QUERY_DELAY_UPPER                              "FENCE_QUERY_DELAY"
 #define FENCE_QUERY_DELAY_UNIT_LOWER                         "fence_query_delay_unit"
 #define FENCE_QUERY_DELAY_UNIT_UPPER                         "FENCE_QUERY_DELAY_UNIT"
-#define FORCE_FIFO_PRESENT_MODE_LOWER                        "force_fifo_present_mode"
-#define FORCE_FIFO_PRESENT_MODE_UPPER                        "FORCE_FIFO_PRESENT_MODE"
 #define BUFFER_USAGES_TO_IGNORE_LOWER                        "buffer_usages_to_ignore"
 #define BUFFER_USAGES_TO_IGNORE_UPPER                        "BUFFER_USAGES_TO_IGNORE"
 #define CAPTURE_PACKAGE_NAME_LOWER                           "capture_package_name"
 #define CAPTURE_PACKAGE_NAME_UPPER                           "CAPTURE_PACKAGE_NAME"
-
+#define FORCE_FIFO_PRESENT_MODE_LOWER                        "force_fifo_present_mode"
+#define FORCE_FIFO_PRESENT_MODE_UPPER                        "FORCE_FIFO_PRESENT_MODE"
 
 #if defined(__ANDROID__)
 #define GFXRECON_ENV_VAR_PREFIX "debug.gfxrecon."
@@ -183,6 +184,7 @@ const char kScreenshotDirEnvVar[]                            = GFXRECON_OPTION_S
 const char kScreenshotFormatEnvVar[]                         = GFXRECON_OPTION_STR(SCREENSHOT_FORMAT);
 const char kScreenshotFramesEnvVar[]                         = GFXRECON_OPTION_STR(SCREENSHOT_FRAMES);
 const char kCaptureFramesEnvVar[]                            = GFXRECON_OPTION_STR(CAPTURE_FRAMES);
+const char kCaptureDrawCallsEnvVar[]                         = GFXRECON_OPTION_STR(CAPTURE_DRAW_CALLS);
 const char kQuitAfterFramesEnvVar[]                          = GFXRECON_OPTION_STR(QUIT_AFTER_CAPTURE_FRAMES);
 const char kCaptureTriggerEnvVar[]                           = GFXRECON_OPTION_STR(CAPTURE_TRIGGER);
 const char kCaptureTriggerFramesEnvVar[]                     = GFXRECON_OPTION_STR(CAPTURE_TRIGGER_FRAMES);
@@ -211,9 +213,9 @@ const char kAnnotationGPUVAEnvVar[]                          = GFXRECON_OPTION_S
 const char kAnnotationDescriptorEnvVar[]                     = GFXRECON_OPTION_STR(RV_ANNOTATION_DESCRIPTOR);
 const char kFenceQueryDelayEnvVar[]                          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY);
 const char kFenceQueryDelayUnitEnvVar[]                      = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_UNIT);
-const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
 const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
+const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
 
 #if defined(__ANDROID__)
 const char kCaptureAndroidTriggerEnvVar[]                    = GFXRECON_OPTION_STR(CAPTURE_ANDROID_TRIGGER);
@@ -242,6 +244,7 @@ const std::string kOptionKeyScreenshotDir                            = std::stri
 const std::string kOptionKeyScreenshotFormat                         = std::string(kSettingsFilter) + std::string(SCREENSHOT_FORMAT_LOWER);
 const std::string kOptionKeyScreenshotFrames                         = std::string(kSettingsFilter) + std::string(SCREENSHOT_FRAMES_LOWER);
 const std::string kOptionKeyCaptureFrames                            = std::string(kSettingsFilter) + std::string(CAPTURE_FRAMES_LOWER);
+const std::string kOptionKeyCaptureDrawCalls                         = std::string(kSettingsFilter) + std::string(CAPTURE_DRAW_CALLS_LOWER);
 const std::string kOptionKeyQuitAfterCaptureFrames                   = std::string(kSettingsFilter) + std::string(QUIT_AFTER_CAPTURE_FRAMES_LOWER);
 const std::string kOptionKeyCaptureTrigger                           = std::string(kSettingsFilter) + std::string(CAPTURE_TRIGGER_LOWER);
 const std::string kOptionKeyCaptureTriggerFrames                     = std::string(kSettingsFilter) + std::string(CAPTURE_TRIGGER_FRAMES_LOWER);
@@ -270,10 +273,9 @@ const std::string kOptionKeyAnnotationGPUVA                          = std::stri
 const std::string kOptionKeyAnnotationDescriptor                     = std::string(kSettingsFilter) + std::string(RV_ANNOTATION_DESCRIPTOR_LOWER);
 const std::string kOptionFenceQueryDelay                             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LOWER);
 const std::string kOptionFenceQueryDelayUnit                         = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_UNIT_LOWER);
-const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
 const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
-
+const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
 
 #if defined(GFXRECON_ENABLE_LZ4_COMPRESSION)
 const format::CompressionType kDefaultCompressionType = format::CompressionType::kLz4;
@@ -387,6 +389,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
 
     // Trimming environment variables
     LoadSingleOptionEnvVar(options, kCaptureFramesEnvVar, kOptionKeyCaptureFrames);
+    LoadSingleOptionEnvVar(options, kCaptureDrawCallsEnvVar, kOptionKeyCaptureDrawCalls);
     LoadSingleOptionEnvVar(options, kQuitAfterFramesEnvVar, kOptionKeyQuitAfterCaptureFrames);
     LoadSingleOptionEnvVar(options, kCaptureTriggerEnvVar, kOptionKeyCaptureTrigger);
     LoadSingleOptionEnvVar(options, kCaptureTriggerFramesEnvVar, kOptionKeyCaptureTriggerFrames);
@@ -430,14 +433,15 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kAnnotationRandEnvVar, kOptionKeyAnnotationRand);
     LoadSingleOptionEnvVar(options, kAnnotationGPUVAEnvVar, kOptionKeyAnnotationGPUVA);
     LoadSingleOptionEnvVar(options, kAnnotationDescriptorEnvVar, kOptionKeyAnnotationDescriptor);
+
     LoadSingleOptionEnvVar(options, kFenceQueryDelayEnvVar, kOptionFenceQueryDelay);
     LoadSingleOptionEnvVar(options, kFenceQueryDelayUnitEnvVar, kOptionFenceQueryDelayUnit);
-
-    LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentModeEnvVar);
 
     LoadSingleOptionEnvVar(options, kBufferUsagesToIgnoreEnvVar, kOptionBufferUsagesToIgnore);
 
     LoadSingleOptionEnvVar(options, kCapturePackageNameEnvVar, kOptionCapturePackageName);
+
+    LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentModeEnvVar);
 }
 
 void CaptureSettings::LoadOptionsFile(OptionsMap* options)
@@ -494,12 +498,40 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         }
     }
 
+    std::string trim_draw_calls = FindOption(options, kOptionKeyCaptureDrawCalls);
+    if (!trim_draw_calls.empty())
+    {
+        std::vector<util::UintRange> trim_values;
+        ParseUintRangeList(trim_draw_calls, &trim_values, "capture draw calls", false, true);
+        if (trim_values.size() == 3 || trim_values.size() == 4)
+        {
+            settings->trace_settings_.trim_draw_calls.submit_index            = trim_values[0].first;
+            settings->trace_settings_.trim_draw_calls.command_index           = trim_values[1].first;
+            settings->trace_settings_.trim_draw_calls.draw_call_indices.first = trim_values[2].first;
+            settings->trace_settings_.trim_draw_calls.draw_call_indices.last  = trim_values[2].last;
+            settings->trace_settings_.trim_boundary                           = TrimBoundary::kDrawCalls;
+
+            if (trim_values.size() == 4)
+            {
+                settings->trace_settings_.trim_draw_calls.bundle_draw_call_indices.first = trim_values[3].first;
+                settings->trace_settings_.trim_draw_calls.bundle_draw_call_indices.last  = trim_values[3].last;
+            }
+            else
+            {
+                // bundle_draw_call_indices is the 4th arg. The default is 0 if it doesn't set.
+                settings->trace_settings_.trim_draw_calls.bundle_draw_call_indices.first = 0;
+                settings->trace_settings_.trim_draw_calls.bundle_draw_call_indices.last  = 0;
+            }
+        }
+    }
+
     std::string trim_queue_submits = FindOption(options, kOptionKeyCaptureQueueSubmits);
     if (!trim_queue_submits.empty())
     {
         if (settings->trace_settings_.trim_ranges.empty())
         {
-            ParseUintRangeList(trim_queue_submits, &settings->trace_settings_.trim_ranges, "capture queue submits");
+            ParseUintRangeList(
+                trim_queue_submits, &settings->trace_settings_.trim_ranges, "capture queue submits", true, true);
             if (!settings->trace_settings_.trim_ranges.empty())
             {
                 settings->trace_settings_.trim_boundary = TrimBoundary::kQueueSubmits;
@@ -611,17 +643,19 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     settings->trace_settings_.rv_anotation_info.descriptor_mask =
         ParseUnsignedInteger16String(FindOption(options, kOptionKeyAnnotationDescriptor),
                                      settings->trace_settings_.rv_anotation_info.descriptor_mask);
+
     settings->trace_settings_.fence_query_delay =
         ParseIntegerString(FindOption(options, kOptionFenceQueryDelay), settings->trace_settings_.fence_query_delay);
     settings->trace_settings_.fence_query_delay_unit = ParseFenceQueryDelayUnit(
         FindOption(options, kOptionFenceQueryDelayUnit), settings->trace_settings_.fence_query_delay_unit);
-    settings->trace_settings_.force_fifo_present_mode = ParseBoolString(
-        FindOption(options, kOptionForceFifoPresentModeEnvVar), settings->trace_settings_.force_fifo_present_mode);
     settings->trace_settings_.buffer_usages_to_ignore =
         ParseBufferUsages(FindOption(options, kOptionBufferUsagesToIgnore));
 
     settings->trace_settings_.capture_package_name =
         FindOption(options, kOptionCapturePackageName, settings->trace_settings_.capture_package_name);
+
+    settings->trace_settings_.force_fifo_present_mode = ParseBoolString(
+        FindOption(options, kOptionForceFifoPresentModeEnvVar), settings->trace_settings_.force_fifo_present_mode);
 }
 
 void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* settings)
@@ -841,13 +875,16 @@ util::Log::Severity CaptureSettings::ParseLogLevelString(const std::string&  val
 
 void CaptureSettings::ParseUintRangeList(const std::string&            value_string,
                                          std::vector<util::UintRange>* frames,
-                                         const char*                   option_name)
+                                         const char*                   option_name,
+                                         bool                          check_overlap_range,
+                                         bool                          allow_zero)
 {
     GFXRECON_ASSERT(frames != nullptr);
 
     if (!value_string.empty())
     {
-        std::vector<gfxrecon::util::UintRange> frame_ranges = util::GetUintRanges(value_string.c_str(), option_name);
+        std::vector<gfxrecon::util::UintRange> frame_ranges =
+            util::GetUintRanges(value_string.c_str(), option_name, check_overlap_range, allow_zero);
 
         for (uint32_t i = 0; i < frame_ranges.size(); ++i)
         {

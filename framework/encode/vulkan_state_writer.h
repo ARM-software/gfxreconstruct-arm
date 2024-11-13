@@ -52,8 +52,6 @@ class VulkanStateWriter
                       format::ThreadId                         thread_id,
                       const std::function<format::HandleId()>& get_unique_id);
 
-    ~VulkanStateWriter();
-
     // Returns number of blocks written to the output_stream.
     uint64_t WriteState(const VulkanStateTable& state_table, uint64_t frame_number);
 
@@ -141,7 +139,11 @@ class VulkanStateWriter
 
     void WriteBufferState(const VulkanStateTable& state_table);
 
+    void WriteBufferDeviceAddressState(const VulkanStateTable& state_table);
+
     void WriteDeviceMemoryState(const VulkanStateTable& state_table);
+
+    void WriteRayTracingPipelinePropertiesState(const VulkanStateTable& state_table);
 
     void WriteAccelerationStructureKHRState(const VulkanStateTable& state_table);
 
@@ -391,12 +393,12 @@ class VulkanStateWriter
 
     struct AccelerationStructureCommands
     {
-        std::vector<AccelerationStructureBuildCommandData>           blas_build;
-        std::vector<AccelerationStructureBuildCommandData>           tlas_build;
+        std::vector<AccelerationStructureBuildCommandData*>          blas_build;
+        std::vector<AccelerationStructureBuildCommandData*>          tlas_build;
         std::vector<AccelerationStructureWritePropertiesCommandData> write_properties;
         AccelerationStructureCopyCommandData                         copies;
-        std::vector<AccelerationStructureBuildCommandData>           blas_update;
-        std::vector<AccelerationStructureBuildCommandData>           tlas_update;
+        std::vector<AccelerationStructureBuildCommandData*>          blas_update;
+        std::vector<AccelerationStructureBuildCommandData*>          tlas_update;
     };
 
     void BeginAccelerationStructuresSection(format::HandleId device_id, uint64_t max_resource_size);

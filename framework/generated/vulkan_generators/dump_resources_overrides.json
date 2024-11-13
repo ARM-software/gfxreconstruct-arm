@@ -10,10 +10,10 @@
     "vkCmdNextSubpass2KHR": "OverrideCmdNextSubpass2",
     "vkCmdEndRenderPass2": "OverrideCmdEndRenderPass2",
     "vkCmdEndRenderPass2KHR": "OverrideCmdEndRenderPass2",
-    "vkCmdBeginRendering" : "OverrideCmdBeginRendering",
-    "vkCmdBeginRenderingKHR" : "OverrideCmdBeginRenderingKHR",
-    "vkCmdEndRendering" : "OverrideCmdEndRendering",
-    "vkCmdEndRenderingKHR" : "OverrideCmdEndRenderingKHR",
+    "vkCmdBeginRendering": "OverrideCmdBeginRendering",
+    "vkCmdBeginRenderingKHR": "OverrideCmdBeginRenderingKHR",
+    "vkCmdEndRendering": "OverrideCmdEndRendering",
+    "vkCmdEndRenderingKHR": "OverrideCmdEndRenderingKHR",
     "vkCmdBindDescriptorSets": "OverrideCmdBindDescriptorSets",
     "vkCmdDispatch": "OverrideCmdDispatch",
     "vkCmdDispatchIndirect": "OverrideCmdDispatchIndirect",
@@ -32,6 +32,7 @@
     "vkCmdBindIndexBuffer": "OverrideCmdBindIndexBuffer",
     "vkCmdSetVertexInputEXT": "OverrideCmdSetVertexInputEXT",
     "vkCmdBindVertexBuffers2": "OverrideCmdBindVertexBuffers2",
-    "vkCmdBindIndexBuffer2KHR": "OverrideCmdBindIndexBuffer2KHR"
+    "vkCmdBindIndexBuffer2KHR": "OverrideCmdBindIndexBuffer2KHR",
+    "vkEndCommandBuffer": "OverrideEndCommandBuffer"
   }
 }

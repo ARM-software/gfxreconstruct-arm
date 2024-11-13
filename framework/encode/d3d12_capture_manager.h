@@ -251,13 +251,17 @@ class D3D12CaptureManager : public ApiCaptureManager
                                              UINT                           present_flags,
                                              const DXGI_PRESENT_PARAMETERS* present_parameters);
 
-    void
-    PostProcess_IDXGISwapChain_Present(IDXGISwapChain_Wrapper* wrapper, HRESULT result, UINT sync_interval, UINT flags);
+    void PostProcess_IDXGISwapChain_Present(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                            IDXGISwapChain_Wrapper*                                wrapper,
+                                            HRESULT                                                result,
+                                            UINT                                                   sync_interval,
+                                            UINT                                                   flags);
 
-    void PostProcess_IDXGISwapChain1_Present1(IDXGISwapChain_Wrapper*        wrapper,
-                                              HRESULT                        result,
-                                              UINT                           sync_interval,
-                                              UINT                           present_flags,
+    void PostProcess_IDXGISwapChain1_Present1(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                              IDXGISwapChain_Wrapper*                                wrapper,
+                                              HRESULT                                                result,
+                                              UINT                                                   sync_interval,
+                                              UINT                                                   present_flags,
                                               const DXGI_PRESENT_PARAMETERS* present_parameters);
 
     void PreProcess_IDXGISwapChain_ResizeBuffers(IDXGISwapChain_Wrapper* wrapper,
@@ -444,13 +448,23 @@ class D3D12CaptureManager : public ApiCaptureManager
 
     void PostProcess_ID3D12Heap_GetDesc(ID3D12Heap_Wrapper* wrapper, D3D12_HEAP_DESC& desc);
 
-    void PreProcess_ID3D12CommandQueue_ExecuteCommandLists(ID3D12CommandQueue_Wrapper* wrapper,
-                                                           UINT                        num_lists,
-                                                           ID3D12CommandList* const*   lists);
+    void PreProcess_ID3D12CommandQueue_ExecuteCommandLists(
+        std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+        ID3D12CommandQueue_Wrapper*                            wrapper,
+        UINT                                                   num_lists,
+        ID3D12CommandList* const*                              lists);
 
-    void PostProcess_ID3D12CommandQueue_ExecuteCommandLists(ID3D12CommandQueue_Wrapper* wrapper,
-                                                            UINT                        num_lists,
-                                                            ID3D12CommandList* const*   lists);
+    void PostProcess_ID3D12CommandQueue_ExecuteCommandLists(
+        std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+        ID3D12CommandQueue_Wrapper*                            wrapper,
+        UINT                                                   num_lists,
+        ID3D12CommandList* const*                              lists);
+
+    void
+    OverrideID3D12CommandQueue_ExecuteCommandLists(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                                   ID3D12CommandQueue_Wrapper*                            wrapper,
+                                                   UINT                                                   num_lists,
+                                                   ID3D12CommandList* const*                              lists);
 
     void PreProcess_D3D12CreateDevice(IUnknown*         pAdapter,
                                       D3D_FEATURE_LEVEL MinimumFeatureLevel,
@@ -601,6 +615,10 @@ class D3D12CaptureManager : public ApiCaptureManager
                                                         ID3D12Pageable* const*          ppObjects,
                                                         const D3D12_RESIDENCY_PRIORITY* pPriorities);
 
+    HRESULT OverrideD3D12SerializeVersionedRootSignature(const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pRootSignature,
+                                                         ID3DBlob**                                 ppBlob,
+                                                         ID3DBlob**                                 ppErrorBlob);
+
     D3D12_CPU_DESCRIPTOR_HANDLE
     OverrideID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(ID3D12DescriptorHeap_Wrapper* wrapper);
 
@@ -713,6 +731,19 @@ class D3D12CaptureManager : public ApiCaptureManager
         const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* pDesc,
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO*      pInfo);
 
+    HRESULT OverrideID3D12GraphicsCommandList_Reset(ID3D12GraphicsCommandList_Wrapper* wrapper,
+                                                    ID3D12CommandAllocator*            pAllocator,
+                                                    ID3D12PipelineState*               pInitialState);
+
+    void OverrideID3D12GraphicsCommandList_ExecuteBundle(ID3D12GraphicsCommandList_Wrapper* wrapper,
+                                                         ID3D12GraphicsCommandList*         pCommandList);
+
+    void OverrideID3D12GraphicsCommandList4_BeginRenderPass(ID3D12GraphicsCommandList4_Wrapper* wrapper,
+                                                            UINT                                NumRenderTargets,
+                                                            const D3D12_RENDER_PASS_RENDER_TARGET_DESC* pRenderTargets,
+                                                            const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC* pDepthStencil,
+                                                            D3D12_RENDER_PASS_FLAGS                     Flags);
+
     virtual CaptureSettings::TraceSettings GetDefaultTraceSettings();
 
     inline format::HandleId GetEnableDebugLayerObjectId() { return track_enable_debug_layer_object_id_; }
@@ -760,6 +791,35 @@ class D3D12CaptureManager : public ApiCaptureManager
 
     int GetAgsVersion() { return ags_version_; }
 
+    void TrimDrawCalls_D3D12SerializeVersionedRootSignature(const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pRootSignature,
+                                                            ID3DBlob**                                 ppBlob,
+                                                            ID3DBlob**                                 ppErrorBlob);
+
+    void TrimDrawCalls_ID3D12GraphicsCommandList_Reset(HRESULT                            replay_result,
+                                                       ID3D12GraphicsCommandList_Wrapper* wrapper,
+                                                       ID3D12CommandAllocator*            pAllocator,
+                                                       ID3D12PipelineState*               pInitialState);
+
+    void TrimDrawCalls_ID3D12GraphicsCommandList_ExecuteBundle(ID3D12GraphicsCommandList_Wrapper* wrapper,
+                                                               ID3D12GraphicsCommandList*         pCommandList);
+    void
+    TrimDrawCalls_ID3D12GraphicsCommandList4_BeginRenderPass(ID3D12GraphicsCommandList4_Wrapper* wrapper,
+                                                             UINT                                NumRenderTargets,
+                                                             const D3D12_RENDER_PASS_RENDER_TARGET_DESC* pRenderTargets,
+                                                             const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC* pDepthStencil,
+                                                             D3D12_RENDER_PASS_FLAGS                     Flags);
+
+    bool TrimDrawCalls_ID3D12CommandQueue_ExecuteCommandLists(
+        std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+        ID3D12CommandQueue_Wrapper*                            wrapper,
+        UINT                                                   num_lists,
+        ID3D12CommandList* const*                              lists);
+
+    bool HasSplitCommandLists(UINT num_lists, ID3D12CommandList* const* lists);
+
+    std::vector<graphics::dx12::CommandSet> GetCommandListsForTrimDrawCalls(ID3D12CommandList_Wrapper* wrapper,
+                                                                            format::ApiCallId          api_call_id);
+
   protected:
     D3D12CaptureManager();
 
@@ -793,7 +853,8 @@ class D3D12CaptureManager : public ApiCaptureManager
                                       ID3D12Heap_Wrapper*      heap_wrapper,
                                       uint64_t                 heap_offset);
 
-    void InitializeSwapChainBufferResourceInfo(ID3D12Resource_Wrapper* resource_wrapper,
+    void InitializeSwapChainBufferResourceInfo(IDXGISwapChain_Wrapper* wrapper,
+                                               ID3D12Resource_Wrapper* resource_wrapper,
                                                D3D12_RESOURCE_STATES   initial_state);
 
     void InitializeID3D12DeviceInfo(IUnknown* pAdapter, void** device);
@@ -812,8 +873,11 @@ class D3D12CaptureManager : public ApiCaptureManager
     void                          EnableDRED();
     bool                          RvAnnotationActive();
 
-    void                              PrePresent(IDXGISwapChain_Wrapper* wrapper);
-    void                              PostPresent(IDXGISwapChain_Wrapper* wrapper, UINT flags);
+    void PrePresent(IDXGISwapChain_Wrapper* wrapper);
+    void PostPresent(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                     IDXGISwapChain_Wrapper*                                wrapper,
+                     UINT                                                   flags);
+
     static D3D12CaptureManager*       singleton_;
     std::set<ID3D12Resource_Wrapper*> mapped_resources_; ///< Track mapped resources for unassisted tracking mode.
     DxgiDispatchTable  dxgi_dispatch_table_;  ///< DXGI dispatch table for functions retrieved from the DXGI DLL.

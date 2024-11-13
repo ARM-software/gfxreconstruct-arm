@@ -179,11 +179,11 @@ void FpsInfo::LogMeasurements()
     {
         const std::string json_string = file_content.dump(util::kJsonIndentWidth);
 
-        const size_t size_written = util::platform::FileWrite(json_string.data(), 1, json_string.size(), file_pointer);
+        const bool success = util::platform::FileWrite(json_string.data(), json_string.size(), file_pointer);
         util::platform::FileClose(file_pointer);
 
         // It either writes a fully valid file, or it doesn't write anything !
-        if (size_written != json_string.size())
+        if (!success)
         {
             GFXRECON_LOG_ERROR("Failed to write to measurements file '%s'.", measurement_file_name_.c_str());
 

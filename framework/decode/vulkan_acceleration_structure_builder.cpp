@@ -119,8 +119,12 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
     VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
+
     BeginCommandBuffer();
     CmdBuildAccelerationStructures(cmd_execute_obj_.command_buffer_, info_count, geometry_infos, range_infos);
+    functions_.cmd_build_acceleration_structures(
+        cmd_execute_obj_.command_buffer_, info_count, geometry_infos, range_infos);
     ExecuteCommandBuffer();
 }
 
@@ -318,8 +322,6 @@ void VulkanAccelerationStructureBuilder::QueueInstanceBufferUpdate(
     {
         throw std::runtime_error("Unsupported instances.arrayOfPointers");
     }
-    // Update the device address of the buffer itself in the geometry info
-    buffer_tracker_->UpdateBufferDeviceAddress(instances.data.deviceAddress);
 
     if (build_range.primitiveCount == 0)
     {
@@ -590,47 +592,23 @@ void VulkanAccelerationStructureBuilder::ExecuteCommandBuffer()
     GFXRECON_ASSERT(result == VK_SUCCESS);
 }
 
-// For each geometry build info, we want to get the actual addresses of the geometry buffers
-void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
+void VulkanAccelerationStructureBuilder::ProcessAccelerationStructureGeometry(
     VkCommandBuffer                              command_buffer,
     VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
     VkAccelerationStructureBuildRangeInfoKHR*    range_infos)
 {
     for (uint32_t geometry_index = 0; geometry_index < build_geometry.geometryCount; ++geometry_index)
     {
-        auto& geometry_data =
+        VkAccelerationStructureGeometryKHR& geometry_data =
             const_cast<VkAccelerationStructureGeometryKHR*>(build_geometry.pGeometries)[geometry_index];
         if (geometry_data.sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
         {
             continue;
         }
-        switch (geometry_data.geometryType)
+        if (geometry_data.geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
         {
-            case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
-            {
-                auto& triangles = geometry_data.geometry.triangles;
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
-                break;
-            }
-            case VK_GEOMETRY_TYPE_INSTANCES_KHR:
-            {
-                auto& instances = geometry_data.geometry.instances;
-                QueueInstanceBufferUpdate(command_buffer, instances, range_infos[geometry_index]);
-                break;
-            }
-            case VK_GEOMETRY_TYPE_AABBS_KHR:
-            {
-                auto& aabbs = geometry_data.geometry.aabbs;
-                buffer_tracker_->UpdateBufferDeviceAddress(aabbs.data.deviceAddress);
-                break;
-            }
-            default:
-            {
-                GFXRECON_LOG_ERROR("Unexpected geometry type");
-                break;
-            }
+            auto& instances = geometry_data.geometry.instances;
+            QueueInstanceBufferUpdate(command_buffer, instances, range_infos[geometry_index]);
         }
     }
 }
@@ -735,13 +713,11 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
             scratch_size                               = size_info.updateScratchSize;
         }
-
+        ProcessAccelerationStructureGeometry(command_buffer, geometry_infos[i], range_infos[i]);
         UpdateScratchDeviceAddress(geometry_infos[i], scratch_size);
-        UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
 
     VulkanMicromapBuilder::OnCmdBuildAccStrHandling(buffer_tracker_, info_count, geometry_infos);
-    functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
 }
 
 void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
@@ -1259,26 +1235,6 @@ void VulkanAccelerationStructureBuilder::OnCmdTraceRaysKHR(VkCommandBuffer      
                                                            VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
                                                            VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable)
 {
-    // SBT's device addresses can change, update them based on buffer_tracker_->GetBufferDeviceAddress calls recorded
-    // earlier Device addresses are not guaranteed to be valid - some tables could be left out, process only the regions
-    // with specified size
-    if (pRaygenShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pRaygenShaderBindingTable->deviceAddress);
-    }
-    if (pMissShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
-    }
-    if (pHitShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
-    }
-    if (pCallableShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
-    }
-
     // Shader group handles stored in SBT's will require update as well, this should be done before QueueSubmit
     // Store SBT data for later replacement
     CmdTraceRaysEntry new_entry{

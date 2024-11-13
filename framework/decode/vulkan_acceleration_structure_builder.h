@@ -407,9 +407,9 @@ class VulkanAccelerationStructureBuilder
   private:
     AccelerationStructureEntry* GetAccelerationStructureEntry(VkAccelerationStructureKHR acceleration_struct);
     bool                        UpdateAccelerationStructDeviceAddress(VkDeviceAddress& address);
-    void                        UpdateDeviceAddress(VkCommandBuffer                              command_buffer,
-                                                    VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
-                                                    VkAccelerationStructureBuildRangeInfoKHR*    range_infos);
+    void                        ProcessAccelerationStructureGeometry(VkCommandBuffer                              command_buffer,
+                                                                     VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
+                                                                     VkAccelerationStructureBuildRangeInfoKHR*    range_infos);
 
     VkDeviceAddress GetAccelerationStructureDeviceAddress(VkAccelerationStructureKHR acceleration_structure);
 

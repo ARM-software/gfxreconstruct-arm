@@ -89,7 +89,7 @@ from vulkan_struct_handle_wrappers_body_generator import VulkanStructHandleWrapp
 from vulkan_struct_trackers_header_generator import VulkanStructTrackersHeaderGenerator, VulkanStructTrackersHeaderGeneratorOptions
 from vulkan_struct_trackers_body_generator import VulkanStructTrackersBodyGenerator, VulkanStructTrackersBodyGeneratorOptions
 from vulkan_struct_deep_copy_body_generator import VulkanStructDeepCopyBodyGenerator, VulkanStructDeepCopyBodyGeneratorOptions
-from vulkan_struct_deep_copy_pnext_body_generator import VulkanStructDeepCopyPNextBodyGenerator, VulkanStructDeepCopyPNextBodyGeneratorOptions
+from vulkan_struct_deep_copy_stype_body_generator import VulkanStructDeepCopySTypeBodyGenerator, VulkanStructDeepCopySTypeBodyGeneratorOptions
 
 # To String
 from vulkan_enum_to_string_body_generator import VulkanEnumToStringBodyGenerator, VulkanEnumToStringBodyGeneratorOptions
@@ -475,6 +475,21 @@ def make_gen_opts(args):
             replay_overrides=replay_overrides,
             dump_resources_overrides=dump_resources_overrides,
             replay_async_overrides=replay_async_overrides,
+            platform_types=platform_types,
+            prefix_text=prefix_strings + vk_prefix_strings,
+            protect_file=False,
+            protect_feature=False,
+            extraVulkanHeaders=extraVulkanHeaders
+        )
+    ]
+
+    gen_opts['generated_vulkan_replay_dump_resources.cpp'] = [
+        VulkanReplayDumpResourcesBodyGenerator,
+        VulkanReplayDumpResourcesBodyGeneratorOptions(
+            filename='generated_vulkan_replay_dump_resources.cpp',
+            directory=directory,
+            blacklists=None,
+            dump_resources_overrides=dump_resources_overrides,
             platform_types=platform_types,
             prefix_text=prefix_strings + vk_prefix_strings,
             protect_file=False,
@@ -935,10 +950,10 @@ def make_gen_opts(args):
         )
     ]
 
-    gen_opts['generated_vulkan_struct_deep_copy_pnext.cpp'] = [
-        VulkanStructDeepCopyPNextBodyGenerator,
-        VulkanStructDeepCopyPNextBodyGeneratorOptions(
-            filename='generated_vulkan_struct_deep_copy_pnext.cpp',
+    gen_opts['generated_vulkan_struct_deep_copy_stype.cpp'] = [
+        VulkanStructDeepCopySTypeBodyGenerator,
+        VulkanStructDeepCopySTypeBodyGeneratorOptions(
+            filename='generated_vulkan_struct_deep_copy_stype.cpp',
             directory=directory,
             blacklists=blacklists,
             platform_types=platform_types,
