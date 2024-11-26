@@ -94,6 +94,7 @@ def CreateReplayParser():
     parser.add_argument('--log-file', metavar='DEVICE_FILE', help='Write log messages to a file at the specified path instead of logcat (forwarded to replay tool)')
     parser.add_argument('--pause-frame', metavar='N', help='Pause after replaying frame number N (forwarded to replay tool)')
     parser.add_argument('--paused', action='store_true', default=False, help='Pause after replaying the first frame (same as "--pause-frame 1"; forwarded to replay tool)')
+    parser.add_argument('--cpu-mask', metavar='binary_mask', help='Set of CPU cores used by the replayer. `binary-mask` is a succession of "0" and "1" that specifies used/unused cores. For example "1010" activates the first and third cores and deactivate all other cores. If the option is not set, all cores can be used. If the option is set only for some cores, the other cores are not used. (forwarded to replay tool)')
     parser.add_argument('--trigger-script-path', metavar='DEVICE_FILE', help='Path to the script needed to trigger)')
     parser.add_argument('--trigger-script-frame', metavar='RANGES', help='Frame ranges to trigger the script.)')
     parser.add_argument('--screenshot-all', action='store_true', default=False, help='Generate screenshots for all frames.  When this option is specified, --screenshots is ignored (forwarded to replay tool)')
@@ -170,6 +171,10 @@ def MakeExtrasString(args):
 
     if args.paused:
         arg_list.append('--paused')
+
+    if args.cpu_mask:
+        arg_list.append('--cpu-mask')
+        arg_list.append('{}'.format(args.cpu_mask))
 
     if args.screenshot_all:
         arg_list.append('--screenshot-all')
