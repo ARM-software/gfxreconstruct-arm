@@ -35,7 +35,7 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(application)
-
+ANativeWindow* tmp_window = nullptr;
 AndroidWindow::AndroidWindow(AndroidContext* android_context, ANativeWindow* window) :
     android_context_(android_context), window_(window), width_(0), height_(0), pre_transform_(0)
 {
@@ -162,14 +162,27 @@ decode::Window* AndroidWindowFactory::Create(
     GFXRECON_UNREFERENCED_PARAMETER(width);
     GFXRECON_UNREFERENCED_PARAMETER(height);
     GFXRECON_UNREFERENCED_PARAMETER(force_windowed);
+    tmp_window = nullptr;
+    android_context_->requestNativeWindow(width, height);
 
-    return android_context_->GetWindow();
+    AndroidWindow* tmpwin = nullptr;
+    if (tmp_window != nullptr)
+    {
+        tmpwin = new AndroidWindow(android_context_, tmp_window);
+        GFXRECON_LOG_INFO("Got android window %p\n", tmp_window);
+    }
+    else
+    {
+        GFXRECON_LOG_WARNING("Get android window failed");
+    }
+    return tmpwin;
 }
 
 void AndroidWindowFactory::Destroy(decode::Window* window)
 {
-    // Android currently has a single window whose lifetime is managed by AndroidContext.
     GFXRECON_UNREFERENCED_PARAMETER(window);
+    int32_t windowidx = created_window_.at(window) - 1;
+    android_context_->destroyNativeWindow(windowidx);
 }
 
 VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const encode::VulkanInstanceTable* table,

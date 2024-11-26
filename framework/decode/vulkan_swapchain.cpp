@@ -95,6 +95,8 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
             GFXRECON_LOG_FATAL("Failed to create a window for use with surface creation.  Replay cannot continue.");
             return VK_ERROR_UNKNOWN;
         }
+        ++created_window_count_;
+        window_factory->created_window_.emplace(window, created_window_count_);
 
         result = window->CreateSurface(instance_table_, instance, flags, replay_surface);
 
