@@ -158,6 +158,7 @@ const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-outpu
 const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
 const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
+const char kVerboseOption[]                       = "--verbose";
 
 enum class WsiPlatform
 {

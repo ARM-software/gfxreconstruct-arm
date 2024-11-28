@@ -87,12 +87,15 @@ class MetadataJsonConsumer : public Base
         const JsonOptions& json_options = GetOptions();
         auto&              jdata        = WriteMetaCommandStart("FixDeviceAddressCommand");
         HandleToJson(jdata["relation_id"], header.relation_id, json_options);
-        for (int i = 0; i < header.num_of_locations; i++)
+        if (json_options.verbose)
         {
-            HandleToJson(jdata["location"][i]["buffer_id"], infos[i].id, json_options);
-            FieldToJson(jdata["location"][i]["original_address"], infos[i].original_address, json_options);
-            FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
-            FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            for (int i = 0; i < header.num_of_locations; i++)
+            {
+                HandleToJson(jdata["location"][i]["object_id"], infos[i].id, json_options);
+                FieldToJson(jdata["location"][i]["original_address"], infos[i].original_address, json_options);
+                FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
+                FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            }
         }
         WriteBlockEnd();
     }
