@@ -22,7 +22,7 @@
 */
 
 #include "tools/optimize/vulkan_file_optimizer.h"
-#include "decode/vulkan_skia_modifier.h"
+#include "generated/generated_vulkan_skiavk_modifier.h"
 #include "framework/format/format_util.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -35,7 +35,10 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     bool                success = ReadBytes(&call_info.thread_id, sizeof(call_info.thread_id));
 
     parameter_buffer_size -= sizeof(call_info.thread_id);
-
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetCurrentBlockIndex(GetCurrentBlockIndex());
+    }
     if (format::IsBlockCompressed(block_header.type))
     {
         parameter_buffer_size -= sizeof(uncompressed_size);
@@ -103,7 +106,6 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
         modifier->AppendPreCalls(new_pre_calls);
         modifier->AppendPostCalls(new_post_calls);
     }
-
     for (auto& new_call : new_pre_calls)
     {
         switch (new_call->type)
@@ -232,10 +234,13 @@ bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_heade
 {
     uint64_t index               = GetCurrentBlockIndex();
     bool     delete_current_call = false;
-
     for (auto& modifier : optimization_data_->modifiers)
     {
-        delete_current_call |= modifier->GetDeleteCurrentCall(index);
+        modifier->SetCurrentBlockIndex(GetCurrentBlockIndex());
+    }
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        delete_current_call |= modifier->GetDeleteCurrentCall();
     }
     if (delete_current_call)
     {
