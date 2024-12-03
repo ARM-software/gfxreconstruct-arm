@@ -443,6 +443,21 @@ VkObjectType GetObjectType<ShaderEXTWrapper>()
 {
     return VK_OBJECT_TYPE_SHADER_EXT;
 }
+template <>
+VkObjectType GetObjectType<PipelineBinaryKHRWrapper>()
+{
+    return VK_OBJECT_TYPE_PIPELINE_BINARY_KHR;
+}
+template <>
+VkObjectType GetObjectType<IndirectExecutionSetEXTWrapper>()
+{
+    return VK_OBJECT_TYPE_INDIRECT_EXECUTION_SET_EXT;
+}
+template <>
+VkObjectType GetObjectType<IndirectCommandsLayoutEXTWrapper>()
+{
+    return VK_OBJECT_TYPE_INDIRECT_COMMANDS_LAYOUT_EXT;
+}
 GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

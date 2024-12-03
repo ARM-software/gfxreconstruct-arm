@@ -67,12 +67,10 @@ class FileTransformer
 
     virtual ~FileTransformer();
 
-    bool Initialize(const std::string& input_filename, const std::string& output_filename);
+    bool Initialize(const std::string& input_filename, const std::string& output_filename, const std::string& tool);
 
     // Returns false if processing failed.  Use GetErrorState() to determine error condition for failure case.
     virtual bool Process();
-
-    const format::FileHeader& GetFileHeader() const { return file_header_; }
 
     const std::vector<format::FileOptionPair>& GetFileOptions() const { return file_options_; }
 
@@ -83,8 +81,6 @@ class FileTransformer
     Error GetErrorState() const { return error_state_; }
 
   protected:
-    bool IsFileHeaderValid() const { return (file_header_.fourcc == GFXRECON_FOURCC); }
-
     bool IsFileValid(FILE* fd) const { return ((fd != nullptr) && !feof(fd) && !ferror(fd)); }
 
     bool IsLoadingState() const { return loading_state_; }
@@ -151,9 +147,11 @@ class FileTransformer
     bool ReadBlockHeader(format::BlockHeader* block_header);
 
   protected:
+    std::string                         input_filename_;
+    std::string                         output_filename_;
+    std::string                         tool_;
     FILE*                               input_file_;
     FILE*                               output_file_;
-    format::FileHeader                  file_header_;
     std::vector<format::FileOptionPair> file_options_;
     format::EnabledOptions              enabled_options_;
     uint64_t                            bytes_read_;

@@ -202,6 +202,36 @@ class VulkanStateTracker
         }
     }
 
+    void AddStructGroupEntry(
+        VkDevice                                                                                   parent_handle,
+        uint32_t                                                                                   count,
+        VkPipelineBinaryHandlesInfoKHR*                                                            handle_structs,
+        std::function<vulkan_wrappers::PipelineBinaryKHRWrapper*(VkPipelineBinaryHandlesInfoKHR*)> unwrap_struct_handle,
+        format::ApiCallId                                                                          create_call_id,
+        const util::MemoryOutputStream* create_parameter_buffer)
+    {
+        assert(handle_structs != nullptr);
+        assert(create_parameter_buffer != nullptr);
+
+        GFXRECON_UNREFERENCED_PARAMETER(count);
+        GFXRECON_UNREFERENCED_PARAMETER(unwrap_struct_handle);
+
+        if (handle_structs->pPipelineBinaries != nullptr)
+        {
+            vulkan_state_info::CreateParameters create_parameters = std::make_shared<util::MemoryOutputStream>(
+                create_parameter_buffer->GetData(), create_parameter_buffer->GetDataSize());
+
+            AddGroupHandles<VkDevice, void*, vulkan_wrappers::PipelineBinaryKHRWrapper, void>(
+                parent_handle,
+                nullptr,
+                handle_structs->pipelineBinaryCount,
+                handle_structs->pPipelineBinaries,
+                nullptr,
+                create_call_id,
+                create_parameters);
+        }
+    }
+
     template <typename Wrapper>
     void RemoveEntry(typename Wrapper::HandleType handle)
     {
@@ -304,6 +334,8 @@ class VulkanStateTracker
 
     void TrackBufferDeviceAddress(VkDevice device, VkBuffer buffer, VkDeviceAddress address);
 
+    void TrackOpaqueBufferDeviceAddress(VkDevice device, VkBuffer buffer, VkDeviceAddress opaque_address);
+
     void TrackBufferMemoryBinding(VkDevice       device,
                                   VkBuffer       buffer,
                                   VkDeviceMemory memory,
@@ -404,8 +436,11 @@ class VulkanStateTracker
 
     void TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address);
 
+    void TrackRayTracingPipelineProperties(VkPhysicalDevice                                 physicalDevice,
+                                           VkPhysicalDeviceRayTracingPipelinePropertiesKHR* ray_properties);
+
     void TrackRayTracingShaderGroupHandles(
-        VkDevice device, VkPipeline pipeline, uint32_t group_count, size_t data_size, const void* data);
+        VkDevice device, VkPipeline pipeline, size_t group_count, size_t data_size, const void* data);
 
     void TrackAcquireFullScreenExclusiveMode(VkDevice device, VkSwapchainKHR swapchain);
 

@@ -2318,6 +2318,85 @@ void VulkanReferencedResourceConsumer::Process_vkCmdDrawClusterIndirectHUAWEI(
     GetTable().AddResourceToUser(commandBuffer, buffer);
 }
 
+void VulkanReferencedResourceConsumer::Process_vkCmdPreprocessGeneratedCommandsEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkGeneratedCommandsInfoEXT>* pGeneratedCommandsInfo,
+    format::HandleId                            stateCommandBuffer)
+{
+    assert(pGeneratedCommandsInfo != nullptr);
+
+    if (!pGeneratedCommandsInfo->IsNull() && (pGeneratedCommandsInfo->HasData()))
+    {
+        auto pGeneratedCommandsInfo_ptr = pGeneratedCommandsInfo->GetMetaStructPointer();
+        const VkBaseInStructure* pnext_header = nullptr;
+        if (pGeneratedCommandsInfo_ptr->pNext != nullptr)
+        {
+            pnext_header = reinterpret_cast<const VkBaseInStructure*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+        }
+        while (pnext_header)
+        {
+            switch (pnext_header->sType)
+            {
+                default:
+                    break;
+                case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_PIPELINE_INFO_EXT:
+                {
+                    auto pnext_value = reinterpret_cast<const Decoded_VkGeneratedCommandsPipelineInfoEXT*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_SHADER_INFO_EXT:
+                {
+                    auto pnext_value = reinterpret_cast<const Decoded_VkGeneratedCommandsShaderInfoEXT*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+                    break;
+                }
+            }
+            pnext_header = pnext_header->pNext;
+        }
+    }
+    GetTable().AddUserToUser(commandBuffer, stateCommandBuffer);
+}
+
+void VulkanReferencedResourceConsumer::Process_vkCmdExecuteGeneratedCommandsEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    VkBool32                                    isPreprocessed,
+    StructPointerDecoder<Decoded_VkGeneratedCommandsInfoEXT>* pGeneratedCommandsInfo)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(isPreprocessed);
+
+    assert(pGeneratedCommandsInfo != nullptr);
+
+    if (!pGeneratedCommandsInfo->IsNull() && (pGeneratedCommandsInfo->HasData()))
+    {
+        auto pGeneratedCommandsInfo_ptr = pGeneratedCommandsInfo->GetMetaStructPointer();
+        const VkBaseInStructure* pnext_header = nullptr;
+        if (pGeneratedCommandsInfo_ptr->pNext != nullptr)
+        {
+            pnext_header = reinterpret_cast<const VkBaseInStructure*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+        }
+        while (pnext_header)
+        {
+            switch (pnext_header->sType)
+            {
+                default:
+                    break;
+                case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_PIPELINE_INFO_EXT:
+                {
+                    auto pnext_value = reinterpret_cast<const Decoded_VkGeneratedCommandsPipelineInfoEXT*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_SHADER_INFO_EXT:
+                {
+                    auto pnext_value = reinterpret_cast<const Decoded_VkGeneratedCommandsShaderInfoEXT*>(pGeneratedCommandsInfo_ptr->pNext->GetPointer());
+                    break;
+                }
+            }
+            pnext_header = pnext_header->pNext;
+        }
+    }
+}
+
 void VulkanReferencedResourceConsumer::Process_vkCmdBuildAccelerationStructuresKHR(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,

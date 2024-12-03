@@ -95,23 +95,34 @@ class ApiCaptureManager
 
     void WriteFrameMarker(format::MarkerType marker_type) { common_manager_->WriteFrameMarker(marker_type); }
 
-    virtual void EndFrame() { common_manager_->EndFrame(api_family_); }
+    virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->EndFrame(api_family_, current_lock);
+    }
 
     // Pre/PostQueueSubmit to be called immediately before and after work is submitted to the GPU by vkQueueSubmit for
     // Vulkan or by ID3D12CommandQueue::ExecuteCommandLists for DX12.
-    void PreQueueSubmit() { common_manager_->PreQueueSubmit(api_family_); }
-    void PostQueueSubmit() { common_manager_->PostQueueSubmit(api_family_); }
+    void PreQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->PreQueueSubmit(api_family_, current_lock);
+    }
+    void PostQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->PostQueueSubmit(api_family_, current_lock);
+    }
 
     bool ShouldTriggerScreenshot() { return common_manager_->ShouldTriggerScreenshot(); }
 
-    void CheckContinueCaptureForWriteMode(uint32_t current_boundary_count)
+    void CheckContinueCaptureForWriteMode(uint32_t                                               current_boundary_count,
+                                          std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
     {
-        common_manager_->CheckContinueCaptureForWriteMode(api_family_, current_boundary_count);
+        common_manager_->CheckContinueCaptureForWriteMode(api_family_, current_boundary_count, current_lock);
     }
 
-    void CheckStartCaptureForTrackMode(uint32_t current_boundary_count)
+    void CheckStartCaptureForTrackMode(uint32_t                                               current_boundary_count,
+                                       std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
     {
-        common_manager_->CheckStartCaptureForTrackMode(api_family_, current_boundary_count);
+        common_manager_->CheckStartCaptureForTrackMode(api_family_, current_boundary_count, current_lock);
     }
 
     bool IsTrimHotkeyPressed() { return common_manager_->IsTrimHotkeyPressed(); }
@@ -200,6 +211,8 @@ class ApiCaptureManager
     util::Keyboard&                   GetKeyboard() { return common_manager_->GetKeyboard(); }
     const std::string&                GetScreenshotPrefix() const { return common_manager_->GetScreenshotPrefix(); }
     util::ScreenshotFormat            GetScreenshotFormat() { return common_manager_->GetScreenshotFormat(); }
+    auto                              GetTrimBoundary() const { return common_manager_->GetTrimBoundary(); }
+    auto                              GetTrimDrawCalls() const { return common_manager_->GetTrimDrawCalls(); }
 
   protected:
     const format::ApiFamilyId api_family_;

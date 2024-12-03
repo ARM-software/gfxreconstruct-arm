@@ -202,7 +202,8 @@ class VulkanDecoderBase : public ApiDecoder
                                                                       size_t         buffer_size) override;
     virtual void DispatchVulkanAccelerationStructuresCopyMetaCommand(const uint8_t* parameter_buffer,
                                                                      size_t         buffer_size) override;
-
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string) override;
     virtual void DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(const uint8_t* parameter_buffer,
                                                                                 size_t         buffer_size) override;
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;

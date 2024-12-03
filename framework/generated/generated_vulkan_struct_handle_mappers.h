@@ -439,7 +439,23 @@ void MapStructHandles(Decoded_VkPipelineCreateFlags2CreateInfoKHR* wrapper, cons
 
 void MapStructHandles(Decoded_VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
 
+void MapStructHandles(Decoded_VkPhysicalDevicePipelineBinaryFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkDevicePipelineBinaryInternalCacheControlKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPipelineBinaryCreateInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPipelineBinaryInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkReleaseCapturedPipelineDataInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPipelineBinaryDataInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPipelineBinaryHandlesInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
 void MapStructHandles(Decoded_VkPhysicalDeviceCooperativeMatrixFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkVideoDecodeAV1PictureInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
 
@@ -576,8 +592,6 @@ void MapStructHandles(Decoded_VkPipelineCompilerControlCreateInfoAMD* wrapper, c
 void MapStructHandles(Decoded_VkDeviceMemoryOverallocationCreateInfoAMD* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPresentFrameTokenGGP* wrapper, const VulkanObjectInfoTable& object_info_table);
-
-void MapStructHandles(Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceMeshShaderFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
@@ -813,6 +827,8 @@ void MapStructHandles(Decoded_VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQC
 
 void MapStructHandles(Decoded_VkPhysicalDeviceDeviceGeneratedCommandsComputeFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
+void MapStructHandles(Decoded_VkComputePipelineIndirectBufferInfoNV* wrapper, const VulkanObjectInfoTable& object_info_table);
+
 void MapStructHandles(Decoded_VkPipelineIndirectDeviceAddressInfoNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceLinearColorAttachmentFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
@@ -842,6 +858,8 @@ void MapStructHandles(Decoded_VkPhysicalDeviceLegacyDitheringFeaturesEXT* wrappe
 void MapStructHandles(Decoded_VkPhysicalDevicePipelineProtectedAccessFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceExternalFormatResolveFeaturesANDROID* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPhysicalDeviceAntiLagFeaturesAMD* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceShaderObjectFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
 
@@ -895,15 +913,41 @@ void MapStructHandles(Decoded_VkPhysicalDeviceDescriptorPoolOverallocationFeatur
 
 void MapStructHandles(Decoded_VkPhysicalDeviceRawAccessChainsFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
+void MapStructHandles(Decoded_VkPhysicalDeviceCommandBufferInheritanceFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
+
 void MapStructHandles(Decoded_VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkPhysicalDeviceRayTracingValidationFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table);
 
+void MapStructHandles(Decoded_VkPhysicalDeviceDeviceGeneratedCommandsFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkGeneratedCommandsMemoryRequirementsInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetPipelineInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetShaderLayoutInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetShaderInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkGeneratedCommandsInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkWriteIndirectExecutionSetPipelineEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkIndirectCommandsLayoutCreateInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkGeneratedCommandsPipelineInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkGeneratedCommandsShaderInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkWriteIndirectExecutionSetShaderEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
+
 void MapStructHandles(Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkImageAlignmentControlCreateInfoMESA* wrapper, const VulkanObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkPhysicalDeviceDepthClampControlFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkAccelerationStructureGeometryTrianglesDataKHR* wrapper, const VulkanObjectInfoTable& object_info_table);
 
@@ -957,6 +1001,8 @@ void AddStructHandles(format::HandleId parent_id, const Decoded_VkDisplayPlanePr
 
 void AddStructHandles(format::HandleId parent_id, const Decoded_VkDisplayModeProperties2KHR* id_wrapper, const VkDisplayModeProperties2KHR* handle_struct, VulkanObjectInfoTable* object_info_table);
 
+void AddStructHandles(format::HandleId parent_id, const Decoded_VkPipelineBinaryHandlesInfoKHR* id_wrapper, const VkPipelineBinaryHandlesInfoKHR* handle_struct, VulkanObjectInfoTable* object_info_table);
+
 template <typename T>
 void AddStructArrayHandles(format::HandleId parent_id, const T* id_wrappers, size_t id_len, const typename T::struct_type* handle_structs, size_t handle_len, VulkanObjectInfoTable* object_info_table)
 {
@@ -972,6 +1018,8 @@ void AddStructArrayHandles(format::HandleId parent_id, const T* id_wrappers, siz
 }
 
 void SetStructHandleLengths(Decoded_VkPhysicalDeviceGroupProperties* wrapper);
+
+void SetStructHandleLengths(Decoded_VkPipelineBinaryHandlesInfoKHR* wrapper);
 
 template <typename T>
 void SetStructArrayHandleLengths(T* wrappers, size_t len)

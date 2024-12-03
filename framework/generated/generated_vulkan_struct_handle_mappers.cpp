@@ -258,6 +258,11 @@ void MapStructHandles(Decoded_VkComputePipelineCreateInfo* wrapper, const Vulkan
     {
         VkComputePipelineCreateInfo* value = wrapper->decoded_value;
 
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
         MapStructHandles(wrapper->stage, object_info_table);
 
         value->layout = handle_mapping::MapHandle<PipelineLayoutInfo>(wrapper->layout, object_info_table, &VulkanObjectInfoTable::GetPipelineLayoutInfo);
@@ -2277,7 +2282,95 @@ void MapStructHandles(Decoded_VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDevicePipelineBinaryFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkDevicePipelineBinaryInternalCacheControlKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPipelineBinaryCreateInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkPipelineBinaryCreateInfoKHR* value = wrapper->decoded_value;
+
+        value->pipeline = handle_mapping::MapHandle<PipelineInfo>(wrapper->pipeline, object_info_table, &VulkanObjectInfoTable::GetPipelineInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkPipelineBinaryInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkPipelineBinaryInfoKHR* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->pPipelineBinaries = handle_mapping::MapHandleArray<PipelineBinaryKHRInfo>(&wrapper->pPipelineBinaries, object_info_table, &VulkanObjectInfoTable::GetPipelineBinaryKHRInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkReleaseCapturedPipelineDataInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkReleaseCapturedPipelineDataInfoKHR* value = wrapper->decoded_value;
+
+        value->pipeline = handle_mapping::MapHandle<PipelineInfo>(wrapper->pipeline, object_info_table, &VulkanObjectInfoTable::GetPipelineInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkPipelineBinaryDataInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkPipelineBinaryDataInfoKHR* value = wrapper->decoded_value;
+
+        value->pipelineBinary = handle_mapping::MapHandle<PipelineBinaryKHRInfo>(wrapper->pipelineBinary, object_info_table, &VulkanObjectInfoTable::GetPipelineBinaryKHRInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkPipelineBinaryHandlesInfoKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkPipelineBinaryHandlesInfoKHR* value = wrapper->decoded_value;
+
+        value->pPipelineBinaries = handle_mapping::MapHandleArray<PipelineBinaryKHRInfo>(&wrapper->pPipelineBinaries, object_info_table, &VulkanObjectInfoTable::GetPipelineBinaryKHRInfo);
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceCooperativeMatrixFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -3066,17 +3159,6 @@ void MapStructHandles(Decoded_VkDeviceMemoryOverallocationCreateInfoAMD* wrapper
 }
 
 void MapStructHandles(Decoded_VkPresentFrameTokenGGP* wrapper, const VulkanObjectInfoTable& object_info_table)
-{
-    if (wrapper != nullptr)
-    {
-        if (wrapper->pNext)
-        {
-            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
-        }
-    }
-}
-
-void MapStructHandles(Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -4386,6 +4468,17 @@ void MapStructHandles(Decoded_VkPhysicalDeviceDeviceGeneratedCommandsComputeFeat
     }
 }
 
+void MapStructHandles(Decoded_VkComputePipelineIndirectBufferInfoNV* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkPipelineIndirectDeviceAddressInfoNV* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
@@ -4540,6 +4633,17 @@ void MapStructHandles(Decoded_VkPhysicalDevicePipelineProtectedAccessFeaturesEXT
 }
 
 void MapStructHandles(Decoded_VkPhysicalDeviceExternalFormatResolveFeaturesANDROID* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPhysicalDeviceAntiLagFeaturesAMD* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -4834,6 +4938,17 @@ void MapStructHandles(Decoded_VkPhysicalDeviceRawAccessChainsFeaturesNV* wrapper
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDeviceCommandBufferInheritanceFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
@@ -4867,6 +4982,148 @@ void MapStructHandles(Decoded_VkPhysicalDeviceRayTracingValidationFeaturesNV* wr
     }
 }
 
+void MapStructHandles(Decoded_VkPhysicalDeviceDeviceGeneratedCommandsFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkGeneratedCommandsMemoryRequirementsInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkGeneratedCommandsMemoryRequirementsInfoEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->indirectExecutionSet = handle_mapping::MapHandle<IndirectExecutionSetEXTInfo>(wrapper->indirectExecutionSet, object_info_table, &VulkanObjectInfoTable::GetIndirectExecutionSetEXTInfo);
+
+        value->indirectCommandsLayout = handle_mapping::MapHandle<IndirectCommandsLayoutEXTInfo>(wrapper->indirectCommandsLayout, object_info_table, &VulkanObjectInfoTable::GetIndirectCommandsLayoutEXTInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetPipelineInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkIndirectExecutionSetPipelineInfoEXT* value = wrapper->decoded_value;
+
+        value->initialPipeline = handle_mapping::MapHandle<PipelineInfo>(wrapper->initialPipeline, object_info_table, &VulkanObjectInfoTable::GetPipelineInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetShaderLayoutInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkIndirectExecutionSetShaderLayoutInfoEXT* value = wrapper->decoded_value;
+
+        value->pSetLayouts = handle_mapping::MapHandleArray<DescriptorSetLayoutInfo>(&wrapper->pSetLayouts, object_info_table, &VulkanObjectInfoTable::GetDescriptorSetLayoutInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkIndirectExecutionSetShaderInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkIndirectExecutionSetShaderInfoEXT* value = wrapper->decoded_value;
+
+        value->pInitialShaders = handle_mapping::MapHandleArray<ShaderEXTInfo>(&wrapper->pInitialShaders, object_info_table, &VulkanObjectInfoTable::GetShaderEXTInfo);
+
+        MapStructArrayHandles<Decoded_VkIndirectExecutionSetShaderLayoutInfoEXT>(wrapper->pSetLayoutInfos->GetMetaStructPointer(), wrapper->pSetLayoutInfos->GetLength(), object_info_table);
+    }
+}
+
+void MapStructHandles(Decoded_VkGeneratedCommandsInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkGeneratedCommandsInfoEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->indirectExecutionSet = handle_mapping::MapHandle<IndirectExecutionSetEXTInfo>(wrapper->indirectExecutionSet, object_info_table, &VulkanObjectInfoTable::GetIndirectExecutionSetEXTInfo);
+
+        value->indirectCommandsLayout = handle_mapping::MapHandle<IndirectCommandsLayoutEXTInfo>(wrapper->indirectCommandsLayout, object_info_table, &VulkanObjectInfoTable::GetIndirectCommandsLayoutEXTInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkWriteIndirectExecutionSetPipelineEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkWriteIndirectExecutionSetPipelineEXT* value = wrapper->decoded_value;
+
+        value->pipeline = handle_mapping::MapHandle<PipelineInfo>(wrapper->pipeline, object_info_table, &VulkanObjectInfoTable::GetPipelineInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkIndirectCommandsLayoutCreateInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkIndirectCommandsLayoutCreateInfoEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->pipelineLayout = handle_mapping::MapHandle<PipelineLayoutInfo>(wrapper->pipelineLayout, object_info_table, &VulkanObjectInfoTable::GetPipelineLayoutInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkGeneratedCommandsPipelineInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkGeneratedCommandsPipelineInfoEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->pipeline = handle_mapping::MapHandle<PipelineInfo>(wrapper->pipeline, object_info_table, &VulkanObjectInfoTable::GetPipelineInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkGeneratedCommandsShaderInfoEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkGeneratedCommandsShaderInfoEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+
+        value->pShaders = handle_mapping::MapHandleArray<ShaderEXTInfo>(&wrapper->pShaders, object_info_table, &VulkanObjectInfoTable::GetShaderEXTInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkWriteIndirectExecutionSetShaderEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkWriteIndirectExecutionSetShaderEXT* value = wrapper->decoded_value;
+
+        value->shader = handle_mapping::MapHandle<ShaderEXTInfo>(wrapper->shader, object_info_table, &VulkanObjectInfoTable::GetShaderEXTInfo);
+    }
+}
+
 void MapStructHandles(Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
@@ -4879,6 +5136,17 @@ void MapStructHandles(Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA*
 }
 
 void MapStructHandles(Decoded_VkImageAlignmentControlCreateInfoMESA* wrapper, const VulkanObjectInfoTable& object_info_table)
+{
+    if (wrapper != nullptr)
+    {
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkPhysicalDeviceDepthClampControlFeaturesEXT* wrapper, const VulkanObjectInfoTable& object_info_table)
 {
     if (wrapper != nullptr)
     {
@@ -4983,6 +5251,11 @@ void MapStructHandles(Decoded_VkRayTracingPipelineCreateInfoKHR* wrapper, const 
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
     {
         VkRayTracingPipelineCreateInfoKHR* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext->GetPointer(), wrapper->pNext->GetMetaStructPointer(), object_info_table);
+        }
 
         MapStructArrayHandles<Decoded_VkPipelineShaderStageCreateInfo>(wrapper->pStages->GetMetaStructPointer(), wrapper->pStages->GetLength(), object_info_table);
 
@@ -5353,8 +5626,20 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_BINARY_FEATURES_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDevicePipelineBinaryFeaturesKHR*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_DEVICE_PIPELINE_BINARY_INTERNAL_CACHE_CONTROL_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkDevicePipelineBinaryInternalCacheControlKHR*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PIPELINE_BINARY_INFO_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkPipelineBinaryInfoKHR*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceCooperativeMatrixFeaturesKHR*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PICTURE_INFO_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkVideoDecodeAV1PictureInfoKHR*>(wrapper), object_info_table);
@@ -5496,9 +5781,6 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
             break;
         case VK_STRUCTURE_TYPE_PRESENT_FRAME_TOKEN_GGP:
             MapStructHandles(reinterpret_cast<Decoded_VkPresentFrameTokenGGP*>(wrapper), object_info_table);
-            break;
-        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV:
-            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceComputeShaderDerivativesFeaturesNV*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceMeshShaderFeaturesNV*>(wrapper), object_info_table);
@@ -5788,6 +6070,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_GENERATED_COMMANDS_COMPUTE_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceDeviceGeneratedCommandsComputeFeaturesNV*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_INDIRECT_BUFFER_INFO_NV:
+            MapStructHandles(reinterpret_cast<Decoded_VkComputePipelineIndirectBufferInfoNV*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINEAR_COLOR_ATTACHMENT_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceLinearColorAttachmentFeaturesNV*>(wrapper), object_info_table);
             break;
@@ -5829,6 +6114,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_FORMAT_RESOLVE_FEATURES_ANDROID:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceExternalFormatResolveFeaturesANDROID*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ANTI_LAG_FEATURES_AMD:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceAntiLagFeaturesAMD*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderObjectFeaturesEXT*>(wrapper), object_info_table);
@@ -5902,6 +6190,9 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAW_ACCESS_CHAINS_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceRawAccessChainsFeaturesNV*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMMAND_BUFFER_INHERITANCE_FEATURES_NV:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceCommandBufferInheritanceFeaturesNV*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT16_VECTOR_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV*>(wrapper), object_info_table);
             break;
@@ -5911,11 +6202,23 @@ void MapPNextStructHandles(const void* value, void* wrapper, const VulkanObjectI
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceRayTracingValidationFeaturesNV*>(wrapper), object_info_table);
             break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_GENERATED_COMMANDS_FEATURES_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceDeviceGeneratedCommandsFeaturesEXT*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_PIPELINE_INFO_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkGeneratedCommandsPipelineInfoEXT*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_GENERATED_COMMANDS_SHADER_INFO_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkGeneratedCommandsShaderInfoEXT*>(wrapper), object_info_table);
+            break;
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_FEATURES_MESA:
             MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceImageAlignmentControlFeaturesMESA*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA:
             MapStructHandles(reinterpret_cast<Decoded_VkImageAlignmentControlCreateInfoMESA*>(wrapper), object_info_table);
+            break;
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLAMP_CONTROL_FEATURES_EXT:
+            MapStructHandles(reinterpret_cast<Decoded_VkPhysicalDeviceDepthClampControlFeaturesEXT*>(wrapper), object_info_table);
             break;
         case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR:
             MapStructHandles(reinterpret_cast<Decoded_VkWriteDescriptorSetAccelerationStructureKHR*>(wrapper), object_info_table);
@@ -5992,11 +6295,30 @@ void AddStructHandles(format::HandleId parent_id, const Decoded_VkDisplayModePro
     }
 }
 
+void AddStructHandles(format::HandleId parent_id, const Decoded_VkPipelineBinaryHandlesInfoKHR* id_wrapper, const VkPipelineBinaryHandlesInfoKHR* handle_struct, VulkanObjectInfoTable* object_info_table)
+{
+    if (id_wrapper != nullptr)
+    {
+        handle_mapping::AddHandleArray<PipelineBinaryKHRInfo>(parent_id, id_wrapper->pPipelineBinaries.GetPointer(), id_wrapper->pPipelineBinaries.GetLength(), handle_struct->pPipelineBinaries, handle_struct->pipelineBinaryCount, object_info_table, &VulkanObjectInfoTable::AddPipelineBinaryKHRInfo);
+    }
+}
+
 void SetStructHandleLengths(Decoded_VkPhysicalDeviceGroupProperties* wrapper)
 {
     if (wrapper != nullptr)
     {
         wrapper->physicalDevices.SetHandleLength(wrapper->physicalDevices.GetLength());
+    }
+}
+
+void SetStructHandleLengths(Decoded_VkPipelineBinaryHandlesInfoKHR* wrapper)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkPipelineBinaryHandlesInfoKHR* value = wrapper->decoded_value;
+
+        wrapper->pPipelineBinaries.SetHandleLength(wrapper->pPipelineBinaries.GetLength());
+        value->pPipelineBinaries = wrapper->pPipelineBinaries.GetHandlePointer();
     }
 }
 

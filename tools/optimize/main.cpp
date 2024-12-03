@@ -148,8 +148,8 @@ GetVulkanOptimizationData(const std::string& input_filename)
     {
         gfxrecon::decode::VulkanDecoder                    decoder;
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-        auto feature_tracker_consumer   = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
-        auto micromap_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+        auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+        auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
         auto vulkan_skia_modifier_consuer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
 
         decoder.AddConsumer(&resref_consumer);
@@ -202,7 +202,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 
     // Modification pass. Implement all identified optimizations in output file
     gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get());
-    if (file_optimizer.Initialize(input_filename, output_filename))
+    if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
     {
         file_optimizer.Process();
 
@@ -221,7 +221,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 void SetReplayOptions(std::string input_filename, std::string output_filename, std::string replay_options)
 {
     gfxrecon::ReplayOptionsEditor file_transformer;
-    if (file_transformer.Initialize(input_filename, output_filename))
+    if (file_transformer.Initialize(input_filename, output_filename, "replay_options"))
     {
         file_transformer.SetReplayOptions(replay_options);
         file_transformer.Process();

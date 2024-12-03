@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
 ** Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -54,8 +55,24 @@ typedef _com_ptr_t<_com_IIID<ID3D12CommandQueue, &__uuidof(ID3D12CommandQueue)>>
 typedef _com_ptr_t<_com_IIID<ID3D12CommandAllocator, &__uuidof(ID3D12CommandAllocator)>> ID3D12CommandAllocatorComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList, &__uuidof(ID3D12GraphicsCommandList)>>
     ID3D12GraphicsCommandListComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList1, &__uuidof(ID3D12GraphicsCommandList1)>>
+    ID3D12GraphicsCommandList1ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList2, &__uuidof(ID3D12GraphicsCommandList2)>>
+    ID3D12GraphicsCommandList2ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList3, &__uuidof(ID3D12GraphicsCommandList3)>>
+    ID3D12GraphicsCommandList3ComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList4, &__uuidof(ID3D12GraphicsCommandList4)>>
     ID3D12GraphicsCommandList4ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList5, &__uuidof(ID3D12GraphicsCommandList5)>>
+    ID3D12GraphicsCommandList5ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList6, &__uuidof(ID3D12GraphicsCommandList6)>>
+    ID3D12GraphicsCommandList6ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList7, &__uuidof(ID3D12GraphicsCommandList7)>>
+    ID3D12GraphicsCommandList7ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList8, &__uuidof(ID3D12GraphicsCommandList8)>>
+    ID3D12GraphicsCommandList8ComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12GraphicsCommandList9, &__uuidof(ID3D12GraphicsCommandList9)>>
+    ID3D12GraphicsCommandList9ComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12DeviceRemovedExtendedData1, &__uuidof(ID3D12DeviceRemovedExtendedData1)>>
     ID3D12DeviceRemovedExtendedData1ComPtr;
 typedef _com_ptr_t<
@@ -68,6 +85,26 @@ typedef _com_ptr_t<
     _com_IIID<ID3D12VersionedRootSignatureDeserializer, &__uuidof(ID3D12VersionedRootSignatureDeserializer)>>
                                                                      ID3D12VersionedRootSignatureDeserializerComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12Object, &__uuidof(ID3D12Object)>> ID3D12ObjectComPtr;
+
+struct CommandSet
+{
+    ID3D12CommandAllocatorComPtr    allocator{ nullptr };
+    ID3D12GraphicsCommandListComPtr list{ nullptr };
+};
+
+enum class Dx12DumpResourcePos : uint32_t
+{
+    kUnknown,
+    kBeforeDrawCall,
+    kDrawCall,
+    kAfterDrawCall,
+};
+
+const static uint32_t kBeforeDrawCallArrayIndex = 0;
+const static uint32_t kDrawCallArrayIndex       = 1;
+const static uint32_t kAfterDrawCallArrayIndex  = 2;
+
+uint32_t Dx12DumpResourcePosToArrayIndex(Dx12DumpResourcePos pos);
 
 struct ActiveAdapterInfo
 {
@@ -278,6 +315,19 @@ void RobustGetCopyableFootprint(ID3D12Device*                       device,
                                 UINT*                               pNumRows,
                                 UINT64*                             pRowSizeInBytes,
                                 UINT64*                             pTotalBytes);
+
+bool IsFormatCompressed(DXGI_FORMAT format);
+
+uint64_t GetCompressedSubresourcePixelByteSize(DXGI_FORMAT format);
+
+uint64_t GetPixelByteSize(DXGI_FORMAT format);
+
+uint64_t GetSubresourceSizeTex1D(DXGI_FORMAT format, uint32_t width, uint32_t mip_levels, uint32_t subresource);
+
+uint64_t GetSubresourceSizeTex2D(
+    DXGI_FORMAT format, uint32_t height, uint32_t mip_levels, uint32_t row_pitch, uint32_t subresource);
+
+uint64_t GetSubresourceSizeTex3D(uint32_t depth, uint32_t mip_levels, uint32_t depth_pitch, uint32_t subresource);
 
 GFXRECON_END_NAMESPACE(dx12)
 GFXRECON_END_NAMESPACE(graphics)

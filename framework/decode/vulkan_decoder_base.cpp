@@ -637,6 +637,15 @@ void VulkanDecoderBase::DispatchVulkanAccelerationStructuresWritePropertiesMetaC
     }
 }
 
+void VulkanDecoderBase::DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                               const char*                             env_string)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessSetEnvironmentVariablesCommand(header, env_string);
+    }
+}
+
 void VulkanDecoderBase::SetCurrentBlockIndex(uint64_t block_index)
 {
     for (auto consumer : consumers_)

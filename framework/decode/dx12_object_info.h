@@ -69,6 +69,23 @@ enum class DxObjectInfoType : uint32_t
 };
 
 //
+// Enumerations for storing variable length array replay sizes.
+//
+enum class VariableLengthArrayIndices : uint32_t
+{
+    kDxgiObjectArrayGetPrivateData = 0,
+    kDxgiOutputArrayGetDisplayModeList,
+    kDxgiOutput1ArrayGetDisplayModeList1,
+    kD3D12ObjectArrayGetPrivateData,
+    kD3D12Device5ArrayEnumerateMetaCommands,
+    kD3D12Device5ArrayEnumerateMetaCommandParameters,
+    kD3D12InfoQueueArrayGetMessage,
+    kD3D12InfoQueueArrayGetStorageFilter,
+    kD3D12InfoQueueArrayGetRetrievalFilter,
+    kD3D12ShaderCacheSessionArrayFindValue
+};
+
+//
 // Structures for storing DirectX object info.
 //
 
@@ -197,11 +214,12 @@ struct DxObjectExtraInfo
 struct DxObjectInfo
 {
     // Standard info stored for all DX objects.
-    IUnknown*                          object{ nullptr };
-    format::HandleId                   capture_id{ format::kNullHandleId };
-    uint64_t                           ref_count{ 1 };
-    uint64_t                           extra_ref{ 0 };
-    std::unique_ptr<DxObjectExtraInfo> extra_info;
+    IUnknown*                                              object{ nullptr };
+    format::HandleId                                       capture_id{ format::kNullHandleId };
+    uint64_t                                               ref_count{ 1 };
+    uint64_t                                               extra_ref{ 0 };
+    std::unique_ptr<DxObjectExtraInfo>                     extra_info;
+    std::unordered_map<VariableLengthArrayIndices, size_t> array_counts;
 };
 
 struct DxgiSwapchainInfo : DxObjectExtraInfo
@@ -210,6 +228,7 @@ struct DxgiSwapchainInfo : DxObjectExtraInfo
     static constexpr char             kObjectType[] = "IDXGISwapChain";
     DxgiSwapchainInfo() : DxObjectExtraInfo(kType) {}
 
+    uint32_t init_buffer_index{ 0 };
     Window*  window{ nullptr }; ///< Pointer to the platform-specific window object associated with the swapchain.
     uint64_t hwnd_id{ 0 };      ///< Capture ID for the HWND handle used with swapchain creation.
 
@@ -368,6 +387,7 @@ struct D3D12ResourceInfo : DxObjectExtraInfo
 
     D3D12_RESOURCE_DESC1 desc = {};
     format::HandleId     swap_chain_id{ format::kNullHandleId };
+    uint32_t             buffer_index{ 0 };
 
     size_t                                         subresource_count{ 0 };
     std::vector<graphics::dx12::ResourceStateInfo> resource_state_infos;

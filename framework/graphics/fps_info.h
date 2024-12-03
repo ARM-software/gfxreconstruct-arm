@@ -83,12 +83,12 @@ class FpsInfo
     bool started_measurement_;
     bool ended_measurement_;
 
-    bool preload_measurement_range_;
-
     std::string measurement_file_name_;
 
     int64_t              frame_start_time_;
     std::vector<int64_t> frame_durations_;
+
+    bool preload_measurement_range_;
 };
 
 GFXRECON_END_NAMESPACE(graphics)
