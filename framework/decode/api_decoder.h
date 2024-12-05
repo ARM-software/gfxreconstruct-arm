@@ -43,7 +43,7 @@ struct ApiCallInfo
     /// Convert.
     /// @see ApiDecoder::SetCurrentBlockIndex() which can pass the block index
     /// to decoders so it is available for any block type, not just API calls.
-    uint64_t         index{ 0 };
+    uint64_t index{ 0 };
 
     /// Thread id of captured function call.
     format::ThreadId thread_id{ 0 };
@@ -87,7 +87,7 @@ class ApiDecoder
     virtual void DispatchExeFileInfo(format::ThreadId thread_id, format::ExeFileInfoBlock& info) = 0;
 
     virtual void DispatchFillMemoryCommand(
-        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) = 0;
+        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) = 0;
 
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) = 0;
@@ -205,6 +205,9 @@ class ApiDecoder
                                                                      size_t         buffer_size){};
     virtual void DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(const uint8_t* parameter_buffer,
                                                                                 size_t         buffer_size){};
+
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string){};
 };
 
 GFXRECON_END_NAMESPACE(decode)

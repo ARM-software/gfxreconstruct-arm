@@ -35,9 +35,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
     switch (fdwReason)
     {
         case DLL_PROCESS_ATTACH:
-            gfxrecon::encode::VulkanCaptureManager::SetLayerFuncs(gfxrecon::dispatch_CreateInstance,
-                                                                  gfxrecon::dispatch_CreateDevice,
-                                                                  gfxrecon::EnumerateInstanceExtensionProperties);
+            gfxrecon::encode::VulkanCaptureManager::SetLayerFuncs(
+                gfxrecon::vulkan_entry::dispatch_CreateInstance,
+                gfxrecon::vulkan_entry::dispatch_CreateDevice,
+                gfxrecon::vulkan_entry::EnumerateInstanceExtensionProperties);
             break;
         case DLL_PROCESS_DETACH:
             // TODO: We assume that lpvReserved will always be NULL, because FreeLibrary should be

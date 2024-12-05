@@ -74,9 +74,25 @@ class CaptureSettings
         kUnknown,
         kFrames,
         kQueueSubmits,
+        kDrawCalls,
+    };
+
+    enum class FenceQueryDelayUnit
+    {
+        kCalls,
+        kFrames
     };
 
     const static char kDefaultCaptureFileName[];
+
+    struct TrimDrawCalls
+    {
+        // 0-based
+        uint32_t        submit_index{ 0 };
+        uint32_t        command_index{ 0 };
+        util::UintRange draw_call_indices;
+        util::UintRange bundle_draw_call_indices;
+    };
 
     struct ResourveValueAnnotationInfo
     {
@@ -99,6 +115,7 @@ class CaptureSettings
         util::ScreenshotFormat       screenshot_format;
         TrimBoundary                 trim_boundary{ TrimBoundary::kUnknown };
         std::vector<util::UintRange> trim_ranges;
+        TrimDrawCalls                trim_draw_calls;
         std::string                  trim_key;
         uint32_t                     trim_key_frames{ 0 };
         RuntimeTriggerState          runtime_capture_trigger{ kNotUsed };
@@ -118,6 +135,7 @@ class CaptureSettings
         uint32_t                     accel_struct_padding{ 0 };
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
+        FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
         bool                         queue_zero_only{ false };
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };
@@ -190,8 +208,11 @@ class CaptureSettings
 
     static util::Log::Severity ParseLogLevelString(const std::string& value_string, util::Log::Severity default_value);
 
-    static void
-    ParseUintRangeList(const std::string& value_string, std::vector<util::UintRange>* frames, const char* option_name);
+    static void ParseUintRangeList(const std::string&            value_string,
+                                   std::vector<util::UintRange>* frames,
+                                   const char*                   option_name,
+                                   bool                          check_overlap_range = true,
+                                   bool                          allow_zero          = false);
 
     static std::string ParseTrimKeyString(const std::string& value_string);
 
@@ -201,6 +222,9 @@ class CaptureSettings
                                                               util::ScreenshotFormat default_value);
 
     static std::vector<uint64_t> ParseBufferUsages(const std::string& value_string);
+
+    static FenceQueryDelayUnit ParseFenceQueryDelayUnit(const std::string&  value_string,
+                                                        FenceQueryDelayUnit default_value);
 
   private:
     TraceSettings       trace_settings_;

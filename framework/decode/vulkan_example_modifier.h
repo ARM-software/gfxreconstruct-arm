@@ -58,7 +58,7 @@ class VulkanExampleModifier : public util::VulkanModifierBase
                                   HandlePointerDecoder<VkInstance>*                    pInstance)
     {
         // Just modification pass, nothing to analyze
-        if (parameter_buffer_)
+        if (IsModificationPass())
         {
             auto create_info     = pCreateInfo->GetMetaStructPointer()->decoded_value;
             auto extension_count = create_info->enabledExtensionCount;
@@ -104,12 +104,12 @@ class VulkanExampleModifier : public util::VulkanModifierBase
                                          format::HandleId                                             device,
                                          StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* pNameInfo)
     {
-        if (parameter_buffer_)
+        if (IsModificationPass())
         {
             const auto compacted_copy = compacted_copies_.find(pNameInfo->GetPointer()->objectHandle);
             if (compacted_copy != compacted_copies_.end())
             {
-                delete_current_call = true;
+                SetDeleteCurrentCall();
             }
         }
     }
@@ -124,7 +124,7 @@ class VulkanExampleModifier : public util::VulkanModifierBase
                                               StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo)
     {
         // Keep track of compacted acceleration structures
-        if (!parameter_buffer_)
+        if (!IsModificationPass())
         {
             const auto* info = pInfo->GetMetaStructPointer();
 
@@ -148,7 +148,7 @@ class VulkanExampleModifier : public util::VulkanModifierBase
         HandlePointerDecoder<VkAccelerationStructureKHR>*                   pAccelerationStructure)
     {
         // In modification pass, add SetObjectName command after AS creation
-        if (parameter_buffer_)
+        if (IsModificationPass())
         {
             const auto compaction_info = compacted_copies_.find(*pAccelerationStructure->GetPointer());
 

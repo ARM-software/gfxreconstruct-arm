@@ -70,6 +70,7 @@ const int8_t   kNoneIndex                 = -1;
 const char* const kAnnotationLabelOperation          = "operation";
 const char* const kAnnotationLabelReplayOptions      = "replayopts";
 const char* const kAnnotationLabelRemovedResource    = "removed-resource";
+const char* const kAnnotationLabelTransformer        = "transformer";
 const char* const kAnnotationPipelineCreationAttempt = "pipelinecreationattempt";
 
 const char* const kOperationAnnotationGfxreconstructVersion = "gfxrecon-version";
@@ -152,7 +153,9 @@ enum class MetaDataType : uint16_t
     kVulkanBuildAccelerationStructuresCommand           = 28,
     kVulkanCopyAccelerationStructuresCommand            = 29,
     kVulkanWriteAccelerationStructuresPropertiesCommand = 30,
-    kFixDeviceAddressCommand                            = 31
+    kFixDeviceAddressCommand                            = 31,
+    kSetEnvironmentVariablesCommand                     = 32,
+    kViewRelativeLocation                               = 33,
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -225,12 +228,13 @@ struct EnabledOptions
 // Resource values are values contained in resource data that may require special handling (e.g., mapping for replay).
 enum class ResourceValueType : uint8_t
 {
-    kUnknown                      = 0,
-    kGpuVirtualAddress            = 1,
-    kGpuDescriptorHandle          = 2,
-    kShaderIdentifier             = 3,
-    kIndirectArgumentDispatchRays = 4,
-    kExecuteIndirectCountBuffer   = 5
+    kUnknown                       = 0,
+    kGpuVirtualAddress             = 1,
+    kGpuDescriptorHandle           = 2,
+    kShaderIdentifier              = 3,
+    kIndirectArgumentDispatchRays  = 4,
+    kExecuteIndirectCountBuffer    = 5,
+    kRaytracingInstanceDescPointer = 6,
 };
 
 #pragma pack(push)
@@ -680,6 +684,17 @@ struct VulkanWriteAccelerationStructuresPropertiesCommandHeader
 struct VulkanCopyAccelerationStructuresCommandHeader
 {
     format::MetaDataHeader meta_header;
+};
+
+static constexpr char kEnvironmentStringDelimeter = (char)-1;
+struct SetEnvironmentVariablesCommand
+{
+    MetaDataHeader meta_header;
+    ThreadId       thread_id;
+    uint64_t       string_length;
+
+    // In the capture file, a string will immediately follow this block
+    // containing a list of environment variables and their values
 };
 
 // Restore size_t to normal behavior.

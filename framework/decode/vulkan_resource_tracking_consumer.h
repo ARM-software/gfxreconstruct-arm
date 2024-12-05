@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2020-2024 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -167,7 +167,7 @@ class VulkanResourceTrackingConsumer : public VulkanConsumer
                                         format::HandleId                                     image,
                                         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
-    void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+    void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                         const format::AddressLocationInfo*           infos) override;
@@ -175,6 +175,41 @@ class VulkanResourceTrackingConsumer : public VulkanConsumer
     void SortMemoriesBoundResourcesByOffset();
 
     void CalculateReplayBindingOffsetAndMemoryAllocationSize();
+
+    void Process_vkGetImageSubresourceLayout(const ApiCallInfo&                                 call_info,
+                                             format::HandleId                                   device,
+                                             format::HandleId                                   image,
+                                             StructPointerDecoder<Decoded_VkImageSubresource>*  pSubresource,
+                                             StructPointerDecoder<Decoded_VkSubresourceLayout>* pLayout) override;
+
+    void
+    Process_vkGetImageSubresourceLayout2KHR(const ApiCallInfo&                                     call_info,
+                                            format::HandleId                                       device,
+                                            format::HandleId                                       image,
+                                            StructPointerDecoder<Decoded_VkImageSubresource2KHR>*  pSubresource,
+                                            StructPointerDecoder<Decoded_VkSubresourceLayout2KHR>* pLayout) override;
+
+    void
+    Process_vkGetImageSubresourceLayout2EXT(const ApiCallInfo&                                     call_info,
+                                            format::HandleId                                       device,
+                                            format::HandleId                                       image,
+                                            StructPointerDecoder<Decoded_VkImageSubresource2KHR>*  pSubresource,
+                                            StructPointerDecoder<Decoded_VkSubresourceLayout2KHR>* pLayout) override;
+
+    void Process_vkGetPhysicalDeviceProperties(
+        const ApiCallInfo&                                        call_info,
+        format::HandleId                                          physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceProperties>* pProperties) override;
+
+    void Process_vkGetPhysicalDeviceProperties2(
+        const ApiCallInfo&                                         call_info,
+        format::HandleId                                           physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceProperties2>* pProperties) override;
+
+    void Process_vkGetPhysicalDeviceProperties2KHR(
+        const ApiCallInfo&                                         call_info,
+        format::HandleId                                           physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceProperties2>* pProperties) override;
 
   protected:
     VulkanTrackedObjectInfoTable* GetTrackedObjectInfoTable() { return tracked_object_info_table_; }

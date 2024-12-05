@@ -74,7 +74,7 @@ void VulkanDecoderBase::DispatchDisplayMessageCommand(format::ThreadId thread_id
 }
 
 void VulkanDecoderBase::DispatchFillMemoryCommand(
-    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data)
+    format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data)
 {
     GFXRECON_UNREFERENCED_PARAMETER(thread_id);
 
@@ -634,6 +634,15 @@ void VulkanDecoderBase::DispatchVulkanAccelerationStructuresWritePropertiesMetaC
     {
         consumer->ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
             device_id, query_type, acceleration_structure_id);
+    }
+}
+
+void VulkanDecoderBase::DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                               const char*                             env_string)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessSetEnvironmentVariablesCommand(header, env_string);
     }
 }
 

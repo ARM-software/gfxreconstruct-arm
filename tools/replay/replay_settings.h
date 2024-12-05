@@ -29,22 +29,24 @@
 const char kOptions[] =
     "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--opcd|--"
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
-    "screenshot-all,--onhb|--omit-null-hardware-buffers,--vssb|--virtual-swapchain-skip-blit,--preload-measurement-"
-    "range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary,--qamr|--quit-after-"
-    "measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-range,--use-captured-swapchain-"
+    "screenshot-all,--onhb|--omit-null-hardware-buffers,--qamr|--quit-after-measurement-range,--fmr|--flush-"
+    "measurement-range,--flush-inside-measurement-range,--vssb|--virtual-swapchain-skip-blit,--use-captured-swapchain-"
     "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,--dx12-"
-    "override-object-names,--offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,--"
-    "dump-resources-dump-depth-attachment,--dump-resources-dump-vertex-index-buffers,--dump-resources-json-output-per-"
-    "command,--dump-resources-dump-immutable-resources,--dump-resources-dump-all-image-subresources,--pbi-all";
+    "override-object-names,--"
+    "offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
+    "--dump-resources-dump-depth-attachment,--dump-"
+    "resources-dump-vertex-index-buffers,--dump-resources-json-output-per-command,--dump-resources-dump-immutable-"
+    "resources,--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--pbi-all,--"
+    "preload-measurement-range,--dsf|--disable-subpass-fusion,--add-new-pipeline-caches,--use-ext-frame-boundary";
 const char kArguments[] =
     "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
-    "get-fence-status,--sgfr|--skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-"
-    "format,--dump-resources-dir,--dump-resources-dump-color-attachment-index,--pbis,--tsp|--trigger-script-path,--tsf|"
-    "--trigger-script-frame,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-pipeline-cache,--marking-"
-    "layers";
+    "get-fence-status,--sgfr|--"
+    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-format,--dump-resources-dir,"
+    "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--tsp|--trigger-script-path,"
+    "--tsf|--trigger-script-frame,--save-pipeline-cache,--load-pipeline-cache,--marking-layers";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -73,8 +75,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--swapchain <mode>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--vssb | --virtual-swapchain-skip-blit]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--use-captured-swapchain-indices]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--vssb | --virtual-swapchain-skip-blit]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfr <frame-ranges> | --skip-get-fence-ranges <frame-ranges>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--use-colorspace-fallback|--colorspace-fallback]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--offscreen-swapchain-frame-boundary]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--mfr|--measurement-frame-range <start-frame>-<end-frame>]");
@@ -82,6 +82,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--flush-measurement-range]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--fw <width,height> | --force-windowed <width,height>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfs <status> | --skip-get-fence-status <status>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfr <frame-ranges> | --skip-get-fence-ranges <frame-ranges>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--pbi-all] [--pbis <index1,index2>]");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources <submit-index,command-index,drawcall-index>]");
@@ -243,8 +244,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --use-captured-swapchain-indices");
     GFXRECON_WRITE_CONSOLE("          \t\tSame as \"--swapchain captured\".");
     GFXRECON_WRITE_CONSOLE("          \t\tIgnored if the \"--swapchain\" option is used.");
-    GFXRECON_WRITE_CONSOLE("  --vssb");
-    GFXRECON_WRITE_CONSOLE("          \t\tSkip blit to real swapchain to gain performance during replay.");
     GFXRECON_WRITE_CONSOLE("  --use-ext-frame-boundary");
     GFXRECON_WRITE_CONSOLE("          \t\tConvert all offscreen frame boundaries to `VK_EXT_frame_boundary`");
     GFXRECON_WRITE_CONSOLE("          \t\tframe boundaries.");
@@ -328,7 +327,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tof instrumentation data on some platforms.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources <arg>");
     GFXRECON_WRITE_CONSOLE("          \t\t<arg> is BeginCommandBuffer=<n>,Draw=<m>,BeginRenderPass=<o>,");
-    GFXRECON_WRITE_CONSOLE("          \t\tNextSubpass=<p>,Dispatch=<q>,CmdTraceRays=<r>,QueueSubmit=<s>");
+    GFXRECON_WRITE_CONSOLE("          \t\tNextSubpass=<p>,Dispatch=<q>,TraceRays=<r>,QueueSubmit=<s>");
     GFXRECON_WRITE_CONSOLE("          \t\tGPU resources are dumped after the given vkCmdDraw*,");
     GFXRECON_WRITE_CONSOLE("          \t\tvkCmdDispatch, or vkCmdTraceRaysKHR is replayed.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources <file>");
@@ -370,7 +369,11 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --pcj\t\t\tSpecify the number of pipeline-creation-jobs or background-threads.");
     GFXRECON_WRITE_CONSOLE("       \t\t\tDefault is 0.");
     GFXRECON_WRITE_CONSOLE("       \t\t\t(same as --pipeline-creation-jobs");
-
+    GFXRECON_WRITE_CONSOLE("  --pipeline-creation-jobs <num_jobs>");
+    GFXRECON_WRITE_CONSOLE("          \t\tSpecify the number of asynchronous pipeline-creation jobs as integer.");
+    GFXRECON_WRITE_CONSOLE("          \t\tIf <num_jobs> is negative it will be added to the number of cpu-cores");
+    GFXRECON_WRITE_CONSOLE("          \t\tDefault: 0 (do not use asynchronous operations).");
+    GFXRECON_WRITE_CONSOLE("          \t\tSame as --pcj <num_jobs>");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("D3D12 only:")

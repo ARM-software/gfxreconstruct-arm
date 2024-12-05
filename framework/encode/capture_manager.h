@@ -46,9 +46,11 @@
 #include <vector>
 #include "util/file_path.h"
 
+#include "nlohmann/json.hpp"
+
 #if defined(__linux__)
 #include <dirent.h>
-#elif
+#else
 #include <windows.h>
 #include <TlHelp32.h>
 #endif
@@ -77,7 +79,7 @@ class CommonCaptureManager
 #else
         pid = GetCurrentProcessId();
 #endif
-        if (CommonCaptureManager::progress_id_ == INT32_MAX || pid == CommonCaptureManager::progress_id_)
+        if (CommonCaptureManager::process_id_ == INT32_MAX || pid == CommonCaptureManager::process_id_)
             return true;
         return false;
     }
@@ -136,20 +138,31 @@ class CommonCaptureManager
 
     void WriteFrameMarker(format::MarkerType marker_type);
 
-    void EndFrame(format::ApiFamilyId api_family);
+    void EndFrame(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock);
 
     // Pre/PostQueueSubmit to be called immediately before and after work is submitted to the GPU by vkQueueSubmit for
     // Vulkan or by ID3D12CommandQueue::ExecuteCommandLists for DX12.
-    void PreQueueSubmit(format::ApiFamilyId api_family);
-    void PostQueueSubmit(format::ApiFamilyId api_family);
+    void PreQueueSubmit(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock);
+    void PostQueueSubmit(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock);
 
     bool ShouldTriggerScreenshot();
 
-    util::ScreenshotFormat GetScreenshotFormat() { return screenshot_format_; }
+    util::ScreenshotFormat GetScreenshotFormat()
+    {
+        return screenshot_format_;
+    }
 
-    void CheckContinueCaptureForWriteMode(format::ApiFamilyId api_family, uint32_t current_boundary_count);
+    void CheckContinueCaptureForWriteMode(format::ApiFamilyId              api_family,
+                                          uint32_t                         current_boundary_count,
+                                          std::shared_lock<ApiCallMutexT>& current_lock);
 
-    void CheckStartCaptureForTrackMode(format::ApiFamilyId api_family, uint32_t current_boundary_count);
+    void CheckStartCaptureForTrackMode(format::ApiFamilyId              api_family,
+                                       uint32_t                         current_boundary_count,
+                                       std::shared_lock<ApiCallMutexT>& current_lock);
+
+    void ActivateTrimmingDrawCalls(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock);
+
+    void DeactivateTrimmingDrawCalls(std::shared_lock<ApiCallMutexT>& current_lock);
 
     bool IsTrimHotkeyPressed();
 
@@ -171,15 +184,39 @@ class CommonCaptureManager
     /// @param data The value or payload text of the annotation.
     void WriteAnnotation(const format::AnnotationType type, const char* label, const char* data);
 
-    bool GetIUnknownWrappingSetting() const { return iunknown_wrapping_; }
-    auto GetForceCommandSerialization() const { return force_command_serialization_; }
-    auto GetQueueZeroOnly() const { return queue_zero_only_; }
-    auto GetAllowPipelineCompileRequired() const { return allow_pipeline_compile_required_; }
+    bool GetIUnknownWrappingSetting() const
+    {
+        return iunknown_wrapping_;
+    }
+    auto GetForceCommandSerialization() const
+    {
+        return force_command_serialization_;
+    }
+    auto GetQueueZeroOnly() const
+    {
+        return queue_zero_only_;
+    }
+    auto GetAllowPipelineCompileRequired() const
+    {
+        return allow_pipeline_compile_required_;
+    }
 
-    bool     IsAnnotated() const { return rv_annotation_info_.rv_annotation; }
-    uint16_t GetGPUVAMask() const { return rv_annotation_info_.gpuva_mask; }
-    uint16_t GetDescriptorMask() const { return rv_annotation_info_.descriptor_mask; }
-    uint64_t GetShaderIDMask() const { return rv_annotation_info_.shaderid_mask; }
+    bool IsAnnotated() const
+    {
+        return rv_annotation_info_.rv_annotation;
+    }
+    uint16_t GetGPUVAMask() const
+    {
+        return rv_annotation_info_.gpuva_mask;
+    }
+    uint16_t GetDescriptorMask() const
+    {
+        return rv_annotation_info_.descriptor_mask;
+    }
+    uint64_t GetShaderIDMask() const
+    {
+        return rv_annotation_info_.shaderid_mask;
+    }
 
     uint64_t GetBlockIndex()
     {
@@ -187,11 +224,19 @@ class CommonCaptureManager
         return thread_data->block_index_ == 0 ? 0 : thread_data->block_index_ - 1;
     }
 
-    uint32_t GetFenceQueryDelay() const { return fence_query_delay_; }
+    uint32_t GetFenceQueryDelay() const
+    {
+        return fence_query_delay_;
+    }
+    CaptureSettings::FenceQueryDelayUnit GetFenceQueryDelayUnit() const
+    {
+        return fence_query_delay_unit_;
+    }
 
   public:
-    static bool CreateInstance(ApiCaptureManager* api_instance_, const std::function<void()>& destroyer);
     static int32_t GetPidFromPackageName(const char* progress_name);
+
+    static bool CreateInstance(ApiCaptureManager* api_instance_, const std::function<void()>& destroyer);
     template <typename Derived>
     static bool CreateInstance()
     {
@@ -200,7 +245,6 @@ class CommonCaptureManager
 
     CommonCaptureManager();
 
-  public:
     enum CaptureModeFlags : uint32_t
     {
         kModeDisabled      = 0x0,
@@ -267,35 +311,104 @@ class CommonCaptureManager
                     const CaptureSettings::TraceSettings& trace_settings);
 
   public:
-    bool                                GetForceFileFlush() const { return force_file_flush_; }
-    CaptureSettings::MemoryTrackingMode GetMemoryTrackingMode() const { return memory_tracking_mode_; }
-    bool                                GetPageGuardAlignBufferSizes() const { return page_guard_align_buffer_sizes_; }
-    bool                                GetPageGuardTrackAhbMemory() const { return page_guard_track_ahb_memory_; }
-    PageGuardMemoryMode                 GetPageGuardMemoryMode() const { return page_guard_memory_mode_; }
-    const std::string&                  GetTrimKey() const { return trim_key_; }
-    bool                                IsTrimEnabled() const { return trim_enabled_; }
-    uint32_t                            GetCurrentFrame() const { return current_frame_; }
-    CaptureMode                         GetCaptureMode() const { return capture_mode_; }
-    bool                                GetDebugLayerSetting() const { return debug_layer_; }
-    bool                                GetDebugDeviceLostSetting() const { return debug_device_lost_; }
-    bool                                GetDisableDxrSetting() const { return disable_dxr_; }
-    auto                                GetAccelStructPaddingSetting() const { return accel_struct_padding_; }
+    bool GetForceFileFlush() const
+    {
+        return force_file_flush_;
+    }
+    CaptureSettings::MemoryTrackingMode GetMemoryTrackingMode() const
+    {
+        return memory_tracking_mode_;
+    }
+    bool GetPageGuardAlignBufferSizes() const
+    {
+        return page_guard_align_buffer_sizes_;
+    }
+    bool GetPageGuardTrackAhbMemory() const
+    {
+        return page_guard_track_ahb_memory_;
+    }
+    PageGuardMemoryMode GetPageGuardMemoryMode() const
+    {
+        return page_guard_memory_mode_;
+    }
+    const std::string& GetTrimKey() const
+    {
+        return trim_key_;
+    }
+    bool IsTrimEnabled() const
+    {
+        return trim_enabled_;
+    }
+    uint32_t GetCurrentFrame() const
+    {
+        return current_frame_;
+    }
+    CaptureMode GetCaptureMode() const
+    {
+        return capture_mode_;
+    }
+    bool GetDebugLayerSetting() const
+    {
+        return debug_layer_;
+    }
+    bool GetDebugDeviceLostSetting() const
+    {
+        return debug_device_lost_;
+    }
+    bool GetDisableDxrSetting() const
+    {
+        return disable_dxr_;
+    }
+    auto GetAccelStructPaddingSetting() const
+    {
+        return accel_struct_padding_;
+    }
     bool GetForceFifoPresentModeSetting() const
     {
         return force_fifo_present_mode_;
     }
+    auto GetTrimBoundary() const
+    {
+        return trim_boundary_;
+    }
+    auto GetTrimDrawCalls() const
+    {
+        return trim_draw_calls_;
+    }
+    auto GetQueueSubmitCount() const
+    {
+        return queue_submit_count_;
+    }
 
-    util::Compressor*      GetCompressor() { return compressor_.get(); }
-    std::mutex&            GetMappedMemoryLock() { return mapped_memory_lock_; }
-    util::Keyboard&        GetKeyboard() { return keyboard_; }
-    const std::string&     GetScreenshotPrefix() const { return screenshot_prefix_; }
-    util::ScreenshotFormat GetScreenShotFormat() const { return screenshot_format_; }
+    util::Compressor* GetCompressor()
+    {
+        return compressor_.get();
+    }
+    std::mutex& GetMappedMemoryLock()
+    {
+        return mapped_memory_lock_;
+    }
+    util::Keyboard& GetKeyboard()
+    {
+        return keyboard_;
+    }
+    const std::string& GetScreenshotPrefix() const
+    {
+        return screenshot_prefix_;
+    }
+    util::ScreenshotFormat GetScreenShotFormat() const
+    {
+        return screenshot_format_;
+    }
 
-    std::string CreateTrimFilename(const std::string& base_filename, const util::UintRange& trim_range);
-    bool        CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename);
-    void        WriteCaptureOptions(std::string& operation_annotation);
-    void        ActivateTrimming();
-    void        DeactivateTrimming();
+    std::string            CreateTrimFilename(const std::string& base_filename, const util::UintRange& trim_range);
+    std::string            CreateTrimDrawCallsFilename(const std::string&                    base_filename,
+                                                       const CaptureSettings::TrimDrawCalls& trim_draw_calls);
+    bool                   CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename);
+    void                   WriteCaptureOptions(nlohmann::ordered_json& operation_annotation);
+    nlohmann::ordered_json GetIgnoredBufferUsages();
+    void                   ActivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
+    void                   DeactivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
 
     void WriteFileHeader();
     void BuildOptionList(const format::EnabledOptions&        enabled_options,
@@ -318,14 +431,6 @@ class CommonCaptureManager
                                   uint64_t                     num_of_locations,
                                   format::AddressLocationInfo* locations);
 
-  public:
-    std::unique_ptr<util::Compressor> compressor_;
-    std::mutex                        mapped_memory_lock_;
-    util::Keyboard                    keyboard_;
-    std::string                       screenshot_prefix_;
-    util::ScreenshotFormat            screenshot_format_;
-    bool                              debug_set_objects_name_;
-    std::atomic<uint64_t>             block_index_;
     void WriteCreateHeapAllocationCmd(format::ApiFamilyId api_family, uint64_t allocation_id, uint64_t allocation_size);
 
     void WriteToFile(const void* data, size_t size);
@@ -354,18 +459,30 @@ class CommonCaptureManager
         GetThreadData()->block_index_ = block_index_;
     }
 
-    uint64_t GetGlobalBlockIndex() { return block_index_.load(); }
+    uint64_t GetGlobalBlockIndex()
+    {
+        return block_index_.load();
+    }
+
+  protected:
+    std::unique_ptr<util::Compressor> compressor_;
+    std::mutex                        mapped_memory_lock_;
+    util::Keyboard                    keyboard_;
+    std::string                       screenshot_prefix_;
+    util::ScreenshotFormat            screenshot_format_;
+    std::atomic<uint64_t>             block_index_;
 
   private:
     static void AtExit();
 
   public:
-    static int32_t                                  progress_id_;
+    static int32_t                                  process_id_;
     static std::mutex                               instance_lock_;
     static CommonCaptureManager*                    singleton_;
     static thread_local std::unique_ptr<ThreadData> thread_data_;
     static std::atomic<format::HandleId>            unique_id_counter_;
     static ApiCallMutexT                            api_call_mutex_;
+    bool                                            debug_set_objects_name_;
 
     uint32_t instance_count_ = 0;
     struct ApiInstanceRecord
@@ -398,6 +515,7 @@ class CommonCaptureManager
     bool                                    trim_enabled_;
     CaptureSettings::TrimBoundary           trim_boundary_;
     std::vector<util::UintRange>            trim_ranges_;
+    CaptureSettings::TrimDrawCalls          trim_draw_calls_;
     std::string                             trim_key_;
     uint32_t                                trim_key_frames_;
     uint32_t                                trim_key_first_frame_;
@@ -420,8 +538,10 @@ class CommonCaptureManager
     bool                                    quit_after_frame_ranges_;
     static std::function<void()>            delete_instance_func_;
     uint32_t                                fence_query_delay_;
-    bool                                    force_fifo_present_mode_;
+    CaptureSettings::FenceQueryDelayUnit    fence_query_delay_unit_;
     std::vector<uint64_t>                   buffer_usages_to_ignore_;
+    bool                                    force_fifo_present_mode_;
+
     struct
     {
         bool     rv_annotation{ false };

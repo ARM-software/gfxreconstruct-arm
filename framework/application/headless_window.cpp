@@ -47,10 +47,10 @@ bool HeadlessWindow::Create(const std::string& title,
     GFXRECON_UNREFERENCED_PARAMETER(title);
     GFXRECON_UNREFERENCED_PARAMETER(xpos);
     GFXRECON_UNREFERENCED_PARAMETER(ypos);
+    GFXRECON_UNREFERENCED_PARAMETER(force_windowed);
 
     width_  = width;
     height_ = height;
-    GFXRECON_UNREFERENCED_PARAMETER(force_windowed);
 
     return true;
 }

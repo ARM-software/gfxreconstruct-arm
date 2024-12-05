@@ -388,7 +388,8 @@ HRESULT Dx12ResourceDataUtil::ReadFromResource(ID3D12Resource*                  
                                                std::vector<uint8_t>&                       data,
                                                std::vector<uint64_t>&                      subresource_offsets,
                                                std::vector<uint64_t>&                      subresource_sizes,
-                                               ID3D12Resource*                             staging_buffer_for_batching)
+                                               ID3D12Resource*                             staging_buffer_for_batching,
+                                               ID3D12CommandQueue*                         queue)
 {
     HRESULT result = E_FAIL;
 
@@ -441,7 +442,8 @@ HRESULT Dx12ResourceDataUtil::ReadFromResource(ID3D12Resource*                  
                                     before_states,
                                     after_states,
                                     staging_resource,
-                                    batching);
+                                    batching,
+                                    queue);
 
     // After the command list has completed, map the copy resource and read its data.
     if (!batching && SUCCEEDED(result))
@@ -513,16 +515,25 @@ HRESULT Dx12ResourceDataUtil::WriteToResource(ID3D12Resource*                   
             GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, subresource_sizes[i]);
             size_t subresource_size = static_cast<size_t>(std::min(subresource_sizes[i], layout_sizes[i]));
 
-            if (layout_sizes[i] != subresource_sizes[i])
+            if (layout_sizes[i] > subresource_sizes[i])
             {
-                GFXRECON_LOG_ERROR("The size of the data to be copied to the subresource does not match the size "
+                GFXRECON_LOG_DEBUG("The size of the data to be copied to the subresource does not match the size "
                                    "required by the subresource's copyable footprint (data size = %" PRIu64
                                    ", footprint size = %" PRIu64 ", subresouce index = %" PRIu32 ").",
                                    subresource_sizes[i],
                                    layout_sizes[i],
                                    i);
             }
-
+            else if (layout_sizes[i] < subresource_sizes[i])
+            {
+                GFXRECON_LOG_ERROR("The size of the data to be copied to the subresource is greater than the size of "
+                                   "the subresource's copyable footprint."
+                                   "Not all data can be written to the subresource. (data size = %" PRIu64
+                                   ", footprint size = %" PRIu64 ", subresouce index = %" PRIu32 ").",
+                                   subresource_sizes[i],
+                                   layout_sizes[i],
+                                   i);
+            }
             size_t layout_offset = static_cast<size_t>(layout_offsets[i]);
             size_t layout_size   = static_cast<size_t>(layout_sizes[i]);
             util::platform::MemoryCopy(
@@ -602,12 +613,18 @@ bool Dx12ResourceDataUtil::CopyMappableResource(ID3D12Resource*              tar
     return SUCCEEDED(result);
 }
 
-HRESULT Dx12ResourceDataUtil::ExecuteAndWaitForCommandList()
+HRESULT Dx12ResourceDataUtil::ExecuteAndWaitForCommandList(ID3D12CommandQueue* queue)
 {
     // Execute the command list and wait for completion.
     ID3D12CommandList* cmd_lists[] = { command_list_ };
-    command_queue_->ExecuteCommandLists(1, cmd_lists);
-    return dx12::WaitForQueue(command_queue_, command_fence_, ++fence_value_);
+
+    ID3D12CommandQueue* command_queue = queue;
+    if (command_queue == nullptr)
+    {
+        command_queue = command_queue_;
+    }
+    command_queue->ExecuteCommandLists(1, cmd_lists);
+    return dx12::WaitForQueue(command_queue, command_fence_, ++fence_value_);
 
     // MakeResident and Evict are ref-counted. Remove the ref count added by MakeResident.
     for (auto resource : resident_resources)
@@ -763,7 +780,8 @@ Dx12ResourceDataUtil::ExecuteCopyCommandList(ID3D12Resource*                    
                                              const std::vector<dx12::ResourceStateInfo>&            before_states,
                                              const std::vector<dx12::ResourceStateInfo>&            after_states,
                                              ID3D12Resource*                                        staging_buffer,
-                                             bool                                                   batching)
+                                             bool                                                   batching,
+                                             ID3D12CommandQueue*                                    queue)
 {
     // Make sure the target resource is resident.
     ID3D12Pageable* const pageable = target_resource;
@@ -807,7 +825,7 @@ Dx12ResourceDataUtil::ExecuteCopyCommandList(ID3D12Resource*                    
                 result = command_list_->Close();
                 if (SUCCEEDED(result))
                 {
-                    result = ExecuteAndWaitForCommandList();
+                    result = ExecuteAndWaitForCommandList(queue);
                 }
             }
         }
@@ -824,7 +842,8 @@ Dx12ResourceDataUtil::ExecuteCopyCommandList(ID3D12Resource*                    
 HRESULT
 Dx12ResourceDataUtil::ExecuteTransitionCommandList(ID3D12Resource*                             target_resource,
                                                    const std::vector<dx12::ResourceStateInfo>& before_states,
-                                                   const std::vector<dx12::ResourceStateInfo>& after_states)
+                                                   const std::vector<dx12::ResourceStateInfo>& after_states,
+                                                   ID3D12CommandQueue*                         queue)
 {
     GFXRECON_ASSERT(before_states.size() == after_states.size());
     uint64_t subresource_count = before_states.size();
@@ -850,7 +869,7 @@ Dx12ResourceDataUtil::ExecuteTransitionCommandList(ID3D12Resource*              
             result = command_list_->Close();
             if (SUCCEEDED(result) && !cmd_list_empty)
             {
-                result = ExecuteAndWaitForCommandList();
+                result = ExecuteAndWaitForCommandList(queue);
             }
         }
     }

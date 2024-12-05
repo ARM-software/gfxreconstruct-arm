@@ -88,7 +88,7 @@ class VulkanDecoderBase : public ApiDecoder
     virtual void DispatchDisplayMessageCommand(format::ThreadId thread_id, const std::string& message) override;
 
     virtual void DispatchFillMemoryCommand(
-        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
@@ -202,7 +202,8 @@ class VulkanDecoderBase : public ApiDecoder
                                                                       size_t         buffer_size) override;
     virtual void DispatchVulkanAccelerationStructuresCopyMetaCommand(const uint8_t* parameter_buffer,
                                                                      size_t         buffer_size) override;
-
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string) override;
     virtual void DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(const uint8_t* parameter_buffer,
                                                                                 size_t         buffer_size) override;
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;

@@ -314,6 +314,9 @@ class VulkanCaptureManager : public ApiCaptureManager
                                     const VkAllocationCallbacks* pAllocator,
                                     VkDeviceMemory*              pMemory);
 
+    void OverrideGetPhysicalDeviceProperties2(VkPhysicalDevice             physicalDevice,
+                                              VkPhysicalDeviceProperties2* pProperties);
+
     VkResult OverrideGetPhysicalDeviceToolPropertiesEXT(VkPhysicalDevice                   physicalDevice,
                                                         uint32_t*                          pToolCount,
                                                         VkPhysicalDeviceToolPropertiesEXT* pToolProperties);
@@ -348,6 +351,8 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     VkResult OverrideWaitForFences(
         VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout);
+
+    VkResult OverrideGetFenceStatus(VkDevice device, VkFence fence);
 
     void OverrideCmdBeginDebugUtilsLabelEXT(VkCommandBuffer commandBuffer, const VkDebugUtilsLabelEXT* pLabelInfo);
 
@@ -590,7 +595,10 @@ class VulkanCaptureManager : public ApiCaptureManager
         ProcessFenceSubmit(pAcquireInfo->fence);
     }
 
-    void PostProcess_vkQueuePresentKHR(VkResult result, VkQueue queue, const VkPresentInfoKHR* pPresentInfo)
+    void PostProcess_vkQueuePresentKHR(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                       VkResult                                               result,
+                                       VkQueue                                                queue,
+                                       const VkPresentInfoKHR*                                pPresentInfo)
     {
         if (IsCaptureModeTrack() && ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR)))
         {
@@ -601,7 +609,7 @@ class VulkanCaptureManager : public ApiCaptureManager
                 pPresentInfo->swapchainCount, pPresentInfo->pSwapchains, pPresentInfo->pImageIndices, queue);
         }
 
-        EndFrame();
+        EndFrame(current_lock);
     }
 
     void PostProcess_vkQueueBindSparse(
@@ -634,22 +642,6 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void PostProcess_vkGetFenceStatus(VkResult& result, VkDevice device, VkFence fence)
-    {
-        GFXRECON_UNREFERENCED_PARAMETER(device);
-
-        if (result == VK_SUCCESS)
-        {
-            FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
-            assert(wrapper != nullptr);
-            if (wrapper->query_delay != 0)
-            {
-                --wrapper->query_delay;
-                result = VK_NOT_READY;
-            }
-        }
-    }
-
     void PostProcess_vkGetBufferMemoryRequirements(VkDevice              device,
                                                    VkBuffer              buffer,
                                                    VkMemoryRequirements* pMemoryRequirements)
@@ -657,7 +649,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(buffer);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -679,7 +672,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -702,7 +696,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -724,7 +719,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(image);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -746,7 +742,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -769,7 +766,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -793,7 +791,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(image);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -817,7 +816,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -843,7 +843,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -892,6 +893,7 @@ class VulkanCaptureManager : public ApiCaptureManager
                 vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(pBindInfos[i].memory);
             memory_wrapper->bound_buffers.insert(wrapper);
         }
+
         if (IsCaptureModeTrack() && (result == VK_SUCCESS) && (pBindInfos != nullptr))
         {
             assert(state_tracker_ != nullptr);
@@ -974,6 +976,107 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
+    void PostProcess_vkCmdCopyImage(VkCommandBuffer commandBuffer,
+                                    VkImage,
+                                    VkImageLayout,
+                                    VkImage       dstImage,
+                                    VkImageLayout dstImageLayout,
+                                    uint32_t,
+                                    const VkImageCopy*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyImage2(VkCommandBuffer commandBuffer, const VkCopyImageInfo2* pCopyImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pCopyImageInfo->dstImage, pCopyImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer,
+                                            VkBuffer,
+                                            VkImage       dstImage,
+                                            VkImageLayout dstImageLayout,
+                                            uint32_t,
+                                            const VkBufferImageCopy*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdCopyBufferToImage2(VkCommandBuffer                 commandBuffer,
+                                             const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pCopyBufferToImageInfo->dstImage, pCopyBufferToImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdBlitImage(VkCommandBuffer commandBuffer,
+                                    VkImage,
+                                    VkImageLayout,
+                                    VkImage       dstImage,
+                                    VkImageLayout dstImageLayout,
+                                    uint32_t,
+                                    const VkImageBlit*,
+                                    VkFilter)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdBlitImage2(VkCommandBuffer commandBuffer, const VkBlitImageInfo2* pBlitImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pBlitImageInfo->dstImage, pBlitImageInfo->dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdResolveImage(VkCommandBuffer commandBuffer,
+                                       VkImage,
+                                       VkImageLayout,
+                                       VkImage       dstImage,
+                                       VkImageLayout dstImageLayout,
+                                       uint32_t,
+                                       const VkImageResolve*)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+        }
+    }
+
+    void PostProcess_vkCmdResolveImage2(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo)
+    {
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackImageDstLayout(
+                commandBuffer, pResolveImageInfo->dstImage, pResolveImageInfo->dstImageLayout);
+        }
+    }
+
     void PostProcess_vkCmdPipelineBarrier(VkCommandBuffer commandBuffer,
                                           VkPipelineStageFlags,
                                           VkPipelineStageFlags,
@@ -1031,10 +1134,14 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void
-    PostProcess_vkQueueSubmit(VkResult result, VkQueue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence)
+    void PostProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                   VkResult                                               result,
+                                   VkQueue,
+                                   uint32_t            submitCount,
+                                   const VkSubmitInfo* pSubmits,
+                                   VkFence)
     {
-        PostQueueSubmit();
+        PostQueueSubmit(current_lock);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
@@ -1053,7 +1160,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
-            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
             {
                 break;
             }
@@ -1062,7 +1169,8 @@ class VulkanCaptureManager : public ApiCaptureManager
             {
                 auto cmd_buffer_wrapper =
                     vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(pSubmits[i].pCommandBuffers[j]);
-                if (CheckCommandBufferWrapperForFrameBoundary(cmd_buffer_wrapper))
+
+                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
                 {
                     break;
                 }
@@ -1070,10 +1178,14 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void PostProcess_vkQueueSubmit2(
-        VkResult result, VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence)
+    void PostProcess_vkQueueSubmit2(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                    VkResult                                               result,
+                                    VkQueue                                                queue,
+                                    uint32_t                                               submitCount,
+                                    const VkSubmitInfo2*                                   pSubmits,
+                                    VkFence                                                fence)
     {
-        PostQueueSubmit();
+        PostQueueSubmit(current_lock);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
@@ -1093,7 +1205,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
-            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
             {
                 break;
             }
@@ -1102,7 +1214,8 @@ class VulkanCaptureManager : public ApiCaptureManager
             {
                 auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
                     pSubmits[i].pCommandBufferInfos[j].commandBuffer);
-                if (CheckCommandBufferWrapperForFrameBoundary(cmd_buffer_wrapper))
+
+                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
                 {
                     break;
                 }
@@ -1322,9 +1435,17 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     void PostProcess_vkFreeMemory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks* pAllocator);
 
-    void PreProcess_vkQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+    void PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                  VkQueue                                                queue,
+                                  uint32_t                                               submitCount,
+                                  const VkSubmitInfo*                                    pSubmits,
+                                  VkFence                                                fence);
 
-    void PreProcess_vkQueueSubmit2(VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+    void PreProcess_vkQueueSubmit2(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                   VkQueue                                                queue,
+                                   uint32_t                                               submitCount,
+                                   const VkSubmitInfo2*                                   pSubmits,
+                                   VkFence                                                fence);
 
     void PreProcess_vkCreateDescriptorUpdateTemplate(VkResult                                    result,
                                                      VkDevice                                    device,
@@ -1338,7 +1459,9 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                         const VkAllocationCallbacks*                pAllocator,
                                                         VkDescriptorUpdateTemplate* pDescriptorUpdateTemplate);
 
-    void PreProcess_vkGetBufferDeviceAddress(VkDevice device, const VkBufferDeviceAddressInfo* pInfo);
+    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress                  address,
+                                              VkDevice                         device,
+                                              const VkBufferDeviceAddressInfo* pInfo);
 
     void PreProcess_vkGetBufferOpaqueCaptureAddress(VkDevice device, const VkBufferDeviceAddressInfo* pInfo);
 
@@ -1475,22 +1598,12 @@ class VulkanCaptureManager : public ApiCaptureManager
                                          const VkAllocationCallbacks*   pAllocator,
                                          VkCommandPool*                 pCommandPool);
 
-    void PostProcess_vkFrameBoundaryANDROID(VkDevice device, VkSemaphore semaphore, VkImage image)
+    void PostProcess_vkFrameBoundaryANDROID(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                            VkDevice                                               device,
+                                            VkSemaphore                                            semaphore,
+                                            VkImage                                                image)
     {
-        EndFrame();
-    }
-
-    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress address, const VkBufferDeviceAddressInfo* pInfo)
-    {
-        if (address != 0)
-        {
-            BufferWrapper* wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pInfo->buffer);
-            address_tracker.TrackBufferDeviceAddress(wrapper->handle_id, wrapper->created_size, address);
-            if (IsCaptureModeTrack())
-            {
-                state_tracker_->TrackGetBufferDeviceAddress(address, pInfo);
-            }
-        }
+        EndFrame(current_lock);
     }
 
     void PostProcess_vkCreateShaderModule(VkResult                        result,
@@ -1583,11 +1696,16 @@ class VulkanCaptureManager : public ApiCaptureManager
     void ReleaseAndroidHardwareBuffer(AHardwareBuffer* hardware_buffer);
     bool CheckBindAlignment(VkDeviceSize memoryOffset);
 
-    bool CheckCommandBufferWrapperForFrameBoundary(const vulkan_wrappers::CommandBufferWrapper* command_buffer_wrapper);
+    bool CheckCommandBufferWrapperForFrameBoundary(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                                   const vulkan_wrappers::CommandBufferWrapper* command_buffer_wrapper);
 
-    bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
+    bool CheckPNextChainForFrameBoundary(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                         const VkBaseInStructure*                               current);
+
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
+
+    virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock) override;
 
   private:
     void QueueSubmitWriteFillMemoryCmd();

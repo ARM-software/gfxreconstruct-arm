@@ -125,7 +125,7 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
             vk_remove_code += '    }\n'
             vk_get_code += 'template<> inline {0}* VulkanStateHandleTable::GetWrapper<{0}>({1} handle) {{ return VulkanStateTableBase::GetWrapper(handle, {2}); }}\n'.format(handle_wrapper_type, vkhandle_name, handle_map)
             vk_const_get_code += 'template<> inline const {0}* VulkanStateHandleTable::GetWrapper<{0}>({1} handle) const {{ return VulkanStateTableBase::GetWrapper(handle, {2}); }}\n'.format(handle_wrapper_type, vkhandle_name, handle_map)
-            vk_get_map_lock_code += 'template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<{0}>(){{ return {1}.mutex; }}\n'.format(handle_wrapper_type, handle_map) 
+            vk_get_map_lock_code += 'template<> inline std::recursive_mutex& VulkanStateHandleTable::GetMapMutex<{0}>(){{ return {1}.mutex; }}\n'.format(handle_wrapper_type, handle_map)
             vk_map_code += '    UnorderedStateMap<{0}, {1}*> {2};\n'.format(vkhandle_name, handle_wrapper_type, handle_map)
 
         self.newline()
@@ -159,6 +159,8 @@ class VulkanStateTableHeaderGenerator(BaseGenerator):
         code += vk_insert_code
         code += '\n'
         code += vk_remove_code
+        code += '\n'
+        code += visit_code
         code += '\n'
         code += '    template<typename Wrapper> const Wrapper* GetWrapper(typename Wrapper::HandleType handle) const { return nullptr; }\n'
         code += '\n'

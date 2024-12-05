@@ -119,8 +119,12 @@ void VulkanAccelerationStructureBuilder::ProcessBuildVulkanAccelerationStructure
     VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
+
     BeginCommandBuffer();
     CmdBuildAccelerationStructures(cmd_execute_obj_.command_buffer_, info_count, geometry_infos, range_infos);
+    functions_.cmd_build_acceleration_structures(
+        cmd_execute_obj_.command_buffer_, info_count, geometry_infos, range_infos);
     ExecuteCommandBuffer();
 }
 
@@ -205,7 +209,6 @@ bool VulkanAccelerationStructureBuilder::UpdateAccelerationStructDeviceAddress(V
     }
     else
     {
-        GFXRECON_LOG_DEBUG("Acceleration structure address not found: %" PRIu64, address);
         return false;
     }
 }
@@ -310,7 +313,7 @@ void VulkanAccelerationStructureBuilder::UpdateDescriptorSetWithTemplateKHR(
 }
 
 // Store the update for the BLAS device addresses in the geometry for TLAS to contain actual addresses
-void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
+void VulkanAccelerationStructureBuilder::QueueInstanceBufferUpdate(
     VkCommandBuffer                                  command_buffer,
     VkAccelerationStructureGeometryInstancesDataKHR& instances,
     const VkAccelerationStructureBuildRangeInfoKHR&  build_range)
@@ -319,8 +322,6 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
     {
         throw std::runtime_error("Unsupported instances.arrayOfPointers");
     }
-    // Update the device address of the buffer itself in the geometry info
-    buffer_tracker_->UpdateBufferDeviceAddress(instances.data.deviceAddress);
 
     if (build_range.primitiveCount == 0)
     {
@@ -329,76 +330,177 @@ void VulkanAccelerationStructureBuilder::UpdateInstanceBuffer(
 
     // Find the buffer by updated address, and record offset if any
     BufferInfo*  instance_buffer = buffer_tracker_->GetBufferByReplayDeviceAddress(instances.data.deviceAddress);
-    VkDeviceSize offset =
-        instances.data.deviceAddress - buffer_tracker_->GetBufferDeviceAddress(instance_buffer->handle);
+    VkDeviceSize offset          = instances.data.deviceAddress -
+                          buffer_tracker_->GetBufferDeviceAddress(instance_buffer->handle) +
+                          build_range.primitiveOffset;
 
-    // This is a workaround for FillMemoryCommand overwriting any substitutions we may insert for BLAS device addresses
-    // Instead of writing at command recording time, store the update and write on vkQueueSubmit, after
-    // FillMemory command
-    instance_buffer_updates_[command_buffer].push_back(
-        std::make_tuple(instance_buffer->allocator_data, offset, build_range));
+    // Ideally, we do not need this, but FixDeviceAddress in not ideal
+    // Queue a direct instance buffer update, where we map into the buffer provided by the build command
+    instance_buffer_direct_updates_[command_buffer].emplace_back(instance_buffer, offset, build_range);
 
-    auto instance_buffers_staging_update_itr = instance_buffer_staging_updates_.find(command_buffer);
+    // Try to see, whether we have a potential update through the staging buffer via vkCmdCopyBuffer
+    auto instance_buffers_staging_update_itr = scratch_instance_buffer_indirect_staging_updates_.find(command_buffer);
 
-    if (instance_buffers_staging_update_itr != instance_buffer_staging_updates_.end())
+    if (instance_buffers_staging_update_itr != scratch_instance_buffer_indirect_staging_updates_.end())
     {
-        auto& staging_update_vector = instance_buffers_staging_update_itr->second;
+        std::vector<InstanceBufferIndirectStagingUpdateInfo>& staging_update_vector =
+            instance_buffers_staging_update_itr->second;
 
-        for (auto it = staging_update_vector.begin(); it != staging_update_vector.end(); it++)
-        {
-            VkBuffer dst_buffer = std::get<2>(*it);
-            if (dst_buffer == instance_buffer->handle)
-            {
-                GFXRECON_LOG_DEBUG("Stagging write of instance buffer has been detected");
-                VulkanResourceAllocator::ResourceData src_buffer_allocator_data = std::get<0>(*it);
-                VkDeviceSize                          src_offset                = std::get<1>(*it);
+        std::copy_if(staging_update_vector.begin(),
+                     staging_update_vector.end(),
+                     std::back_inserter(queued_instance_buffer_indirect_staging_updates_[command_buffer]),
+                     [&instance_buffer, &offset, &build_range](const InstanceBufferIndirectStagingUpdateInfo& info) {
+                         if (!info.dst_info_ || !info.src_info_)
+                         {
+                             return false;
+                         }
 
-                instance_buffer_updates_[command_buffer].pop_back();
-                instance_buffer_updates_[command_buffer].push_back(
-                    std::make_tuple(src_buffer_allocator_data, src_offset, build_range));
+                         // If the destination is indeed the instance buffer
+                         if (info.dst_info_->capture_id != instance_buffer->capture_id)
+                         {
+                             return false;
+                         }
 
-                staging_update_vector.erase(it);
-                break;
-            }
-        }
+                         VkDeviceSize build_range_start{ offset };
+                         VkDeviceSize build_range_end{
+                             build_range_start + build_range.primitiveCount * sizeof(VkAccelerationStructureInstanceKHR)
+                         };
+                         VkDeviceSize dst_region_start = info.dst_offset_;
+                         VkDeviceSize dst_region_end   = dst_region_start + info.size_;
+                         // If the region to where we are copying is indeed the input region of the build command
+                         if (!((dst_region_start >= build_range_start && dst_region_start < build_range_end) ||
+                               (dst_region_end >= build_range_start && dst_region_end < build_range_end)))
+                         {
+                             return false;
+                         }
+
+                         // If the data we are copying is indeed the VkAccelerationStructureInstanceKHR (at least
+                         // by size)
+                         if (info.size_ % sizeof(VkAccelerationStructureInstanceKHR) != 0)
+                         {
+                             return false;
+                         }
+                         return true;
+                     });
     }
 }
 
 // Perform the actual update of the BLAS device addresses
-void VulkanAccelerationStructureBuilder::UpdateInstanceBufferContent(
-    VulkanResourceAllocator::ResourceData    instance_buffer_allocator_data,
-    VkDeviceSize                             offset,
-    VkAccelerationStructureBuildRangeInfoKHR build_range)
+void VulkanAccelerationStructureBuilder::UpdateInstanceBufferDirect(const InstanceBufferDirectUpdateInfo& info)
 {
     uint8_t* data;
-    uint32_t size = build_range.primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
+    uint32_t size = info.build_range_.primitiveCount * sizeof(VkAccelerationStructureInstanceKHR);
 
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     VkResult mapping_result =
-        allocator_->MapResourceMemoryDirect(size, 0, (void**)&data, instance_buffer_allocator_data);
-    GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
-    data += offset + build_range.primitiveOffset;
-
-    VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
-
-    // All or nothing strategy - we should always find a device address
-    // This way, we do not perform a modificaction of real device memory until we are sure that it is valid
-    std::vector<VkAccelerationStructureInstanceKHR> copy(instance_data, instance_data + build_range.primitiveCount);
-    bool                                            success = true;
-    for (uint32_t instance_index = 0; success && (instance_index < build_range.primitiveCount); ++instance_index)
+        allocator_->MapResourceMemoryDirect(size, 0, (void**)&data, info.buffer_info_->allocator_data);
+    if (mapping_result == VK_SUCCESS)
     {
-        success = UpdateAccelerationStructDeviceAddress(copy[instance_index].accelerationStructureReference);
+        data += info.offset_;
+
+        VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
+
+        for (uint32_t i = 0; i < info.build_range_.primitiveCount; ++i)
+        {
+            UpdateAccelerationStructDeviceAddress(instance_data[i].accelerationStructureReference);
+        }
+
+        allocator_->UnmapResourceMemoryDirect(info.buffer_info_->allocator_data);
     }
-    if (success)
+    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+}
+
+bool VulkanAccelerationStructureBuilder::UpdateInstanceBufferIndirectStaging(
+    const InstanceBufferIndirectStagingUpdateInfo& info)
+{
+    uint8_t* data;
+    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+    // Map the SOURCE buffer with the appropriate size
+    VkResult mapping_result = allocator_->MapResourceMemoryDirect(
+        allocator_->GetBufferSize(info.src_info_->allocator_data), 0, (void**)&data, info.src_info_->allocator_data);
+    bool success = true;
+
+    if (mapping_result == VK_SUCCESS)
     {
-        util::platform::MemoryCopy(instance_data, size, copy.data(), size);
+        data += info.src_offset_;
+
+        uint32_t                            count         = info.size_ / sizeof(VkAccelerationStructureInstanceKHR);
+        VkAccelerationStructureInstanceKHR* instance_data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(data);
+        // As this could be a false positive, do not change the data unless everything is in order
+        std::vector<VkAccelerationStructureInstanceKHR> copy(instance_data, instance_data + count);
+        for (uint32_t i = 0; success && (i < count); ++i)
+        {
+            success = success && UpdateAccelerationStructDeviceAddress(copy[i].accelerationStructureReference);
+        }
+
+        if (success)
+        {
+            util::platform::MemoryCopy(data, info.size_, copy.data(), info.size_);
+        }
     }
     else
     {
-        GFXRECON_LOG_DEBUG("Some of the instance buffer BLAS addresses failed to update");
+        GFXRECON_LOG_DEBUG("Mapping of staging update buffer (capture id %" PRIu64 ") has failed",
+                           info.src_info_->capture_id);
     }
-    allocator_->UnmapResourceMemoryDirect(instance_buffer_allocator_data);
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+
+    return success;
+}
+
+bool VulkanAccelerationStructureBuilder::UpdateInstanceBufferIndirectPipeline(
+    InstanceBufferIndirectPipelineUpdateInfo& entry)
+{
+    bool update_commited = false;
+
+    for (uint32_t buffer_idx = 0; buffer_idx < entry.size_; ++buffer_idx)
+    {
+        if (entry.buffer_infos_[buffer_idx]->usage &
+            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+        {
+            continue;
+        }
+
+        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+
+        uint8_t*     data;
+        VkDeviceSize size           = allocator_->GetBufferSize(entry.buffer_infos_[buffer_idx]->allocator_data);
+        VkResult     mapping_result = allocator_->MapResourceMemoryDirect(
+            size, 0, (void**)&data, entry.buffer_infos_[buffer_idx]->allocator_data);
+
+        if (mapping_result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_WARNING_ONCE("Mapping of descriptor update buffer has failed");
+            GFXRECON_LOG_DEBUG("Mapping of descriptor update buffer (capture id %" PRIu64 ") has failed",
+                               entry.buffer_infos_[buffer_idx]->capture_id);
+            util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+            continue;
+        }
+
+        data += entry.offsets_[buffer_idx];
+
+        VkDeviceAddress* device_addresses = reinterpret_cast<VkDeviceAddress*>(data);
+
+        // All or nothing - if we are looking in the wrong buffer, we do not want to update
+        // the contents until we are sure
+        uint32_t count   = entry.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
+        bool     success = true;
+
+        std::vector<VkDeviceAddress> copy(device_addresses, device_addresses + count);
+        for (uint32_t i = 0; success && (i < count); ++i)
+        {
+            success = success && UpdateAccelerationStructDeviceAddress(copy[i]);
+        }
+
+        if (success)
+        {
+            util::platform::MemoryCopy(data, entry.ranges_[buffer_idx], copy.data(), entry.ranges_[buffer_idx]);
+            update_commited = true;
+        }
+        allocator_->UnmapResourceMemoryDirect(entry.buffer_infos_[buffer_idx]->allocator_data);
+        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+    }
+    return update_commited;
 }
 
 void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
@@ -490,47 +592,23 @@ void VulkanAccelerationStructureBuilder::ExecuteCommandBuffer()
     GFXRECON_ASSERT(result == VK_SUCCESS);
 }
 
-// For each geometry build info, we want to get the actual addresses of the geometry buffers
-void VulkanAccelerationStructureBuilder::UpdateDeviceAddress(
+void VulkanAccelerationStructureBuilder::ProcessAccelerationStructureGeometry(
     VkCommandBuffer                              command_buffer,
     VkAccelerationStructureBuildGeometryInfoKHR& build_geometry,
     VkAccelerationStructureBuildRangeInfoKHR*    range_infos)
 {
     for (uint32_t geometry_index = 0; geometry_index < build_geometry.geometryCount; ++geometry_index)
     {
-        auto& geometry_data =
+        VkAccelerationStructureGeometryKHR& geometry_data =
             const_cast<VkAccelerationStructureGeometryKHR*>(build_geometry.pGeometries)[geometry_index];
         if (geometry_data.sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
         {
             continue;
         }
-        switch (geometry_data.geometryType)
+        if (geometry_data.geometryType == VK_GEOMETRY_TYPE_INSTANCES_KHR)
         {
-            case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
-            {
-                auto& triangles = geometry_data.geometry.triangles;
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.vertexData.deviceAddress);
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.indexData.deviceAddress);
-                buffer_tracker_->UpdateBufferDeviceAddress(triangles.transformData.deviceAddress);
-                break;
-            }
-            case VK_GEOMETRY_TYPE_INSTANCES_KHR:
-            {
-                auto& instances = geometry_data.geometry.instances;
-                UpdateInstanceBuffer(command_buffer, instances, range_infos[geometry_index]);
-                break;
-            }
-            case VK_GEOMETRY_TYPE_AABBS_KHR:
-            {
-                auto& aabbs = geometry_data.geometry.aabbs;
-                buffer_tracker_->UpdateBufferDeviceAddress(aabbs.data.deviceAddress);
-                break;
-            }
-            default:
-            {
-                GFXRECON_LOG_ERROR("Unexpected geometry type");
-                break;
-            }
+            auto& instances = geometry_data.geometry.instances;
+            QueueInstanceBufferUpdate(command_buffer, instances, range_infos[geometry_index]);
         }
     }
 }
@@ -635,13 +713,11 @@ void VulkanAccelerationStructureBuilder::CmdBuildAccelerationStructures(
             geometry_infos[i].dstAccelerationStructure = *dst_entry->replacement_acceleration_struct_->handles_.begin();
             scratch_size                               = size_info.updateScratchSize;
         }
-
+        ProcessAccelerationStructureGeometry(command_buffer, geometry_infos[i], range_infos[i]);
         UpdateScratchDeviceAddress(geometry_infos[i], scratch_size);
-        UpdateDeviceAddress(command_buffer, geometry_infos[i], range_infos[i]);
     }
 
     VulkanMicromapBuilder::OnCmdBuildAccStrHandling(buffer_tracker_, info_count, geometry_infos);
-    functions_.cmd_build_acceleration_structures(command_buffer, info_count, geometry_infos, range_infos);
 }
 
 void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
@@ -846,11 +922,11 @@ VkDeviceAddress VulkanAccelerationStructureBuilder::GetActualDeviceAddress(VkAcc
 VkDeviceAddress VulkanAccelerationStructureBuilder::GetAccelerationStructureDeviceAddress(
     VkAccelerationStructureKHR acceleration_structure)
 {
-    VkAccelerationStructureDeviceAddressInfoKHR info{
-        .sType                 = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-        .pNext                 = nullptr,
-        .accelerationStructure = acceleration_structure
-    };
+    VkAccelerationStructureDeviceAddressInfoKHR info;
+    info.sType                 = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    info.pNext                 = nullptr;
+    info.accelerationStructure = acceleration_structure;
+
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     VkDeviceAddress address = functions_.get_acceleration_structure_device_address(device_, &info);
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
@@ -863,12 +939,16 @@ VkAccelerationStructureKHR VulkanAccelerationStructureBuilder::CreateAcceleratio
     const VkAccelerationStructureBuildSizesInfoKHR& size_info,
     VkBuffer                                        storage)
 {
-    VkAccelerationStructureCreateInfoKHR create_info = {
-        .sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-        .buffer = storage,
-        .size   = size_info.accelerationStructureSize,
-        .type   = geometry_info.type,
-    };
+    VkAccelerationStructureCreateInfoKHR create_info;
+    create_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    create_info.pNext         = nullptr;
+    create_info.createFlags   = 0;
+    create_info.buffer        = storage;
+    create_info.offset        = 0;
+    create_info.size          = size_info.accelerationStructureSize;
+    create_info.type          = geometry_info.type;
+    create_info.deviceAddress = 0;
+
     VkAccelerationStructureKHR acceleration_structure;
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
     functions_.create_acceleration_structure(device_, &create_info, nullptr, &acceleration_structure);
@@ -1006,86 +1086,61 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
     }
 
     bool wait = false;
-    // Perform the actual update of the bottom level acceleration structures in the instance buffers
-    for (int i = 0; i < submitCount; ++i)
+
+    // First, try to perform the indirect update
+    for (InstanceBufferIndirectPipelineUpdateInfo& indirect_update : instance_buffer_indirect_pipeline_updates_)
     {
-        auto submission = pSubmits[i];
-        for (int cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
-        {
-            auto submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
-
-            // if instance_buffer_staging_updates_ for this command buffer is not empty it means that the staging
-            // instance buffer write was referring to an acceleration structure meant to be built at a later time,
-            // therefore no action needed for it
-            auto instance_buffer_staging_update_it = instance_buffer_staging_updates_.find(submitted_buffer);
-            if (instance_buffer_staging_update_it != instance_buffer_staging_updates_.end())
-            {
-                instance_buffer_staging_updates_.erase(instance_buffer_staging_update_it);
-            }
-
-            auto instance_buffers_update_itr = instance_buffer_updates_.find(submitted_buffer);
-            if (instance_buffers_update_itr != instance_buffer_updates_.end())
-            {
-                auto instance_buffers_update = instance_buffers_update_itr->second;
-                for (auto [resource_data, offset, range_info] : instance_buffers_update)
-                {
-                    UpdateInstanceBufferContent(resource_data, offset, range_info);
-                }
-                instance_buffer_updates_.erase(instance_buffers_update_itr);
-                wait = true;
-            }
-        }
+        bool result = UpdateInstanceBufferIndirectPipeline(indirect_update);
+        wait        = wait || result;
     }
 
-    for (const auto& descriptor_update_buffers : deferred_inspection_buffers_)
+    for (int i = 0; i < submitCount; ++i)
     {
-        for (uint32_t buffer_idx = 0; buffer_idx < descriptor_update_buffers.size_; ++buffer_idx)
+        const VkSubmitInfo& submission = pSubmits[i];
+        for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
         {
-            if (descriptor_update_buffers.infos_[buffer_idx]->usage &
-                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR)
+            const VkCommandBuffer& submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
+
+            scratch_instance_buffer_indirect_staging_updates_.erase(submitted_buffer);
+
+            auto instance_buffer_indirect_staging_itr =
+                queued_instance_buffer_indirect_staging_updates_.find(submitted_buffer);
+            if (instance_buffer_indirect_staging_itr != queued_instance_buffer_indirect_staging_updates_.end())
             {
-                continue;
+                for (const InstanceBufferIndirectStagingUpdateInfo& info : instance_buffer_indirect_staging_itr->second)
+                {
+                    bool result = UpdateInstanceBufferIndirectStaging(info);
+                    wait        = wait || result;
+                }
             }
 
-            util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
-
-            uint8_t* data;
-            VkResult mapping_result = allocator_->MapResourceMemoryDirect(
-                allocator_->GetBufferSize(descriptor_update_buffers.infos_[buffer_idx]->allocator_data),
-                0,
-                (void**)&data,
-                descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
-
-            if (mapping_result != VK_SUCCESS)
+            auto instance_buffers_update_itr = instance_buffer_direct_updates_.find(submitted_buffer);
+            if (instance_buffers_update_itr != instance_buffer_direct_updates_.end())
             {
-                GFXRECON_LOG_WARNING_ONCE("Mapping of descriptor update buffer has failed");
-                GFXRECON_LOG_DEBUG("Mapping of descriptor update buffer (capture id %u) has failed",
-                                   descriptor_update_buffers.infos_[buffer_idx]->capture_id);
-                util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
-                continue;
-            }
-
-            data += descriptor_update_buffers.offsets_[buffer_idx];
-
-            VkDeviceAddress* device_addresses = reinterpret_cast<uint64_t*>(data);
-
-            // All or nothing - if we are looking in the wrong buffer, we do not want to update
-            // the contents until we are sure
-            uint32_t count   = descriptor_update_buffers.ranges_[buffer_idx] / sizeof(VkDeviceAddress);
-            bool     success = true;
-            std::vector<VkDeviceAddress> copy(device_addresses, device_addresses + count);
-            for (uint32_t i = 0; success && (i < count); ++i)
-            {
-                success = UpdateAccelerationStructDeviceAddress(copy[i]);
-            }
-            if (success)
-            {
-                uint32_t size = sizeof(VkDeviceAddress) * count;
-                util::platform::MemoryCopy(data, size, copy.data(), size);
+                auto instance_buffers_update = instance_buffers_update_itr->second;
+                for (const InstanceBufferDirectUpdateInfo& info : instance_buffers_update)
+                {
+                    UpdateInstanceBufferDirect(info);
+                }
+                instance_buffer_direct_updates_.erase(instance_buffers_update_itr);
                 wait = true;
             }
-            allocator_->UnmapResourceMemoryDirect(descriptor_update_buffers.infos_[buffer_idx]->allocator_data);
-            util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+
+            auto trace_rays_data = trace_rays_.find(submitted_buffer);
+            if (trace_rays_data != trace_rays_.end())
+            {
+                // Every command buffer containing CmdTraceRays has been recorded into trace_rays_ map along with the
+                // shader binding table data. These SBTs will contain shader group handles that need an update
+                for (auto& sbt_data : trace_rays_[submitted_buffer])
+                {
+                    UpdateShaderBindingTable(sbt_data.raygen);
+                    UpdateShaderBindingTable(sbt_data.hit);
+                    UpdateShaderBindingTable(sbt_data.miss);
+                    UpdateShaderBindingTable(sbt_data.callable);
+                }
+                trace_rays_.erase(trace_rays_data);
+                wait = true;
+            }
         }
     }
 
@@ -1094,8 +1149,9 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
         queue_with_buffer_write_ = queue;
     }
 
-    deferred_inspection_buffers_.clear();
+    instance_buffer_indirect_pipeline_updates_.clear();
     // Update the descriptor set with the actual handle, if any such update is stored
+    // TODO: Replace with erase(remove_if) idiom
     for (auto it = cached_descriptor_write_.begin(); it != cached_descriptor_write_.end();)
     {
         AccelerationStructureEntry* entry = GetAccelerationStructureEntry(it->first);
@@ -1112,27 +1168,6 @@ void VulkanAccelerationStructureBuilder::OnQueueSubmit(VkQueue             queue
         else
         {
             ++it;
-        }
-    }
-
-    // Update shader group handles if the submission contains vkCmdTraceRays command
-    for (int i = 0; i < submitCount; ++i)
-    {
-        VkSubmitInfo submission = pSubmits[i];
-        for (int cmd_buffer_index = 0; cmd_buffer_index < submission.commandBufferCount; ++cmd_buffer_index)
-        {
-            VkCommandBuffer submitted_buffer = submission.pCommandBuffers[cmd_buffer_index];
-
-            // Every command buffer containing CmdTraceRays has been recorded into trace_rays_ map along with the
-            // shader binding table data. These SBTs will contain shader group handles that need an update
-            for (auto& sbt_data : trace_rays_[submitted_buffer])
-            {
-                UpdateShaderBindingTable(sbt_data.raygen);
-                UpdateShaderBindingTable(sbt_data.hit);
-                UpdateShaderBindingTable(sbt_data.miss);
-                UpdateShaderBindingTable(sbt_data.callable);
-            }
-            trace_rays_.erase(submitted_buffer);
         }
     }
 }
@@ -1200,26 +1235,6 @@ void VulkanAccelerationStructureBuilder::OnCmdTraceRaysKHR(VkCommandBuffer      
                                                            VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
                                                            VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable)
 {
-    // SBT's device addresses can change, update them based on buffer_tracker_->GetBufferDeviceAddress calls recorded
-    // earlier Device addresses are not guaranteed to be valid - some tables could be left out, process only the regions
-    // with specified size
-    if (pRaygenShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pRaygenShaderBindingTable->deviceAddress);
-    }
-    if (pMissShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pMissShaderBindingTable->deviceAddress);
-    }
-    if (pHitShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pHitShaderBindingTable->deviceAddress);
-    }
-    if (pCallableShaderBindingTable->size)
-    {
-        buffer_tracker_->UpdateBufferDeviceAddress(pCallableShaderBindingTable->deviceAddress);
-    }
-
     // Shader group handles stored in SBT's will require update as well, this should be done before QueueSubmit
     // Store SBT data for later replacement
     CmdTraceRaysEntry new_entry{
@@ -1242,14 +1257,15 @@ void VulkanAccelerationStructureBuilder::RegisterShaderGroupHandleEntry(uint32_t
     }
 }
 
-void VulkanAccelerationStructureBuilder::RegisterInstanceBufferStagingUpdate(
-    VkCommandBuffer                       command_buffer,
-    VulkanResourceAllocator::ResourceData src_buffer_allocator_data,
-    VkDeviceSize                          src_offset,
-    VkBuffer                              dst_buffer)
+void VulkanAccelerationStructureBuilder::RegisterInstanceBufferStagingUpdate(VkCommandBuffer   command_buffer,
+                                                                             const BufferInfo* src_buffer,
+                                                                             VkDeviceSize      src_offset,
+                                                                             const BufferInfo* dst_buffer,
+                                                                             VkDeviceSize      dst_offset,
+                                                                             VkDeviceSize      size)
 {
-    instance_buffer_staging_updates_[command_buffer].push_back(
-        std::make_tuple(src_buffer_allocator_data, src_offset, dst_buffer));
+    scratch_instance_buffer_indirect_staging_updates_[command_buffer].emplace_back(
+        src_buffer, src_offset, dst_buffer, dst_offset, size);
 }
 
 void VulkanAccelerationStructureBuilder::PostQueuePresent()
@@ -1262,12 +1278,13 @@ void VulkanAccelerationStructureBuilder::StoreDeferredDeviceAddressBufferUpdates
     const std::vector<BufferInfo*>&                   buffer_infos,
     const std::vector<const VkDescriptorBufferInfo*>& descriptor_buffer_infos)
 {
-    DescriptorUpdateBufferEntries& buffers = deferred_inspection_buffers_.emplace_back(buffer_infos.size());
+    InstanceBufferIndirectPipelineUpdateInfo& buffers =
+        instance_buffer_indirect_pipeline_updates_.emplace_back(static_cast<uint32_t>(buffer_infos.size()));
 
     for (uint32_t i = 0; i < buffer_infos.size(); ++i)
     {
-        buffers.infos_[i]   = buffer_infos[i];
-        buffers.offsets_[i] = descriptor_buffer_infos[i]->offset;
+        buffers.buffer_infos_[i] = buffer_infos[i];
+        buffers.offsets_[i]      = descriptor_buffer_infos[i]->offset;
         if (descriptor_buffer_infos[i]->range == VK_WHOLE_SIZE)
         {
             buffers.ranges_[i] = allocator_->GetBufferSize(buffer_infos[i]->allocator_data);

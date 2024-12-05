@@ -83,7 +83,7 @@ class InfoDecoder : public ApiDecoder
     virtual void DispatchDisplayMessageCommand(format::ThreadId thread_id, const std::string& message) override {}
 
     virtual void DispatchFillMemoryCommand(
-        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override
+        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override
     {}
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override{};
@@ -194,6 +194,9 @@ class InfoDecoder : public ApiDecoder
         std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
         const uint8_t*                                                  build_inputs_data) override
     {}
+
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string) override;
 
   private:
     std::vector<InfoConsumer*> consumers_;

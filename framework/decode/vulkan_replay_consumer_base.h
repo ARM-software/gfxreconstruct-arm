@@ -29,6 +29,8 @@
 #include "decode/pointer_decoder.h"
 #include "decode/screenshot_handler.h"
 #include "decode/swapchain_image_tracker.h"
+#include "decode/vulkan_buffer_tracker.h"
+#include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_handle_mapping_util.h"
 #include "decode/vulkan_object_info.h"
 #include "decode/vulkan_object_info_table.h"
@@ -46,8 +48,8 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
-#include "util/threadpool.h"
 #include "decode/vulkan_micromap_builder.h"
+#include "util/threadpool.h"
 
 #include "application/application.h"
 
@@ -96,7 +98,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     virtual void ProcessDisplayMessageCommand(const std::string& message) override;
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
@@ -390,50 +393,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     }
 
     //! track arbitrary handles that are currently used by asynchronous operations
-    void TrackAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
-    {
-        for (const auto& handle : async_handles)
-        {
-            // check to avoid overwriting existing handle-destructors
-            if (async_inflight_handles_.count(handle) == 0)
-            {
-                async_inflight_handles_[handle] = {};
-            }
-        }
-    }
+    void TrackAsyncHandles(const std::unordered_set<format::HandleId>& async_handles,
+                           const std::function<void()>&                sync_fn);
 
     //! clear handles that are currently used by asynchronous operations,
     //! invoke stored deletion-functions
-    void ClearAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
-    {
-        for (const auto& handle : async_handles)
-        {
-            auto it = async_inflight_handles_.find(handle);
-            if (it != async_inflight_handles_.end())
-            {
-                const auto& [tracked_handle, destroy_fn] = *it;
-                if (destroy_fn)
-                {
-                    destroy_fn();
-                }
-                async_inflight_handles_.erase(it);
-            }
-        }
-    }
+    void ClearAsyncHandles(const std::unordered_set<format::HandleId>& async_handles);
 
     //! schedules deletion of already tracked handles
-    void DestroyAsyncHandle(format::HandleId handle, std::function<void()> destroy_fn)
-    {
-        auto it = async_inflight_handles_.find(handle);
-
-        if (it != async_inflight_handles_.end())
-        {
-            it->second = std::move(destroy_fn);
-        }
-    }
+    void DestroyAsyncHandle(format::HandleId handle, std::function<void()> destroy_fn);
 
     //! return true if this handle is currently being tracked (was passed to 'TrackAsyncHandles' earlier)
-    bool IsUsedByAsyncTask(uint64_t handle) const { return async_inflight_handles_.count(handle) > 0; }
+    bool IsUsedByAsyncTask(uint64_t handle) const { return async_tracked_handles_.count(handle) > 0; }
 
     //! returns true if asynchronous operations should be used at all
     bool UseAsyncOperations() { return options_.num_pipeline_creation_jobs != 0 && !options_.dumping_resources; }
@@ -818,6 +789,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       uint32_t                                                   bindInfoCount,
                                       const StructPointerDecoder<Decoded_VkBindImageMemoryInfo>* pBindInfos);
 
+    VkResult OverrideBindVideoSessionMemoryKHR(
+        PFN_vkBindVideoSessionMemoryKHR                                func,
+        VkResult                                                       original_result,
+        const DeviceInfo*                                              device_info,
+        VideoSessionKHRInfo*                                           video_session_info,
+        uint32_t                                                       bindSessionMemoryInfoCount,
+        StructPointerDecoder<Decoded_VkBindVideoSessionMemoryInfoKHR>* pBindSessionMemoryInfos);
+
     VkResult OverrideCreateBuffer(PFN_vkCreateBuffer                                         func,
                                   VkResult                                                   original_result,
                                   const DeviceInfo*                                          device_info,
@@ -841,6 +820,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                               const DeviceInfo*                                          device_info,
                               ImageInfo*                                                 image_info,
                               const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    VkResult OverrideCreateVideoSessionKHR(PFN_vkCreateVideoSessionKHR func,
+                                           VkResult                    original_result,
+                                           const DeviceInfo*           device_info,
+                                           const StructPointerDecoder<Decoded_VkVideoSessionCreateInfoKHR>* pCreateInfo,
+                                           const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                           HandlePointerDecoder<VkVideoSessionKHR>* pVideoSession);
+
+    void OverrideDestroyVideoSessionKHR(PFN_vkDestroyVideoSessionKHR                               func,
+                                        const DeviceInfo*                                          device_info,
+                                        VideoSessionKHRInfo*                                       video_session_info,
+                                        const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideGetImageSubresourceLayout(PFN_vkGetImageSubresourceLayout                         func,
                                            const DeviceInfo*                                       device_info,
@@ -1173,18 +1164,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                         pAccelerationStructureKHR);
 
-    VkResult OverrideCreateMicromapEXT(PFN_vkCreateMicromapEXT                                      func,
-                                       VkResult                                                     original_result,
-                                       const DeviceInfo*                                            device_info,
-                                       const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
-                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
-
-    void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
-                                          const DeviceInfo*                                          device,
-                                          VkAccelerationStructureBuildTypeKHR                        buildType,
-                                          StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
-                                          StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo);
+    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR func,
+                                                 const DeviceInfo*                     device_info,
+                                                 const AccelerationStructureKHRInfo*   acceleration_structure_info,
+                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideCmdBuildAccelerationStructuresKHR(
         PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
@@ -1192,11 +1175,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         uint32_t                                                                   infoCount,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos);
-
-    void OverrideCmdBuildMicromapsEXT(PFN_vkCmdBuildMicromapsEXT                            func,
-                                      CommandBufferInfo*                                    command_buffer_info,
-                                      uint32_t                                              infoCount,
-                                      StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
 
     void
     OverrideCmdCopyAccelerationStructureKHR(PFN_vkCmdCopyAccelerationStructureKHR func,
@@ -1211,6 +1189,29 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         VkQueryType                                       queryType,
         gfxrecon::decode::QueryPoolInfo*                  query_pool_info,
         uint32_t                                          firstQuery);
+
+    VkResult OverrideCreateMicromapEXT(PFN_vkCreateMicromapEXT                                      func,
+                                       VkResult                                                     original_result,
+                                       const DeviceInfo*                                            device_info,
+                                       const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
+                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
+
+    void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
+                                    const DeviceInfo*                                    device_info,
+                                    const MicromapEXTInfo*                               micromap_info,
+                                    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
+                                          const DeviceInfo*                                          device,
+                                          VkAccelerationStructureBuildTypeKHR                        buildType,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo);
+
+    void OverrideCmdBuildMicromapsEXT(PFN_vkCmdBuildMicromapsEXT                            func,
+                                      CommandBufferInfo*                                    command_buffer_info,
+                                      uint32_t                                              infoCount,
+                                      StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
 
     VkResult OverrideCreateRayTracingPipelinesKHR(
         PFN_vkCreateRayTracingPipelinesKHR                                     func,
@@ -1317,6 +1318,17 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                     VkSubpassContents                                    contents);
 
     void
+    OverrideCmdTraceRaysKHR(PFN_vkCmdTraceRaysKHR                                          func,
+                            CommandBufferInfo*                                             command_buffer_info,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
+                            uint32_t                                                       width,
+                            uint32_t                                                       height,
+                            uint32_t                                                       depth);
+
+    void
     OverrideCmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2                            func,
                                 CommandBufferInfo*                                   command_buffer_info,
                                 StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder,
@@ -1340,26 +1352,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       const DeviceInfo*          device_info,
                                       const SemaphoreInfo*       semaphore_info,
                                       const ImageInfo*           image_info);
-
-    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR func,
-                                                 const DeviceInfo*                     device_info,
-                                                 const AccelerationStructureKHRInfo*   acceleration_structure_info,
-                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
-
-    void
-         OverrideCmdTraceRaysKHR(PFN_vkCmdTraceRaysKHR                                          func,
-                                 CommandBufferInfo*                                             in_commandBuffer,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
-                                 uint32_t                                                       width,
-                                 uint32_t                                                       height,
-                                 uint32_t                                                       depth);
-    void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
-                                    const DeviceInfo*                                    device_info,
-                                    const MicromapEXTInfo*                               micromap_info,
-                                    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideUpdateDescriptorSets(PFN_vkUpdateDescriptorSets                          func,
                                       const DeviceInfo*                                   device_info,
@@ -1403,6 +1395,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                  VkDeviceSize             dataSize,
                                  PointerDecoder<uint8_t>* pData);
 
+    VkResult OverrideCreateShadersEXT(PFN_vkCreateShadersEXT                                     func,
+                                      VkResult                                                   original_result,
+                                      const DeviceInfo*                                          device_info,
+                                      uint32_t                                                   create_info_count,
+                                      const StructPointerDecoder<Decoded_VkShaderCreateInfoEXT>* pCreateInfos,
+                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                      HandlePointerDecoder<VkShaderEXT>*                         pShaders);
+
     void OverrideDestroyPipeline(PFN_vkDestroyPipeline                                      func,
                                  const DeviceInfo*                                          device_info,
                                  PipelineInfo*                                              pipeline_info,
@@ -1427,6 +1427,25 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                  StructPointerDecoder<Decoded_VkGraphicsPipelineCreateInfo>* pCreateInfos,
                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>*        pAllocator,
                                  HandlePointerDecoder<VkPipeline>*                           pPipelines);
+
+    std::function<handle_create_result_t<VkPipeline>()>
+    AsyncCreateComputePipelines(const ApiCallInfo&                                         call_info,
+                                VkResult                                                   returnValue,
+                                const DeviceInfo*                                          device_info,
+                                const PipelineCacheInfo*                                   pipeline_cache_info,
+                                uint32_t                                                   createInfoCount,
+                                StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+                                StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                HandlePointerDecoder<VkPipeline>*                          pPipelines);
+
+    std::function<handle_create_result_t<VkShaderEXT>()>
+    AsyncCreateShadersEXT(const ApiCallInfo&                                   call_info,
+                          VkResult                                             returnValue,
+                          const DeviceInfo*                                    device_info,
+                          uint32_t                                             createInfoCount,
+                          StructPointerDecoder<Decoded_VkShaderCreateInfoEXT>* pCreateInfos,
+                          StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                          HandlePointerDecoder<VkShaderEXT>*                   pShaders);
 
     const VulkanReplayOptions options_;
 
@@ -1460,6 +1479,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void SetPhysicalDeviceProperties(PhysicalDeviceInfo*               physical_device_info,
                                      const VkPhysicalDeviceProperties* capture_properties,
                                      const VkPhysicalDeviceProperties* replay_properties);
+
+    void SetPhysicalDeviceProperties(PhysicalDeviceInfo*                physical_device_info,
+                                     const VkPhysicalDeviceProperties2* capture_properties,
+                                     const VkPhysicalDeviceProperties2* replay_properties);
 
     void SetPhysicalDeviceMemoryProperties(PhysicalDeviceInfo*                     physical_device_info,
                                            const VkPhysicalDeviceMemoryProperties* capture_properties,
@@ -1555,6 +1578,16 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                              const DescriptorUpdateTemplateInfo*    template_info,
                                              const DescriptorUpdateTemplateDecoder* decoder) const;
 
+    VulkanDeviceAddressTracker& GetDeviceAddressTracker(VkDevice device);
+
+    [[nodiscard]] std::vector<std::unique_ptr<char[]>> ReplaceShaders(uint32_t                      create_info_count,
+                                                                      VkGraphicsPipelineCreateInfo* create_infos,
+                                                                      const format::HandleId*       pipelines) const;
+
+    [[nodiscard]] std::vector<std::unique_ptr<char[]>> ReplaceShaders(uint32_t                create_info_count,
+                                                                      VkShaderCreateInfoEXT*  create_infos,
+                                                                      const format::HandleId* shaders) const;
+
     void LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData);
     void SavePipelineCache(format::HandleId id, const DeviceInfo* device_info, VkPipelineCache pipelineCache);
     VkPipelineCache CreateNewPipelineCache(const DeviceInfo* device_info, format::HandleId id);
@@ -1598,9 +1631,25 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::string                                                                screenshot_file_prefix_;
     graphics::FpsInfo*                                                         fps_info_;
 
-    util::ThreadPool                                            main_thread_queue_;
-    util::ThreadPool                                            background_queue_;
-    std::unordered_map<format::HandleId, std::function<void()>> async_inflight_handles_;
+    std::unordered_map<VkDevice, decode::VulkanDeviceAddressTracker> _device_address_trackers;
+
+    util::ThreadPool main_thread_queue_;
+    util::ThreadPool background_queue_;
+
+    //! async_tracked_handle_asset_t groups assets used by tracked async-dependencies
+    struct async_tracked_handle_asset_t
+    {
+        //! function to synchronize (blocking wait) with parent asynchronous-task
+        std::function<void()> sync_fn;
+
+        //! function used to defer deletion of a tracked async-dependency
+        std::function<void()> destroy_fn;
+    };
+    //! stores handles used/referenced by currently running async tasks
+    std::unordered_map<format::HandleId, async_tracked_handle_asset_t> async_tracked_handles_;
+
+    //! decide whether to sync/wait or defer deletion of handles used by currently running async tasks
+    static constexpr bool async_defer_deletion_ = false;
 
     // Imported semaphores are semaphores that are used to track external memory.
     // During replay, the external memory is not present (we have no Fds or handles to valid

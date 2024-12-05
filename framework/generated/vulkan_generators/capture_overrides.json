@@ -15,6 +15,7 @@
         "vkGetPhysicalDeviceQueueFamilyProperties2": "manager->OverrideGetPhysicalDeviceQueueFamilyProperties2",
         "vkGetPhysicalDeviceQueueFamilyProperties2KHR": "manager->OverrideGetPhysicalDeviceQueueFamilyProperties2KHR",
         "vkWaitForFences": "manager->OverrideWaitForFences",
+        "vkGetFenceStatus": "manager->OverrideGetFenceStatus",
         "vkCmdBeginDebugUtilsLabelEXT": "manager->OverrideCmdBeginDebugUtilsLabelEXT",
         "vkCmdEndDebugUtilsLabelEXT": "manager->OverrideCmdEndDebugUtilsLabelEXT",
         "vkCmdInsertDebugUtilsLabelEXT": "manager->OverrideCmdInsertDebugUtilsLabelEXT",
@@ -29,6 +30,8 @@
         "vkCmdBuildAccelerationStructuresKHR": "manager->OverrideCmdBuildAccelerationStructuresKHR",
         "vkCmdBuildMicromapsEXT": "manager->OverrideCmdBuildMicromapsEXT",
         "vkCmdCopyAccelerationStructureKHR": "manager->OverrideCmdCopyAccelerationStructureKHR",
-        "vkCmdWriteAccelerationStructuresPropertiesKHR": "manager->OverrideCmdWriteAccelerationStructuresPropertiesKHR"
+        "vkCmdWriteAccelerationStructuresPropertiesKHR": "manager->OverrideCmdWriteAccelerationStructuresPropertiesKHR",
+        "vkGetPhysicalDeviceProperties2": "manager->OverrideGetPhysicalDeviceProperties2",
+        "vkGetPhysicalDeviceProperties2KHR": "manager->OverrideGetPhysicalDeviceProperties2"
     }
 }

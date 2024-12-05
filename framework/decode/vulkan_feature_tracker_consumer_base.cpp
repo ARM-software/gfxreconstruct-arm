@@ -324,7 +324,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
 
     if (pCreateInfoDec->enabledExtensionCount)
     {
-        if (!parameter_buffer_)
+        if (!IsModificationPass())
         {
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
@@ -335,16 +335,14 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
         {
             auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
 
-            uint32_t extensions_count = output_instance_extensions_vector.size();
-
-            const char* extensions[extensions_count]{};
-            for (uint32_t i = 0; i < extensions_count; i++)
+            std::vector<const char*> extensions(output_instance_extensions_vector.size());
+            for (uint32_t i = 0; i < extensions.size(); i++)
             {
                 extensions[i] = output_instance_extensions_vector[i].c_str();
             }
 
-            pCreateInfoDec->ppEnabledExtensionNames = extensions;
-            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+            pCreateInfoDec->ppEnabledExtensionNames = extensions.data();
+            pCreateInfoDec->enabledExtensionCount   = extensions.size();
 
             parameter_buffer_->Clear();
 
@@ -371,7 +369,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
 
     if (pEnabledFeatures != nullptr)
     {
-        if (!parameter_buffer_)
+        if (!IsModificationPass())
         {
             capture_core10_ = *pEnabledFeatures;
         }
@@ -386,7 +384,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
     {
         if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
         {
-            if (!parameter_buffer_)
+            if (!IsModificationPass())
             {
                 capture_core10_ = ((VkPhysicalDeviceFeatures2*)pNext)->features;
             }
@@ -397,7 +395,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES)
         {
-            if (!parameter_buffer_)
+            if (!IsModificationPass())
             {
                 capture_core11_ = *((VkPhysicalDeviceVulkan11Features*)pNext);
             }
@@ -408,7 +406,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
         {
-            if (!parameter_buffer_)
+            if (!IsModificationPass())
             {
                 capture_core12_ = *((VkPhysicalDeviceVulkan12Features*)pNext);
             }
@@ -419,7 +417,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
         {
-            if (!parameter_buffer_)
+            if (!IsModificationPass())
             {
                 capture_core13_ = *((VkPhysicalDeviceVulkan13Features*)pNext);
             }
@@ -435,7 +433,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
 
     if (pCreateInfoDec->enabledExtensionCount)
     {
-        if (!parameter_buffer_)
+        if (!IsModificationPass())
         {
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
@@ -456,7 +454,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         }
     }
 
-    if (parameter_buffer_)
+    if (IsModificationPass())
     {
         parameter_buffer_->Clear();
 

@@ -208,34 +208,15 @@ void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplate(con
                                                                              format::HandleId   device,
                                                                              format::HandleId   descriptorSet,
                                                                              format::HandleId descriptorUpdateTemplate,
-                                                                             DescriptorUpdateTemplateDecoder* pData)
-{
-    ProcessUpdateDescriptorSetWithTemplate(
-        "vkUpdateDescriptorSetWithTemplate", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
-}
-
-void VulkanExportJsonConsumerBase::Process_vkUpdateDescriptorSetWithTemplateKHR(
-    const ApiCallInfo&               call_info,
-    format::HandleId                 device,
-    format::HandleId                 descriptorSet,
-    format::HandleId                 descriptorUpdateTemplate,
-    DescriptorUpdateTemplateDecoder* pData)
-{
-    ProcessUpdateDescriptorSetWithTemplate(
-        "vkUpdateDescriptorSetWithTemplateKHR", call_info, device, descriptorSet, descriptorUpdateTemplate, pData);
-}
-
-void VulkanExportJsonConsumerBase::ProcessUpdateDescriptorSetWithTemplate(std::string        function_name,
-                                                                          const ApiCallInfo& call_info,
-                                                                          format::HandleId   device,
-                                                                          format::HandleId   descriptorSet,
-                                                                          format::HandleId   descriptorUpdateTemplate,
-                                                                          DescriptorUpdateTemplateDecoder* pData)
+                                                                             DescriptorUpdateTemplateDecoder* pData,
+                                                                             bool use_KHR_suffix)
 {
     using namespace gfxrecon::util;
     const JsonOptions& json_options = GetJsonOptions();
 
-    auto& function = WriteApiCallStart(call_info, function_name.c_str());
+    const char* function_name =
+        use_KHR_suffix ? "vkUpdateDescriptorSetWithTemplateKHR" : "vkUpdateDescriptorSetWithTemplate";
+    auto& function = WriteApiCallStart(call_info, function_name);
     auto& args     = function[NameArgs()];
 
     HandleToJson(args["device"], device, json_options);

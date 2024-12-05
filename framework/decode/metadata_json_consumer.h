@@ -68,7 +68,8 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override
     {
         const util::JsonOptions& json_options = GetOptions();
         auto&                    jdata        = WriteMetaCommandStart("FillMemoryCommand");
@@ -345,6 +346,27 @@ class MetadataJsonConsumer : public Base
         HandleToJson(jdata["device"], device_id, json_options);
         FieldToJson(jdata["query_type"], query_type, json_options);
         FieldToJson(jdata["acceleration_structure"], acceleration_structure_id, json_options);
+    }
+
+    virtual void ProcessSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                       const char*                             env_string) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              json_data    = WriteMetaCommandStart("SetEnvironmentVariablesCommand");
+
+        std::vector<std::string> env_vars =
+            util::strings::SplitString(std::string_view(env_string), format::kEnvironmentStringDelimeter);
+        for (std::string& e : env_vars)
+        {
+            std::vector<std::string> var_plus_val = util::strings::SplitString(e, '=');
+            if (var_plus_val.size() == 2)
+            {
+                const char* var = var_plus_val[0].c_str();
+                const char* val = var_plus_val[1].c_str();
+                json_data[var]  = val;
+            }
+        }
+
         WriteBlockEnd();
     }
 

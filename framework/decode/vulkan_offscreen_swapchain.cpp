@@ -48,8 +48,7 @@ VkResult VulkanOffscreenSwapchain::CreateSurface(VkResult                       
 
     // For multi-surface captures, when replay is restricted to a specific surface, only create a surface for
     // the specified index.
-    if ((swapchain_options_.select_surface_index == -1) ||
-        (swapchain_options_.select_surface_index == create_surface_count_))
+    if ((swapchain_options_.surface_index == -1) || (swapchain_options_.surface_index == create_surface_count_))
     {
 
         const format::HandleId* id             = surface->GetPointer();
@@ -104,14 +103,14 @@ VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                  
     }
 
     util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    device_table_->GetDeviceQueue(device, default_queue_family_index_, 0, &default_queue_);
+    default_queue_ = GetDeviceQueue(device_table_, device_info, default_queue_family_index_, 0);
     util::MarkingLayersUtil::instance().EndInjected(device_info);
 
     // If this option is set, a command buffer submission with a `VkFrameBoundaryEXT` must be called each time
     // `vkQueuePresentKHR` should have been called by the offscreen swapchain. So a maximum of work must be done at
     // swapchain creation: Allocation and recording of an empty command buffer, initialization of a `VkFrameBoundaryEXT`
     // structure... (Don't forget to free everything at swapchain destruction)
-    if (swapchain_options_.insert_frame_boundary)
+    if (swapchain_options_.offscreen_swapchain_frame_boundary)
     {
         frame_boundary_.sType       = VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT;
         frame_boundary_.pNext       = nullptr;
@@ -249,7 +248,7 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
                                                    const QueueInfo*                      queue_info,
                                                    const VkPresentInfoKHR*               present_info)
 {
-    if (swapchain_options_.insert_frame_boundary)
+    if (swapchain_options_.offscreen_swapchain_frame_boundary)
     {
         std::vector<VkImage> images(present_info->swapchainCount);
         for (uint32_t i = 0; i < images.size(); ++i)

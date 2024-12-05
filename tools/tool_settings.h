@@ -111,13 +111,15 @@ const char kEnableUseCapturedSwapchainIndices[] =
     "--use-captured-swapchain-indices"; // The same: util::SwapchainOption::kCaptured
 const char kVirtualSwapchainSkipBlitShortOption[] = "--vssb";
 const char kVirtualSwapchainSkipBlitLongOption[]  = "--virtual-swapchain-skip-blit";
+const char kColorspaceFallback[]                  = "--use-colorspace-fallback";
 const char kUseExtFrameBoundaryOption[]           = "--use-ext-frame-boundary";
 const char kOffscreenSwapchainFrameBoundary[]     = "--offscreen-swapchain-frame-boundary";
-const char kColorspaceFallback[]                  = "--use-colorspace-fallback";
 const char kFormatArgument[]                      = "--format";
 const char kIncludeBinariesOption[]               = "--include-binaries";
 const char kExpandFlagsOption[]                   = "--expand-flags";
 const char kFilePerFrameOption[]                  = "--file-per-frame";
+const char kSkipGetFenceStatusShortArgument[]     = "--sgfs";
+const char kSkipGetFenceRangesShortArgument[]     = "--sgfr";
 const char kSkipGetFenceStatus[]                  = "--skip-get-fence-status";
 const char kSkipGetFenceRanges[]                  = "--skip-get-fence-ranges";
 const char kFrameRange[]                          = "--frame-range";
@@ -150,6 +152,7 @@ const char kDumpResourcesDumpVertexIndexBuffers[] = "--dump-resources-dump-verte
 const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-output-per-command";
 const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
 const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
+const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
 
 enum class WsiPlatform
 {
@@ -429,6 +432,12 @@ static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
         case WsiPlatform::kHeadless:
         {
             return VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME;
+        }
+#endif
+#if defined(VK_USE_PLATFORM_DISPLAY_KHR)
+        case WsiPlatform::kDisplay:
+        {
+            return VK_KHR_DISPLAY_EXTENSION_NAME;
         }
 #endif
         default:
@@ -803,7 +812,8 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
         }
         else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) != 0)
         {
-            GFXRECON_LOG_WARNING("Ignoring unrecognized memory translation option \"%s\"", value.c_str());
+            GFXRECON_LOG_FATAL("Unrecognized memory translation option \"%s\"", value.c_str());
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -1091,7 +1101,17 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.surface_index = std::stoi(surface_index);
     }
 
-    const std::string& skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatus);
+    if (arg_parser.IsOptionSet(kWaitBeforePresent))
+    {
+        replay_options.wait_before_present = true;
+    }
+
+    std::string skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatusShortArgument);
+    if (skip_get_fence_status.empty())
+    {
+        skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatus);
+    }
+
     if (!skip_get_fence_status.empty())
     {
         const int i_skip_get_fence_status = std::stoi(skip_get_fence_status);
@@ -1108,18 +1128,24 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         }
     }
 
-    const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRanges);
-    if (skip_get_fence_ranges.empty())
+    if (arg_parser.IsArgumentSet(kSkipGetFenceRangesShortArgument))
+    {
+        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRangesShortArgument);
+        replay_options.skip_get_fence_ranges =
+            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRangesShortArgument);
+    }
+    else if (arg_parser.IsArgumentSet(kSkipGetFenceRanges))
+    {
+        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRanges);
+        replay_options.skip_get_fence_ranges =
+            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRanges);
+    }
+    else
     {
         gfxrecon::util::UintRange range;
         range.first = 1;
         range.last  = std::numeric_limits<uint32_t>::max();
         replay_options.skip_get_fence_ranges.push_back(range);
-    }
-    else
-    {
-        replay_options.skip_get_fence_ranges =
-            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRanges);
     }
 
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
@@ -1151,6 +1177,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         arg_parser.IsOptionSet(kDumpResourcesDumpImmutableResources);
     replay_options.dump_resources_dump_all_image_subresources =
         arg_parser.IsOptionSet(kDumpResourcesDumpImageSubresources);
+    replay_options.dump_resources_dump_raw_images = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())
@@ -1193,19 +1220,19 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
     }
 
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
-    if (!dump_resources.empty())
+    if (!dump_resources.empty() && dump_resources.find_first_not_of("0123456789,") == std::string::npos)
     {
-        // If the option parameter does not split into three comma separated values, consider
-        // it a Vulkan option and ignore it. It it does split into three comma separated values,
+        // If the option parameter does not split into three comma separated numbers, consider
+        // it a Vulkan option and ignore it. If it does split into three comma separated numbers,
         // the arg is for dx12 and should have already been validated in the Vulkan option parsing.
         // In that case, we simply extract and save the values here.
         std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
         if (values.size() == 3)
         {
-            replay_options.dump_resources_target.submit_index   = std::stoi(values[0]);
-            replay_options.dump_resources_target.command_index  = std::stoi(values[1]);
-            replay_options.dump_resources_target.drawcall_index = std::stoi(values[2]);
-            replay_options.enable_dump_resources                = true;
+            replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
+            replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
+            replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
+            replay_options.enable_dump_resources                 = true;
         }
     }
 

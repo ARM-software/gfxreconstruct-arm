@@ -26,6 +26,7 @@
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
 #include "decode/vulkan_micromap_modifier.h"
+#include "decode/vulkan_skia_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -44,7 +45,9 @@
 #include "util/argument_parser.h"
 #include "util/logging.h"
 #include "util/date_time.h"
-#include "vulkan_raytracing_optimizer.h"
+
+// TODO add vulkan_raytracing_optimizer
+// #include "vulkan_raytracing_optimizer.h"
 
 #include "vulkan/vulkan.h"
 
@@ -110,7 +113,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
     GFXRECON_WRITE_CONSOLE("        \t\tdisplayed when abort() is called (Windows debug only).");
 #endif
-    GFXRECON_WRITE_CONSOLE(
     GFXRECON_WRITE_CONSOLE("  --d3d12-pso-removal\tD3D12-only: Remove creation of unreferenced PSOs.");
     GFXRECON_WRITE_CONSOLE("  --dxr\t\t\tD3D12-only: Optimize for DXR and ExecuteIndirect replay.");
     GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\tUse the specified device for the optimizer replay, where index");
@@ -149,15 +151,14 @@ GetVulkanOptimizationData(const std::string& input_filename)
     {
         gfxrecon::decode::VulkanDecoder                    decoder;
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-
         auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
         auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
-        auto raytracing_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanRaytracingOptimizer();
+        auto vulkan_skia_modifier_consuer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
-        decoder.AddConsumer(raytracing_modifier_consumer.get());
+        decoder.AddConsumer(vulkan_skia_modifier_consuer.get());
 
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
@@ -177,9 +178,9 @@ GetVulkanOptimizationData(const std::string& input_filename)
         {
             result->modifiers.push_back(std::move(micromap_modifier_consumer));
         }
-        if (raytracing_modifier_consumer->CanOptimize())
+        if (vulkan_skia_modifier_consuer->CanOptimize())
         {
-            result->modifiers.push_back(std::move(raytracing_modifier_consumer));
+            result->modifiers.push_back(std::move(vulkan_skia_modifier_consuer));
         }
     }
     return result;
@@ -204,7 +205,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 
     // Modification pass. Implement all identified optimizations in output file
     gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get());
-    if (file_optimizer.Initialize(input_filename, output_filename))
+    if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
     {
         file_optimizer.Process();
 
@@ -223,7 +224,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 void SetReplayOptions(std::string input_filename, std::string output_filename, std::string replay_options)
 {
     gfxrecon::ReplayOptionsEditor file_transformer;
-    if (file_transformer.Initialize(input_filename, output_filename))
+    if (file_transformer.Initialize(input_filename, output_filename, "replay_options"))
     {
         file_transformer.SetReplayOptions(replay_options);
         file_transformer.Process();

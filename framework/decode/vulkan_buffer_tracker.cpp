@@ -29,10 +29,9 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanBufferTracker::VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
                                          const PhysicalDeviceInfo*        physical_device_info,
-                                         VkDevice                         device,
-                                         VulkanResourceAllocator*         allocator) :
+                                         VkDevice                         device) :
     physical_device_info_(physical_device_info),
-    device_(device), allocator_(allocator)
+    device_(device)
 {
     InitializeFunctionPointers(device_table);
 }
@@ -96,9 +95,7 @@ void VulkanBufferTracker::UpdateBufferDeviceAddress(VkDeviceAddress& address)
 
     VkDeviceSize offset = 0;
     auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
-        // TODO: allocator_->GetBufferSize(entry->allocator_data) and entry->size should have the same data. This is not
-        // true on FF. Investigate why and remove the allocator_ call.
-        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        size_t buffer_size = entry->size;
         if (entry->capture_address == address)
         {
             return true;
@@ -118,7 +115,7 @@ BufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress 
 {
     // Try to find buffer by runtime device address
     auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
-        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        size_t buffer_size = entry->size;
         if (entry->replay_address == replay_address)
         {
             return true;
@@ -136,7 +133,7 @@ BufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress 
 BufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address)
 {
     auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
-        size_t buffer_size = allocator_->GetBufferSize(entry->allocator_data);
+        size_t buffer_size = entry->size;
         if (entry->capture_address == capture_address)
         {
             return true;

@@ -108,6 +108,12 @@ class Dx12DecoderBase : public ApiDecoder
     virtual void DispatchFillMemoryCommand(
         format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
+    virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
+                                                const format::AddressLocationInfo*           infos) override
+    {
+        GFXRECON_ASSERT(false); // Not implemented for DX12
+    };
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;
@@ -209,6 +215,9 @@ class Dx12DecoderBase : public ApiDecoder
 
     virtual void
     DispatchGetDx12RuntimeInfo(const format::Dx12RuntimeInfoCommandHeader& dx12_runtime_info_header) override;
+
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string) override;
 
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;
 

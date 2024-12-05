@@ -282,9 +282,12 @@ template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkQueuePresentKHR>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         VkResult                                               result,
+                         Args... args)
     {
-        manager->PostProcess_vkQueuePresentKHR(result, args...);
+        manager->PostProcess_vkQueuePresentKHR(current_lock, result, args...);
     }
 };
 
@@ -292,9 +295,11 @@ template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkFrameBoundaryANDROID>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PostProcess_vkFrameBoundaryANDROID(args...);
+        manager->PostProcess_vkFrameBoundaryANDROID(current_lock, args...);
     }
 };
 
@@ -692,9 +697,11 @@ template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkQueueSubmit>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PreProcess_vkQueueSubmit(args...);
+        manager->PreProcess_vkQueueSubmit(current_lock, args...);
     }
 };
 
@@ -702,9 +709,12 @@ template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkQueueSubmit>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         VkResult                                               result,
+                         Args... args)
     {
-        manager->PostProcess_vkQueueSubmit(result, args...);
+        manager->PostProcess_vkQueueSubmit(current_lock, result, args...);
     }
 };
 
@@ -712,9 +722,11 @@ template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkQueueSubmit2>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PreProcess_vkQueueSubmit2(args...);
+        manager->PreProcess_vkQueueSubmit2(current_lock, args...);
     }
 };
 
@@ -722,9 +734,11 @@ template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkQueueSubmit2KHR>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PreProcess_vkQueueSubmit2(args...);
+        manager->PreProcess_vkQueueSubmit2(current_lock, args...);
     }
 };
 
@@ -732,9 +746,12 @@ template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkQueueSubmit2>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         VkResult                                               result,
+                         Args... args)
     {
-        manager->PostProcess_vkQueueSubmit2(result, args...);
+        manager->PostProcess_vkQueueSubmit2(current_lock, result, args...);
     }
 };
 
@@ -742,9 +759,12 @@ template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkQueueSubmit2KHR>
 {
     template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    static void Dispatch(VulkanCaptureManager*                                  manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         VkResult                                               result,
+                         Args... args)
     {
-        manager->PostProcess_vkQueueSubmit2(result, args...);
+        manager->PostProcess_vkQueueSubmit2(current_lock, result, args...);
     }
 };
 
@@ -765,16 +785,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkResetFences>
     static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
     {
         manager->PostProcess_vkResetFences(result, args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetFenceStatus>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult& result, Args... args)
-    {
-        manager->PostProcess_vkGetFenceStatus(result, args...);
     }
 };
 
@@ -959,32 +969,32 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkResetQueryPoolEXT>
 };
 
 template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddress>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddress>
 {
     template <typename... Args>
     static void Dispatch(VulkanCaptureManager* manager, Args... args)
     {
-        manager->PreProcess_vkGetBufferDeviceAddress(args...);
+        manager->PostProcess_vkGetBufferDeviceAddress(args...);
     }
 };
 
 template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressKHR>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressKHR>
 {
     template <typename... Args>
     static void Dispatch(VulkanCaptureManager* manager, Args... args)
     {
-        manager->PreProcess_vkGetBufferDeviceAddress(args...);
+        manager->PostProcess_vkGetBufferDeviceAddress(args...);
     }
 };
 
 template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressEXT>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressEXT>
 {
     template <typename... Args>
     static void Dispatch(VulkanCaptureManager* manager, Args... args)
     {
-        manager->PreProcess_vkGetBufferDeviceAddress(args...);
+        manager->PostProcess_vkGetBufferDeviceAddress(args...);
     }
 };
 
@@ -1460,45 +1470,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateCommandPool>
 };
 
 template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddress>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager*            manager,
-                         VkDeviceAddress                  result,
-                         VkDevice                         device,
-                         const VkBufferDeviceAddressInfo* pInfo)
-    {
-        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressKHR>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager*            manager,
-                         VkDeviceAddress                  result,
-                         VkDevice                         device,
-                         const VkBufferDeviceAddressInfo* pInfo)
-    {
-        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetBufferDeviceAddressEXT>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager*            manager,
-                         VkDeviceAddress                  result,
-                         VkDevice                         device,
-                         const VkBufferDeviceAddressInfo* pInfo)
-    {
-        manager->PostProcess_vkGetBufferDeviceAddress(result, pInfo);
-    }
-};
-
-template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushConstants>
 {
     template <typename... Args>
@@ -1517,6 +1488,127 @@ struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdUpdateBuffer>
         manager->PreProcess_vkCmdUpdateBuffer(args...);
     }
 };
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyImage>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyImage(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyImage2>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyImage2KHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyBufferToImage>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyBufferToImage(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyBufferToImage2>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyBufferToImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyBufferToImage2KHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdCopyBufferToImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBlitImage>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdBlitImage(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBlitImage2>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdBlitImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBlitImage2KHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdBlitImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdResolveImage>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdResolveImage(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdResolveImage2>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdResolveImage2(args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdResolveImage2KHR>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_vkCmdResolveImage2(args...);
+    }
+};
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

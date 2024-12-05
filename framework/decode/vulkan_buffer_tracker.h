@@ -23,7 +23,6 @@
 #ifndef GFXRECON_DECODE_VULKAN_BUFFER_TRACKER_H
 #define GFXRECON_DECODE_VULKAN_BUFFER_TRACKER_H
 
-#include "decode/vulkan_resource_allocator.h"
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/vulkan_object_info_table.h"
 #include "util/defines.h"
@@ -38,8 +37,7 @@ class VulkanBufferTracker
   public:
     VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
                         const PhysicalDeviceInfo*        physical_device_info,
-                        VkDevice                         device,
-                        VulkanResourceAllocator*         allocator);
+                        VkDevice                         device);
 
     ~VulkanBufferTracker();
 
@@ -65,7 +63,6 @@ class VulkanBufferTracker
   private:
     Functions                 functions_;
     VkDevice                  device_;
-    VulkanResourceAllocator*  allocator_;
     const PhysicalDeviceInfo* physical_device_info_;
     std::vector<BufferInfo*>  buffers_;
 };
