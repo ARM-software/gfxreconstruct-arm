@@ -99,7 +99,7 @@ VulkanRaytracingOptimizer::Call* VulkanRaytracingOptimizer::TrackSourceModificat
 // Fills out missing information in collected data based on full trace data
 void VulkanRaytracingOptimizer::ProcessIntermediateData()
 {
-    // Go over all registered vulkan objects and let them prepare internal data used later in analysis 
+    // Go over all registered vulkan objects and let them prepare internal data used later in analysis
     for (const auto& [_, vulkan_object] : objects_)
     {
         vulkan_object->ProcessIntermediateData();
@@ -223,7 +223,7 @@ void VulkanRaytracingOptimizer::ValidateFixDeviceAddressCommands()
 // containing given device address This function returns all such buffers, except for those that never had its
 // device address retrieved current_index can be set to filter out deleted buffers
 std::vector<VulkanRaytracingOptimizer::Buffer*>
-VulkanRaytracingOptimizer::GetBufferByDeviceAddress(VkDeviceAddress address, uint64_t current_index = 0)
+VulkanRaytracingOptimizer::GetBufferByDeviceAddress(VkDeviceAddress address, uint64_t current_index)
 {
     std::vector<Buffer*> matching_buffers;
     // Traverse buffers that had its device address retrieved, starting with the one matching the input address
@@ -328,12 +328,7 @@ void VulkanRaytracingOptimizer::ProcessFillMemoryCommand(uint64_t memory_id,
         MemoryAllocation* modified_memory = reinterpret_cast<MemoryAllocation*>(objects_.at(memory_id).get());
 
         // register memory modification
-        MemoryModification modification;
-        modification.call_         = fill_memory_command.get();
-        modification.memory_       = modified_memory;
-        modification.start_offset_ = offset;
-        modification.end_offset_   = offset + size;
-
+        MemoryModification modification{ fill_memory_command.get(), modified_memory, offset, offset + size };
 
         // Find SGH values inside data parameter
         // For each pipeline-SGH groups pair
@@ -459,6 +454,10 @@ void VulkanRaytracingOptimizer::ProcessFixDeviceAddressCommand(const format::Fix
     calls_[block_index_] = std::move(fix_device_command);
 }
 
+void VulkanRaytracingOptimizer::ProcessFixShaderGroupHandleCommand(
+    const format::FixShaderGroupHandleCommandHeader& header, const format::ShaderHandleLocationInfo* infos)
+{}
+
 void VulkanRaytracingOptimizer::Process_vkBeginCommandBuffer(
     const ApiCallInfo&                                      call_info,
     VkResult                                                returnValue,
@@ -487,8 +486,11 @@ void VulkanRaytracingOptimizer::Process_vkBindBufferMemory(const ApiCallInfo& ca
     {
         return;
     }
-    calls_[block_index_] =
-        std::make_unique<BindBufferMemory>(block_index_, objects_[buffer], objects_[memory], memoryOffset);
+
+    calls_[block_index_] = std::make_unique<BindBufferMemory>(block_index_,
+                                                              dynamic_cast<Buffer*>(objects_[buffer].get()),
+                                                              dynamic_cast<MemoryAllocation*>(objects_[memory].get()),
+                                                              memoryOffset);
 }
 
 // Add new draw command data for this cmdbuffer
@@ -537,8 +539,7 @@ void VulkanRaytracingOptimizer::Process_vkCmdBindIndexBuffer(const ApiCallInfo& 
         return;
     }
     auto& command_buffer = command_buffers_[commandBuffer];
-    auto bind_call = std::make_unique<CommandCall>(
-        block_index_, Call::CallType::CmdBindIndexBuffer, command_buffer.calls.size(), commandBuffer);
+    auto  bind_call = std::make_unique<CommandCall>(block_index_, Call::CallType::CmdBindIndexBuffer, commandBuffer);
     command_buffer.calls.push_back(bind_call.get());
     auto* buffer_data = objects_.at(buffer).get();
     // TODO: buffer could be bound after this call, move this to later stage, OnQueueSubmit/CanOptimize
@@ -560,8 +561,8 @@ void VulkanRaytracingOptimizer::Process_vkGetBufferDeviceAddress(
     {
         return;
     }
-    const auto& buffer_id                   = pInfo->GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[returnValue]    = std::reinterpret_cast<Buffer*>(objects_[buffer_id].get());
+    const auto& buffer_id                 = pInfo->GetMetaStructPointer()->buffer;
+    buffer_device_addresses_[returnValue] = reinterpret_cast<Buffer*>(objects_[buffer_id].get());
 }
 
 void VulkanRaytracingOptimizer::Process_vkCreateBuffer(const ApiCallInfo&                                   call_info,
@@ -625,11 +626,8 @@ void VulkanRaytracingOptimizer::Process_vkCmdBuildAccelerationStructuresKHR(
     {
         return;
     }
-    calls_[block_index_] = std::make_unique<CommandCall>(block_index_,
-                                                         Call::CallType::CmdBuildAccelerationStructures,
-                                                         0,
-                                                         commandBuffer,
-                                                         &command_buffers_[commandBuffer]);
+    calls_[block_index_] =
+        std::make_unique<CommandCall>(block_index_, Call::CallType::CmdBuildAccelerationStructures, commandBuffer);
     // Keep track of instance device addresses
     for (uint32_t info_index = 0; info_index < infoCount; ++info_index)
     {
@@ -656,7 +654,8 @@ void VulkanRaytracingOptimizer::Process_vkCmdBuildAccelerationStructuresKHR(
                     case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                     {
                         const auto& instances = geometry_data.geometry.instances;
-                        instance_addresses_.push_back({ calls_[block_index_], instances.data.deviceAddress });
+                        instance_addresses_.push_back(
+                            { dynamic_cast<CommandCall*>(calls_[block_index_].get()), instances.data.deviceAddress });
                         break;
                     }
                     case VK_GEOMETRY_TYPE_AABBS_KHR:

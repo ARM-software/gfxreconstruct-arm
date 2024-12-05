@@ -93,6 +93,15 @@ void VulkanDecoderBase::DispatchFixDeviceAddresCommand(const format::FixDeviceAd
     }
 }
 
+void VulkanDecoderBase::DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                         const format::ShaderHandleLocationInfo*          infos)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessFixShaderGroupHandleCommand(header, infos);
+    }
+}
+
 void VulkanDecoderBase::DispatchExeFileInfo(format::ThreadId thread_id, format::ExeFileInfoBlock& info)
 {
     for (auto consumer : consumers_)
@@ -567,6 +576,15 @@ void VulkanDecoderBase::DispatchMicromapCompactionDependencyCommand(format::Hand
     for (auto consumer : consumers_)
     {
         consumer->ProcessMicromapCompactionDependencyCommand(parent, children);
+    }
+}
+
+void VulkanDecoderBase::DispatchAccelerationStructureCompactionDependencyCommand(
+    format::HandleId parent, const std::vector<format::HandleId>& children)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessAccelerationStructureCompactionDependencyCommand(parent, children);
     }
 }
 

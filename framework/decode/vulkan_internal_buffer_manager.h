@@ -40,6 +40,7 @@ class VulkanInternalBufferManager
     struct BufferInfoWrapper
     {
         BufferInfo                info_;
+        DeviceMemoryInfo          memory_info_;
         VulkanResourceAllocator*  allocator_;
         const PhysicalDeviceInfo* physical_device_info_;
 
@@ -53,6 +54,7 @@ class VulkanInternalBufferManager
         {
             util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
             allocator_->DestroyBuffer(info_.handle, nullptr, info_.allocator_data);
+            allocator_->FreeMemoryDirect(memory_info_.handle, nullptr, memory_info_.allocator_data);
             util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
         }
     };

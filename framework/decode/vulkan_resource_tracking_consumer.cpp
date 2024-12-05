@@ -768,6 +768,10 @@ void VulkanResourceTrackingConsumer::ProcessFillMemoryCommand(uint64_t       mem
 void VulkanResourceTrackingConsumer::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                                     const format::AddressLocationInfo* infos){};
 
+void VulkanResourceTrackingConsumer::ProcessFixShaderGroupHandleCommand(
+    const format::FixShaderGroupHandleCommandHeader& header, const format::ShaderHandleLocationInfo* infos)
+{}
+
 // Util function for sorting: compares two resources according to the trace binding offset number.
 bool CompareOffset(TrackedResourceInfo* resource1, TrackedResourceInfo* resource2)
 {

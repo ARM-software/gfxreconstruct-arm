@@ -20,10 +20,10 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-
 // Performs optimization of raytracing content
-// In the first pass tracks memory modifications in order to indentify memory ranges containing device addresses and shader group handles
-// In second pass injects FixDeviceAddress metacommand instructing the replayer to replace memory range with a device address or shader group handle value 
+// In the first pass tracks memory modifications in order to indentify memory ranges containing device addresses and
+// shader group handles In second pass injects FixDeviceAddress metacommand instructing the replayer to replace memory
+// range with a device address or shader group handle value
 class VulkanRaytracingOptimizer : public util::VulkanModifierBase
 {
   protected:
@@ -62,7 +62,8 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
         uint32_t                                                       height,
         uint32_t                                                       depth) override;
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     virtual void Process_vkCmdUpdateBuffer(const ApiCallInfo&       call_info,
                                            format::HandleId         commandBuffer,
@@ -82,6 +83,9 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     // Fix/FillMemory commands might happen at any time, so this data may be processed only on submission
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
+
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos) override;
 
     virtual void
     Process_vkBeginCommandBuffer(const ApiCallInfo&                                      call_info,
@@ -176,7 +180,7 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
 
     // Every FillMemoryCommand was scanned for known values of shader group handles, buffer and acceleration structure
     // device addresses Matching instances were tracked, now they need to be verified
-    void ProcessRuntimeVariables() {}
+    void ProcessRuntimeVariables();
 
     // Each trace rays call contains a set of device addresses of shader binding tables
     // Attempt to track these addresses to the original call inserting shader grup handles at those addresses
@@ -323,6 +327,21 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
         VkDeviceSize                             fill_memory_data_offset_;
     };
 
+    // BufferRange size is not always known
+    class BufferRange
+    {
+      public:
+        Buffer*      buffer;
+        VkDeviceSize offset;
+        VkDeviceSize size;
+    };
+
+    class IndexBufferData : public BufferRange
+    {
+      public:
+        VkIndexType index_type;
+    };
+
     class DrawIndexedCall : public CommandCall
     {
       public:
@@ -347,7 +366,7 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     {
       public:
         VulkanObject(format::HandleId handle, VkObjectType type) : handle(handle), type(type) {}
-        // Some objects require processing once the first pass is finished 
+        // Some objects require processing once the first pass is finished
         virtual void ProcessIntermediateData() {}
         format::HandleId handle;
         VkObjectType     type;
@@ -355,24 +374,11 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
         uint64_t         destruction_call;
     };
 
-    // BufferRange size is not always known
-    class BufferRange
-    {
-      public:
-        Buffer*      buffer;
-        VkDeviceSize offset;
-        VkDeviceSize size;
-    };
-
-    class IndexBufferData : public BufferRange
-    {
-      public:
-        VkIndexType index_type;
-    };
-
     class CommandBuffer : public VulkanObject
     {
       public:
+        CommandBuffer() : VulkanObject(0, VK_OBJECT_TYPE_UNKNOWN) {}
+        CommandBuffer(format::HandleId handle, VkObjectType type) : VulkanObject(handle, type) {}
         std::vector<CommandCall*> calls;
         QueueSubmitCall*          submission;
 
@@ -398,6 +404,8 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     class Buffer : public VulkanObject
     {
       public:
+        Buffer(format::HandleId handle, VkDeviceSize size) : VulkanObject(handle, VK_OBJECT_TYPE_BUFFER), size(size) {}
+
         VkDeviceAddress   device_address;
         uint64_t          size;
         BindBufferMemory* memory_binding;
@@ -416,12 +424,20 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     };
 
     // Generic class representing *some* usage of a memory renage in a call
-    // Usage could be a memory modificaiton, index buffer binding, acceleration structure storage etc.  
+    // Usage could be a memory modificaiton, index buffer binding, acceleration structure storage etc.
     class MemoryRangeReference : public MemoryRange
     {
       public:
         Call*             call_;
         MemoryAllocation* memory_;
+
+        MemoryRangeReference(Call* call, MemoryAllocation* memory, VkDeviceSize start, VkDeviceSize end)
+        {
+            call_         = call;
+            memory_       = memory;
+            start_offset_ = start;
+            end_offset_   = end;
+        }
 
         bool operator<(const MemoryRangeReference& other) const { return (*call_) < (*other.call_); }
 
@@ -439,6 +455,9 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     class MemoryModification : public MemoryRangeReference
     {
       public:
+        MemoryModification(Call* call, MemoryAllocation* memory, VkDeviceSize start, VkDeviceSize end) :
+            MemoryRangeReference(call, memory, start, end)
+        {}
         // Helper used for copy commands, this refers to source memory range
         MemoryModification* source_modification;
 
@@ -512,6 +531,9 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
 
     struct InstanceGeometryAddresses
     {
+        InstanceGeometryAddresses(CommandCall* call, VkDeviceAddress address) :
+            cmd_build_as_index(call), address(address)
+        {}
         // build command containing instance address
         CommandCall*    cmd_build_as_index;
         VkDeviceAddress address;

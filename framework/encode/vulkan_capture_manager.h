@@ -559,13 +559,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                       const VkAllocationCallbacks*    pAllocator,
                                       VkSwapchainKHR*                 pSwapchain);
 
-    void PreProcess_vkCmdPushConstants(VkCommandBuffer    commandBuffer,
-                                       VkPipelineLayout   layout,
-                                       VkShaderStageFlags stageFlags,
-                                       uint32_t           offset,
-                                       uint32_t           size,
-                                       const void*        pValues);
-
     void PostProcess_vkAcquireNextImageKHR(VkResult result,
                                            VkDevice,
                                            VkSwapchainKHR swapchain,
@@ -1696,12 +1689,6 @@ class VulkanCaptureManager : public ApiCaptureManager
         std::lock_guard<std::mutex> lock(mapped_memory_lock_);
         return memories[id];
     }
-
-    void PreProcess_vkCmdUpdateBuffer(VkCommandBuffer commandBuffer,
-                                      VkBuffer        dstBuffer,
-                                      VkDeviceSize    dstOffset,
-                                      VkDeviceSize    dataSize,
-                                      const void*     pData);
 
   protected:
     VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}

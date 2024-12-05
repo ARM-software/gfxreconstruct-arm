@@ -42,7 +42,7 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     if (format::IsBlockCompressed(block_header.type))
     {
         parameter_buffer_size -= sizeof(uncompressed_size);
-        success = ReadBytes(&uncompressed_size, sizeof(uncompressed_size));
+        success = success && ReadBytes(&uncompressed_size, sizeof(uncompressed_size));
 
         if (success)
         {
@@ -71,7 +71,7 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     }
     else
     {
-        success = ReadParameterBuffer(parameter_buffer_size);
+        success = success && ReadParameterBuffer(parameter_buffer_size);
 
         if (!success)
         {
@@ -94,18 +94,22 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
     // This vector owns new call data to be inserted after currently processed call
     std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
 
-    for (auto& modifier : optimization_data_->modifiers)
+    if (success)
     {
-        modifier->SetParameterBuffer(&buffer);
-        decoder.AddConsumer(modifier.get());
-        decode::DecodeAllocator::Begin();
-        decoder.DecodeFunctionCall(call_id, call_info, buffer.GetData(), buffer.GetDataSize());
-        decode::DecodeAllocator::End();
-        decoder.RemoveConsumer(modifier.get());
-        delete_current_call |= modifier->GetDeleteCurrentCall();
-        modifier->AppendPreCalls(new_pre_calls);
-        modifier->AppendPostCalls(new_post_calls);
+        for (auto& modifier : optimization_data_->modifiers)
+        {
+            modifier->SetParameterBuffer(&buffer);
+            decoder.AddConsumer(modifier.get());
+            decode::DecodeAllocator::Begin();
+            decoder.DecodeFunctionCall(call_id, call_info, buffer.GetData(), buffer.GetDataSize());
+            decode::DecodeAllocator::End();
+            decoder.RemoveConsumer(modifier.get());
+            delete_current_call |= modifier->GetDeleteCurrentCall();
+            modifier->AppendPreCalls(new_pre_calls);
+            modifier->AppendPostCalls(new_post_calls);
+        }
     }
+
     for (auto& new_call : new_pre_calls)
     {
         switch (new_call->type)
@@ -122,10 +126,12 @@ bool VulkanFileOptimizer::ProcessFunctionCall(const format::BlockHeader& block_h
         }
     }
 
-    // TODO: Write buffer with calls to add pre/post current call
-    if (!delete_current_call)
+    if (success)
     {
-        WriteFunctionCall(call_id, call_info.thread_id, &buffer);
+        if (!delete_current_call)
+        {
+            WriteFunctionCall(call_id, call_info.thread_id, &buffer);
+        }
     }
 
     for (auto& new_call : new_post_calls)
@@ -232,22 +238,322 @@ void VulkanFileOptimizer::WriteMetaCommand(const util::MemoryOutputStream* param
 
 bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
 {
-    uint64_t index               = GetCurrentBlockIndex();
-    bool     delete_current_call = false;
+    uint64_t                index                 = GetCurrentBlockIndex();
+    uint64_t                parameter_buffer_size = 0;
+    bool                    success               = false;
+    format::MetaDataType    meta_data_type        = format::GetMetaDataType(meta_data_id);
+    encode::ParameterBuffer buffer;
+    bool                    delete_current_call = false;
+    bool                    process_meta_data   = false;
+
+    std::vector<uint8_t>                                              meta_data_header;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
     for (auto& modifier : optimization_data_->modifiers)
     {
         modifier->SetCurrentBlockIndex(GetCurrentBlockIndex());
     }
+
+    if (meta_data_type == format::MetaDataType::kFillMemoryCommand)
+    {
+        format::FillMemoryCommandHeader header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success = success && ReadBytes(&header.memory_offset, sizeof(header.memory_offset));
+        success = success && ReadBytes(&header.memory_size, sizeof(header.memory_size));
+
+        if (success)
+        {
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size   = static_cast<size_t>(block_header.size) - sizeof(meta_data_id) -
+                                         sizeof(header.thread_id) - sizeof(header.memory_id) -
+                                         sizeof(header.memory_offset) - sizeof(header.memory_size);
+                parameter_buffer_size = compressed_size;
+                success               = ReadCompressedParameterBuffer(
+                    compressed_size, static_cast<size_t>(header.memory_size), &uncompressed_size);
+            }
+            else
+            {
+                parameter_buffer_size = header.memory_size;
+                success               = ReadParameterBuffer(static_cast<size_t>(header.memory_size));
+            }
+
+            if (success)
+            {
+                meta_data_header.resize(sizeof(header));
+                memcpy(meta_data_header.data(), &header, sizeof(header));
+                for (auto& modifier : optimization_data_->modifiers)
+                {
+                    modifier->SetParameterBuffer(&buffer);
+                    process_meta_data = true;
+                    decoder.AddConsumer(modifier.get());
+                    decoder.DispatchFillMemoryCommand(header.thread_id,
+                                                      header.memory_id,
+                                                      header.memory_offset,
+                                                      header.memory_size,
+                                                      GetParameterBuffer().data());
+                    decoder.RemoveConsumer(modifier.get());
+                    modifier->AppendPreCalls(new_pre_calls);
+                    modifier->AppendPostCalls(new_post_calls);
+                }
+            }
+            else
+            {
+                parameter_buffer_size = 0;
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read fill memory meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData, "Failed to read fill memory meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read fill memory meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kInitBufferCommand)
+    {
+        format::InitBufferCommandHeader header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+        success = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+        success = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+        if (success)
+        {
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size =
+                    static_cast<size_t>(block_header.size) - (sizeof(header) - sizeof(header.meta_header.block_header));
+                parameter_buffer_size = compressed_size;
+                success               = ReadCompressedParameterBuffer(
+                    compressed_size, static_cast<size_t>(header.data_size), &uncompressed_size);
+            }
+            else
+            {
+                parameter_buffer_size = header.data_size;
+                success               = ReadParameterBuffer(static_cast<size_t>(header.data_size));
+            }
+
+            if (success)
+            {
+                meta_data_header.resize(sizeof(header));
+                memcpy(meta_data_header.data(), &header, sizeof(header));
+                for (auto& modifier : optimization_data_->modifiers)
+                {
+                    modifier->SetParameterBuffer(&buffer);
+                    process_meta_data = true;
+                    decoder.AddConsumer(modifier.get());
+                    decoder.DispatchInitBufferCommand(header.thread_id,
+                                                      header.device_id,
+                                                      header.buffer_id,
+                                                      header.data_size,
+                                                      GetParameterBuffer().data());
+                    decoder.RemoveConsumer(modifier.get());
+                    modifier->AppendPreCalls(new_pre_calls);
+                    modifier->AppendPostCalls(new_post_calls);
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read init buffer data meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData, "Failed to read init buffer data meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanBuildAccelerationStructuresCommand)
+    {
+        format::VulkanMetaBuildAccelerationStructuresHeader header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        size_t parameter_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success               = ReadParameterBuffer(parameter_size);
+
+        if (success)
+        {
+            parameter_buffer_size = parameter_size;
+            meta_data_header.resize(sizeof(header));
+            memcpy(meta_data_header.data(), &header, sizeof(header));
+            for (auto& modifier : optimization_data_->modifiers)
+            {
+                modifier->SetParameterBuffer(&buffer);
+                process_meta_data = true;
+                decoder.AddConsumer(modifier.get());
+                decode::DecodeAllocator::Begin();
+                decoder.DispatchVulkanAccelerationStructuresBuildMetaCommand(GetParameterBuffer().data(),
+                                                                             parameter_size);
+                decode::DecodeAllocator::End();
+                decoder.RemoveConsumer(modifier.get());
+                modifier->AppendPreCalls(new_pre_calls);
+                modifier->AppendPostCalls(new_post_calls);
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read acceleration structure init meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanCopyAccelerationStructuresCommand)
+    {
+        format::VulkanCopyAccelerationStructuresCommandHeader header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        size_t parameter_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success               = ReadParameterBuffer(parameter_size);
+
+        if (success)
+        {
+            parameter_buffer_size = parameter_size;
+            meta_data_header.resize(sizeof(header));
+            memcpy(meta_data_header.data(), &header, sizeof(header));
+            for (auto& modifier : optimization_data_->modifiers)
+            {
+                modifier->SetParameterBuffer(&buffer);
+                process_meta_data = true;
+                decoder.AddConsumer(modifier.get());
+                decode::DecodeAllocator::Begin();
+                decoder.DispatchVulkanAccelerationStructuresCopyMetaCommand(GetParameterBuffer().data(),
+                                                                            parameter_size);
+                decode::DecodeAllocator::End();
+                decoder.RemoveConsumer(modifier.get());
+                modifier->AppendPreCalls(new_pre_calls);
+                modifier->AppendPostCalls(new_post_calls);
+            }
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kSetOpaqueAddressCommand)
+    {
+        // This command does not support compression.
+        assert(block_header.type != format::BlockType::kCompressedMetaDataBlock);
+
+        format::SetOpaqueAddressCommand header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+        success = success && ReadBytes(&header.object_id, sizeof(header.object_id));
+        success = success && ReadBytes(&header.address, sizeof(header.address));
+
+        if (success)
+        {
+            parameter_buffer_size = 0;
+            meta_data_header.resize(sizeof(header));
+            memcpy(meta_data_header.data(), &header, sizeof(header));
+            for (auto& modifier : optimization_data_->modifiers)
+            {
+                modifier->SetParameterBuffer(&buffer);
+                process_meta_data = true;
+                decoder.AddConsumer(modifier.get());
+                decoder.DispatchSetOpaqueAddressCommand(
+                    header.thread_id, header.device_id, header.object_id, header.address);
+                decoder.RemoveConsumer(modifier.get());
+                modifier->AppendPreCalls(new_pre_calls);
+                modifier->AppendPostCalls(new_post_calls);
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read set opaque address meta-data block header");
+        }
+    }
+
     for (auto& modifier : optimization_data_->modifiers)
     {
         delete_current_call |= modifier->GetDeleteCurrentCall();
     }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
     if (delete_current_call)
     {
-        SkipBytes(static_cast<size_t>(block_header.size - sizeof(meta_data_id)));
-        return true;
+        if (!process_meta_data)
+        {
+            SkipBytes(static_cast<size_t>(block_header.size - sizeof(meta_data_id)));
+        }
     }
-    FileOptimizer::ProcessMetaData(block_header, meta_data_id);
+    else
+    {
+        if (process_meta_data)
+        {
+            WriteBytes(meta_data_header.data(), meta_data_header.size());
+
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                WriteBytes(GetCompressedParameterBuffer().data(), parameter_buffer_size);
+            }
+            else
+            {
+                WriteBytes(GetParameterBuffer().data(), parameter_buffer_size);
+            }
+        }
+        else
+        {
+            FileOptimizer::ProcessMetaData(block_header, meta_data_id);
+        }
+    }
+
+    for (auto& new_call : new_post_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
     return true;
 }
 

@@ -140,9 +140,11 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
 
     std::unique_ptr<BufferInfoWrapper> entry =
         std::make_unique<BufferInfoWrapper>(BufferInfo(), allocator_, physical_device_info_);
-    entry->info_.allocator_data = buffer_allocator_data;
-    entry->info_.replay_address = GetBufferDeviceAddress(buffer);
-    entry->info_.handle         = buffer;
+    entry->info_.allocator_data        = buffer_allocator_data;
+    entry->info_.replay_address        = GetBufferDeviceAddress(buffer);
+    entry->info_.handle                = buffer;
+    entry->memory_info_.handle         = memory;
+    entry->memory_info_.allocator_data = memory_allocator_data;
 
     return entry;
 }

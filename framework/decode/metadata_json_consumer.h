@@ -100,6 +100,26 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos) override
+    {
+        using namespace util;
+        const JsonOptions& json_options = GetOptions();
+        auto&              jdata        = WriteMetaCommandStart("FixShaderGroupHandleCommand");
+        HandleToJson(jdata["relation_id"], header.relation_id, json_options);
+        if (json_options.verbose)
+        {
+            for (int i = 0; i < header.num_of_locations; i++)
+            {
+                HandleToJson(jdata["location"][i]["pipeline_id"], infos[i].id, json_options);
+                FieldToJson(jdata["location"][i]["group"], infos[i].group, json_options);
+                FieldToJson(jdata["location"][i]["group_size"], infos[i].group_size, json_options);
+                FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            }
+        }
+        WriteBlockEnd();
+    }
+
     virtual void Process_ExeFileInfo(gfxrecon::util::filepath::FileInfo& info) override
     {
         const util::JsonOptions& json_options = GetOptions();
@@ -325,6 +345,19 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    void ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                                 const std::vector<format::HandleId>& children)
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("AccelerationStructureCompactionDependencyCommand");
+        HandleToJson(jdata["Parent"], parent, json_options);
+        for (const auto& child : children)
+        {
+            jdata["Children"].push_back(child);
+        }
+        WriteBlockEnd();
+    }
+
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
         uint32_t                                                                   info_count,
@@ -362,6 +395,7 @@ class MetadataJsonConsumer : public Base
         HandleToJson(jdata["device"], device_id, json_options);
         FieldToJson(jdata["query_type"], query_type, json_options);
         FieldToJson(jdata["acceleration_structure"], acceleration_structure_id, json_options);
+        WriteBlockEnd();
     }
 
     virtual void ProcessSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,

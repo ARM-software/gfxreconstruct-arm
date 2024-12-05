@@ -5,7 +5,7 @@ target_sources(gfxrecon_encode
                    ${GFXRECON_SOURCE_DIR}/framework/encode/api_capture_manager.h
                    ${GFXRECON_SOURCE_DIR}/framework/encode/api_capture_manager.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/encode/capture_manager.h
-                   ${GFXRECON_SOURCE_DIR}/framework/encode/capture_manager.cpp               
+                   ${GFXRECON_SOURCE_DIR}/framework/encode/capture_manager.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/encode/capture_settings.h
                    ${GFXRECON_SOURCE_DIR}/framework/encode/capture_settings.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/encode/custom_vulkan_encoder_commands.h

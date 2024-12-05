@@ -114,6 +114,12 @@ class Dx12DecoderBase : public ApiDecoder
         GFXRECON_ASSERT(false); // Not implemented for DX12
     };
 
+    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                  const format::ShaderHandleLocationInfo*          infos) override
+    {
+        GFXRECON_ASSERT(false); // Not implemented for DX12
+    };
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;

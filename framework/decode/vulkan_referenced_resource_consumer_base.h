@@ -237,6 +237,10 @@ class VulkanReferencedResourceConsumerBase : public VulkanConsumer
     virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
                                                             const std::vector<format::HandleId>& children) override;
 
+    virtual void
+    ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
     virtual void Process_vkCmdTraceRaysKHR(
         const ApiCallInfo&                                             call_info,
         format::HandleId                                               commandBuffer,

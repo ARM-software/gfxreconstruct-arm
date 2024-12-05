@@ -125,6 +125,7 @@
     "vkSetDebugUtilsObjectNameEXT": "OverrideSetDebugUtilsObjectNameEXT",
     "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
     "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
+    "vkGetAccelerationStructureBuildSizesKHR": "OverrideGetAccelerationStructureBuildSizesKHR",
     "vkCreateAccelerationStructureKHR": "OverrideCreateAccelerationStructureKHR",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",

@@ -774,19 +774,36 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
     else if (meta_data_type == format::MetaDataType::kFixDeviceAddressCommand)
     {
         format::FixDeviceAddressCommandHeader header;
-        success        = ReadBytes(&header.relation_id, sizeof(header.relation_id));
-        success        = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
-        auto locations = new format::AddressLocationInfo[header.num_of_locations];
-        success        = ReadBytes(locations, header.num_of_locations * sizeof(format::AddressLocationInfo));
+        success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
+        success = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+        std::vector<format::AddressLocationInfo> locations(header.num_of_locations);
+        success = ReadBytes(locations.data(), header.num_of_locations * sizeof(format::AddressLocationInfo));
 
         for (auto decoder : decoders_)
         {
             if (decoder->SupportsMetaDataId(meta_data_id))
             {
-                decoder->DispatchFixDeviceAddresCommand(header, locations);
+                decoder->DispatchFixDeviceAddresCommand(header, locations.data());
             }
         }
-        delete[] locations;
+    }
+    else if (meta_data_type == format::MetaDataType::kFixShaderGroupHandleCommand)
+    {
+        format::FixShaderGroupHandleCommandHeader header;
+        success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
+        success = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+        std::vector<format::ShaderHandleLocationInfo> locations(header.num_of_locations);
+        success = ReadBytes(locations.data(), header.num_of_locations * sizeof(format::ShaderHandleLocationInfo));
+
+        for (auto decoder : decoders_)
+        {
+            if (decoder->SupportsMetaDataId(meta_data_id))
+            {
+                decoder->DispatchShaderGroupHandleCommand(header, locations.data());
+            }
+        }
     }
     else if (meta_data_type == format::MetaDataType::kFillMemoryResourceValueCommand)
     {
@@ -1840,6 +1857,10 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                             break;
                         case format::kMicromapCompactionDependency:
                             decoder->DispatchMicromapCompactionDependencyCommand(header.parent_id, children);
+                            break;
+                        case format::kAccelerationStructureCompactionDependency:
+                            decoder->DispatchAccelerationStructureCompactionDependencyCommand(header.parent_id,
+                                                                                              children);
                             break;
                         default:
                             GFXRECON_LOG_WARNING("Unrecognized parent to child dependency type");

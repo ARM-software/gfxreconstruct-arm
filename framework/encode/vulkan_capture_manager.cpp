@@ -2670,14 +2670,6 @@ void VulkanCaptureManager::PreProcess_vkFlushMappedMemoryRanges(VkDevice        
                         manager->ProcessMemoryEntry(
                             current_memory_wrapper->handle_id,
                             [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                                const DeviceMemoryWrapper* memory    = memories[memory_id];
-                                auto                       locations = address_tracker.GetAddressesInMemoryRange(
-                                    common_manager_->buffer_usages_to_ignore_, memory, start_address, offset, size);
-                                if (locations.size())
-                                {
-                                    common_manager_->WriteFixDeviceAddressCmd(
-                                        api_family_, memory_id, locations.size(), locations.data());
-                                }
                                 WriteFillMemoryCmd(memory_id, offset, size, start_address);
                             });
                     }
@@ -2733,18 +2725,10 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
             util::PageGuardManager* manager = util::PageGuardManager::Get();
             assert(manager != nullptr);
 
-            manager->ProcessMemoryEntry(
-                wrapper->handle_id, [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                    const DeviceMemoryWrapper* memory    = memories[memory_id];
-                    auto                       locations = address_tracker.GetAddressesInMemoryRange(
-                        common_manager_->buffer_usages_to_ignore_, memory, start_address, offset, size);
-                    if (locations.size())
-                    {
-                        common_manager_->WriteFixDeviceAddressCmd(
-                            api_family_, memory_id, locations.size(), locations.data());
-                    }
-                    WriteFillMemoryCmd(memory_id, offset, size, start_address);
-                });
+            manager->ProcessMemoryEntry(wrapper->handle_id,
+                                        [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+                                            WriteFillMemoryCmd(memory_id, offset, size, start_address);
+                                        });
 
             manager->RemoveTrackedMemory(wrapper->handle_id);
         }
@@ -3037,13 +3021,6 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd()
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-            const DeviceMemoryWrapper* memory    = memories[memory_id];
-            auto                       locations = address_tracker.GetAddressesInMemoryRange(
-                common_manager_->buffer_usages_to_ignore_, memory, start_address, offset, size);
-            if (locations.size())
-            {
-                common_manager_->WriteFixDeviceAddressCmd(api_family_, memory_id, locations.size(), locations.data());
-            }
             WriteFillMemoryCmd(memory_id, offset, size, start_address);
         });
     }
@@ -3640,34 +3617,6 @@ void VulkanCaptureManager::PostProcess_vkCreateCommandPool(VkDevice             
     }
     CommandPoolWrapper* wrapper = GetWrapper<CommandPoolWrapper>(*pCommandPool);
     wrapper->device             = GetWrapper<DeviceWrapper>(device);
-}
-
-void VulkanCaptureManager::PreProcess_vkCmdPushConstants(VkCommandBuffer    commandBuffer,
-                                                         VkPipelineLayout   layout,
-                                                         VkShaderStageFlags stageFlags,
-                                                         uint32_t           offset,
-                                                         uint32_t           size,
-                                                         const void*        pValues)
-{
-    std::vector<format::AddressLocationInfo> locations = address_tracker.GetAddressesInMemoryRange(
-        common_manager_->buffer_usages_to_ignore_, nullptr, pValues, offset, size);
-    if (!locations.empty())
-    {
-        format::HandleId device_id = GetWrapper<CommandBufferWrapper>(commandBuffer)->parent_pool->device->handle_id;
-        common_manager_->WriteFixDeviceAddressCmd(api_family_, device_id, locations.size(), locations.data());
-    }
-}
-
-void VulkanCaptureManager::PreProcess_vkCmdUpdateBuffer(
-    VkCommandBuffer commandBuffer, VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize dataSize, const void* pData)
-{
-    std::vector<format::AddressLocationInfo> locations = address_tracker.GetAddressesInMemoryRange(
-        common_manager_->buffer_usages_to_ignore_, nullptr, pData, dstOffset, dataSize);
-    if (!locations.empty())
-    {
-        format::HandleId device_id = GetWrapper<CommandBufferWrapper>(commandBuffer)->parent_pool->device->handle_id;
-        common_manager_->WriteFixDeviceAddressCmd(api_family_, device_id, locations.size(), locations.data());
-    }
 }
 
 void VulkanCaptureManager::PostProcess_vkDestroyBuffer(VkDevice                     device,

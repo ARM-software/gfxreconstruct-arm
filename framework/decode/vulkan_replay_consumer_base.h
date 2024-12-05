@@ -107,6 +107,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
                                                             const std::vector<format::HandleId>& children) override;
 
+    virtual void
+    ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos) override;
+
     virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
 
     virtual void ProcessResizeWindowCommand2(format::HandleId surface_id,
@@ -1172,6 +1179,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                  const AccelerationStructureKHRInfo*   acceleration_structure_info,
                                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
+    void OverrideGetAccelerationStructureBuildSizesKHR(
+        PFN_vkGetAccelerationStructureBuildSizesKHR                                func,
+        const DeviceInfo*                                                          device_info,
+        VkAccelerationStructureBuildTypeKHR                                        buildType,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pBuildInfo,
+        PointerDecoder<uint32_t>*                                                  pMaxPrimitiveCounts,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>*    pSizeInfo);
+
     void OverrideCmdBuildAccelerationStructuresKHR(
         PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
         CommandBufferInfo*                                                         command_buffer_info,
@@ -1705,17 +1720,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 
-    struct TrackedAddress
-    {
-        enum class Type
-        {
-            AccelerationStructure,
-            Buffer
-        };
-        Type            address_type;
-        VkDeviceAddress address;
-    };
-    std::unordered_map<format::HandleId, TrackedAddress>                           tracked_addresses_;
     std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
 
 #ifdef ARM_INTERNAL
@@ -1742,6 +1746,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::vector<uint8_t>                     matched_replay_cache_data_;
     std::vector<format::AddressLocationInfo> device_memory_address_locations;
     std::vector<format::AddressLocationInfo> other_address_locations;
+
+    std::vector<format::ShaderHandleLocationInfo> shader_group_handle_locations;
 };
 
 GFXRECON_END_NAMESPACE(decode)

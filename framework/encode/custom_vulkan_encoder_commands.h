@@ -1552,26 +1552,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateCommandPool>
 };
 
 template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdPushConstants>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PreProcess_vkCmdPushConstants(args...);
-    }
-};
-
-template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdUpdateBuffer>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PreProcess_vkCmdUpdateBuffer(args...);
-    }
-};
-
-template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyImage>
 {
     template <typename... Args>

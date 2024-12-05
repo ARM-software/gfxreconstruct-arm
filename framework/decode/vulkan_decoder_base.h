@@ -93,6 +93,8 @@ class VulkanDecoderBase : public ApiDecoder
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
 
+    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                  const format::ShaderHandleLocationInfo*          infos) override;
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;
@@ -189,6 +191,10 @@ class VulkanDecoderBase : public ApiDecoder
                                                         const std::vector<format::HandleId>& blases) override;
 
     virtual void DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                             const std::vector<format::HandleId>& children) override;
+
+    virtual void
+    DispatchAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
                                                              const std::vector<format::HandleId>& children) override;
 
     virtual void DispatchInitDx12AccelerationStructureCommand(

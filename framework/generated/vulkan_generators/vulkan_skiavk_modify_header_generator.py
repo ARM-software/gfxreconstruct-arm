@@ -156,6 +156,8 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         write('    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);', file=self.outFile)
         write('    virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,', file=self.outFile)
         write('                                                const format::AddressLocationInfo*           infos);', file=self.outFile)
+        write('    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,', file=self.outFile)
+        write('                                                    const format::ShaderHandleLocationInfo*          infos);', file=self.outFile)
         write('    virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height);', file=self.outFile)
         write('    virtual void', file=self.outFile)
         write('    ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform);', file=self.outFile)

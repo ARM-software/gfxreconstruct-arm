@@ -302,34 +302,6 @@ option values.
 | Delay fence queries                            | GFXRECON_FENCE_QUERY_DELAY                              | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Fence Query Delay unit                         | GFXRECON_FENCE_QUERY_DELAY_UNIT                         | STRING  | Specify the "unit of time" used for the delay fence queries option. If set to `calls` then fence query delay is the number of calls to `vkGetFenceStatus`/`vkWaitForFences` that will be delayed. If set to `frames` then fence query delay is the number of frames for which called will be delayed. Default is `calls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Fence Query Delay Timeout Threshold            | GFXRECON_FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD            | INTEGER | Specify a timeout threshold (in nanoseconds) as to what is considered a "fence query" when calling `vkWaitForFences`. Calls to `vkWaitForFences` can either be understood as a synchronization step where you actually want to wait for the underlying command to complete and reaching the timeout is a failure in the command, or as a "delayed query" where you just want to query the fence for a certain amount of time and will try again later if timeout is reached. This option sets the threshold of the timeout value to differentiate these two usages.                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Ignore device address lookup in buffers        | GFXRECON_BUFFER_USAGES_TO_IGNORE                        | STRING  | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. Potential values: `transfer_src`, `transfer_dst` ,`uniform_texel`, `storage_texel`, `uniform`, `storage`, `index`, `vertex`, `indirect`, `shader_address`, `acc_input`, `acc_storage`, `shader_binding` `resource_descriptor` ,`push_descriptors`, `ignore_all`. It is possible to combine usages using binary 'or' operator.
-
-#### Raytracing capture issues
-
-If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. To remedy that, buffer_usages_to_ignore option allows to skip lookups in buffers based on buffer usage:
-
-| GFXRECON_BUFFER_USAGES_TO_IGNORE | VkBufferUsageFlagBits |
-| -------------------------------- | -------------------------------------------------------------------- |
-| `transfer_src`                   | VK_BUFFER_USAGE_TRANSFER_SRC_BIT                                     |
-| `transfer_dst`                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT                                     |
-| `uniform_texel`                  | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT                             |
-| `storage_texel`                  | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT                             |
-| `uniform`                        | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT                                   |
-| `storage`                        | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT                                   |
-| `index`                          | VK_BUFFER_USAGE_INDEX_BUFFER_BIT                                     |
-| `vertex`                         | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT                                    |
-| `indirect`                       | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT                                  |
-| `shader_address`                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT                            |
-| `acc_input`                      | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-| `acc_storage`                    | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR               |
-| `shader_binding`                 | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR                         |
-| `resource_descriptor`            | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT                   |
-| `push_descriptors`               | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT           |
-| `ignore_all`                     | Do not perform lookup at all                                         |
-           
-
- It is possible to combine usages using binary 'or' operator, for example: 
-`export GFXRECON_BUFFER_USAGES_TO_IGNORE='transfer_src|transfer_dst|uniform'`                                                                                                                                                                                                                                                                                                                                                                                   |
 
 #### Memory Tracking Known Issues
 

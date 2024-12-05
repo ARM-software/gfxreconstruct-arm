@@ -807,6 +807,18 @@ void VulkanReferencedResourceConsumerBase::ProcessMicromapCompactionDependencyCo
     }
 }
 
+void VulkanReferencedResourceConsumerBase::ProcessAccelerationStructureCompactionDependencyCommand(
+    format::HandleId parent, const std::vector<format::HandleId>& children)
+{
+    if (children.size())
+    {
+        for (const auto& child : children)
+        {
+            table_.AddResource(parent, child, true);
+        }
+    }
+}
+
 uint32_t VulkanReferencedResourceConsumerBase::GetBindingCount(format::HandleId container_id, uint32_t binding) const
 {
     const auto layout_entry = set_layouts_.find(container_id);

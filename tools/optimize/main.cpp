@@ -27,6 +27,7 @@
 #include "vulkan_file_optimizer.h"
 #include "decode/vulkan_micromap_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
+#include "vulkan_raytracing_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -159,11 +160,13 @@ GetVulkanOptimizationData(const std::string& input_filename)
         auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
         auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
         auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
+        auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>();
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
         decoder.AddConsumer(vulkan_skia_modifier_consumer.get());
+        decoder.AddConsumer(raytracing_modifier_consumer.get());
 
         vulkan_skia_modifier_consumer.get()->SetAppName(remove_app_name);
         file_processor.AddDecoder(&decoder);
@@ -187,6 +190,10 @@ GetVulkanOptimizationData(const std::string& input_filename)
         if (vulkan_skia_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(vulkan_skia_modifier_consumer));
+        }
+        if (raytracing_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(raytracing_modifier_consumer));
         }
     }
     return result;

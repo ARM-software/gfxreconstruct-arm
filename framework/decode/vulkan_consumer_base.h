@@ -97,6 +97,10 @@ class VulkanConsumerBase : public CommonConsumerBase
     virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
                                                             const std::vector<format::HandleId>& children)
     {}
+
+    virtual void ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                                         const std::vector<format::HandleId>& children)
+    {}
 };
 
 GFXRECON_END_NAMESPACE(decode)

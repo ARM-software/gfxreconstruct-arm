@@ -577,6 +577,30 @@ void VulkanSkiaModifier::ProcessFixDeviceAddressCommand(const format::FixDeviceA
     }
 }
 
+void VulkanSkiaModifier::ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                            const format::ShaderHandleLocationInfo*          infos)
+{
+    if (IsModificationPass())
+        return;
+    auto it = skia_device2queue.find(header.relation_id);
+    if (it != skia_device2queue.end())
+    {
+        skiavkindex2remove[block_index_] = true;
+    }
+    else
+    {
+        for (auto& e : skia_device2memory)
+        {
+            auto it1 = std::find(e.second.begin(), e.second.end(), header.relation_id);
+            if (it1 != e.second.end())
+            {
+                skiavkindex2remove[block_index_] = true;
+                break;
+            }
+        }
+    }
+}
+
 void VulkanSkiaModifier::ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height)
 {
     if (IsModificationPass())
