@@ -313,8 +313,8 @@ class VulkanAccelerationStructureBuilder
     VkQueue                                                  queue_with_buffer_write_ = VK_NULL_HANDLE;
     std::vector<std::unique_ptr<AccelerationStructureEntry>> acceleration_structures_;
 
-    std::unordered_map<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write_;
-    std::vector<InstanceBufferIndirectPipelineUpdateInfo>               instance_buffer_indirect_pipeline_updates_;
+    std::multimap<VkAccelerationStructureKHR, DescriptorWriteData> cached_descriptor_write_;
+    std::vector<InstanceBufferIndirectPipelineUpdateInfo>          instance_buffer_indirect_pipeline_updates_;
 
     struct DoubleBufferScratch
     {
