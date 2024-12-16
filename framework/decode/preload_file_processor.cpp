@@ -22,7 +22,6 @@
 */
 
 #include "decode/preload_file_processor.h"
-#include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -42,16 +41,14 @@ void PreloadFileProcessor::PreloadNextFrames(size_t count)
     status_ = PreloadStatus::kReplay;
 }
 
-PreloadFileProcessor::PreloadBuffer::PreloadBuffer() : replay_offset_(0) {}
-
-void PreloadFileProcessor::PreloadBuffer::Reserve(size_t size)
+PreloadFileProcessor::PreloadBuffer::PreloadBuffer()
 {
-    container_.reserve(container_.size() + size);
+    Reset();
 }
 
 size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t destination_size)
 {
-    auto remaining_buffer_data = container_.size() - replay_offset_;
+    auto remaining_buffer_data = preloaded_size_ - replay_offset_;
     auto read_size             = destination_size > remaining_buffer_data ? remaining_buffer_data : destination_size;
     memcpy(destination, &container_[replay_offset_], read_size);
     replay_offset_ += read_size;
@@ -60,9 +57,10 @@ size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t desti
 
 void PreloadFileProcessor::PreloadBuffer::Reset()
 {
-    container_.clear();
-    container_.shrink_to_fit();
+    allocated_size_ = 0;
     replay_offset_ = 0;
+    free(container_);
+    container_ = nullptr;
 }
 
 bool PreloadFileProcessor::ProcessBlocks()

@@ -111,6 +111,9 @@ from vulkan_stype_util_generator import VulkanSTypeUtilGenerator, VulkanSTypeUti
 from vulkan_cpp_struct_generator import VulkanCppStructGenerator, VulkanCppStructGeneratorOptions
 from vulkan_cpp_consumer_extension_generator import VulkanCppConsumerExtensionGenerator, VulkanCppConsumerExtensionGeneratorOptions
 
+#skivkmodify
+from vulkan_skiavk_modify_header_generator import VulkanSkiavkModifierHeaderGenerator, VulkanSkiavkModifierHeaderGeneratorOptions
+
 # Simple timer functions
 start_time = None
 
@@ -959,6 +962,23 @@ def make_gen_opts(args):
             platform_types=platform_types,
             prefix_text=prefix_strings + vk_prefix_strings,
             protect_file=False,
+            protect_feature=False,
+            extraVulkanHeaders=extraVulkanHeaders
+        )
+    ]
+
+    gen_opts['generated_vulkan_skiavk_modifier.h'] = [
+        VulkanSkiavkModifierHeaderGenerator,
+        VulkanSkiavkModifierHeaderGeneratorOptions(
+            class_name='VulkanSkiaModifier',
+            base_class_header='vulkan_consumer_base.h',
+            is_override=False,
+            filename='generated_vulkan_skiavk_modifier.h',
+            directory=directory,
+            blacklists=blacklists,
+            platform_types=platform_types,
+            prefix_text=prefix_strings + vk_prefix_strings,
+            protect_file=True,
             protect_feature=False,
             extraVulkanHeaders=extraVulkanHeaders
         )

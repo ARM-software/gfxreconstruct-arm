@@ -48,6 +48,8 @@ target_sources(gfxrecon-optimize
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.cpp>
                    ${CMAKE_CURRENT_LIST_DIR}/../platform_debug_helper.cpp
+                   $<$<BOOL:${GFXRECON_TOCPP_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_skiavk_modifier.h>
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_skia_modifier.cpp
                    $<$<BOOL:WIN32>:${CMAKE_SOURCE_DIR}/version.rc>
               )
 

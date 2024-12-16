@@ -389,5 +389,23 @@ void ArgumentParser::AddArguments(std::vector<std::string> command_line_args)
     }
 }
 
+const std::vector<std::string> ArgumentParser::SplitStringByFlag(std::string& rawstring, char flag)
+{
+    std::vector<std::string> node;
+    std::istringstream       raw_string_stream(rawstring);
+    while (raw_string_stream.good())
+    {
+        std::string sub_string;
+        std::getline(raw_string_stream, sub_string, flag);
+        auto start = sub_string.find_first_not_of(' ');
+        auto end   = sub_string.find_last_not_of(' ');
+        if (start != end)
+        {
+            node.push_back(sub_string.substr(start, end - start + 1));
+        }
+    }
+    return node;
+}
+
 GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)

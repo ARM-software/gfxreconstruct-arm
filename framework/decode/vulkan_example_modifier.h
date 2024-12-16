@@ -154,11 +154,34 @@ class VulkanExampleModifier : public util::VulkanModifierBase
 
             if (compaction_info != compacted_copies_.end())
             {
-                // Initialize new call data
-                auto new_call        = CreatePostCall();
-                new_call->call_id    = gfxrecon::format::ApiCallId::ApiCall_vkSetDebugUtilsObjectNameEXT;
-                new_call->thread_id  = call_info.thread_id;
-                std::string new_name = "Compacted copy of " + std::to_string(compaction_info->second);
+                // Initialize new Metacommand call data
+                auto new_pre_call = CreatePreCall();
+
+                new_pre_call->type = util::CallModifierBase::NewCallDataType::MetaDataCall;
+
+                format::ParentToChildDependencyHeader header;
+
+                header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+                header.meta_header.meta_data_id      = format::MakeMetaDataId(
+                    format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kParentToChildDependency);
+                header.thread_id       = 1;
+                header.dependency_type = format::kAccelerationStructuresDependency;
+                header.parent_id       = compaction_info->second;
+                header.child_count     = 1;
+
+                // Encode Struct
+                new_pre_call->parameter_buffer.Write(&header, sizeof(header));
+
+                // Encode Child
+                new_pre_call->parameter_buffer.Write(&(compaction_info->first), sizeof(compaction_info->first));
+
+                // Initialize new Vulkan Api call data
+                auto new_post_call = CreatePostCall();
+
+                new_post_call->type      = NewCallDataType::ApiCall;
+                new_post_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkSetDebugUtilsObjectNameEXT;
+                new_post_call->thread_id = call_info.thread_id;
+                std::string new_name     = "Compacted copy of " + std::to_string(compaction_info->second);
 
                 VkDebugUtilsObjectNameInfoEXT object_name_info;
                 object_name_info.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -169,7 +192,7 @@ class VulkanExampleModifier : public util::VulkanModifierBase
                 assert(object_name_info.pNext == nullptr);
 
                 // Encode new call
-                gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+                gfxrecon::encode::ParameterEncoder encoder(&new_post_call->parameter_buffer);
                 encoder.EncodeHandleIdValue(device);
                 encoder.EncodeStructPtrPreamble(&object_name_info, false, false);
                 encoder.EncodeEnumValue(object_name_info.sType);

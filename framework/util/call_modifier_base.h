@@ -36,8 +36,16 @@ GFXRECON_BEGIN_NAMESPACE(util)
 class CallModifierBase
 {
   public:
+    enum NewCallDataType
+    {
+        UnknownType  = 0,
+        ApiCall      = 1,
+        MetaDataCall = 2
+    };
+
     struct NewCallData
     {
+        NewCallDataType          type;
         format::ApiCallId        call_id;
         format::ThreadId         thread_id;
         util::MemoryOutputStream parameter_buffer;
