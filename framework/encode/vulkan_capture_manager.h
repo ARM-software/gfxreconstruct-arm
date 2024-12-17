@@ -944,6 +944,16 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
+#ifdef ARM_INTERNAL
+    void PostProcess_vkEndCommandBuffer(VkResult result, VkCommandBuffer commandBuffer)
+    {
+        if (commandBuffer == tail_cmd_buf_)
+        {
+            replace_command_buffer_(tail_cmd_buf_, orig_cmd_buf_);
+        }
+    }
+#endif
+
     void PostProcess_vkCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,
                                           VkSubpassContents)
@@ -973,7 +983,49 @@ class VulkanCaptureManager : public ApiCaptureManager
             assert(state_tracker_ != nullptr);
             state_tracker_->TrackEndRenderPass(commandBuffer);
         }
+#ifdef ARM_INTERNAL
+        SecondReplace(commandBuffer);
+#endif
     }
+#ifdef ARM_INTERNAL
+    void PostProcess_vkBeginCommandBuffer(VkResult,
+                                          VkCommandBuffer                 commandBuffer,
+                                          const VkCommandBufferBeginInfo* pBeginInfo);
+    void PreProcess_vkCmdDispatch(VkCommandBuffer commandBuffer, uint32_t, uint32_t, uint32_t)
+    {
+        FirstReplace(commandBuffer);
+    }
+    void PreProcess_vkCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
+                                         const VkRenderPassBeginInfo* pRenderPassBegin,
+                                         VkSubpassContents)
+    {
+        FirstReplace(commandBuffer);
+    }
+
+    void PostProcess_vkCmdDispatch(VkCommandBuffer commandBuffer, uint32_t, uint32_t, uint32_t)
+    {
+        SecondReplace(commandBuffer);
+    }
+
+    void PostProcess_vkCmdBindPipeline(VkCommandBuffer     commandBuffer,
+                                       VkPipelineBindPoint pipelineBindPoint,
+                                       VkPipeline          pipeline);
+    void PostProcess_vkCmdBindDescriptorSets(VkCommandBuffer        commandBuffer,
+                                             VkPipelineBindPoint    pipelineBindPoint,
+                                             VkPipelineLayout       layout,
+                                             uint32_t               firstSet,
+                                             uint32_t               descriptorSetCount,
+                                             const VkDescriptorSet* pDescriptorSets,
+                                             uint32_t               dynamicOffsetCount,
+                                             const uint32_t*        pDynamicOffsets);
+
+    void PostProcess_VkCmdPushConstants(VkCommandBuffer    commandBuffer,
+                                        VkPipelineLayout   layout,
+                                        VkShaderStageFlags stageFlags,
+                                        uint32_t           offset,
+                                        uint32_t           size,
+                                        const void*        pValues);
+#endif
 
     void PostProcess_vkCmdEndRenderPass2(VkCommandBuffer commandBuffer, const VkSubpassEndInfoKHR*)
     {
@@ -1144,9 +1196,9 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     void PostProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
                                    VkResult                                               result,
-                                   VkQueue,
-                                   uint32_t            submitCount,
-                                   const VkSubmitInfo* pSubmits,
+                                   VkQueue                                                queue,
+                                   uint32_t                                               submitCount,
+                                   const VkSubmitInfo*                                    pSubmits,
                                    VkFence)
     {
         PostQueueSubmit(current_lock);
@@ -1165,6 +1217,9 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                           pSubmits[i].pSignalSemaphores);
             }
         }
+#ifdef ARM_INTERNAL
+        bool submmited = false;
+#endif
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
@@ -1175,15 +1230,23 @@ class VulkanCaptureManager : public ApiCaptureManager
 
             for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; ++j)
             {
+#ifdef ARM_INTERNAL
+                submmited |= (pSubmits[i].pCommandBuffers[j] == orig_cmd_buf_);
+#endif
                 auto cmd_buffer_wrapper =
                     vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(pSubmits[i].pCommandBuffers[j]);
-
                 if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
                 {
                     break;
                 }
             }
         }
+#ifdef ARM_INTERNAL
+        if (common_manager_->render_pass_slice_enabled_ && submmited)
+        {
+            SubmitTargetCommandBuffer(current_lock, queue);
+        }
+#endif
     }
 
     void PostProcess_vkQueueSubmit2(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
@@ -1728,6 +1791,38 @@ class VulkanCaptureManager : public ApiCaptureManager
     VulkanDeviceAddressTracker                      address_tracker;
     std::unordered_map<format::HandleId, vulkan_wrappers::DeviceMemoryWrapper*> memories;
     std::mutex                                                                  mapped_memory_lock_;
+
+#ifdef ARM_INTERNAL
+  public:
+    uint64_t GetPacketId()
+    {
+        return packet_id_;
+    };
+    void SetPacketId(uint64_t packet_id)
+    {
+        packet_id_ = packet_id;
+    };
+    void SetReplaceCommandBuffer(std::function<void(VkCommandBuffer, VkCommandBuffer)> replace_command_buffer)
+    {
+        replace_command_buffer_ = replace_command_buffer;
+    };
+    VkCommandBuffer TargetCommandBuffer() const
+    {
+        return target_cmd_buf_;
+    };
+    bool RenderPassSliceEnabled()
+    {
+        return common_manager_->render_pass_slice_enabled_;
+    };
+
+  private:
+    void InsertQueuePresent(VkQueue queue, VkDevice device);
+    void FirstReplace(VkCommandBuffer commandBuffer);
+    void SecondReplace(VkCommandBuffer commandBuffer);
+    void SubmitTargetCommandBuffer(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock, VkQueue queue);
+    VkCommandBuffer orig_cmd_buf_, target_cmd_buf_, tail_cmd_buf_{ VK_NULL_HANDLE };
+    std::function<void(VkCommandBuffer, VkCommandBuffer)> replace_command_buffer_ = NULL;
+#endif
 };
 
 GFXRECON_END_NAMESPACE(encode)

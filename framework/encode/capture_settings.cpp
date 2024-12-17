@@ -96,6 +96,12 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define CAPTURE_IUNKNOWN_WRAPPING_UPPER                      "CAPTURE_IUNKNOWN_WRAPPING"
 #define CAPTURE_QUEUE_SUBMITS_LOWER                          "capture_queue_submits"
 #define CAPTURE_QUEUE_SUBMITS_UPPER                          "CAPTURE_QUEUE_SUBMITS"
+#ifdef ARM_INTERNAL
+#define RENDER_PASS_SLICE_RANGE_LOWER                        "render_pass_slice_range"
+#define RENDER_PASS_SLICE_RANGE_UPPER                        "RENDER_PASS_SLICE_RANGE"
+#define RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_LOWER         "render_pass_slice_command_buffer_begin"
+#define RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_UPPER         "RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN"
+#endif
 #define PAGE_GUARD_COPY_ON_MAP_LOWER                         "page_guard_copy_on_map"
 #define PAGE_GUARD_COPY_ON_MAP_UPPER                         "PAGE_GUARD_COPY_ON_MAP"
 #define PAGE_GUARD_SEPARATE_READ_LOWER                       "page_guard_separate_read"
@@ -190,6 +196,10 @@ const char kCaptureTriggerEnvVar[]                           = GFXRECON_OPTION_S
 const char kCaptureTriggerFramesEnvVar[]                     = GFXRECON_OPTION_STR(CAPTURE_TRIGGER_FRAMES);
 const char kCaptureIUnknownWrappingEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_IUNKNOWN_WRAPPING);
 const char kCaptureQueueSubmitsEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_QUEUE_SUBMITS);
+#ifdef ARM_INTERNAL
+const char kRenderPassSliceRangeEnvVar[]                     = GFXRECON_OPTION_STR(RENDER_PASS_SLICE_RANGE);
+const char kRenderPassSliceCommandBufferBeginEnvVar[]        = GFXRECON_OPTION_STR(RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN);
+#endif
 const char kPageGuardCopyOnMapEnvVar[]                       = GFXRECON_OPTION_STR(PAGE_GUARD_COPY_ON_MAP);
 const char kPageGuardSeparateReadEnvVar[]                    = GFXRECON_OPTION_STR(PAGE_GUARD_SEPARATE_READ);
 const char kPageGuardPersistentMemoryEnvVar[]                = GFXRECON_OPTION_STR(PAGE_GUARD_PERSISTENT_MEMORY);
@@ -250,6 +260,10 @@ const std::string kOptionKeyCaptureTrigger                           = std::stri
 const std::string kOptionKeyCaptureTriggerFrames                     = std::string(kSettingsFilter) + std::string(CAPTURE_TRIGGER_FRAMES_LOWER);
 const std::string kOptionKeyCaptureIUnknownWrapping                  = std::string(kSettingsFilter) + std::string(CAPTURE_IUNKNOWN_WRAPPING_LOWER);
 const std::string kOptionKeyCaptureQueueSubmits                      = std::string(kSettingsFilter) + std::string(CAPTURE_QUEUE_SUBMITS_LOWER);
+#ifdef ARM_INTERNAL
+const std::string kOptionKeyRenderPassSliceRange                     = std::string(kSettingsFilter) + std::string(RENDER_PASS_SLICE_RANGE_LOWER);
+const std::string kOptionKeyRenderPassSliceCommandBufferBegin        = std::string(kSettingsFilter) + std::string(RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_LOWER);
+#endif
 const std::string kOptionKeyPageGuardCopyOnMap                       = std::string(kSettingsFilter) + std::string(PAGE_GUARD_COPY_ON_MAP_LOWER);
 const std::string kOptionKeyPageGuardSeparateRead                    = std::string(kSettingsFilter) + std::string(PAGE_GUARD_SEPARATE_READ_LOWER);
 const std::string kOptionKeyPageGuardPersistentMemory                = std::string(kSettingsFilter) + std::string(PAGE_GUARD_PERSISTENT_MEMORY_LOWER);
@@ -394,7 +408,11 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kCaptureTriggerEnvVar, kOptionKeyCaptureTrigger);
     LoadSingleOptionEnvVar(options, kCaptureTriggerFramesEnvVar, kOptionKeyCaptureTriggerFrames);
     LoadSingleOptionEnvVar(options, kCaptureQueueSubmitsEnvVar, kOptionKeyCaptureQueueSubmits);
-
+#ifdef ARM_INTERNAL
+    LoadSingleOptionEnvVar(options, kRenderPassSliceRangeEnvVar, kOptionKeyRenderPassSliceRange);
+    LoadSingleOptionEnvVar(
+        options, kRenderPassSliceCommandBufferBeginEnvVar, kOptionKeyRenderPassSliceCommandBufferBegin);
+#endif
     // Page guard environment variables
     LoadSingleOptionEnvVar(options, kPageGuardCopyOnMapEnvVar, kOptionKeyPageGuardCopyOnMap);
     LoadSingleOptionEnvVar(options, kPageGuardSeparateReadEnvVar, kOptionKeyPageGuardSeparateRead);
@@ -543,6 +561,18 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
                 "Settings Loader: Ignoring trim queue submit ranges setting as trim frame ranges has been specified.");
         }
     }
+
+#ifdef ARM_INTERNAL
+    std::string render_pass_slice_range = FindOption(options, kOptionKeyRenderPassSliceRange);
+    if (!render_pass_slice_range.empty())
+    {
+        ParseUintRangeList(
+            render_pass_slice_range, &settings->trace_settings_.render_pass_slice_range, "render pass slice range");
+    }
+
+    settings->trace_settings_.render_pass_slice_command_buffer_begin =
+        ParseIntegerString(FindOption(options, kOptionKeyRenderPassSliceCommandBufferBegin), 0);
+#endif
 
     std::string trim_key_option        = FindOption(options, kOptionKeyCaptureTrigger);
     std::string trim_key_frames_option = FindOption(options, kOptionKeyCaptureTriggerFrames);

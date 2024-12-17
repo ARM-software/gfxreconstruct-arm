@@ -516,6 +516,11 @@ class CommonCaptureManager
     CaptureSettings::TrimBoundary           trim_boundary_;
     std::vector<util::UintRange>            trim_ranges_;
     CaptureSettings::TrimDrawCalls          trim_draw_calls_;
+#ifdef ARM_INTERNAL
+    std::vector<util::UintRange> render_pass_slice_range_;
+    uint32_t                     render_pass_slice_command_buffer_begin_;
+    bool                         render_pass_slice_enabled_{ false };
+#endif
     std::string                             trim_key_;
     uint32_t                                trim_key_frames_;
     uint32_t                                trim_key_first_frame_;

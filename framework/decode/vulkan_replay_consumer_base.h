@@ -1718,6 +1718,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<format::HandleId, TrackedAddress>                           tracked_addresses_;
     std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
 
+#ifdef ARM_INTERNAL
+    void (*pfn_set_packet_id_)(uint64_t) = nullptr;
+#endif
   protected:
     // Used by pipeline cache handling, there are the following two cases for the flag to be set:
     //
