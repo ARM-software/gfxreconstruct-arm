@@ -819,14 +819,6 @@ class VulkanExportJsonConsumer : public VulkanExportJsonConsumerBase
         uint32_t                                    regionCount,
         StructPointerDecoder<Decoded_VkBufferImageCopy>* pRegions) override;
 
-    virtual void Process_vkCmdUpdateBuffer(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        format::HandleId                            dstBuffer,
-        VkDeviceSize                                dstOffset,
-        VkDeviceSize                                dataSize,
-        PointerDecoder<uint8_t>*                    pData) override;
-
     virtual void Process_vkCmdFillBuffer(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
