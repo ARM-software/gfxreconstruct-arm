@@ -65,9 +65,28 @@ class VulkanMicromapBuilder
     VkResult OnCreateMicromap(const DeviceInfo*            device_info,
                               VkMicromapCreateInfoEXT*     info,
                               const VkAllocationCallbacks* pAllocator,
+                              format::HandleId             capture_id,
                               VkMicromapEXT*               handle);
 
     void OnCmdBuildMicromaps(VkCommandBuffer command_buffer, uint32_t info_count, VkMicromapBuildInfoEXT* build_infos);
+
+    void OnMicromapCompactionDependencyCommand(VkMicromapEXT parent, const std::vector<format::HandleId>& children);
+
+    void OnCmdWriteMicromapsProperties(VkCommandBuffer command_buffer,
+                                       uint32_t        count,
+                                       VkMicromapEXT*  micromaps,
+                                       VkQueryType     query_type,
+                                       VkQueryPool     pool,
+                                       uint32_t        first_query);
+
+    // called before command gets executed
+    // the query pool results contain the MM compacted sizes
+    // inject duplicate of this command that puts the results in internal buffer
+    void OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info, const QueryPoolInfo* query_pool_info);
+
+    // called before command gets executed
+    // inject duplicate of this command to retrieve compact sizes
+    void OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info);
 
     static void OnCmdBuildAccStrHandling(VulkanBufferTracker*                         buffer_tracker,
                                          uint32_t                                     info_count,
@@ -84,20 +103,41 @@ class VulkanMicromapBuilder
     void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
     struct Functions
     {
-        PFN_vkGetMicromapBuildSizesEXT get_micromap_build_sizes{ nullptr };
         PFN_vkCreateMicromapEXT        create_micromap{ nullptr };
+        PFN_vkGetMicromapBuildSizesEXT get_micromap_build_sizes{ nullptr };
+        PFN_vkGetQueryPoolResults      get_query_pool_results{ nullptr };
         PFN_vkCmdBuildMicromapsEXT     cmd_build_micromaps{ nullptr };
+        PFN_vkCmdCopyQueryPoolResults  cmd_copy_query_pool_results{ nullptr };
+        PFN_vkCmdPipelineBarrier       cmd_pipeline_barrier{ nullptr };
     };
 
+    VulkanResourceAllocator*    allocator_;
     Functions                   functions_;
     VulkanBufferTracker*        buffer_tracker_;
     VulkanInternalBufferManager internal_buffer_manager_;
+    const PhysicalDeviceInfo*   physical_device_info_;
 
     struct MicromapData
     {
+        format::HandleId                                                capture_id;
         VkMicromapBuildSizesInfoEXT                                     info;
         std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> storage;
     };
+
+    struct PreProcessingCompactionInfo
+    {
+        uint32_t                                                        first_query;
+        std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> buffer_info_wrapper;
+        std::vector<VkMicromapEXT>                                      parents;
+    };
+
+    // holds information gathered during vkCmdCopyQueryPoolResults that needs to be processed before
+    // vkCreateMicromapEXT in order to know MM compressed sizes
+    std::unordered_map<VkQueryPool, std::vector<PreProcessingCompactionInfo>> compacted_sizes_unprocessed_;
+    // map containing relation between uncompacted MM capture id and the size of compacted MM
+    std::unordered_map<VkMicromapEXT, VkDeviceSize> compacted_sizes_processed_;
+
+    std::unordered_map<format::HandleId, VkMicromapEXT> compaction_child_to_parent_dependency_;
 
     VkMicromapBuildSizesInfoEXT                     last_build_sizes_;
     std::unordered_map<VkMicromapEXT, MicromapData> micromaps_;

@@ -522,6 +522,20 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
     }
 }
 
+void VulkanReplayConsumerBase::ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                                          const std::vector<format::HandleId>& children)
+{
+    const MicromapEXTInfo* micromap_info = object_info_table_.GetMicromapEXTInfo(parent);
+    const DeviceInfo*      device_info   = object_info_table_.GetDeviceInfo(micromap_info->parent_id);
+
+    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
+    {
+        return;
+    }
+
+    micromap_builders_[device_info->capture_id]->OnMicromapCompactionDependencyCommand(micromap_info->handle, children);
+}
+
 void VulkanReplayConsumerBase::ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height)
 {
     // We need to find the surface associated with this ID, and then lookup its window.
@@ -3807,6 +3821,8 @@ void VulkanReplayConsumerBase::OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQuer
     {
         acceleration_structure_builders_[command_buffer_info->parent_id]->OnCmdCopyQueryPoolResults(command_buffer_info,
                                                                                                     query_pool_info);
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdCopyQueryPoolResults(command_buffer_info,
+                                                                                      query_pool_info);
     }
 
     func(command_buffer, query_pool, firstQuery, queryCount, dst_buffer, dstOffset, stride, flags);
@@ -3877,6 +3893,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoo
     if (use_acceleration_structure_builder_)
     {
         acceleration_structure_builders_[device_info->capture_id]->OnGetQueryPoolResults(device_info, query_pool_info);
+        micromap_builders_[device_info->capture_id]->OnGetQueryPoolResults(device_info, query_pool_info);
     }
     return result;
 }
@@ -8806,7 +8823,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
         modified_create_info.createFlags &= ~VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
         modified_create_info.deviceAddress = 0;
         micromap_builders_[device_info->capture_id]->OnCreateMicromap(
-            device_info, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_micromap);
+            device_info, &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_micromap);
     }
 
     return result;
@@ -8970,6 +8987,31 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
             query_pool_info->handle,
             firstQuery);
     }
+}
+
+void VulkanReplayConsumerBase::OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdWriteMicromapsPropertiesEXT func,
+                                                                      CommandBufferInfo* command_buffer_info,
+                                                                      uint32_t           count,
+                                                                      HandlePointerDecoder<VkMicromapEXT>* pMicromaps,
+                                                                      VkQueryType                          queryType,
+                                                                      gfxrecon::decode::QueryPoolInfo* query_pool_info,
+                                                                      uint32_t                         firstQuery)
+{
+    VkCommandBuffer      command_buffer = command_buffer_info->handle;
+    const VkMicromapEXT* pMicromaps_dec = pMicromaps->GetHandlePointer();
+    VkQueryPool          query_pool     = query_pool_info->handle;
+
+    if (!loading_trim_state_ && use_acceleration_structure_builder_)
+    {
+        micromap_builders_[command_buffer_info->parent_id]->OnCmdWriteMicromapsProperties(
+            command_buffer_info->handle,
+            count,
+            pMicromaps->GetHandlePointer(),
+            queryType,
+            query_pool_info->handle,
+            firstQuery);
+    }
+    func(command_buffer, count, pMicromaps_dec, queryType, query_pool, firstQuery);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(

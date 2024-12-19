@@ -561,6 +561,15 @@ void VulkanDecoderBase::DispatchSetTlasToBlasDependencyCommand(format::HandleId 
     }
 }
 
+void VulkanDecoderBase::DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                                    const std::vector<format::HandleId>& children)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessMicromapCompactionDependencyCommand(parent, children);
+    }
+}
+
 void VulkanDecoderBase::DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
                                                                              size_t         buffer_size)
 {

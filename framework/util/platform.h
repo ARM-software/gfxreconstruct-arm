@@ -260,6 +260,52 @@ inline int GetSystemLastErrorCode()
     return GetLastError();
 }
 
+inline std::string GetCpuAffinity()
+{
+    DWORD_PTR process_mask;
+    DWORD_PTR system_mask;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask))
+    {
+        return "";
+    }
+
+    DWORD_PTR mask = (process_mask & system_mask);
+
+    std::string affinity;
+    while (mask)
+    {
+        affinity += (mask & 1) ? "1" : "0";
+        mask >>= 1;
+    }
+
+    while (affinity.back() == '0')
+    {
+        affinity.pop_back();
+    }
+
+    return affinity;
+}
+
+inline bool SetCpuAffinity(const std::string& affinity)
+{
+    DWORD_PTR mask = 0;
+    for (unsigned i = 0; i < affinity.size(); i++)
+    {
+        if (affinity[i] == '1')
+        {
+            mask |= 1;
+        }
+        else if (affinity[i] != '0')
+        {
+            return false;
+        }
+
+        mask <<= 1;
+    }
+
+    return (SetProcessAffinityMask(GetCurrentProcess(), mask) != 0);
+}
+
 #else // !defined(WIN32)
 
 // Error value indicating string was truncated
@@ -566,6 +612,47 @@ inline void FreeRawMemory(void* memory, size_t aligned_size)
 inline int GetSystemLastErrorCode()
 {
     return errno;
+}
+
+inline std::string GetCpuAffinity()
+{
+    cpu_set_t mask;
+    if (sched_getaffinity(0, sizeof(mask), &mask))
+    {
+        return "";
+    }
+
+    std::string affinity;
+    for (unsigned i = 0; i < sizeof(mask) / CPU_ALLOC_SIZE(1); i++)
+    {
+        affinity += CPU_ISSET(i, &mask) ? "1" : "0";
+    }
+
+    while (affinity.back() == '0')
+    {
+        affinity.pop_back();
+    }
+
+    return affinity;
+}
+
+static bool SetCpuAffinity(const std::string& affinity)
+{
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    for (unsigned i = 0; i < affinity.size(); i++)
+    {
+        if (affinity[i] == '1')
+        {
+            CPU_SET(i, &mask);
+        }
+        else if (affinity[i] != '0')
+        {
+            return false;
+        }
+    }
+
+    return (sched_setaffinity(0, sizeof(mask), &mask) == 0);
 }
 
 #endif // WIN32

@@ -549,6 +549,9 @@ void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer              
                   infos[i].pUsageCounts + infos[i].usageCountsCount,
                   reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_usage_counts_memory.get()));
 
+        dst_command->micromap_build_info.pUsageCounts =
+            reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_usage_counts_memory.get());
+
         for (const VkDeviceAddress address : { infos[i].data.deviceAddress, infos[i].triangleArray.deviceAddress })
         {
             if (address == 0)

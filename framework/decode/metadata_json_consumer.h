@@ -309,6 +309,19 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                    const std::vector<format::HandleId>& children)
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("MicromapCompactionDependencyCommand");
+        HandleToJson(jdata["Parent"], parent, json_options);
+        for (const auto& child : children)
+        {
+            jdata["Children"].push_back(child);
+        }
+        WriteBlockEnd();
+    }
+
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
         uint32_t                                                                   info_count,

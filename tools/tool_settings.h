@@ -51,6 +51,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 #ifndef GFXRECON_PLATFORM_SETTINGS_H
 #define GFXRECON_PLATFORM_SETTINGS_H
 
@@ -64,6 +68,7 @@ const char kLogLevelArgument[]                   = "--log-level";
 const char kLogFileArgument[]                    = "--log-file";
 const char kLogDebugView[]                       = "--log-debugview";
 const char kNoDebugPopup[]                       = "--no-debug-popup";
+const char kCpuMaskArgument[]                    = "--cpu-mask";
 const char kOverrideGpuArgument[]                = "--gpu";
 const char kOverrideGpuGroupArgument[]           = "--gpu-group";
 const char kPausedOption[]                       = "--paused";
@@ -965,6 +970,20 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
         options.num_pipeline_creation_jobs = std::stoi(arg_parser.GetArgumentValue(kNumPipelineCreationJobs));
     }
 
+    options.cpu_mask = arg_parser.GetArgumentValue(kCpuMaskArgument);
+    if (!options.cpu_mask.empty())
+    {
+        if (gfxrecon::util::platform::SetCpuAffinity(options.cpu_mask))
+        {
+            GFXRECON_LOG_INFO("CPU mask successfully set: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to set CPU mask: %s", options.cpu_mask.c_str());
+            GFXRECON_LOG_ERROR("Resuming with CPU mask: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
+    }
+
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);
     if (!override_gpu.empty())
     {
@@ -1300,4 +1319,5 @@ static bool CheckOptionPrintUsage(const char* exe_name, const gfxrecon::util::Ar
 
     return false;
 }
+
 #endif // GFXRECON_PLATFORM_SETTINGS_H

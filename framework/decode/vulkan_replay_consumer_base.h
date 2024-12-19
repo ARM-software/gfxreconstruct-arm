@@ -104,6 +104,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
 
+    virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
     virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
 
     virtual void ProcessResizeWindowCommand2(format::HandleId surface_id,
@@ -1212,6 +1215,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                       CommandBufferInfo*                                    command_buffer_info,
                                       uint32_t                                              infoCount,
                                       StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
+    void OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdWriteMicromapsPropertiesEXT func,
+                                                CommandBufferInfo*                   command_buffer_info,
+                                                uint32_t                             count,
+                                                HandlePointerDecoder<VkMicromapEXT>* pMicromaps,
+                                                VkQueryType                          queryType,
+                                                gfxrecon::decode::QueryPoolInfo*     query_pool_info,
+                                                uint32_t                             firstQuery);
 
     VkResult OverrideCreateRayTracingPipelinesKHR(
         PFN_vkCreateRayTracingPipelinesKHR                                     func,

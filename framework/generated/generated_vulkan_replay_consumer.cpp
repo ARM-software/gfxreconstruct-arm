@@ -9352,15 +9352,16 @@ void VulkanReplayConsumer::Process_vkCmdWriteMicromapsPropertiesEXT(
     format::HandleId                            queryPool,
     uint32_t                                    firstQuery)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<CommandBufferInfo>(commandBuffer, &VulkanObjectInfoTable::GetCommandBufferInfo);
-    const VkMicromapEXT* in_pMicromaps = MapHandles<MicromapEXTInfo>(pMicromaps, micromapCount, &VulkanObjectInfoTable::GetMicromapEXTInfo);
-    VkQueryPool in_queryPool = MapHandle<QueryPoolInfo>(queryPool, &VulkanObjectInfoTable::GetQueryPoolInfo);
+    auto in_commandBuffer = GetObjectInfoTable().GetCommandBufferInfo(commandBuffer);
+    MapHandles<MicromapEXTInfo>(pMicromaps, micromapCount, &VulkanObjectInfoTable::GetMicromapEXTInfo);
+    auto in_queryPool = GetObjectInfoTable().GetQueryPoolInfo(queryPool);
 
-    GetDeviceTable(in_commandBuffer)->CmdWriteMicromapsPropertiesEXT(in_commandBuffer, micromapCount, in_pMicromaps, queryType, in_queryPool, firstQuery);
+    OverrideCmdWriteMicromapsPropertiesEXT(GetDeviceTable(in_commandBuffer->handle)->CmdWriteMicromapsPropertiesEXT, in_commandBuffer, micromapCount, pMicromaps, queryType, in_queryPool, firstQuery);
 
     if (options_.dumping_resources)
     {
-        resource_dumper.Process_vkCmdWriteMicromapsPropertiesEXT(call_info, GetDeviceTable(in_commandBuffer)->CmdWriteMicromapsPropertiesEXT, in_commandBuffer, micromapCount, in_pMicromaps, queryType, in_queryPool, firstQuery);
+        //TODO: fix upsteam
+        //resource_dumper.Process_vkCmdWriteMicromapsPropertiesEXT(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdWriteMicromapsPropertiesEXT, in_commandBuffer->handle, micromapCount, in_pMicromaps->handle, queryType, in_queryPool->handle, firstQuery);
     }
 }
 
