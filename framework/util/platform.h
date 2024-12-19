@@ -57,6 +57,10 @@
 #include <sys/system_properties.h>
 #endif
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 GFXRECON_BEGIN_NAMESPACE(platform)

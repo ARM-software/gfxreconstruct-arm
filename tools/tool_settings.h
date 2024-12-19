@@ -51,10 +51,6 @@
 #include <string>
 #include <vector>
 
-#ifdef __linux__
-#include <sched.h>
-#endif
-
 #ifndef GFXRECON_PLATFORM_SETTINGS_H
 #define GFXRECON_PLATFORM_SETTINGS_H
 
