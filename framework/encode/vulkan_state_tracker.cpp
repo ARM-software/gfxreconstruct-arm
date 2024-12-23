@@ -540,11 +540,11 @@ void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer              
 
         auto dst_command = std::make_unique<MicromapEXTWrapper::MicromapBuildCommandData>();
         // Extract command information for 1 Micromap
-        dst_command->device              = wrapper->device_id;
         dst_command->micromap_build_info = infos[i];
 
         dst_command->micromap_usage_counts_memory =
             std::make_unique<uint8_t[]>(sizeof(VkMicromapUsageEXT) * infos[i].usageCountsCount);
+
         std::copy(infos[i].pUsageCounts,
                   infos[i].pUsageCounts + infos[i].usageCountsCount,
                   reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_usage_counts_memory.get()));
@@ -1937,6 +1937,22 @@ void VulkanStateTracker::TrackAccelerationStructureCopyCommand(VkCommandBuffer  
     wrapper->latest_copy_command_->info   = *info;
 }
 
+void VulkanStateTracker::TrackMicromapCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info)
+{
+    // TODO: Support other types of copies (clone, serialize, deserialize)
+    if ((info == nullptr) || (info->mode != VK_COPY_MICROMAP_MODE_COMPACT_EXT))
+    {
+        return;
+    }
+
+    auto wrapper = GetWrapper<MicromapEXTWrapper>(info->src);
+    if (!wrapper->latest_copy_command_)
+    {
+        wrapper->latest_copy_command_ = std::make_unique<MicromapEXTWrapper::MicromapCopyCommandData>();
+    }
+    wrapper->latest_copy_command_->info = *info;
+}
+
 void gfxrecon::encode::VulkanStateTracker::DestroyState(gfxrecon::encode::BufferWrapper* wrapper)
 {
     assert(wrapper != nullptr);
@@ -2030,6 +2046,30 @@ void VulkanStateTracker::TrackWriteAccelerationStructuresPropertiesCommand(
         wrapper->latest_write_properties_command_ =
             std::make_unique<AccelerationStructureKHRWrapper::AccelerationStructureWritePropertiesCommandData>();
         wrapper->latest_write_properties_command_->device     = wrapper->device_id;
+        wrapper->latest_write_properties_command_->query_type = queryType;
+    }
+}
+
+void VulkanStateTracker::TrackWriteMicromapsPropertiesCommand(VkCommandBuffer      commandBuffer,
+                                                              uint32_t             micromapCount,
+                                                              const VkMicromapEXT* pMicromaps,
+                                                              VkQueryType          queryType,
+                                                              VkQueryPool          queryPool,
+                                                              uint32_t             firstQuery)
+{
+    if (micromapCount == 0)
+    {
+        return;
+    }
+
+    CommandBufferWrapper* cmd_buf_wrapper    = GetWrapper<CommandBufferWrapper>(commandBuffer);
+    QueryPoolWrapper*     query_pool_wrapper = GetWrapper<QueryPoolWrapper>(queryPool);
+
+    for (uint32_t i = 0; i < micromapCount; ++i)
+    {
+        MicromapEXTWrapper* wrapper = GetWrapper<MicromapEXTWrapper>(pMicromaps[i]);
+        wrapper->latest_write_properties_command_ =
+            std::make_unique<MicromapEXTWrapper::MicromapWritePropertiesCommandData>();
         wrapper->latest_write_properties_command_->query_type = queryType;
     }
 }

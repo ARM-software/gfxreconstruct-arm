@@ -111,6 +111,13 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer
             call_info, device, descriptorSet, descriptorUpdateTemplate, pData, false);
     }
 
+    virtual void Process_vkCmdUpdateBuffer(const ApiCallInfo&       call_info,
+                                           format::HandleId         commandBuffer,
+                                           format::HandleId         dstBuffer,
+                                           VkDeviceSize             dstOffset,
+                                           VkDeviceSize             dataSize,
+                                           PointerDecoder<uint8_t>* pData) override;
+
   protected:
     void Process_vkUpdateDescriptorSetWithTemplate(const ApiCallInfo&               call_info,
                                                    format::HandleId                 device,

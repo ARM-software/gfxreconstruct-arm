@@ -267,5 +267,32 @@ void VulkanExportJsonConsumerBase::Process_vkCmdPushDescriptorSetWithTemplate2KH
     WriteBlockEnd();
 }
 
+void VulkanExportJsonConsumerBase::Process_vkCmdUpdateBuffer(const ApiCallInfo&       call_info,
+                                                             format::HandleId         commandBuffer,
+                                                             format::HandleId         dstBuffer,
+                                                             VkDeviceSize             dstOffset,
+                                                             VkDeviceSize             dataSize,
+                                                             PointerDecoder<uint8_t>* pData)
+{
+    const JsonOptions& json_options = GetJsonOptions();
+
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdUpdateBuffer");
+
+    auto& args = jdata[NameArgs()];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    HandleToJson(args["dstBuffer"], dstBuffer, json_options);
+    FieldToJson(args["dstOffset"], dstOffset, json_options);
+    FieldToJson(args["dataSize"], dataSize, json_options);
+    if (json_options.verbose)
+    {
+        FieldToJson(args["pData"], pData, json_options);
+    }
+    else
+    {
+        FieldToJson(args["pData"], "[Binary data]", json_options);
+    }
+    WriteBlockEnd();
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

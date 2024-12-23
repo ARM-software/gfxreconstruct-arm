@@ -30,7 +30,9 @@
         "vkCmdBuildAccelerationStructuresKHR": "manager->OverrideCmdBuildAccelerationStructuresKHR",
         "vkCmdBuildMicromapsEXT": "manager->OverrideCmdBuildMicromapsEXT",
         "vkCmdCopyAccelerationStructureKHR": "manager->OverrideCmdCopyAccelerationStructureKHR",
+        "vkCmdCopyMicromapEXT": "manager->OverrideCmdCopyMicromapEXT",
         "vkCmdWriteAccelerationStructuresPropertiesKHR": "manager->OverrideCmdWriteAccelerationStructuresPropertiesKHR",
+        "vkCmdWriteMicromapsPropertiesEXT": "manager->OverrideCmdWriteMicromapsPropertiesEXT",
         "vkGetPhysicalDeviceProperties2": "manager->OverrideGetPhysicalDeviceProperties2",
         "vkGetPhysicalDeviceProperties2KHR": "manager->OverrideGetPhysicalDeviceProperties2"
     }

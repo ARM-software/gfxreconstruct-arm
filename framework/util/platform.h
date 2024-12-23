@@ -57,6 +57,10 @@
 #include <sys/system_properties.h>
 #endif
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 GFXRECON_BEGIN_NAMESPACE(platform)
@@ -616,13 +620,15 @@ inline int GetSystemLastErrorCode()
 
 inline std::string GetCpuAffinity()
 {
-    cpu_set_t mask;
+    std::string affinity;
+
+#ifdef __linux__
+    cpu_set_t   mask;
     if (sched_getaffinity(0, sizeof(mask), &mask))
     {
-        return "";
+        return affinity;
     }
 
-    std::string affinity;
     for (unsigned i = 0; i < sizeof(mask) / CPU_ALLOC_SIZE(1); i++)
     {
         affinity += CPU_ISSET(i, &mask) ? "1" : "0";
@@ -632,12 +638,14 @@ inline std::string GetCpuAffinity()
     {
         affinity.pop_back();
     }
+#endif
 
     return affinity;
 }
 
 static bool SetCpuAffinity(const std::string& affinity)
 {
+#ifdef __linux__
     cpu_set_t mask;
     CPU_ZERO(&mask);
     for (unsigned i = 0; i < affinity.size(); i++)
@@ -653,6 +661,9 @@ static bool SetCpuAffinity(const std::string& affinity)
     }
 
     return (sched_setaffinity(0, sizeof(mask), &mask) == 0);
+#else
+    return false;
+#endif
 }
 
 #endif // WIN32

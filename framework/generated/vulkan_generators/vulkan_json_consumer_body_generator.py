@@ -30,8 +30,10 @@ class VulkanExportJsonConsumerBodyGeneratorOptions(BaseGeneratorOptions):
 
     def __init__(
         self,
-        blacklists=None,  # Path to JSON file listing apicalls and structs to ignore.
-        platform_types=None,  # Path to JSON file listing platform (WIN32, X11, etc.) defined types.
+        # Path to JSON file listing apicalls and structs to ignore.
+        blacklists=None,
+        # Path to JSON file listing platform (WIN32, X11, etc.) defined types.
+        platform_types=None,
         filename=None,
         directory='.',
         prefix_text='',
@@ -78,6 +80,7 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
             'vkCreatePipelineCache',
             'vkCreateShaderModule',
             'vkGetPipelineCacheData',
+            'vkCmdUpdateBuffer'
         }
 
         self.formatAsHex = {
@@ -94,8 +97,7 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
             "vkQueueSubmit2",
             "vkQueuePresentKHR",
             "vkQueueSubmit2KHR",
-            }
-
+        }
 
         self.flagsType = dict()
         self.flagsTypeAlias = dict()
@@ -221,14 +223,16 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
                     to_json = 'HandleToJson(args["{0}"], {0}, json_options)'
                 elif self.is_flags(value.base_type):
                     if value.base_type in self.flagsTypeAlias:
-                            flagsEnumType = self.flagsTypeAlias[value.base_type]
+                        flagsEnumType = self.flagsTypeAlias[value.base_type]
                     if not (value.is_pointer or value.is_array):
                         to_json = 'FieldToJson({2}_t(), args["{0}"], {0}, json_options)'
                     else:
                         # Default to outputting as the raw type but warn:
-                        print("Missing conversion of pointers to", flagsEnumType, "in", name,  file=sys.stderr)
+                        print("Missing conversion of pointers to",
+                              flagsEnumType, "in", name,  file=sys.stderr)
 
-                to_json = to_json.format(value.name, value.base_type, flagsEnumType)
+                to_json = to_json.format(
+                    value.name, value.base_type, flagsEnumType)
                 body += '        {0};\n'.format(to_json)
         return body
     # yapf: enable

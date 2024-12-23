@@ -44,7 +44,8 @@ using VulkanJsonConsumer = gfxrecon::decode::MetadataJsonConsumer<
 using Dx12JsonConsumer =
     gfxrecon::decode::MetadataJsonConsumer<gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::Dx12JsonConsumer>>;
 #endif
-const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags";
+const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags,--"
+                        "verbose";
 
 const char kArguments[] = "--output,--format,--frame-range";
 
@@ -87,6 +88,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("                  \tFrame ranges should be specified in ascending order and cannot "
                            "overlap. Frame numbering is zero-indexed and inclusive.");
     GFXRECON_WRITE_CONSOLE("                  \tExample: 0-2,5,8-10 will generate data for 7 frames.");
+    GFXRECON_WRITE_CONSOLE("  --verbose\t Request verbose output.")
 
 #if defined(WIN32) && defined(_DEBUG)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
@@ -207,6 +209,7 @@ int main(int argc, const char** argv)
     bool                            dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
     bool                            expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
     bool                            file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
+    bool                            verbose              = arg_parser.IsOptionSet(kVerboseOption);
     bool                            output_to_stdout     = output_filename == "stdout";
     gfxrecon::decode::FileProcessor file_processor;
 
@@ -281,6 +284,7 @@ int main(int argc, const char** argv)
             json_options.format        = output_format;
             json_options.dump_binaries = dump_binaries;
             json_options.expand_flags  = expand_flags;
+            json_options.verbose       = verbose;
 
             gfxrecon::decode::JsonWriter json_writer{ json_options, GFXRECON_PROJECT_VERSION_STRING, input_filename };
             file_processor.SetAnnotationProcessor(&json_writer);

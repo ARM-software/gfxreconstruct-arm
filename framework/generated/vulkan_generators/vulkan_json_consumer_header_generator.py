@@ -81,6 +81,7 @@ class VulkanExportJsonConsumerHeaderGenerator(VulkanConsumerHeaderGenerator):
             'vkCreatePipelineCache',
             'vkCreateShaderModule',
             'vkGetPipelineCacheData',
+            'vkCmdUpdateBuffer'
         }
 
     def generate_feature(self):

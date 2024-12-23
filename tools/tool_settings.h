@@ -51,10 +51,6 @@
 #include <string>
 #include <vector>
 
-#ifdef __linux__
-#include <sched.h>
-#endif
-
 #ifndef GFXRECON_PLATFORM_SETTINGS_H
 #define GFXRECON_PLATFORM_SETTINGS_H
 
@@ -158,6 +154,7 @@ const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-outpu
 const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
 const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
+const char kVerboseOption[]                       = "--verbose";
 
 enum class WsiPlatform
 {

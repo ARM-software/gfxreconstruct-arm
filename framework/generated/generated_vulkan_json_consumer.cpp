@@ -1927,26 +1927,6 @@ void VulkanExportJsonConsumer::Process_vkCmdCopyImageToBuffer(
     WriteBlockEnd();
 }
 
-void VulkanExportJsonConsumer::Process_vkCmdUpdateBuffer(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            commandBuffer,
-    format::HandleId                            dstBuffer,
-    VkDeviceSize                                dstOffset,
-    VkDeviceSize                                dataSize,
-    PointerDecoder<uint8_t>*                    pData)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdUpdateBuffer");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-        HandleToJson(args["dstBuffer"], dstBuffer, json_options);
-        FieldToJson(args["dstOffset"], dstOffset, json_options);
-        FieldToJson(args["dataSize"], dataSize, json_options);
-        FieldToJson(args["pData"], pData, json_options);
-    WriteBlockEnd();
-}
-
 void VulkanExportJsonConsumer::Process_vkCmdFillBuffer(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,

@@ -1122,6 +1122,19 @@ void VulkanCaptureManager::OverrideCmdCopyAccelerationStructureKHR(VkCommandBuff
     device_table->CmdCopyAccelerationStructureKHR(command_buffer, pInfo);
 }
 
+void VulkanCaptureManager::OverrideCmdCopyMicromapEXT(VkCommandBuffer              command_buffer,
+                                                      const VkCopyMicromapInfoEXT* pInfo)
+
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackMicromapCopyCommand(command_buffer, pInfo);
+    }
+
+    const VulkanDeviceTable* device_table = GetDeviceTable(command_buffer);
+    device_table->CmdCopyMicromapEXT(command_buffer, pInfo);
+}
+
 void VulkanCaptureManager::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
     VkCommandBuffer                   commandBuffer,
     uint32_t                          accelerationStructureCount,
@@ -1139,6 +1152,24 @@ void VulkanCaptureManager::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
     const VulkanDeviceTable* device_table = GetDeviceTable(commandBuffer);
     device_table->CmdWriteAccelerationStructuresPropertiesKHR(
         commandBuffer, accelerationStructureCount, pAccelerationStructures, queryType, queryPool, firstQuery);
+}
+
+void VulkanCaptureManager::OverrideCmdWriteMicromapsPropertiesEXT(VkCommandBuffer      commandBuffer,
+                                                                  uint32_t             micromapCount,
+                                                                  const VkMicromapEXT* pMicromaps,
+                                                                  VkQueryType          queryType,
+                                                                  VkQueryPool          queryPool,
+                                                                  uint32_t             firstQuery)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackWriteMicromapsPropertiesCommand(
+            commandBuffer, micromapCount, pMicromaps, queryType, queryPool, firstQuery);
+    }
+
+    const VulkanDeviceTable* device_table = GetDeviceTable(commandBuffer);
+    device_table->CmdWriteMicromapsPropertiesEXT(
+        commandBuffer, micromapCount, pMicromaps, queryType, queryPool, firstQuery);
 }
 
 VkResult VulkanCaptureManager::OverrideAllocateMemory(VkDevice                     device,
