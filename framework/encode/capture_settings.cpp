@@ -458,6 +458,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
 
     LoadSingleOptionEnvVar(options, kFenceQueryDelayEnvVar, kOptionFenceQueryDelay);
     LoadSingleOptionEnvVar(options, kFenceQueryDelayUnitEnvVar, kOptionFenceQueryDelayUnit);
+    LoadSingleOptionEnvVar(options, kFenceQueryDelayTimeoutThresholdEnvVar, kOptionFenceQueryDelayTimeoutThreshold);
 
     LoadSingleOptionEnvVar(options, kBufferUsagesToIgnoreEnvVar, kOptionBufferUsagesToIgnore);
 
