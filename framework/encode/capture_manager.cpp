@@ -362,28 +362,29 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
 {
     bool success = true;
 
-    base_filename_                   = base_filename;
-    file_options_                    = trace_settings.capture_file_options;
-    timestamp_filename_              = trace_settings.time_stamp_file;
-    memory_tracking_mode_            = trace_settings.memory_tracking_mode;
-    force_file_flush_                = trace_settings.force_flush;
-    debug_layer_                     = trace_settings.debug_layer;
-    debug_device_lost_               = trace_settings.debug_device_lost;
-    debug_set_objects_name_          = trace_settings.debug_set_objects_name;
-    screenshots_enabled_             = !trace_settings.screenshot_ranges.empty();
-    screenshot_format_               = trace_settings.screenshot_format;
-    screenshot_indices_              = CalcScreenshotIndices(trace_settings.screenshot_ranges);
-    screenshot_prefix_               = PrepScreenshotPrefix(trace_settings.screenshot_dir);
-    disable_dxr_                     = trace_settings.disable_dxr;
-    accel_struct_padding_            = trace_settings.accel_struct_padding;
-    iunknown_wrapping_               = trace_settings.iunknown_wrapping;
-    force_command_serialization_     = trace_settings.force_command_serialization;
-    queue_zero_only_                 = trace_settings.queue_zero_only;
-    allow_pipeline_compile_required_ = trace_settings.allow_pipeline_compile_required;
-    fence_query_delay_               = trace_settings.fence_query_delay;
-    fence_query_delay_unit_          = trace_settings.fence_query_delay_unit;
-    buffer_usages_to_ignore_         = trace_settings.buffer_usages_to_ignore;
-    force_fifo_present_mode_         = trace_settings.force_fifo_present_mode;
+    base_filename_                       = base_filename;
+    file_options_                        = trace_settings.capture_file_options;
+    timestamp_filename_                  = trace_settings.time_stamp_file;
+    memory_tracking_mode_                = trace_settings.memory_tracking_mode;
+    force_file_flush_                    = trace_settings.force_flush;
+    debug_layer_                         = trace_settings.debug_layer;
+    debug_device_lost_                   = trace_settings.debug_device_lost;
+    debug_set_objects_name_              = trace_settings.debug_set_objects_name;
+    screenshots_enabled_                 = !trace_settings.screenshot_ranges.empty();
+    screenshot_format_                   = trace_settings.screenshot_format;
+    screenshot_indices_                  = CalcScreenshotIndices(trace_settings.screenshot_ranges);
+    screenshot_prefix_                   = PrepScreenshotPrefix(trace_settings.screenshot_dir);
+    disable_dxr_                         = trace_settings.disable_dxr;
+    accel_struct_padding_                = trace_settings.accel_struct_padding;
+    iunknown_wrapping_                   = trace_settings.iunknown_wrapping;
+    force_command_serialization_         = trace_settings.force_command_serialization;
+    queue_zero_only_                     = trace_settings.queue_zero_only;
+    allow_pipeline_compile_required_     = trace_settings.allow_pipeline_compile_required;
+    fence_query_delay_                   = trace_settings.fence_query_delay;
+    fence_query_delay_unit_              = trace_settings.fence_query_delay_unit;
+    fence_query_delay_timeout_threshold_ = trace_settings.fence_query_delay_timeout_threshold;
+    buffer_usages_to_ignore_             = trace_settings.buffer_usages_to_ignore;
+    force_fifo_present_mode_             = trace_settings.force_fifo_present_mode;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;
@@ -1653,6 +1654,7 @@ void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation
         {
             capture_options["fence-query-delay-unit"] = "frames";
         }
+        capture_options["fence-query-delay-timeout-threshold"] = fence_query_delay_timeout_threshold_;
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {

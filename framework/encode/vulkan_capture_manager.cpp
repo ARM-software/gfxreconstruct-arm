@@ -1841,7 +1841,7 @@ VkResult VulkanCaptureManager::OverrideWaitForFences(
 {
     // If the timeout is 0, then we suppose this "wait for fence" is in fact a "get fence status" and should be delayed
     // accordingly.
-    if (timeout == 0)
+    if (timeout <= common_manager_->GetFenceQueryDelayTimeoutThreshold())
     {
         bool delay = false;
 
@@ -1895,7 +1895,11 @@ VkResult VulkanCaptureManager::OverrideGetFenceStatus(VkDevice device, VkFence f
         assert(wrapper != nullptr);
         if (wrapper->query_delay != 0)
         {
-            --wrapper->query_delay;
+            if (common_manager_->GetFenceQueryDelayUnit() == CaptureSettings::FenceQueryDelayUnit::kCalls)
+            {
+                --wrapper->query_delay;
+            }
+
             result = VK_NOT_READY;
         }
     }
@@ -3886,12 +3890,15 @@ void VulkanCaptureManager::SubmitTargetCommandBuffer(
 
 void VulkanCaptureManager::EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
 {
-    VisitWrappers<FenceWrapper>([&](FenceWrapper* wrapper) {
-        if (wrapper->query_delay != 0)
-        {
-            --wrapper->query_delay;
-        }
-    });
+    if (common_manager_->GetFenceQueryDelayUnit() == CaptureSettings::FenceQueryDelayUnit::kFrames)
+    {
+        VisitWrappers<FenceWrapper>([&](FenceWrapper* wrapper) {
+            if (wrapper->query_delay != 0)
+            {
+                --wrapper->query_delay;
+            }
+        });
+    }
 
     ApiCaptureManager::EndFrame(current_lock);
 }
