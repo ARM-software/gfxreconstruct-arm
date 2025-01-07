@@ -73,6 +73,7 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(
         format::ParentToChildDependencyHeader header;
 
         header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        header.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(header) + sizeof(format::HandleId);
         header.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
                                                                  format::MetaDataType::kParentToChildDependency);
         header.thread_id                     = 1;
