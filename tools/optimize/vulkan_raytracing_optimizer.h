@@ -187,7 +187,6 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     void ProcessCmdTraceRays();
 
   protected:
-
     // Represents generic block in the trace - a vulkan command or a metacommand
     class Call
     {
@@ -223,14 +222,15 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
             // attempt to order call executions
             bool operator<(const UniqueCallIndex& other) const
             {
-                // Calls might be submitted in the same command buffer, in that case compare calls using their index inside command buffer
+                // Calls might be submitted in the same command buffer, in that case compare calls using their index
+                // inside command buffer
                 if (other.submit_index == submit_index && other.command_buffer == command_buffer)
                 {
                     return command_index < other.command_index;
                 }
                 else
                 {
-                  // use submit index if its not a cmd call or a cmd call from different command buffer
+                    // use submit index if its not a cmd call or a cmd call from different command buffer
                     return submit_index < other.submit_index;
                 }
             }
@@ -345,7 +345,9 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     class DrawIndexedCall : public CommandCall
     {
       public:
-        DrawIndexedCall(uint64_t index, format::HandleId command_buffer) : CommandCall(index,  CallType::CmdDrawIndexed, command_buffer) {}
+        DrawIndexedCall(uint64_t index, format::HandleId command_buffer) :
+            CommandCall(index, CallType::CmdDrawIndexed, command_buffer)
+        {}
         IndexBufferData index_buffer;
         uint32_t        index_count;
         uint32_t        first_index;
@@ -367,7 +369,7 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
       public:
         VulkanObject(format::HandleId handle, VkObjectType type) : handle(handle), type(type) {}
         // Some objects require processing once the first pass is finished
-        virtual void ProcessIntermediateData() {}
+        virtual void     ProcessIntermediateData() {}
         format::HandleId handle;
         VkObjectType     type;
         uint64_t         creation_call;
@@ -391,13 +393,14 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
         // Holds details of latest CmdBindIndexBuffer command
         IndexBufferData current_bound_index_buffer;
 
-        void Reset(){
-          calls.clear();
-          submission = nullptr;
-          draw_indexed_commands.clear();
-          trace_rays_commands.clear();
-          copy_commands.clear();
-          memory_modifications.clear();
+        void Reset()
+        {
+            calls.clear();
+            submission = nullptr;
+            draw_indexed_commands.clear();
+            trace_rays_commands.clear();
+            copy_commands.clear();
+            memory_modifications.clear();
         }
     };
 
@@ -419,8 +422,8 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     class MemoryRange
     {
       public:
-        VkDeviceSize      start_offset_;
-        VkDeviceSize      end_offset_;
+        VkDeviceSize start_offset_;
+        VkDeviceSize end_offset_;
     };
 
     // Generic class representing *some* usage of a memory renage in a call
@@ -469,7 +472,6 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
     class RuntimeVariableInstance : public MemoryRangeReference
     {
       public:
-
     };
 
     class MemoryAllocation : public VulkanObject
@@ -482,7 +484,8 @@ class VulkanRaytracingOptimizer : public util::VulkanModifierBase
         virtual void ProcessIntermediateData() override
         {
             // Memory modificaion data should be sorted in order of execution, not index.
-            // Note: Order of execution is not known until submission, so using sorted container like set doesn't really work here
+            // Note: Order of execution is not known until submission, so using sorted container like set doesn't really
+            // work here
             // TODO: Order of submission should also consider synchronization
             std::sort(modified_memory_ranges.begin(), modified_memory_ranges.end());
         }

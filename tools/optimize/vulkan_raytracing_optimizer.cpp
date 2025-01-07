@@ -200,8 +200,9 @@ void VulkanRaytracingOptimizer::ValidateFixDeviceAddressCommands()
             std::unordered_set<BindBufferMemory*> bound_buffers;
 
             // Loop over all marked offsets
-            // TODO: This is outdated due to rearchitecturing, memory ranges should be marked with MemoryRangeReference already, no need to process buffer bindings here
-            //for (auto location : fix_device_address_command->locations)
+            // TODO: This is outdated due to rearchitecturing, memory ranges should be marked with MemoryRangeReference
+            // already, no need to process buffer bindings here
+            // for (auto location : fix_device_address_command->locations)
             //{
             //    // actual memory offset is a sum of FillMemoryCommand data offset and FixDeviceAddress location
             //    // offset
@@ -209,7 +210,7 @@ void VulkanRaytracingOptimizer::ValidateFixDeviceAddressCommands()
             //    // Get buffers bound to memory at marked_offset
             //    // bound_buffers.merge(memory->GetBoundBuffersByOffset(marked_offset));
             //}
-            //for (const auto* buffer_binding : bound_buffers)
+            // for (const auto* buffer_binding : bound_buffers)
             //{
             //    // For each bound buffer calculate offset inside that buffer based on binding offset and marked
             //    // offset
@@ -360,7 +361,7 @@ void VulkanRaytracingOptimizer::ProcessFillMemoryCommand(uint64_t memory_id,
                         // SGH value offset is a sum of FillMemoryCommand offset and the offset within the modified
                         // range
                         VkDeviceAddress sgh_location = offset + data_offset;
-                        modification.shader_group_handles_.push_back({sgh_location, sgh_location + sgh_size});
+                        modification.shader_group_handles_.push_back({ sgh_location, sgh_location + sgh_size });
                     }
                 }
             }
@@ -381,7 +382,8 @@ void VulkanRaytracingOptimizer::ProcessFillMemoryCommand(uint64_t memory_id,
                     // device address value offset is a sum of FillMemoryCommand offset and the offset within the
                     // modified range
                     VkDeviceAddress device_address_location = offset + data_offset;
-                    modification.device_addresses_.push_back({device_address_location, device_address_location + sizeof(VkDeviceAddress)});
+                    modification.device_addresses_.push_back(
+                        { device_address_location, device_address_location + sizeof(VkDeviceAddress) });
                 }
             }
         }
@@ -437,18 +439,19 @@ void VulkanRaytracingOptimizer::Process_vkQueueSubmit(const ApiCallInfo&        
 // Record FixDeviceAddressCommand for future reference
 // Fix/FillMemory commands might happen at any time, so this data may be processed only on submission
 void VulkanRaytracingOptimizer::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                              const format::AddressLocationInfo*           infos)
+                                                               const format::AddressLocationInfo*           infos)
 {
     if (IsModificationPass())
     {
         return;
     }
-    auto fix_device_command = std::make_unique<FixDeviceAddress>(block_index_);
-    VulkanObject* object = objects_[header.relation_id].get();
+    auto          fix_device_command = std::make_unique<FixDeviceAddress>(block_index_);
+    VulkanObject* object             = objects_[header.relation_id].get();
     if (object->type == VkObjectType::VK_OBJECT_TYPE_DEVICE_MEMORY)
     {
         fix_device_command->memory_id = header.relation_id;
-        fix_device_command->locations = std::vector<format::AddressLocationInfo>(infos, infos + header.num_of_locations);
+        fix_device_command->locations =
+            std::vector<format::AddressLocationInfo>(infos, infos + header.num_of_locations);
     }
     fix_device_address_commands_.push_back(fix_device_command.get());
     calls_[block_index_] = std::move(fix_device_command);
@@ -506,10 +509,10 @@ void VulkanRaytracingOptimizer::Process_vkCmdDrawIndexed(const ApiCallInfo& call
     {
         return;
     }
-    auto draw_command = std::make_unique<DrawIndexedCall>(block_index_, commandBuffer);
+    auto draw_command         = std::make_unique<DrawIndexedCall>(block_index_, commandBuffer);
     draw_command->index_count = indexCount;
     draw_command->first_index = firstIndex;
-    uint32_t           index_type_size = 0;
+    uint32_t index_type_size  = 0;
     switch (draw_command->index_buffer.index_type)
     {
         case VK_INDEX_TYPE_UINT16:
@@ -544,11 +547,10 @@ void VulkanRaytracingOptimizer::Process_vkCmdBindIndexBuffer(const ApiCallInfo& 
     auto* buffer_data = objects_.at(buffer).get();
     // TODO: buffer could be bound after this call, move this to later stage, OnQueueSubmit/CanOptimize
 
-
     command_buffers_[commandBuffer].current_bound_index_buffer.index_type = indexType;
     command_buffers_[commandBuffer].current_bound_index_buffer.offset     = offset;
     command_buffers_[commandBuffer].current_bound_index_buffer.size       = 0;
-    calls_[block_index_] = std::move(bind_call);
+    calls_[block_index_]                                                  = std::move(bind_call);
 }
 
 void VulkanRaytracingOptimizer::Process_vkGetBufferDeviceAddress(
@@ -588,7 +590,7 @@ void VulkanRaytracingOptimizer::Process_vkAllocateMemory(
         return;
     }
     format::HandleId handle = *pMemory->GetPointer();
-    objects_[handle] = std::make_unique<MemoryAllocation>(handle, pAllocateInfo->GetPointer()->allocationSize);
+    objects_[handle]        = std::make_unique<MemoryAllocation>(handle, pAllocateInfo->GetPointer()->allocationSize);
 }
 
 void VulkanRaytracingOptimizer::Process_vkCmdCopyBuffer(const ApiCallInfo&                          call_info,
