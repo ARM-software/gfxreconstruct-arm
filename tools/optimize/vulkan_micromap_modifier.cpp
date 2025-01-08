@@ -1,4 +1,4 @@
-#include "decode/vulkan_micromap_modifier.h"
+#include "vulkan_micromap_modifier.h"
 
 #include "util/logging.h"
 

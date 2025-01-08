@@ -25,7 +25,7 @@
 #include "file_optimizer.h"
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
-#include "decode/vulkan_micromap_modifier.h"
+#include "vulkan_micromap_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
 #include "vulkan_raytracing_modifier.h"
 
