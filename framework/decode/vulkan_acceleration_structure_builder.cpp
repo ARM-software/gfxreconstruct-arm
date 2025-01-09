@@ -301,27 +301,19 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanAccelerationStructuresWrit
 {
     BeginCommandBuffer();
 
-    VkQueryPool query_pool;
-
-    VkQueryPoolCreateInfo pool_info{};
-    pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    pool_info.flags              = 0;
-    pool_info.queryType          = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
-    pool_info.queryCount         = 1;
-    pool_info.pipelineStatistics = 0;
-    pool_info.pNext              = nullptr;
-
-    functions_.create_query_pool(cmd_execute_obj_.device_, &pool_info, nullptr, &query_pool);
+    functions_.cmd_reset_query_pool(cmd_execute_obj_.command_buffer_, cmd_execute_obj_.query_pool_, 0, 1);
 
     OnCmdWriteAccelerationStructuresProperties(
-        cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, query_pool, 0);
+        cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, cmd_execute_obj_.query_pool_, 0);
 
     ExecuteCommandBuffer();
 
     VulkanDeviceInfo device_info;
     device_info.handle = cmd_execute_obj_.device_;
+
     VulkanQueryPoolInfo query_pool_info;
-    query_pool_info.handle = query_pool;
+    query_pool_info.handle = cmd_execute_obj_.query_pool_;
+
     OnGetQueryPoolResults(&device_info, &query_pool_info);
 }
 
@@ -355,6 +347,8 @@ void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode
     functions_.cmd_copy_query_pool_results                  = device_table->CmdCopyQueryPoolResults;
     functions_.cmd_pipeline_barrier                         = device_table->CmdPipelineBarrier;
     functions_.create_query_pool                            = device_table->CreateQueryPool;
+    functions_.cmd_reset_query_pool                         = device_table->CmdResetQueryPool;
+    functions_.destroy_query_pool                           = device_table->DestroyQueryPool;
 }
 
 void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
@@ -364,6 +358,7 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
     cmd_execute_obj_.device_               = device_;
     cmd_execute_obj_.free_command_buffers_ = functions_.free_command_buffers;
     cmd_execute_obj_.destroy_command_pool_ = functions_.destroy_command_pool;
+    cmd_execute_obj_.destroy_query_pool_   = functions_.destroy_query_pool;
 
     VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };
     create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -379,6 +374,17 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
     alloc_info.commandBufferCount          = 1;
 
     result = functions_.allocate_command_buffers(device_, &alloc_info, &cmd_execute_obj_.command_buffer_);
+    GFXRECON_ASSERT(result == VK_SUCCESS);
+
+    VkQueryPoolCreateInfo pool_info{};
+    pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    pool_info.flags              = 0;
+    pool_info.queryType          = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+    pool_info.queryCount         = 1;
+    pool_info.pipelineStatistics = 0;
+    pool_info.pNext              = nullptr;
+
+    result = functions_.create_query_pool(device_, &pool_info, nullptr, &cmd_execute_obj_.query_pool_);
     GFXRECON_ASSERT(result == VK_SUCCESS);
 
     functions_.get_device_queue(device_, 0, 0, &cmd_execute_obj_.queue_);
@@ -475,13 +481,20 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
 { // Check whether the scratch with this original device address is already allocated and fits the size
     VkDeviceAddress capture_scratch_address = geometry_infos.scratchData.deviceAddress;
 
-    format::HandleId capture_id = format::kNullHandleId;
+    format::HandleId      capture_id            = format::kNullHandleId;
+    VkMemoryPropertyFlags memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     // When fastforwarding, the scratch buffers could be destroyed and not be recreated in state recreation
     const VulkanBufferInfo* original_scratch_entry =
         device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_scratch_address);
     if (original_scratch_entry)
     {
-        capture_id = original_scratch_entry->capture_id;
+        capture_id            = original_scratch_entry->capture_id;
+        memory_property_flags = original_scratch_entry->memory_property_flags;
+    }
+
+    if ((memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    {
+        memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     }
 
     auto scratch_entries = scratch_double_buffer_.scratches_current.find(capture_id);
@@ -503,7 +516,9 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
         else
         {
             const auto& new_scratch = scratch_entries->second.emplace_back(internal_buffer_manager_.CreateBuffer(
-                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+                scratch_size,
+                (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+                memory_property_flags));
             new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
             geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
         }
@@ -514,7 +529,9 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
             capture_id, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
 
         auto& new_scratch                        = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
-            scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+            scratch_size,
+            (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+            memory_property_flags));
         new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
         geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
     }

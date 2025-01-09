@@ -149,6 +149,8 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCmdCopyQueryPoolResults                     cmd_copy_query_pool_results{ nullptr };
         PFN_vkCmdPipelineBarrier                          cmd_pipeline_barrier{ nullptr };
         PFN_vkCreateQueryPool                             create_query_pool{ nullptr };
+        PFN_vkCmdResetQueryPool                           cmd_reset_query_pool{ nullptr };
+        PFN_vkDestroyQueryPool                            destroy_query_pool{ nullptr };
     };
 
     // This objects are internal and responsible for executing the state recreation meta commands
@@ -161,15 +163,18 @@ class VulkanAccelerationStructureBuilder
             {
                 free_command_buffers_(device_, pool_, 1, &command_buffer_);
                 destroy_command_pool_(device_, pool_, nullptr);
+                destroy_query_pool_(device_, query_pool_, nullptr);
             }
         }
         PFN_vkFreeCommandBuffers free_command_buffers_{ nullptr };
         PFN_vkDestroyCommandPool destroy_command_pool_{ nullptr };
+        PFN_vkDestroyQueryPool   destroy_query_pool_{ nullptr };
 
         VkDevice        device_{ VK_NULL_HANDLE };
         VkCommandPool   pool_{ VK_NULL_HANDLE };
         VkCommandBuffer command_buffer_{ VK_NULL_HANDLE };
         VkQueue         queue_{ VK_NULL_HANDLE };
+        VkQueryPool     query_pool_{ VK_NULL_HANDLE };
         bool            initialized_{ false };
     };
 

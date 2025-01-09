@@ -606,6 +606,7 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
     {
         GetAccelerationStructureBuilder(device_info)
             .OnInitBufferDataUpdateAddress(device_info, buffer_info, other_address_locations);
+        other_address_locations.clear();
     }
 }
 
