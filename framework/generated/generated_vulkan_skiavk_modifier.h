@@ -4462,6 +4462,7 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
     format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos);
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
     format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id);
+    virtual void ProcessFrameEndMarker(uint64_t frame_number) override;
 
   private:
     bool IsSkiaBlock(format::HandleId handle);
@@ -4469,6 +4470,7 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
   private:
     bool                                                                not_skiavk_instance = false;
     bool                                                                skiavk_instance     = false;
+    std::vector<uint64_t>                                               frames_to_be_removed;
     static std::vector<std::string>                                     app_name_array;
     std::unordered_map<uint64_t, bool>                                  skiavkindex2remove;
     std::unordered_map<format::HandleId, std::vector<format::HandleId>> skiavk_instance2physical_device;

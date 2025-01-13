@@ -557,4 +557,94 @@ bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_heade
     return true;
 }
 
+bool VulkanFileOptimizer::ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+{
+    if (marker_type != format::kEndMarker)
+    {
+        GFXRECON_LOG_ERROR("Skipping unrecognized frame marker with type %u", marker_type);
+        return FileTransformer::ProcessFrameMarker(block_header, marker_type);
+    }
+
+    uint64_t frame_number = 0;
+    bool     success      = ReadBytes(&frame_number, sizeof(frame_number));
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetCurrentBlockIndex(GetCurrentBlockIndex());
+    }
+
+    bool delete_current_call = false;
+
+    if (!success)
+    {
+        return false;
+    }
+
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        decoder.AddConsumer(modifier.get());
+        decode::DecodeAllocator::Begin();
+        decoder.DispatchFrameEndMarker(frame_number);
+        decode::DecodeAllocator::End();
+        decoder.RemoveConsumer(modifier.get());
+        delete_current_call |= modifier->GetDeleteCurrentCall();
+        modifier->AppendPreCalls(new_pre_calls);
+        modifier->AppendPostCalls(new_post_calls);
+    }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (!delete_current_call)
+    {
+        format::Marker marker;
+        marker.header       = block_header;
+        marker.marker_type  = marker_type;
+        marker.frame_number = frame_number - frames_removed;
+        if (!WriteBytes(&marker, sizeof(marker)))
+        {
+            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write frame marker data");
+            return false;
+        }
+    }
+    else
+    {
+        frames_removed++;
+    }
+
+    for (auto& new_call : new_post_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    return success;
+}
+
 GFXRECON_END_NAMESPACE(gfxrecon)
