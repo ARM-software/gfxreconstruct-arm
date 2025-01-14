@@ -1,112 +1,132 @@
-//#pragma once
+/*
+** Copyright (c) 2024 LunarG, Inc.
+** Copyright (c) 2024 Arm Limited and/or its affiliates <open-source-office@arm.com>
+**
+** Permission is hereby granted, free of charge, to any person obtaining a
+** copy of this software and associated documentation files (the "Software"),
+** to deal in the Software without restriction, including without limitation
+** the rights to use, copy, modify, merge, publish, distribute, sublicense,
+** and/or sell copies of the Software, and to permit persons to whom the
+** Software is furnished to do so, subject to the following conditions:
+**
+** The above copyright notice and this permission notice shall be included in
+** all copies or substantial portions of the Software.
+**
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+** IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+** FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+** AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+** DEALINGS IN THE SOFTWARE.
+*/
+
 #include "encode/vulkan_device_address_tracker.h"
-#include "encode/vulkan_capture_manager.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 
-void VulkanDeviceAddressTracker::TrackBufferDeviceAddress(format::HandleId id,
-                                                          uint64_t         buffer_size,
-                                                          VkDeviceAddress  address)
+VulkanDeviceAddressTracker::VulkanDeviceAddressTracker(VulkanDeviceAddressTracker&& other) noexcept :
+    VulkanDeviceAddressTracker()
 {
-    std::lock_guard lg(*this);
-    assert(address != 0);
-    format::AddressLocationInfo loc{};
-    loc.id               = id;
-    loc.original_address = address;
-    loc.size             = buffer_size;
-    tracked_objects[id]  = loc;
-}
-void VulkanDeviceAddressTracker::TrackAccelerationStructureDeviceAddress(format::HandleId id, VkDeviceAddress address)
-{
-    std::lock_guard lg(*this);
-    assert(address != 0);
-    format::AddressLocationInfo loc{};
-    loc.id               = id;
-    loc.original_address = address;
-    loc.adjusted_address = address;
-    tracked_objects[id]  = loc;
+    swap(*this, other);
 }
 
-void VulkanDeviceAddressTracker::StopTracking(format::HandleId object_id)
+VulkanDeviceAddressTracker& VulkanDeviceAddressTracker::operator=(VulkanDeviceAddressTracker other)
 {
-    tracked_objects.erase(object_id);
+    swap(*this, other);
+    return *this;
 }
 
-std::vector<format::AddressLocationInfo>
-VulkanDeviceAddressTracker::GetAddressesInMemoryRange(const std::vector<uint64_t>& ignored_usages,
-                                                      const DeviceMemoryWrapper*   memory,
-                                                      const void*                  start_address,
-                                                      size_t                       offset,
-                                                      size_t                       size)
+void swap(VulkanDeviceAddressTracker& lhs, VulkanDeviceAddressTracker& rhs) noexcept
 {
-    std::lock_guard lg(*this);
+    std::lock(lhs.mutex_, rhs.mutex_);
+    std::lock_guard lock_lhs(lhs.mutex_, std::adopt_lock);
+    std::lock_guard lock_rhs(rhs.mutex_, std::adopt_lock);
+    std::swap(lhs.buffer_addresses_, rhs.buffer_addresses_);
+    std::swap(lhs.acceleration_structure_addresses_, rhs.acceleration_structure_addresses_);
+}
 
-    if (tracked_objects.empty())
+void encode::VulkanDeviceAddressTracker::TrackBuffer(const vulkan_wrappers::BufferWrapper* wrapper)
+{
+    if (wrapper != nullptr && wrapper->handle != VK_NULL_HANDLE && wrapper->address != 0 && wrapper->size != 0)
     {
-        return {};
+        std::unique_lock lock(mutex_);
+        buffer_addresses_[wrapper->address] = { wrapper->handle, wrapper->size };
     }
+}
 
-    if (memory && !memory->bound_buffers.empty())
+void VulkanDeviceAddressTracker::RemoveBuffer(const vulkan_wrappers::BufferWrapper* wrapper)
+{
+    if (wrapper != nullptr)
     {
-        std::vector<BufferWrapper*> buffers;
-        buffers.reserve(memory->bound_buffers.size());
+        std::unique_lock lock(mutex_);
+        buffer_addresses_.erase(wrapper->address);
+    }
+}
 
-        for (auto& buf : memory->bound_buffers)
+void VulkanDeviceAddressTracker::TrackAccelerationStructure(
+    const vulkan_wrappers::AccelerationStructureKHRWrapper* wrapper)
+{
+    if (wrapper != nullptr && wrapper->handle != VK_NULL_HANDLE && wrapper->address != 0)
+    {
+        std::unique_lock lock(mutex_);
+        acceleration_structure_addresses_[wrapper->address] = wrapper->handle;
+    }
+}
+
+void VulkanDeviceAddressTracker::RemoveAccelerationStructure(
+    const vulkan_wrappers::AccelerationStructureKHRWrapper* wrapper)
+{
+    if (wrapper != nullptr)
+    {
+        std::unique_lock lock(mutex_);
+        acceleration_structure_addresses_.erase(wrapper->address);
+    }
+}
+
+VkBuffer VulkanDeviceAddressTracker::GetBufferByDeviceAddress(VkDeviceAddress device_address) const
+{
+    std::shared_lock lock(mutex_);
+
+    if (!buffer_addresses_.empty())
+    {
+        // find first address equal or greater
+        auto address_it = buffer_addresses_.lower_bound(device_address);
+
+        if (address_it == buffer_addresses_.end() || address_it->first > device_address)
         {
-            bool ignore = false;
-            for (auto usage : ignored_usages)
+            // not found
+            if (address_it == buffer_addresses_.begin())
             {
-                if ((buf->usage & usage) == usage)
-                {
-                    ignore = true;
-                    break;
-                }
+                return VK_NULL_HANDLE;
             }
-            if (!ignore)
-            {
-                buffers.push_back(buf);
-            }
-        }
 
-        if (buffers.empty())
+            // decrement iterator, now pointing to the first VkDeviceAddress that is lower than device_address
+            address_it--;
+        }
+        // found_address is lower or equal to device_address
+        const auto& [found_address, buffer_item] = *address_it;
+
+        if (device_address < found_address + buffer_item.size)
         {
-            return {};
+            return buffer_item.handle;
         }
     }
-
-    auto [min, max] =
-        std::minmax_element(tracked_objects.begin(), tracked_objects.end(), [](const auto& a, const auto& b) {
-            return a.second.original_address < b.second.original_address;
-        });
-
-    std::vector<format::AddressLocationInfo> locations;
-    const VkDeviceAddress                    min_addr = min->second.original_address;
-    const VkDeviceAddress                    max_addr = max->second.original_address + max->second.size;
-    uint64_t*                                start    = (uint64_t*)((uint8_t*)start_address + offset);
-    uint64_t*                                end      = (uint64_t*)((uint8_t*)start_address + offset + size);
-    for (int i = 0; i < size / sizeof(uint64_t); i++)
-    {
-        uint64_t*      ptr               = start + i;
-        const uint64_t value             = *ptr;
-        bool           value_is_in_range = value >= min_addr && value <= max_addr;
-        if (!value_is_in_range)
-        {
-            continue;
-        }
-        auto entry = std::find_if(tracked_objects.begin(), tracked_objects.end(), [value](auto& entry) {
-            return (value >= entry.second.original_address) &&
-                   (value <= entry.second.original_address + entry.second.size);
-        });
-
-        if (entry == tracked_objects.end())
-        {
-            continue;
-        }
-        entry->second.adjusted_address = value;
-        entry->second.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
-        locations.push_back(entry->second);
-    }
-    return locations;
+    return VK_NULL_HANDLE;
 }
+
+VkAccelerationStructureKHR
+VulkanDeviceAddressTracker::GetAccelerationStructureByDeviceAddress(VkDeviceAddress device_address) const
+{
+    std::shared_lock lock(mutex_);
+    auto             address_it = acceleration_structure_addresses_.find(device_address);
+    if (address_it != acceleration_structure_addresses_.end())
+    {
+        return address_it->second;
+    }
+    return VK_NULL_HANDLE;
+}
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

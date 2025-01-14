@@ -27,7 +27,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
-                                                         const PhysicalDeviceInfo*               physical_device_info,
+                                                         const VulkanPhysicalDeviceInfo*         physical_device_info,
                                                          VkDevice                                device,
                                                          VulkanResourceAllocator*                allocator,
                                                          const VkPhysicalDeviceMemoryProperties& memory_properties) :
@@ -60,7 +60,7 @@ void VulkanInternalBufferManager::AddEntry(
     }
 }
 
-void VulkanInternalBufferManager::SetBufferInfo(BufferInfo* buffer_info)
+void VulkanInternalBufferManager::SetBufferInfo(VulkanBufferInfo* buffer_info)
 {
     auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
         return entry->info_.handle == buffer_info->handle;
@@ -139,7 +139,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
     std::unique_ptr<BufferInfoWrapper> entry =
-        std::make_unique<BufferInfoWrapper>(BufferInfo(), allocator_, physical_device_info_);
+        std::make_unique<BufferInfoWrapper>(VulkanBufferInfo(), allocator_, physical_device_info_);
     entry->info_.allocator_data        = buffer_allocator_data;
     entry->info_.replay_address        = GetBufferDeviceAddress(buffer);
     entry->info_.handle                = buffer;

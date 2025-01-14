@@ -27,7 +27,7 @@
 #include "decode/vulkan_resource_allocator.h"
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/vulkan_object_info_table.h"
-#include "decode/vulkan_buffer_tracker.h"
+#include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_internal_buffer_manager.h"
 #include "util/defines.h"
 
@@ -51,18 +51,18 @@ class VulkanMicromapBuilder
 {
   public:
     VulkanMicromapBuilder(const encode::VulkanDeviceTable*        device_table,
-                          const PhysicalDeviceInfo*               physical_device_info,
+                          const VulkanPhysicalDeviceInfo*         physical_device_info,
                           VkDevice                                device,
                           VulkanResourceAllocator*                allocator,
                           const VkPhysicalDeviceMemoryProperties& properties,
-                          VulkanBufferTracker*                    buffer_tracker);
+                          VulkanDeviceAddressTracker&             device_address_tracker);
 
-    void OnGetMicromapBuildSizes(const DeviceInfo*                   device_info,
+    void OnGetMicromapBuildSizes(const VulkanDeviceInfo*             device_info,
                                  VkAccelerationStructureBuildTypeKHR buildType,
                                  VkMicromapBuildInfoEXT*             info,
                                  VkMicromapBuildSizesInfoEXT*        size_info);
 
-    VkResult OnCreateMicromap(const DeviceInfo*            device_info,
+    VkResult OnCreateMicromap(const VulkanDeviceInfo*      device_info,
                               VkMicromapCreateInfoEXT*     info,
                               const VkAllocationCallbacks* pAllocator,
                               format::HandleId             capture_id,
@@ -82,19 +82,20 @@ class VulkanMicromapBuilder
     // called before command gets executed
     // the query pool results contain the MM compacted sizes
     // inject duplicate of this command that puts the results in internal buffer
-    void OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info, const QueryPoolInfo* query_pool_info);
+    void OnCmdCopyQueryPoolResults(const VulkanCommandBufferInfo* command_buffer_info,
+                                   const VulkanQueryPoolInfo*     query_pool_info);
 
     // called before command gets executed
     // inject duplicate of this command to retrieve compact sizes
-    void OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info);
+    void OnGetQueryPoolResults(const VulkanDeviceInfo* device_info, const VulkanQueryPoolInfo* query_pool_info);
 
-    static void OnCmdBuildAccStrHandling(VulkanBufferTracker*                         buffer_tracker,
+    static void OnCmdBuildAccStrHandling(VulkanDeviceAddressTracker&                  device_address_tracker,
                                          uint32_t                                     info_count,
                                          VkAccelerationStructureBuildGeometryInfoKHR* infos);
 
-    void OnDestroyBuffer(const BufferInfo* buffer_info);
+    void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
-    void OnDestroyMicromap(const MicromapEXTInfo* micromap_info);
+    void OnDestroyMicromap(const VulkanMicromapEXTInfo* micromap_info);
 
   private:
     void UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_info);
@@ -111,11 +112,11 @@ class VulkanMicromapBuilder
         PFN_vkCmdPipelineBarrier       cmd_pipeline_barrier{ nullptr };
     };
 
-    VulkanResourceAllocator*    allocator_;
-    Functions                   functions_;
-    VulkanBufferTracker*        buffer_tracker_;
-    VulkanInternalBufferManager internal_buffer_manager_;
-    const PhysicalDeviceInfo*   physical_device_info_;
+    VulkanResourceAllocator*        allocator_;
+    Functions                       functions_;
+    VulkanDeviceAddressTracker&     device_address_tracker_;
+    VulkanInternalBufferManager     internal_buffer_manager_;
+    const VulkanPhysicalDeviceInfo* physical_device_info_;
 
     struct MicromapData
     {

@@ -39,14 +39,14 @@ class VulkanInternalBufferManager
   public:
     struct BufferInfoWrapper
     {
-        BufferInfo                info_;
-        DeviceMemoryInfo          memory_info_;
-        VulkanResourceAllocator*  allocator_;
-        const PhysicalDeviceInfo* physical_device_info_;
+        VulkanBufferInfo                info_;
+        VulkanDeviceMemoryInfo          memory_info_;
+        VulkanResourceAllocator*        allocator_;
+        const VulkanPhysicalDeviceInfo* physical_device_info_;
 
-        BufferInfoWrapper(BufferInfo                buffer_info,
-                          VulkanResourceAllocator*  allocator,
-                          const PhysicalDeviceInfo* physical_device_info) :
+        BufferInfoWrapper(VulkanBufferInfo                buffer_info,
+                          VulkanResourceAllocator*        allocator,
+                          const VulkanPhysicalDeviceInfo* physical_device_info) :
             info_(buffer_info),
             allocator_(allocator), physical_device_info_(physical_device_info)
         {}
@@ -60,7 +60,7 @@ class VulkanInternalBufferManager
     };
 
     VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
-                                const PhysicalDeviceInfo*               physical_device_info,
+                                const VulkanPhysicalDeviceInfo*         physical_device_info,
                                 VkDevice                                device,
                                 VulkanResourceAllocator*                allocator,
                                 const VkPhysicalDeviceMemoryProperties& properties);
@@ -69,7 +69,7 @@ class VulkanInternalBufferManager
 
     void AddEntry(std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>& buffer_entry);
 
-    void SetBufferInfo(BufferInfo* buffer_info);
+    void SetBufferInfo(VulkanBufferInfo* buffer_info);
 
     std::unique_ptr<BufferInfoWrapper>
     CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags mem_prop_flags = {});
@@ -90,7 +90,7 @@ class VulkanInternalBufferManager
     VkDevice                                        device_;
     VulkanResourceAllocator*                        allocator_;
     VkPhysicalDeviceMemoryProperties                physical_device_memory_properties_;
-    const PhysicalDeviceInfo*                       physical_device_info_;
+    const VulkanPhysicalDeviceInfo*                 physical_device_info_;
     std::vector<std::unique_ptr<BufferInfoWrapper>> buffers_;
 };
 

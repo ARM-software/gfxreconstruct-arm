@@ -22,6 +22,9 @@
  ** DEALINGS IN THE SOFTWARE.
  */
 
+#include "encode/vulkan_handle_wrappers.h"
+#include "vulkan/vulkan_core.h"
+#include <cstdint>
 #include PROJECT_VERSION_HEADER_FILE
 
 #include "encode/struct_pointer_encoder.h"
@@ -30,6 +33,7 @@
 
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_state_writer.h"
+#include "encode/vulkan_capture_common.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_struct_handle_wrappers.h"
 #include "generated/generated_vulkan_api_call_encoders.h"
@@ -104,9 +108,36 @@ void VulkanCaptureManager::DestroyInstance()
 
 void VulkanCaptureManager::WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id)
 {
-    VulkanStateWriter state_writer(file_stream, GetCompressor(), thread_id, [] { return GetUniqueId(); });
-    uint64_t          n_blocks = state_tracker_->WriteState(&state_writer, GetCurrentFrame());
+    uint64_t n_blocks = state_tracker_->WriteState(
+        file_stream, thread_id, [] { return GetUniqueId(); }, GetCompressor(), GetCurrentFrame(), nullptr, nullptr);
+
     common_manager_->IncrementBlockIndex(n_blocks);
+}
+
+void VulkanCaptureManager::WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                          format::ThreadId        thread_id,
+                                                          util::FileOutputStream* asset_file_stream,
+                                                          const std::string*      asset_file_name)
+{
+    uint64_t n_blocks = state_tracker_->WriteState(
+        file_stream,
+        thread_id,
+        [] { return GetUniqueId(); },
+        GetCompressor(),
+        GetCurrentFrame(),
+        asset_file_stream,
+        asset_file_name);
+
+    common_manager_->IncrementBlockIndex(n_blocks);
+}
+
+void VulkanCaptureManager::WriteAssets(util::FileOutputStream* asset_file_stream,
+                                       const std::string*      asset_file_name,
+                                       format::ThreadId        thread_id)
+{
+    assert(state_tracker_ != nullptr);
+    state_tracker_->WriteAssets(
+        asset_file_stream, asset_file_name, thread_id, [] { return GetUniqueId(); }, GetCompressor());
 }
 
 void VulkanCaptureManager::SetLayerFuncs(PFN_vkCreateInstance                       create_instance,
@@ -199,74 +230,6 @@ void VulkanCaptureManager::WriteResizeWindowCmd2(format::HandleId              s
         }
 
         WriteToFile(&resize_cmd2, sizeof(resize_cmd2));
-    }
-}
-
-void VulkanCaptureManager::WriteCreateHardwareBufferCmd(format::HandleId                                    memory_id,
-                                                        AHardwareBuffer*                                    buffer,
-                                                        const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
-{
-    if (IsCaptureModeWrite())
-    {
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-        assert(buffer != nullptr);
-
-        format::CreateHardwareBufferCommandHeader create_buffer_cmd;
-
-        auto thread_data = GetThreadData();
-        assert(thread_data != nullptr);
-
-        create_buffer_cmd.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
-        create_buffer_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(create_buffer_cmd);
-        create_buffer_cmd.meta_header.meta_data_id      = format::MakeMetaDataId(
-            format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kCreateHardwareBufferCommand);
-        create_buffer_cmd.thread_id = thread_data->thread_id_;
-        create_buffer_cmd.memory_id = memory_id;
-        create_buffer_cmd.buffer_id = reinterpret_cast<uint64_t>(buffer);
-
-        // Get AHB description data.
-        AHardwareBuffer_Desc ahb_desc = {};
-        AHardwareBuffer_describe(buffer, &ahb_desc);
-
-        create_buffer_cmd.format = ahb_desc.format;
-        create_buffer_cmd.width  = ahb_desc.width;
-        create_buffer_cmd.height = ahb_desc.height;
-        create_buffer_cmd.stride = ahb_desc.stride;
-        create_buffer_cmd.usage  = ahb_desc.usage;
-        create_buffer_cmd.layers = ahb_desc.layers;
-
-        size_t planes_size = 0;
-
-        if (plane_info.empty())
-        {
-            create_buffer_cmd.planes = 0;
-        }
-        else
-        {
-            create_buffer_cmd.planes = static_cast<uint32_t>(plane_info.size());
-            // Update size of packet with size of plane info.
-            planes_size = sizeof(plane_info[0]) * plane_info.size();
-            create_buffer_cmd.meta_header.block_header.size += planes_size;
-        }
-
-        {
-            if (planes_size > 0)
-            {
-                CombineAndWriteToFile(
-                    { { &create_buffer_cmd, sizeof(create_buffer_cmd) }, { plane_info.data(), planes_size } });
-            }
-            else
-            {
-                WriteToFile(&create_buffer_cmd, sizeof(create_buffer_cmd));
-            }
-        }
-#else
-        GFXRECON_UNREFERENCED_PARAMETER(memory_id);
-        GFXRECON_UNREFERENCED_PARAMETER(buffer);
-        GFXRECON_UNREFERENCED_PARAMETER(plane_info);
-
-        GFXRECON_LOG_ERROR("Skipping create AHardwareBuffer command write for unsupported platform");
-#endif
     }
 }
 
@@ -900,9 +863,11 @@ VkResult VulkanCaptureManager::OverrideCreateBuffer(VkDevice                    
                                              vulkan_wrappers::BufferWrapper>(
             device, vulkan_wrappers::NoParentWrapper::kHandleValue, pBuffer, GetUniqueId);
 
-        auto buffer_wrapper          = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(*pBuffer);
-        buffer_wrapper->created_size = modified_create_info->size;
-        buffer_wrapper->usage        = pCreateInfo->usage;
+        auto buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(*pBuffer);
+        GFXRECON_ASSERT(buffer_wrapper)
+        buffer_wrapper->size  = modified_create_info->size;
+        buffer_wrapper->usage = pCreateInfo->usage;
+
         if (uses_address)
         {
             // If the buffer has a device address, write the 'set buffer address' command before writing the API call to
@@ -967,27 +932,22 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
                                                              const VkAllocationCallbacks*                pAllocator,
                                                              VkAccelerationStructureKHR* pAccelerationStructureKHR)
 {
-    auto                     handle_unwrap_memory = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
-    auto                     device_wrapper       = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
-    VkDevice                 device_unwrapped     = device_wrapper->handle;
-    const VulkanDeviceTable* device_table         = vulkan_wrappers::GetDeviceTable(device);
-    const VkAccelerationStructureCreateInfoKHR* pCreateInfo_unwrapped =
-        vulkan_wrappers::UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
+    auto                     device_wrapper   = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+    VkDevice                 device_unwrapped = device_wrapper->handle;
+    const VulkanDeviceTable* device_table     = vulkan_wrappers::GetDeviceTable(device);
 
-    VkResult result;
+    std::unique_ptr<uint8_t[]>            struct_memory;
+    VkAccelerationStructureCreateInfoKHR* modified_create_info =
+        vulkan_trackers::TrackStructs(pCreateInfo, 1, struct_memory);
+
     if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
     {
         // Add flag to allow for opaque address capture
-        VkAccelerationStructureCreateInfoKHR modified_create_info = (*pCreateInfo_unwrapped);
-        modified_create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
-        result = device_table->CreateAccelerationStructureKHR(
-            device_unwrapped, &modified_create_info, pAllocator, pAccelerationStructureKHR);
+        modified_create_info->createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
     }
-    else
-    {
-        result = device_table->CreateAccelerationStructureKHR(
-            device_unwrapped, pCreateInfo_unwrapped, pAllocator, pAccelerationStructureKHR);
-    }
+
+    VkResult result = device_table->CreateAccelerationStructureKHR(
+        device_unwrapped, modified_create_info, pAllocator, pAccelerationStructureKHR);
 
     if ((result == VK_SUCCESS) && (pAccelerationStructureKHR != nullptr))
     {
@@ -995,36 +955,32 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
                                              vulkan_wrappers::NoParentWrapper,
                                              vulkan_wrappers::AccelerationStructureKHRWrapper>(
             device, vulkan_wrappers::NoParentWrapper::kHandleValue, pAccelerationStructureKHR, GetUniqueId);
+
         auto accel_struct_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
 
         VkAccelerationStructureDeviceAddressInfoKHR address_info{
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
         };
+
+        // save address to use as pCreateInfo->deviceAddress during replay
         VkDeviceAddress address =
             device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
 
+        accel_struct_wrapper->device  = device_wrapper;
+        accel_struct_wrapper->address = address;
+        accel_struct_wrapper->type    = modified_create_info->type;
+
+        if (IsCaptureModeTrack())
+        {
+            state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
+        }
+
         if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
         {
-            auto accel_struct_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(
-                *pAccelerationStructureKHR);
-
-            VkAccelerationStructureDeviceAddressInfoKHR address_info{
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
-            };
-
-            // save address to use as pCreateInfo->deviceAddress during replay
             WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
-
-            if (IsCaptureModeTrack())
-            {
-                state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
-            }
         }
-        accel_struct_wrapper->device = device_wrapper;
-        accel_struct_wrapper->type_  = pCreateInfo_unwrapped->type;
     }
-
     return result;
 }
 
@@ -1065,20 +1021,20 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
         VkDeviceAddress           address =
             device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
 
+        micromap_wrapper->device = device_wrapper;
+        micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
+
+        if (IsCaptureModeTrack())
+        {
+            state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+        }
+
         if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
         {
             // save address to use as pCreateInfo->deviceAddress during replay
             WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
-
-            if (IsCaptureModeTrack())
-            {
-                state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
-            }
         }
-        micromap_wrapper->device = device_wrapper;
-        micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
     }
-
     return result;
 }
 
@@ -1569,12 +1525,17 @@ VulkanCaptureManager::OverrideCreateRayTracingPipelinesKHR(VkDevice             
         {
             auto pipeline_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[i]);
 
+            // We need to set device_id here because some hardware may not have the feature
+            // rayTracingPipelineShaderGroupHandleCaptureReplay so the device_id cannot be set by
+            // VulkanStateTracker::TrackRayTracingShaderGroupHandles
+            pipeline_wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
+            pipeline_wrapper->num_shader_group_handles = pCreateInfos[i].groupCount;
+
             if (deferred_operation_wrapper)
             {
                 // We need to set device_id here because some hardware may not have the feature
                 // rayTracingPipelineShaderGroupHandleCaptureReplay so the device_id cannot be set by
                 // VulkanStateTracker::TrackRayTracingShaderGroupHandles
-                pipeline_wrapper->device    = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
                 pipeline_wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
                 pipeline_wrapper->deferred_operation.handle_id         = deferred_operation_wrapper->handle_id;
                 pipeline_wrapper->deferred_operation.create_call_id    = deferred_operation_wrapper->create_call_id;
@@ -1662,7 +1623,6 @@ void VulkanCaptureManager::DeferredOperationPostProcess(VkDevice               d
                 // We need to set device_id here because some hardware may not have the feature
                 // rayTracingPipelineShaderGroupHandleCaptureReplay so the device_id cannot be set by
                 // VulkanStateTracker::TrackRayTracingShaderGroupHandles
-                pipeline_wrapper->device    = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
                 pipeline_wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
                 pipeline_wrapper->deferred_operation.handle_id         = deferred_operation_wrapper->handle_id;
                 pipeline_wrapper->deferred_operation.create_call_id    = deferred_operation_wrapper->create_call_id;
@@ -2175,179 +2135,51 @@ VulkanCaptureManager::FindAllocateMemoryExtensions(const VkMemoryAllocateInfo* a
     return import_ahb_info;
 }
 
-void VulkanCaptureManager::ProcessReferenceToAndroidHardwareBuffer(VkDevice device, AHardwareBuffer* hardware_buffer)
+void VulkanCaptureManager::ProcessHardwareBuffer(format::ThreadId thread_id,
+                                                 AHardwareBuffer* hardware_buffer,
+                                                 VkDevice         device)
 {
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-    assert(hardware_buffer != nullptr);
+    auto entry = hardware_buffers_.find(hardware_buffer);
+    if (entry != hardware_buffers_.end())
+    {
+        return;
+    }
+
+    format::HandleId memory_id = GetUniqueId();
+
+    HardwareBufferInfo& ahb_info = hardware_buffers_[hardware_buffer];
+    ahb_info.memory_id           = memory_id;
+    ahb_info.reference_count     = 0;
+
     auto     device_wrapper   = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
     VkDevice device_unwrapped = device_wrapper->handle;
     auto     device_table     = vulkan_wrappers::GetDeviceTable(device);
 
-    auto entry = hardware_buffers_.find(hardware_buffer);
-    if (entry == hardware_buffers_.end())
+    // Query the AHB size
+    VkAndroidHardwareBufferPropertiesANDROID properties = {
+        VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID
+    };
+    properties.pNext = nullptr;
+
+    VkResult vk_result =
+        device_table->GetAndroidHardwareBufferPropertiesANDROID(device_unwrapped, hardware_buffer, &properties);
+
+    if (vk_result == VK_SUCCESS)
     {
-        // If this is the first device memory object to reference the hardware buffer, write a buffer creation
-        // command to the capture file and setup memory tracking.
-
-        std::vector<format::HardwareBufferPlaneInfo> plane_info;
-
-        AHardwareBuffer_Desc desc;
-        AHardwareBuffer_describe(hardware_buffer, &desc);
-
-        if ((desc.usage & AHARDWAREBUFFER_USAGE_CPU_READ_MASK) != 0)
-        {
-            void* data   = nullptr;
-            int   result = -1;
-
-            // The multi-plane functions are declared for API 26, but are only available to link with API 29.  So, this
-            // could be turned into a run-time check dependent on dlsym returning a valid pointer for
-            // AHardwareBuffer_lockPlanes.
-#if __ANDROID_API__ >= 29
-            AHardwareBuffer_Planes ahb_planes;
-            result = AHardwareBuffer_lockPlanes(
-                hardware_buffer, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN, -1, nullptr, &ahb_planes);
-            if (result == 0)
-            {
-                data = ahb_planes.planes[0].data;
-
-                for (uint32_t i = 0; i < ahb_planes.planeCount; ++i)
-                {
-                    format::HardwareBufferPlaneInfo ahb_plane_info;
-                    ahb_plane_info.offset =
-                        reinterpret_cast<uint8_t*>(ahb_planes.planes[i].data) - reinterpret_cast<uint8_t*>(data);
-                    ahb_plane_info.pixel_stride = ahb_planes.planes[i].pixelStride;
-                    ahb_plane_info.row_pitch    = ahb_planes.planes[i].rowStride;
-                    plane_info.emplace_back(std::move(ahb_plane_info));
-                }
-            }
-            else
-            {
-                GFXRECON_LOG_WARNING("AHardwareBuffer_lockPlanes failed: AHardwareBuffer_lock will be used instead");
-            }
-#endif
-
-            // Only store buffer IDs and reference count if a creation command is written to the capture file.
-            format::HandleId memory_id = GetUniqueId();
-
-            HardwareBufferInfo& ahb_info = hardware_buffers_[hardware_buffer];
-            ahb_info.memory_id           = memory_id;
-            ahb_info.reference_count     = 0;
-
-            // Write CreateHardwareBufferCmd with or without the AHB payload
-            WriteCreateHardwareBufferCmd(memory_id, hardware_buffer, plane_info);
-
-            // Query the AHB size
-            VkAndroidHardwareBufferPropertiesANDROID properties = {
-                VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID
-            };
-            properties.pNext = nullptr;
-
-            VkResult vk_result =
-                device_table->GetAndroidHardwareBufferPropertiesANDROID(device_unwrapped, hardware_buffer, &properties);
-
-            if (vk_result == VK_SUCCESS)
-            {
-                const size_t ahb_size = properties.allocationSize;
-                assert(ahb_size);
-
-                // If AHardwareBuffer_lockPlanes() failed (or is not available) try AHardwareBuffer_lock()
-                if (result != 0)
-                {
-                    result =
-                        AHardwareBuffer_lock(hardware_buffer, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN, -1, nullptr, &data);
-                }
-
-                if (result == 0 && data != nullptr)
-                {
-                    WriteFillMemoryCmd(memory_id, 0, ahb_size, data);
-
-                    // Track the memory with the PageGuardManager
-                    if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
-                         GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
-                        GetPageGuardTrackAhbMemory())
-                    {
-                        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, ahb_size);
-
-                        util::PageGuardManager* manager = util::PageGuardManager::Get();
-                        assert(manager != nullptr);
-
-                        manager->AddTrackedMemory(memory_id,
-                                                  data,
-                                                  0,
-                                                  static_cast<size_t>(ahb_size),
-                                                  util::PageGuardManager::kNullShadowHandle,
-                                                  false,  // No shadow memory for the imported AHB memory.
-                                                  false); // Write watch is not supported for this case.
-                    }
-
-                    result = AHardwareBuffer_unlock(hardware_buffer, nullptr);
-                    if (result != 0)
-                    {
-                        GFXRECON_LOG_ERROR("AHardwareBuffer_unlock failed");
-                    }
-                }
-                else
-                {
-                    GFXRECON_LOG_ERROR(
-                        "AHardwareBuffer_lock failed: hardware buffer data will be omitted from the capture file");
-
-                    // Dump zeros for AHB payload.
-                    std::vector<uint8_t> zeros(ahb_size, 0);
-                    WriteFillMemoryCmd(memory_id, 0, ahb_size, zeros.data());
-                }
-            }
-            else
-            {
-                GFXRECON_LOG_ERROR(
-                    "GetAndroidHardwareBufferPropertiesANDROID failed: hardware buffer data will be omitted "
-                    "from the capture file");
-
-                // In case AHardwareBuffer_lockPlanes() succeeded
-                if (result == 0)
-                {
-                    result = AHardwareBuffer_unlock(hardware_buffer, nullptr);
-                    if (result != 0)
-                    {
-                        GFXRECON_LOG_ERROR("AHardwareBuffer_unlock failed");
-                    }
-                }
-            }
-        }
-        else
-        {
-            // The AHB is not CPU-readable
-            // Only store buffer IDs and reference count if a creation command is written to the capture file.
-            format::HandleId memory_id = GetUniqueId();
-
-            HardwareBufferInfo& ahb_info = hardware_buffers_[hardware_buffer];
-            ahb_info.memory_id           = memory_id;
-            ahb_info.reference_count     = 0;
-
-            WriteCreateHardwareBufferCmd(memory_id, hardware_buffer, plane_info);
-
-            GFXRECON_LOG_WARNING("AHardwareBuffer cannot be read: hardware buffer data will be omitted "
-                                 "from the capture file");
-
-            VkAndroidHardwareBufferPropertiesANDROID properties = {
-                VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID
-            };
-            properties.pNext = nullptr;
-
-            VkResult vk_result =
-                device_table->GetAndroidHardwareBufferPropertiesANDROID(device_unwrapped, hardware_buffer, &properties);
-
-            if (vk_result == VK_SUCCESS)
-            {
-                const size_t ahb_size = properties.allocationSize;
-
-                // Dump zeros for AHB payload.
-                std::vector<uint8_t> zeros(ahb_size, 0);
-                WriteFillMemoryCmd(memory_id, 0, zeros.size(), zeros.data());
-            }
-        }
+        const size_t ahb_size = properties.allocationSize;
+        assert(ahb_size);
+        CommonProcessHardwareBuffer(thread_id, memory_id, hardware_buffer, ahb_size, this, nullptr);
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("GetAndroidHardwareBufferPropertiesANDROID failed: hardware buffer data will be omitted "
+                           "from the capture file");
     }
 #else
+    GFXRECON_UNREFERENCED_PARAMETER(thread_id);
     GFXRECON_UNREFERENCED_PARAMETER(hardware_buffer);
+    GFXRECON_UNREFERENCED_PARAMETER(device);
 #endif
 }
 
@@ -2361,7 +2193,10 @@ void VulkanCaptureManager::ProcessImportAndroidHardwareBuffer(VkDevice         d
     auto memory_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
     assert((memory_wrapper != nullptr) && (hardware_buffer != nullptr));
 
-    ProcessReferenceToAndroidHardwareBuffer(device, hardware_buffer);
+    auto thread_data = GetThreadData();
+    assert(thread_data != nullptr);
+
+    ProcessHardwareBuffer(thread_data->thread_id_, hardware_buffer, device);
     auto entry = hardware_buffers_.find(hardware_buffer);
     GFXRECON_ASSERT(entry != hardware_buffers_.end());
 
@@ -2591,7 +2426,8 @@ void VulkanCaptureManager::PostProcess_vkMapMemory(VkResult         result,
                     else if (IsPageGuardMemoryModeShadowPersistent() &&
                              (wrapper->shadow_allocation == util::PageGuardManager::kNullShadowHandle))
                     {
-                        wrapper->shadow_allocation = manager->AllocatePersistentShadowMemory(static_cast<size_t>(size));
+                        wrapper->shadow_allocation =
+                            manager->AllocatePersistentShadowMemory(static_cast<size_t>(wrapper->allocation_size));
                     }
 
                     // Return the pointer provided by the pageguard manager, which may be a pointer to shadow memory,
@@ -2719,6 +2555,22 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
 
     if (wrapper->mapped_data != nullptr)
     {
+        // Make sure state tracker's TrackMappedMemory is called before ProcessMemoryEntry is called which resets
+        // pages status
+        if (IsCaptureModeTrack())
+        {
+            assert(state_tracker_ != nullptr);
+            state_tracker_->TrackMappedMemory(device, memory, nullptr, 0, 0, 0);
+        }
+        else
+        {
+            // Perform subset of the state tracking performed by VulkanStateTracker::TrackMappedMemory, only storing
+            // values needed for non-tracking capture.
+            wrapper->mapped_data   = nullptr;
+            wrapper->mapped_offset = 0;
+            wrapper->mapped_size   = 0;
+        }
+
         if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
         {
@@ -2941,6 +2793,14 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptu
     GFXRECON_UNREFERENCED_PARAMETER(pSubmits);
 
     ProcessFenceSubmit(fence);
+
+    // This must be done before QueueSubmitWriteFillMemoryCmd is called
+    // and tracked mapped memory regions are resetted
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackSubmission(submitCount, pSubmits);
+    }
+
     QueueSubmitWriteFillMemoryCmd();
 
     PreQueueSubmit(current_lock);
@@ -2977,6 +2837,14 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit2(
     GFXRECON_UNREFERENCED_PARAMETER(pSubmits);
 
     ProcessFenceSubmit(fence);
+
+    // This must be done before QueueSubmitWriteFillMemoryCmd is called
+    // and tracked mapped memory regions are resetted
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackSubmission(submitCount, pSubmits);
+    }
+
     QueueSubmitWriteFillMemoryCmd();
 
     PreQueueSubmit(current_lock);
@@ -3044,7 +2912,7 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd()
     }
 }
 
-void VulkanCaptureManager::PreProcess_vkCreateDescriptorUpdateTemplate(
+void VulkanCaptureManager::PostProcess_vkCreateDescriptorUpdateTemplate(
     VkResult                                    result,
     VkDevice                                    device,
     const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
@@ -3060,7 +2928,7 @@ void VulkanCaptureManager::PreProcess_vkCreateDescriptorUpdateTemplate(
     }
 }
 
-void VulkanCaptureManager::PreProcess_vkCreateDescriptorUpdateTemplateKHR(
+void VulkanCaptureManager::PostProcess_vkCreateDescriptorUpdateTemplateKHR(
     VkResult                                    result,
     VkDevice                                    device,
     const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
@@ -3083,10 +2951,10 @@ void VulkanCaptureManager::PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress 
     if (address != 0)
     {
         BufferWrapper* buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pInfo->buffer);
-        address_tracker.TrackBufferDeviceAddress(buffer_wrapper->handle_id, buffer_wrapper->created_size, address);
+        buffer_wrapper->address       = address;
         if (IsCaptureModeTrack())
         {
-            state_tracker_->TrackGetBufferDeviceAddress(address, pInfo);
+            state_tracker_->TrackBufferDeviceAddress(device, buffer_wrapper->handle, address);
         }
     }
 }
@@ -3153,9 +3021,13 @@ void VulkanCaptureManager::PreProcess_vkGetAndroidHardwareBufferPropertiesANDROI
     GFXRECON_UNREFERENCED_PARAMETER(pProperties);
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
     auto device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+
+    auto thread_data = GetThreadData();
+    assert(thread_data != nullptr);
+
     if (hardware_buffer != nullptr)
     {
-        ProcessReferenceToAndroidHardwareBuffer(device, const_cast<AHardwareBuffer*>(hardware_buffer));
+        ProcessHardwareBuffer(thread_data->thread_id_, const_cast<AHardwareBuffer*>(hardware_buffer), device);
     }
 #else
     GFXRECON_UNREFERENCED_PARAMETER(device);
@@ -3358,16 +3230,6 @@ void VulkanCaptureManager::PreProcess_vkBindImageMemory2(VkDevice               
     }
 }
 
-void VulkanCaptureManager::PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice                             device,
-                                                                    const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(device);
-    if (IsCaptureModeTrack())
-    {
-        state_tracker_->TrackSetDebugUtilsName(VulkanCaptureManager::GetUniqueId(), device, pNameInfo);
-    }
-}
-
 template <typename WrapperType>
 void SetObjectName(VkDevice device, typename WrapperType::HandleType handle)
 {
@@ -3507,11 +3369,810 @@ void VulkanCaptureManager::PostProcess_vkCreateShaderModule(VkResult            
     if (result == VK_SUCCESS)
     {
         graphics::vulkan_check_buffer_references(pCreateInfo->pCode, pCreateInfo->codeSize);
+
+        vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
+            vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(*pShaderModule);
+        if (shader_wrapper != nullptr)
+        {
+            gfxrecon::util::SpirVParsingUtil spirv_util;
+            if (!spirv_util.SPIRVReflectPerformReflectionOnShaderModule(
+                    pCreateInfo->codeSize, pCreateInfo->pCode, shader_wrapper->used_descriptors_info))
+            {
+                GFXRECON_LOG_WARNING("Reflection on shader %" PRIu64 "failed", shader_wrapper->handle_id);
+            }
+        }
     }
 
     if (common_manager_->debug_set_objects_name_)
     {
         SetObjectName<ShaderModuleWrapper>(device, *pShaderModule);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBindPipeline(VkCommandBuffer     commandBuffer,
+                                                         VkPipelineBindPoint pipelineBindPoint,
+                                                         VkPipeline          pipeline)
+{
+    if (commandBuffer == orig_cmd_buf_)
+    {
+        CmdBindPipeline(target_cmd_buf_, pipelineBindPoint, pipeline);
+    }
+    if (commandBuffer == target_cmd_buf_)
+    {
+        CmdBindPipeline(tail_cmd_buf_, pipelineBindPoint, pipeline);
+    }
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCreateGraphicsPipelines(VkResult                            result,
+                                                                 VkDevice                            device,
+                                                                 VkPipelineCache                     pipelineCache,
+                                                                 uint32_t                            createInfoCount,
+                                                                 const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                                                 const VkAllocationCallbacks*        pAllocator,
+                                                                 VkPipeline*                         pPipelines)
+{
+    if (common_manager_->debug_set_objects_name_)
+    {
+        SetObjectName<PipelineWrapper>(device, *pPipelines);
+    }
+
+    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
+    {
+        for (uint32_t p = 0; p < createInfoCount; ++p)
+        {
+            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
+            assert(ppl_wrapper != nullptr);
+
+            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
+            if (binary_info == nullptr || !binary_info->binaryCount)
+            {
+                for (uint32_t s = 0; s < pCreateInfos[p].stageCount; ++s)
+                {
+                    const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
+                        vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(
+                            pCreateInfos[p].pStages[s].module);
+
+                    if (shader_wrapper != nullptr)
+                    {
+                        ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCreateComputePipelines(VkResult                           result,
+                                                                VkDevice                           device,
+                                                                VkPipelineCache                    pipelineCache,
+                                                                uint32_t                           createInfoCount,
+                                                                const VkComputePipelineCreateInfo* pCreateInfos,
+                                                                const VkAllocationCallbacks*       pAllocator,
+                                                                VkPipeline*                        pPipelines)
+{
+    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
+    {
+        for (uint32_t p = 0; p < createInfoCount; ++p)
+        {
+            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
+            assert(ppl_wrapper != nullptr);
+
+            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
+            if (binary_info == nullptr || !binary_info->binaryCount)
+            {
+                const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
+                    vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(pCreateInfos[p].stage.module);
+
+                if (shader_wrapper != nullptr)
+                {
+                    ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
+                }
+            }
+        }
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCreateRayTracingPipelinesKHR(
+    VkResult                                 result,
+    VkDevice                                 device,
+    VkDeferredOperationKHR                   deferredOperation,
+    VkPipelineCache                          pipelineCache,
+    uint32_t                                 createInfoCount,
+    const VkRayTracingPipelineCreateInfoKHR* pCreateInfos,
+    const VkAllocationCallbacks*             pAllocator,
+    VkPipeline*                              pPipelines)
+{
+    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
+    {
+        for (uint32_t p = 0; p < createInfoCount; ++p)
+        {
+            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
+            assert(ppl_wrapper != nullptr);
+
+            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
+            if (binary_info == nullptr || !binary_info->binaryCount)
+            {
+                for (uint32_t s = 0; s < pCreateInfos[p].stageCount; ++s)
+                {
+                    const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
+                        vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(
+                            pCreateInfos[p].pStages[s].module);
+
+                    if (shader_wrapper != nullptr)
+                    {
+                        ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDraw(VkCommandBuffer commandBuffer,
+                                                 uint32_t        vertexCount,
+                                                 uint32_t        instanceCount,
+                                                 uint32_t        firstVertex,
+                                                 uint32_t        firstInstance)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndexed(VkCommandBuffer commandBuffer,
+                                                        uint32_t        indexCount,
+                                                        uint32_t        instanceCount,
+                                                        uint32_t        firstIndex,
+                                                        int32_t         vertexOffset,
+                                                        uint32_t        firstInstance)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndexed(
+            commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndirect(
+    VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndirect(commandBuffer, buffer, offset, drawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndexedIndirect(
+    VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndexedIndirect(commandBuffer, buffer, offset, drawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndirectCount(VkCommandBuffer commandBuffer,
+                                                              VkBuffer        buffer,
+                                                              VkDeviceSize    offset,
+                                                              VkBuffer        countBuffer,
+                                                              VkDeviceSize    countBufferOffset,
+                                                              uint32_t        maxDrawCount,
+                                                              uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndirectCount(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer,
+                                                                     VkBuffer        buffer,
+                                                                     VkDeviceSize    offset,
+                                                                     VkBuffer        countBuffer,
+                                                                     VkDeviceSize    countBufferOffset,
+                                                                     uint32_t        maxDrawCount,
+                                                                     uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndexedIndirectCount(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndirectCountKHR(VkCommandBuffer commandBuffer,
+                                                                 VkBuffer        buffer,
+                                                                 VkDeviceSize    offset,
+                                                                 VkBuffer        countBuffer,
+                                                                 VkDeviceSize    countBufferOffset,
+                                                                 uint32_t        maxDrawCount,
+                                                                 uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndirectCountKHR(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawIndexedIndirectCountKHR(VkCommandBuffer commandBuffer,
+                                                                        VkBuffer        buffer,
+                                                                        VkDeviceSize    offset,
+                                                                        VkBuffer        countBuffer,
+                                                                        VkDeviceSize    countBufferOffset,
+                                                                        uint32_t        maxDrawCount,
+                                                                        uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawIndexedIndirectCountKHR(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDispatch(VkCommandBuffer commandBuffer,
+                                                     uint32_t        groupCountX,
+                                                     uint32_t        groupCountY,
+                                                     uint32_t        groupCountZ)
+{
+    SecondReplace(commandBuffer);
+
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDispatchIndirect(VkCommandBuffer commandBuffer,
+                                                             VkBuffer        buffer,
+                                                             VkDeviceSize    offset)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDispatchIndirect(commandBuffer, buffer, offset);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDispatchBase(VkCommandBuffer commandBuffer,
+                                                         uint32_t        baseGroupX,
+                                                         uint32_t        baseGroupY,
+                                                         uint32_t        baseGroupZ,
+                                                         uint32_t        groupCountX,
+                                                         uint32_t        groupCountY,
+                                                         uint32_t        groupCountZ)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDispatchBase(
+            commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDispatchBaseKHR(VkCommandBuffer commandBuffer,
+                                                            uint32_t        baseGroupX,
+                                                            uint32_t        baseGroupY,
+                                                            uint32_t        baseGroupZ,
+                                                            uint32_t        groupCountX,
+                                                            uint32_t        groupCountY,
+                                                            uint32_t        groupCountZ)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDispatchBaseKHR(
+            commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdTraceRaysNV(VkCommandBuffer commandBuffer,
+                                                        VkBuffer        raygenShaderBindingTableBuffer,
+                                                        VkDeviceSize    raygenShaderBindingOffset,
+                                                        VkBuffer        missShaderBindingTableBuffer,
+                                                        VkDeviceSize    missShaderBindingOffset,
+                                                        VkDeviceSize    missShaderBindingStride,
+                                                        VkBuffer        hitShaderBindingTableBuffer,
+                                                        VkDeviceSize    hitShaderBindingOffset,
+                                                        VkDeviceSize    hitShaderBindingStride,
+                                                        VkBuffer        callableShaderBindingTableBuffer,
+                                                        VkDeviceSize    callableShaderBindingOffset,
+                                                        VkDeviceSize    callableShaderBindingStride,
+                                                        uint32_t        width,
+                                                        uint32_t        height,
+                                                        uint32_t        depth)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdTraceRaysNV(commandBuffer,
+                                            raygenShaderBindingTableBuffer,
+                                            raygenShaderBindingOffset,
+                                            missShaderBindingTableBuffer,
+                                            missShaderBindingOffset,
+                                            missShaderBindingStride,
+                                            hitShaderBindingTableBuffer,
+                                            hitShaderBindingOffset,
+                                            hitShaderBindingStride,
+                                            callableShaderBindingTableBuffer,
+                                            callableShaderBindingOffset,
+                                            callableShaderBindingStride,
+                                            width,
+                                            height,
+                                            depth);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdTraceRaysKHR(
+    VkCommandBuffer                        commandBuffer,
+    const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+    uint32_t                               width,
+    uint32_t                               height,
+    uint32_t                               depth)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdTraceRaysKHR(commandBuffer,
+                                             pRaygenShaderBindingTable,
+                                             pMissShaderBindingTable,
+                                             pHitShaderBindingTable,
+                                             pCallableShaderBindingTable,
+                                             width,
+                                             height,
+                                             depth);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdTraceRaysIndirectKHR(
+    VkCommandBuffer                        commandBuffer,
+    const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+    const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+    VkDeviceAddress                        indirectDeviceAddress)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdTraceRaysIndirectKHR(commandBuffer,
+                                                     pRaygenShaderBindingTable,
+                                                     pMissShaderBindingTable,
+                                                     pHitShaderBindingTable,
+                                                     pCallableShaderBindingTable,
+                                                     indirectDeviceAddress);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdTraceRaysIndirect2KHR(VkCommandBuffer commandBuffer,
+                                                                  VkDeviceAddress indirectDeviceAddress)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdTraceRaysIndirect2KHR(commandBuffer, indirectDeviceAddress);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBindDescriptorSets(VkCommandBuffer        commandBuffer,
+                                                               VkPipelineBindPoint    pipelineBindPoint,
+                                                               VkPipelineLayout       layout,
+                                                               uint32_t               firstSet,
+                                                               uint32_t               descriptorSetCount,
+                                                               const VkDescriptorSet* pDescriptorSets,
+                                                               uint32_t               dynamicOffsetCount,
+                                                               const uint32_t*        pDynamicOffsets)
+{
+    if (commandBuffer == orig_cmd_buf_)
+    {
+        CmdBindDescriptorSets(target_cmd_buf_,
+                              pipelineBindPoint,
+                              layout,
+                              firstSet,
+                              descriptorSetCount,
+                              pDescriptorSets,
+                              dynamicOffsetCount,
+                              pDynamicOffsets);
+    }
+    if (commandBuffer == target_cmd_buf_)
+    {
+        CmdBindDescriptorSets(tail_cmd_buf_,
+                              pipelineBindPoint,
+                              layout,
+                              firstSet,
+                              descriptorSetCount,
+                              pDescriptorSets,
+                              dynamicOffsetCount,
+                              pDynamicOffsets);
+    }
+
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBindDescriptorSets(commandBuffer,
+                                                   pipelineBindPoint,
+                                                   layout,
+                                                   firstSet,
+                                                   descriptorSetCount,
+                                                   pDescriptorSets,
+                                                   dynamicOffsetCount,
+                                                   pDynamicOffsets);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBindDescriptorSets2KHR(
+    VkCommandBuffer commandBuffer, const VkBindDescriptorSetsInfoKHR* pBindDescriptorSetsInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBindDescriptorSets2KHR(commandBuffer, pBindDescriptorSetsInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBuffer(VkCommandBuffer     commandBuffer,
+                                                       VkBuffer            srcBuffer,
+                                                       VkBuffer            dstBuffer,
+                                                       uint32_t            regionCount,
+                                                       const VkBufferCopy* pRegions)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, regionCount, pRegions);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImage(VkCommandBuffer    commandBuffer,
+                                                      VkImage            srcImage,
+                                                      VkImageLayout      srcImageLayout,
+                                                      VkImage            dstImage,
+                                                      VkImageLayout      dstImageLayout,
+                                                      uint32_t           regionCount,
+                                                      const VkImageCopy* pRegions)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImage(
+            commandBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions);
+        state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBufferToImage(VkCommandBuffer          commandBuffer,
+                                                              VkBuffer                 srcBuffer,
+                                                              VkImage                  dstImage,
+                                                              VkImageLayout            dstImageLayout,
+                                                              uint32_t                 regionCount,
+                                                              const VkBufferImageCopy* pRegions)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBufferToImage(
+            commandBuffer, srcBuffer, dstImage, dstImageLayout, regionCount, pRegions);
+        state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImageToBuffer(VkCommandBuffer          commandBuffer,
+                                                              VkImage                  srcImage,
+                                                              VkImageLayout            srcImageLayout,
+                                                              VkBuffer                 dstBuffer,
+                                                              uint32_t                 regionCount,
+                                                              const VkBufferImageCopy* pRegions)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImageToBuffer(
+            commandBuffer, srcImage, srcImageLayout, dstBuffer, regionCount, pRegions);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBuffer2(VkCommandBuffer          commandBuffer,
+                                                        const VkCopyBufferInfo2* pCopyBufferInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBuffer2(commandBuffer, pCopyBufferInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImage2(VkCommandBuffer         commandBuffer,
+                                                       const VkCopyImageInfo2* pCopyImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImage2(commandBuffer, pCopyImageInfo);
+        state_tracker_->TrackImageDstLayout(commandBuffer, pCopyImageInfo->dstImage, pCopyImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBufferToImage2(VkCommandBuffer                 commandBuffer,
+                                                               const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBufferToImage2(commandBuffer, pCopyBufferToImageInfo);
+        state_tracker_->TrackImageDstLayout(
+            commandBuffer, pCopyBufferToImageInfo->dstImage, pCopyBufferToImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImageToBuffer2(VkCommandBuffer                 commandBuffer,
+                                                               const VkCopyImageToBufferInfo2* pCopyImageToBufferInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImageToBuffer2(commandBuffer, pCopyImageToBufferInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBuffer2KHR(VkCommandBuffer          commandBuffer,
+                                                           const VkCopyBufferInfo2* pCopyBufferInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBuffer2KHR(commandBuffer, pCopyBufferInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImage2KHR(VkCommandBuffer         commandBuffer,
+                                                          const VkCopyImageInfo2* pCopyImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImage2KHR(commandBuffer, pCopyImageInfo);
+        state_tracker_->TrackImageDstLayout(commandBuffer, pCopyImageInfo->dstImage, pCopyImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyBufferToImage2KHR(
+    VkCommandBuffer commandBuffer, const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyBufferToImage2KHR(commandBuffer, pCopyBufferToImageInfo);
+        state_tracker_->TrackImageDstLayout(
+            commandBuffer, pCopyBufferToImageInfo->dstImage, pCopyBufferToImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdCopyImageToBuffer2KHR(
+    VkCommandBuffer commandBuffer, const VkCopyImageToBufferInfo2* pCopyImageToBufferInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdCopyImageToBuffer2KHR(commandBuffer, pCopyImageToBufferInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBlitImage(VkCommandBuffer    commandBuffer,
+                                                      VkImage            srcImage,
+                                                      VkImageLayout      srcImageLayout,
+                                                      VkImage            dstImage,
+                                                      VkImageLayout      dstImageLayout,
+                                                      uint32_t           regionCount,
+                                                      const VkImageBlit* pRegions,
+                                                      VkFilter           filter)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBlitImage(
+            commandBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions, filter);
+        state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBlitImage2(VkCommandBuffer         commandBuffer,
+                                                       const VkBlitImageInfo2* pBlitImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBlitImage2(commandBuffer, pBlitImageInfo);
+        state_tracker_->TrackImageDstLayout(commandBuffer, pBlitImageInfo->dstImage, pBlitImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBlitImage2KHR(VkCommandBuffer         commandBuffer,
+                                                          const VkBlitImageInfo2* pBlitImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdBlitImage2KHR(commandBuffer, pBlitImageInfo);
+        state_tracker_->TrackImageDstLayout(commandBuffer, pBlitImageInfo->dstImage, pBlitImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdUpdateBuffer(
+    VkCommandBuffer commandBuffer, VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize dataSize, const void* pData)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdUpdateBuffer(commandBuffer, dstBuffer, dstOffset, dataSize, pData);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdFillBuffer(
+    VkCommandBuffer commandBuffer, VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize size, uint32_t data)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdFillBuffer(commandBuffer, dstBuffer, dstOffset, size, data);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdClearColorImage(VkCommandBuffer                commandBuffer,
+                                                            VkImage                        image,
+                                                            VkImageLayout                  imageLayout,
+                                                            const VkClearColorValue*       pColor,
+                                                            uint32_t                       rangeCount,
+                                                            const VkImageSubresourceRange* pRanges)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdClearDepthStencilImage(VkCommandBuffer                 commandBuffer,
+                                                                   VkImage                         image,
+                                                                   VkImageLayout                   imageLayout,
+                                                                   const VkClearDepthStencilValue* pDepthStencil,
+                                                                   uint32_t                        rangeCount,
+                                                                   const VkImageSubresourceRange*  pRanges)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdClearDepthStencilImage(
+            commandBuffer, image, imageLayout, pDepthStencil, rangeCount, pRanges);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdResolveImage(VkCommandBuffer       commandBuffer,
+                                                         VkImage               srcImage,
+                                                         VkImageLayout         srcImageLayout,
+                                                         VkImage               dstImage,
+                                                         VkImageLayout         dstImageLayout,
+                                                         uint32_t              regionCount,
+                                                         const VkImageResolve* pRegions)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdResolveImage(
+            commandBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions);
+        state_tracker_->TrackImageDstLayout(commandBuffer, dstImage, dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdResolveImage2(VkCommandBuffer            commandBuffer,
+                                                          const VkResolveImageInfo2* pResolveImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdResolveImage2(commandBuffer, pResolveImageInfo);
+        state_tracker_->TrackImageDstLayout(
+            commandBuffer, pResolveImageInfo->dstImage, pResolveImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdResolveImage2KHR(VkCommandBuffer            commandBuffer,
+                                                             const VkResolveImageInfo2* pResolveImageInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdResolveImage2(commandBuffer, pResolveImageInfo);
+        state_tracker_->TrackImageDstLayout(
+            commandBuffer, pResolveImageInfo->dstImage, pResolveImageInfo->dstImageLayout);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksNV(VkCommandBuffer commandBuffer,
+                                                            uint32_t        taskCount,
+                                                            uint32_t        firstTask)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksNV(commandBuffer, taskCount, firstTask);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksIndirectNV(
+    VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksIndirectNV(commandBuffer, buffer, offset, drawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksIndirectCountNV(VkCommandBuffer commandBuffer,
+                                                                         VkBuffer        buffer,
+                                                                         VkDeviceSize    offset,
+                                                                         VkBuffer        countBuffer,
+                                                                         VkDeviceSize    countBufferOffset,
+                                                                         uint32_t        maxDrawCount,
+                                                                         uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksIndirectCountNV(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksEXT(VkCommandBuffer commandBuffer,
+                                                             uint32_t        groupCountX,
+                                                             uint32_t        groupCountY,
+                                                             uint32_t        groupCountZ)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksEXT(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksIndirectEXT(
+    VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksIndirectEXT(commandBuffer, buffer, offset, drawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer commandBuffer,
+                                                                          VkBuffer        buffer,
+                                                                          VkDeviceSize    offset,
+                                                                          VkBuffer        countBuffer,
+                                                                          VkDeviceSize    countBufferOffset,
+                                                                          uint32_t        maxDrawCount,
+                                                                          uint32_t        stride)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCmdDrawMeshTasksIndirectCountEXT(
+            commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkCmdBeginRendering(VkCommandBuffer        commandBuffer,
+                                                           const VkRenderingInfo* pRenderingInfo)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackBeginRendering(commandBuffer, pRenderingInfo);
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkSetDebugUtilsObjectNameEXT(VkResult                             result,
+                                                                    VkDevice                             device,
+                                                                    const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    if (result == VK_SUCCESS)
+    {
+        if (IsCaptureModeTrack())
+        {
+            auto thread_data = GetThreadData();
+            assert(thread_data != nullptr);
+            state_tracker_->TrackSetDebugUtilsObjectNameEXT(device, pNameInfo, thread_data->parameter_buffer_.get());
+        }
+    }
+}
+
+void VulkanCaptureManager::PostProcess_vkSetDebugUtilsObjectTagEXT(VkResult                            result,
+                                                                   VkDevice                            device,
+                                                                   const VkDebugUtilsObjectTagInfoEXT* pTagInfo)
+{
+    if (result == VK_SUCCESS)
+    {
+        if (IsCaptureModeTrack())
+        {
+            auto thread_data = GetThreadData();
+            assert(thread_data != nullptr);
+            state_tracker_->TrackSetDebugUtilsObjectTagEXT(device, pTagInfo, thread_data->parameter_buffer_.get());
+        }
     }
 }
 
@@ -3543,18 +4204,6 @@ void VulkanCaptureManager::PostProcess_vkCreateRenderPass(VkDevice              
     if (common_manager_->debug_set_objects_name_)
     {
         SetObjectName<RenderPassWrapper>(device, *pRenderPass);
-    }
-}
-void VulkanCaptureManager::PostProcess_vkCreateGraphicsPipelines(VkDevice                            device,
-                                                                 VkPipelineCache                     pipelineCache,
-                                                                 uint32_t                            createInfoCount,
-                                                                 const VkGraphicsPipelineCreateInfo* pCreateInfos,
-                                                                 const VkAllocationCallbacks*        pAllocator,
-                                                                 VkPipeline*                         pPipelines)
-{
-    if (common_manager_->debug_set_objects_name_)
-    {
-        SetObjectName<PipelineWrapper>(device, *pPipelines);
     }
 }
 void VulkanCaptureManager::PostProcess_vkCreateDescriptorSetLayout(VkDevice                               device,
@@ -3628,7 +4277,6 @@ void VulkanCaptureManager::PostProcess_vkDestroyBuffer(VkDevice                 
     {
         return;
     }
-    address_tracker.StopTracking(wrapper->handle_id);
 }
 
 void VulkanCaptureManager::PostProcess_vkDestroyAccelerationStructureKHR(
@@ -3639,7 +4287,6 @@ void VulkanCaptureManager::PostProcess_vkDestroyAccelerationStructureKHR(
     {
         return;
     }
-    address_tracker.StopTracking(wrapper->handle_id);
 }
 
 #ifdef ARM_INTERNAL
@@ -3695,53 +4342,6 @@ void VulkanCaptureManager::PostProcess_vkBeginCommandBuffer(VkResult,
     result = BeginCommandBuffer(cmd_buffers[1], pBeginInfo);
     GFXRECON_ASSERT(result == VK_SUCCESS);
     tail_cmd_buf_ = cmd_buffers[1];
-}
-
-void VulkanCaptureManager::PostProcess_vkCmdBindPipeline(VkCommandBuffer     commandBuffer,
-                                                         VkPipelineBindPoint pipelineBindPoint,
-                                                         VkPipeline          pipeline)
-{
-    if (commandBuffer == orig_cmd_buf_)
-    {
-        CmdBindPipeline(target_cmd_buf_, pipelineBindPoint, pipeline);
-    }
-    if (commandBuffer == target_cmd_buf_)
-    {
-        CmdBindPipeline(tail_cmd_buf_, pipelineBindPoint, pipeline);
-    }
-}
-
-void VulkanCaptureManager::PostProcess_vkCmdBindDescriptorSets(VkCommandBuffer        commandBuffer,
-                                                               VkPipelineBindPoint    pipelineBindPoint,
-                                                               VkPipelineLayout       layout,
-                                                               uint32_t               firstSet,
-                                                               uint32_t               descriptorSetCount,
-                                                               const VkDescriptorSet* pDescriptorSets,
-                                                               uint32_t               dynamicOffsetCount,
-                                                               const uint32_t*        pDynamicOffsets)
-{
-    if (commandBuffer == orig_cmd_buf_)
-    {
-        CmdBindDescriptorSets(target_cmd_buf_,
-                              pipelineBindPoint,
-                              layout,
-                              firstSet,
-                              descriptorSetCount,
-                              pDescriptorSets,
-                              dynamicOffsetCount,
-                              pDynamicOffsets);
-    }
-    if (commandBuffer == target_cmd_buf_)
-    {
-        CmdBindDescriptorSets(tail_cmd_buf_,
-                              pipelineBindPoint,
-                              layout,
-                              firstSet,
-                              descriptorSetCount,
-                              pDescriptorSets,
-                              dynamicOffsetCount,
-                              pDynamicOffsets);
-    }
 }
 
 void VulkanCaptureManager::PostProcess_VkCmdPushConstants(VkCommandBuffer    commandBuffer,

@@ -39,6 +39,9 @@
     "ID3D12Device1": {
       "CreatePipelineLibrary": "OverrideCreatePipelineLibrary"
     },
+    "ID3D12Device2": {
+      "CreatePipelineState": "OverrideCreatePipelineState"
+    },
     "ID3D12Device3": {
       "EnqueueMakeResident": "OverrideEnqueueMakeResident",
       "OpenExistingHeapFromAddress": "OverrideOpenExistingHeapFromAddress"
@@ -122,6 +125,9 @@
       "CreateSwapChainForHwnd": "OverrideCreateSwapChainForHwnd",
       "CreateSwapChainForComposition": "OverrideCreateSwapChainForComposition",
       "CreateSwapChainForCoreWindow": "OverrideCreateSwapChainForCoreWindow"
+    },
+    "IDXGIFactory4": {
+      "EnumAdapterByLuid": "OverrideEnumAdapterByLuid"
     },
     "IDXGISwapChain": {
       "GetBuffer": "OverrideGetBuffer",

@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 33
+    namespace 'com.lunarg.gfxreconstruct.replay'
     ndkVersion '22.1.7171670'
     defaultConfig {
         applicationId "com.lunarg.gfxreconstruct.replay"
@@ -24,7 +25,7 @@ android {
         }
         externalNativeBuild {
             cmake {
-                cppFlags "-fexceptions", "-std=c++14", "-Wno-nullability-completeness"
+                cppFlags "-fexceptions", "-std=c++17", "-Wno-nullability-completeness"
                 arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}"
             }
         }
@@ -51,13 +52,12 @@ android {
             signingConfig signingConfigs.release
         }
     }
-
     sourceSets {
         main {
-            manifest.srcFile 'AndroidManifest.xml'
+            manifest.srcFile 'src/main/AndroidManifest.xml'
             jniLibs.srcDirs = ['libs']
             java.srcDirs = ['src']
-            res.srcDirs = ['res']
+            res.srcDirs = ['src/main/res']
         }
     }
     externalNativeBuild {

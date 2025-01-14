@@ -298,6 +298,13 @@ class D3D12CaptureManager : public ApiCaptureManager
                                                     const UINT*             node_mask,
                                                     IUnknown* const*        present_queue);
 
+    void PreProcess_IDXGISwapChain_ResizeTarget(IDXGISwapChain_Wrapper* wrapper,
+                                                const DXGI_MODE_DESC*   pNewTargetParameters);
+
+    void PostProcess_IDXGISwapChain_ResizeTarget(IDXGISwapChain_Wrapper* wrapper,
+                                                 HRESULT                 result,
+                                                 const DXGI_MODE_DESC*   pNewTargetParameters);
+
     void Destroy_IDXGISwapChain(IDXGISwapChain_Wrapper* wrapper);
 
     void PostProcess_ID3D12Device_CreateDescriptorHeap(ID3D12Device_Wrapper*             wrapper,
@@ -820,6 +827,13 @@ class D3D12CaptureManager : public ApiCaptureManager
     std::vector<graphics::dx12::CommandSet> GetCommandListsForTrimDrawCalls(ID3D12CommandList_Wrapper* wrapper,
                                                                             format::ApiCallId          api_call_id);
 
+    void PostProcess_IDXGISwapChain3_SetColorSpace1(IDXGISwapChain_Wrapper* wrapper,
+                                                    HRESULT                 result,
+                                                    DXGI_COLOR_SPACE_TYPE   ColorSpace);
+
+    void PostProcess_IDXGISwapChain4_SetHDRMetaData(
+        IDXGISwapChain_Wrapper* wrapper, HRESULT result, DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData);
+
   protected:
     D3D12CaptureManager();
 
@@ -830,6 +844,22 @@ class D3D12CaptureManager : public ApiCaptureManager
     virtual void DestroyStateTracker() override { state_tracker_ = nullptr; }
 
     virtual void WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id) override;
+
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                format::ThreadId        thread_id,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name) override
+    {
+        GFXRECON_UNREFERENCED_PARAMETER(file_stream);
+        GFXRECON_UNREFERENCED_PARAMETER(thread_id);
+        GFXRECON_UNREFERENCED_PARAMETER(asset_file_stream);
+        GFXRECON_UNREFERENCED_PARAMETER(asset_file_name);
+    }
+
+    virtual void WriteAssets(util::FileOutputStream* assert_file_stream,
+                             const std::string*      asset_file_name,
+                             format::ThreadId        thread_id) override
+    {}
 
     void PreAcquireSwapChainImages(IDXGISwapChain_Wrapper* wrapper,
                                    IUnknown*               command_queue,

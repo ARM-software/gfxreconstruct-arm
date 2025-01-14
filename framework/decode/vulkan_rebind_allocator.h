@@ -42,7 +42,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
   public:
     VulkanRebindAllocator();
 
-    virtual ~VulkanRebindAllocator() override;
+    ~VulkanRebindAllocator() override = default;
 
     virtual VkResult Initialize(uint32_t                                api_version,
                                 VkInstance                              instance,
@@ -371,6 +371,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
         bool                                             is_mapped{ false };
         VkDeviceSize                                     mapped_offset{ 0 };
+        AHardwareBuffer*                                 ahb{ nullptr };
+        VkDeviceMemory                                   ahb_memory{ VK_NULL_HANDLE };
         std::unique_ptr<uint8_t[]>                       original_content;
         std::unordered_map<VkBuffer, ResourceAllocInfo*> original_buffers;
         std::unordered_map<VkImage, ResourceAllocInfo*>  original_images;
@@ -451,6 +453,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                               VkMemoryPropertyFlags*                  bind_memory_properties,
                               const VkPhysicalDeviceMemoryProperties& device_memory_properties);
 
+    VkResult AllocateAHBMemory(MemoryAllocInfo* memory_alloc_info, const VkImage image);
+
     VkResult BindImageMemory(VkImage                                 image,
                              VkDeviceMemory                          memory,
                              VkDeviceSize                            memory_offset,
@@ -466,17 +470,17 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                         uint64_t                 resource_handle);
 
   private:
-    VkDevice                         device_;
+    VkDevice                         device_ = VK_NULL_HANDLE;
     VmaAllocator                     allocator_;
     Functions                        functions_;
     VmaVulkanFunctions               vma_functions_;
     VkPhysicalDeviceType             capture_device_type_;
     VkPhysicalDeviceMemoryProperties capture_memory_properties_;
     VkPhysicalDeviceMemoryProperties replay_memory_properties_;
-    VkCommandBuffer                  cmd_buffer_;
-    VkCommandPool                    cmd_pool_;
-    VkQueue                          staging_queue_;
-    uint32_t                         staging_queue_family_;
+    VkCommandBuffer                  cmd_buffer_    = VK_NULL_HANDLE;
+    VkCommandPool                    cmd_pool_      = VK_NULL_HANDLE;
+    VkQueue                          staging_queue_ = VK_NULL_HANDLE;
+    uint32_t                         staging_queue_family_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)

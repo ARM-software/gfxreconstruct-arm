@@ -164,7 +164,7 @@ struct Decoded_VkAccelerationStructureGeometryKHR
     Decoded_VkAccelerationStructureGeometryDataKHR* geometry{ nullptr };
 };
 
-struct Decoded_VkPushDescriptorSetWithTemplateInfoKHR
+struct Decoded_VkPushDescriptorSetWithTemplateInfo
 {
     using struct_type = VkPushDescriptorSetWithTemplateInfoKHR;
 

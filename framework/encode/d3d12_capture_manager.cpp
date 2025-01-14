@@ -737,6 +737,32 @@ void D3D12CaptureManager::PostProcess_IDXGISwapChain3_ResizeBuffers1(IDXGISwapCh
     ResizeSwapChainImages(wrapper, result, buffer_count);
 }
 
+void D3D12CaptureManager::PreProcess_IDXGISwapChain_ResizeTarget(IDXGISwapChain_Wrapper* wrapper,
+                                                                 const DXGI_MODE_DESC*   pNewTargetParameters)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(wrapper);
+    GFXRECON_UNREFERENCED_PARAMETER(pNewTargetParameters);
+
+    // ResizeTarget will resize the window associated with the swapchain. If the window has an event callback, it will
+    // be invoked for a resize event before ResizeTarget returns. Any API calls made by the callback will not be
+    // processed for capture due to the current scope count, resulting in a capture file that will not replay correctly
+    // due to missing API calls. The scope count needs to be temporarily decremented to ensure that API calls made by
+    // the callback are captured.
+    DecrementCallScope();
+}
+
+void D3D12CaptureManager::PostProcess_IDXGISwapChain_ResizeTarget(IDXGISwapChain_Wrapper* wrapper,
+                                                                  HRESULT                 result,
+                                                                  const DXGI_MODE_DESC*   pNewTargetParameters)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(wrapper);
+    GFXRECON_UNREFERENCED_PARAMETER(result);
+    GFXRECON_UNREFERENCED_PARAMETER(pNewTargetParameters);
+
+    // Restore the scope count that was decremented by the pre call.
+    IncrementCallScope();
+}
+
 void D3D12CaptureManager::Destroy_IDXGISwapChain(IDXGISwapChain_Wrapper* wrapper)
 {
     ReleaseSwapChainImages(wrapper);
@@ -3691,6 +3717,25 @@ D3D12CaptureManager::GetCommandListsForTrimDrawCalls(ID3D12CommandList_Wrapper* 
         }
     }
     return cmd_sets;
+}
+
+void D3D12CaptureManager::PostProcess_IDXGISwapChain3_SetColorSpace1(IDXGISwapChain_Wrapper* wrapper,
+                                                                     HRESULT                 result,
+                                                                     DXGI_COLOR_SPACE_TYPE   ColorSpace)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackSetColorSpace1(wrapper, result, ColorSpace);
+    }
+}
+
+void D3D12CaptureManager::PostProcess_IDXGISwapChain4_SetHDRMetaData(
+    IDXGISwapChain_Wrapper* wrapper, HRESULT result, DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackSetHDRMetaData(wrapper, result, Type, Size, pMetaData);
+    }
 }
 
 GFXRECON_END_NAMESPACE(encode)

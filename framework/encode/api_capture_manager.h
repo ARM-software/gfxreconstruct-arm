@@ -46,6 +46,14 @@ class ApiCaptureManager
     virtual void CreateStateTracker()                                                               = 0;
     virtual void DestroyStateTracker()                                                              = 0;
     virtual void WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id) = 0;
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                format::ThreadId        thread_id,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name)                 = 0;
+    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
+                             const std::string*      asset_file_name,
+                             format::ThreadId        thread_id)                                            = 0;
+
     virtual CaptureSettings::TraceSettings GetDefaultTraceSettings();
 
     format::ApiFamilyId GetApiFamily() const { return api_family_; }
@@ -127,8 +135,6 @@ class ApiCaptureManager
 
     bool IsTrimHotkeyPressed() { return common_manager_->IsTrimHotkeyPressed(); }
 
-    CaptureSettings::RuntimeTriggerState GetRuntimeTriggerState() { return common_manager_->GetRuntimeTriggerState(); }
-
     bool RuntimeTriggerEnabled() { return common_manager_->RuntimeTriggerEnabled(); }
 
     bool RuntimeTriggerDisabled() { return common_manager_->RuntimeTriggerDisabled(); }
@@ -164,6 +170,7 @@ class ApiCaptureManager
     uint16_t GetDescriptorMask() const { return common_manager_->GetDescriptorMask(); }
     uint64_t GetShaderIDMask() const { return common_manager_->GetShaderIDMask(); }
     uint64_t GetBlockIndex() const { return common_manager_->GetBlockIndex(); }
+    void     SetWriteAssets() const { return common_manager_->SetWriteAssets(); }
 
     bool                                GetForceFileFlush() const { return common_manager_->GetForceFileFlush(); }
     CaptureSettings::MemoryTrackingMode GetMemoryTrackingMode() const
@@ -180,6 +187,7 @@ class ApiCaptureManager
     bool                              IsTrimEnabled() const { return common_manager_->IsTrimEnabled(); }
     uint32_t                          GetCurrentFrame() const { return common_manager_->GetCurrentFrame(); }
     CommonCaptureManager::CaptureMode GetCaptureMode() const { return common_manager_->GetCaptureMode(); }
+    void SetCaptureMode(CommonCaptureManager::CaptureMode mode) { common_manager_->SetCaptureMode(mode); }
     bool                              GetDebugLayerSetting() const { return common_manager_->GetDebugLayerSetting(); }
     bool GetDebugDeviceLostSetting() const { return common_manager_->GetDebugDeviceLostSetting(); }
     bool GetDisableDxrSetting() const { return common_manager_->GetDisableDxrSetting(); }

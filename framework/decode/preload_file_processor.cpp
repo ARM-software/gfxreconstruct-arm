@@ -301,7 +301,7 @@ bool PreloadFileProcessor::ProcessBlocks()
             }
             else
             {
-                if (feof(file_descriptor_) == 0)
+                if (feof(GetFileDescriptor()) == 0)
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as
                     // it assumes that the block header has been successfully read and will print an incomplete
@@ -328,7 +328,6 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
     if (status_ == PreloadStatus::kReplay)
     {
         bytes_read = preload_buffer_.Read(buffer, buffer_size);
-        bytes_read_ += bytes_read;
         if (preload_buffer_.ReplayFinished())
         {
             status_ = PreloadStatus::kInactive;
@@ -336,13 +335,14 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
     }
     else
     {
-        bool success = util::platform::FileRead(buffer, buffer_size, file_descriptor_);
+        bool success = util::platform::FileRead(buffer, buffer_size, GetFileDescriptor());
         if (success)
         {
             bytes_read = buffer_size;
-            bytes_read_ += bytes_read;
         }
     }
+
+    bytes_read_ += bytes_read;
     return bytes_read == buffer_size;
 }
 

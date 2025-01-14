@@ -50,7 +50,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 DispatchTraceRaysDumpingContext::DispatchTraceRaysDumpingContext(const std::vector<uint64_t>&   dispatch_indices,
                                                                  const std::vector<uint64_t>&   trace_rays_indices,
-                                                                 VulkanObjectInfoTable&         object_info_table,
+                                                                 CommonObjectInfoTable&         object_info_table,
                                                                  const VulkanReplayOptions&     options,
                                                                  VulkanReplayDumpResourcesJson& dump_json,
                                                                  std::string                    capture_filename) :
@@ -64,7 +64,8 @@ DispatchTraceRaysDumpingContext::DispatchTraceRaysDumpingContext(const std::vect
     output_json_per_command(options.dump_resources_json_per_command),
     dump_immutable_resources(options.dump_resources_dump_immutable_resources),
     dump_all_image_subresources(options.dump_resources_dump_all_image_subresources), capture_filename(capture_filename),
-    reached_end_command_buffer(false), dump_images_raw(options.dump_resources_dump_raw_images)
+    reached_end_command_buffer(false), dump_images_raw(options.dump_resources_dump_raw_images),
+    dump_images_separate_alpha(options.dump_resources_dump_separate_alpha)
 {}
 
 DispatchTraceRaysDumpingContext::~DispatchTraceRaysDumpingContext()
@@ -78,7 +79,8 @@ void DispatchTraceRaysDumpingContext::Release()
     {
         if (DR_command_buffer != VK_NULL_HANDLE)
         {
-            const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+            const VulkanDeviceInfo* device_info =
+                object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
             if (device_info != nullptr)
             {
                 DestroyMutableResourcesClones();
@@ -88,8 +90,8 @@ void DispatchTraceRaysDumpingContext::Release()
 
                 assert(device_table);
 
-                const CommandPoolInfo* pool_info =
-                    object_info_table.GetCommandPoolInfo(original_command_buffer_info->pool_id);
+                const VulkanCommandPoolInfo* pool_info =
+                    object_info_table.GetVkCommandPoolInfo(original_command_buffer_info->pool_id);
                 assert(pool_info);
 
                 device_table->FreeCommandBuffers(device, pool_info->handle, 1, &DR_command_buffer);
@@ -109,7 +111,7 @@ void DispatchTraceRaysDumpingContext::Release()
     trace_rays_params.clear();
 }
 
-VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(CommandBufferInfo*                 orig_cmd_buf_info,
+VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(VulkanCommandBufferInfo*           orig_cmd_buf_info,
                                                              const encode::VulkanDeviceTable*   dev_table,
                                                              const encode::VulkanInstanceTable* inst_table)
 {
@@ -117,7 +119,7 @@ VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(CommandBufferInfo* 
     assert(dev_table);
     assert(inst_table);
 
-    const CommandPoolInfo* cb_pool_info = object_info_table.GetCommandPoolInfo(orig_cmd_buf_info->pool_id);
+    const VulkanCommandPoolInfo* cb_pool_info = object_info_table.GetVkCommandPoolInfo(orig_cmd_buf_info->pool_id);
 
     const VkCommandBufferAllocateInfo ai{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                           nullptr,
@@ -125,7 +127,7 @@ VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(CommandBufferInfo* 
                                           VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                                           1 };
 
-    const DeviceInfo* dev_info = object_info_table.GetDeviceInfo(orig_cmd_buf_info->parent_id);
+    const VulkanDeviceInfo* dev_info = object_info_table.GetVkDeviceInfo(orig_cmd_buf_info->parent_id);
 
     VkResult res = dev_table->AllocateCommandBuffers(dev_info->handle, &ai, &DR_command_buffer);
     if (res != VK_SUCCESS)
@@ -145,9 +147,9 @@ VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(CommandBufferInfo* 
     assert(instance_table == nullptr);
     instance_table = inst_table;
 
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info->parent_id != format::kNullHandleId);
-    const PhysicalDeviceInfo* phys_dev_info = object_info_table.GetPhysicalDeviceInfo(device_info->parent_id);
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
     assert(parent_device == VK_NULL_HANDLE);
@@ -172,18 +174,18 @@ void DispatchTraceRaysDumpingContext::FinalizeCommandBuffer(bool is_dispatch)
     }
 }
 
-void DispatchTraceRaysDumpingContext::BindPipeline(VkPipelineBindPoint bind_point, const PipelineInfo* pipeline)
+void DispatchTraceRaysDumpingContext::BindPipeline(VkPipelineBindPoint bind_point, const VulkanPipelineInfo* pipeline)
 {
     PipelineBindPoints point = VkPipelineBindPointToPipelineBindPoint(bind_point);
     bound_pipelines[point]   = pipeline;
 }
 
 void DispatchTraceRaysDumpingContext::BindDescriptorSets(
-    VkPipelineBindPoint                          pipeline_bind_point,
-    uint32_t                                     first_set,
-    const std::vector<const DescriptorSetInfo*>& descriptor_sets_infos,
-    uint32_t                                     dynamicOffsetCount,
-    const uint32_t*                              pDynamicOffsets)
+    VkPipelineBindPoint                                pipeline_bind_point,
+    uint32_t                                           first_set,
+    const std::vector<const VulkanDescriptorSetInfo*>& descriptor_sets_infos,
+    uint32_t                                           dynamicOffsetCount,
+    const uint32_t*                                    pDynamicOffsets)
 {
     PipelineBindPoints bind_point = VkPipelineBindPointToPipelineBindPoint(pipeline_bind_point);
 
@@ -197,7 +199,7 @@ void DispatchTraceRaysDumpingContext::BindDescriptorSets(
     {
         uint32_t set_index = first_set + i;
 
-        DescriptorSetInfo* bound_descriptor_sets;
+        VulkanDescriptorSetInfo* bound_descriptor_sets;
         if (bind_point == kBindPoint_compute)
         {
             bound_descriptor_sets = &bound_descriptor_sets_compute[set_index];
@@ -285,10 +287,10 @@ bool DispatchTraceRaysDumpingContext::MustDumpTraceRays(uint64_t index) const
     return false;
 }
 
-void DispatchTraceRaysDumpingContext::CopyBufferResource(const BufferInfo* src_buffer_info,
-                                                         VkDeviceSize      offset,
-                                                         VkDeviceSize      range,
-                                                         VkBuffer          dst_buffer)
+void DispatchTraceRaysDumpingContext::CopyBufferResource(const VulkanBufferInfo* src_buffer_info,
+                                                         VkDeviceSize            offset,
+                                                         VkDeviceSize            range,
+                                                         VkBuffer                dst_buffer)
 {
     assert(src_buffer_info);
     assert(range);
@@ -323,7 +325,7 @@ void DispatchTraceRaysDumpingContext::CopyBufferResource(const BufferInfo* src_b
     device_table->CmdCopyBuffer(DR_command_buffer, src_buffer_info->handle, dst_buffer, 1, &region);
 }
 
-void DispatchTraceRaysDumpingContext::CopyImageResource(const ImageInfo* src_image_info, VkImage dst_image)
+void DispatchTraceRaysDumpingContext::CopyImageResource(const VulkanImageInfo* src_image_info, VkImage dst_image)
 {
     assert(src_image_info != nullptr);
     assert(dst_image != VK_NULL_HANDLE);
@@ -482,8 +484,8 @@ VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResources
     assert(IsRecording());
 
     // Scan for mutable resources in the bound pipeline
-    const uint32_t      bind_point = static_cast<uint32_t>(is_dispatch ? kBindPoint_compute : kBindPoint_ray_tracing);
-    const PipelineInfo* pipeline   = bound_pipelines[bind_point];
+    const uint32_t bind_point = static_cast<uint32_t>(is_dispatch ? kBindPoint_compute : kBindPoint_ray_tracing);
+    const VulkanPipelineInfo* pipeline = bound_pipelines[bind_point];
     assert(pipeline != nullptr);
 
     for (const auto& shader : pipeline->shaders)
@@ -499,7 +501,7 @@ VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResources
                 {
                     const uint32_t binding_index = shader_desc_binding.first;
 
-                    const DescriptorSetInfo* bound_descriptor_sets =
+                    const VulkanDescriptorSetInfo* bound_descriptor_sets =
                         is_dispatch ? &bound_descriptor_sets_compute[desc_set_index]
                                     : &bound_descriptor_sets_ray_tracing[desc_set_index];
                     assert(bound_descriptor_sets != nullptr);
@@ -521,8 +523,8 @@ VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResources
                                     continue;
                                 }
 
-                                const ImageInfo* img_info =
-                                    object_info_table.GetImageInfo(img_desc.image_view_info->image_id);
+                                const VulkanImageInfo* img_info =
+                                    object_info_table.GetVkImageInfo(img_desc.image_view_info->image_id);
                                 assert(img_info);
 
                                 auto& new_entry          = resource_backup_context.images.emplace_back();
@@ -559,7 +561,7 @@ VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResources
                             uint32_t array_index = 0;
                             for (const auto& buf_desc : bound_desc_binding->second.buffer_info)
                             {
-                                const BufferInfo* buf_info = buf_desc.buffer_info;
+                                const VulkanBufferInfo* buf_info = buf_desc.buffer_info;
                                 if (buf_info == nullptr)
                                 {
                                     continue;
@@ -627,7 +629,7 @@ void DispatchTraceRaysDumpingContext::DestroyMutableResourcesClones()
         for (size_t i = 0; i < dis_params.second.mutable_resources_clones.images.size(); ++i)
         {
             assert(dis_params.second.mutable_resources_clones.images[i].original_image != nullptr);
-            const DeviceInfo* device_info = object_info_table.GetDeviceInfo(
+            const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(
                 dis_params.second.mutable_resources_clones.images[i].original_image->parent_id);
             assert(device_info != nullptr);
             VkDevice device = device_info->handle;
@@ -648,7 +650,7 @@ void DispatchTraceRaysDumpingContext::DestroyMutableResourcesClones()
         for (size_t i = 0; i < dis_params.second.mutable_resources_clones.buffers.size(); ++i)
         {
             assert(dis_params.second.mutable_resources_clones.buffers[i].original_buffer != nullptr);
-            const DeviceInfo* device_info = object_info_table.GetDeviceInfo(
+            const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(
                 dis_params.second.mutable_resources_clones.buffers[i].original_buffer->parent_id);
             assert(device_info != nullptr);
             VkDevice device = device_info->handle;
@@ -671,7 +673,7 @@ void DispatchTraceRaysDumpingContext::DestroyMutableResourcesClones()
         for (size_t i = 0; i < tr_params.second.mutable_resources_clones.images.size(); ++i)
         {
             assert(tr_params.second.mutable_resources_clones.images[i].original_image != nullptr);
-            const DeviceInfo* device_info = object_info_table.GetDeviceInfo(
+            const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(
                 tr_params.second.mutable_resources_clones.images[i].original_image->parent_id);
             assert(device_info != nullptr);
             VkDevice device = device_info->handle;
@@ -691,7 +693,7 @@ void DispatchTraceRaysDumpingContext::DestroyMutableResourcesClones()
         for (size_t i = 0; i < tr_params.second.mutable_resources_clones.buffers.size(); ++i)
         {
             assert(tr_params.second.mutable_resources_clones.buffers[i].original_buffer != nullptr);
-            const DeviceInfo* device_info = object_info_table.GetDeviceInfo(
+            const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(
                 tr_params.second.mutable_resources_clones.buffers[i].original_buffer->parent_id);
             assert(device_info != nullptr);
             VkDevice device = device_info->handle;
@@ -712,7 +714,7 @@ void DispatchTraceRaysDumpingContext::DestroyMutableResourcesClones()
 
 void DispatchTraceRaysDumpingContext::ReleaseIndirectParams()
 {
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     for (auto& dis_params : dispatch_params)
     {
         if (dis_params.second.type != kDispatchIndirect)
@@ -797,7 +799,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpDispatchTraceRays(
     si.signalSemaphoreCount = submit_info.signalSemaphoreCount;
     si.pSignalSemaphores    = submit_info.pSignalSemaphores;
 
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
     VkResult res = VK_SUCCESS;
@@ -930,7 +932,7 @@ std::string DispatchTraceRaysDumpingContext::GenerateDispatchTraceRaysImageFilen
                                                                                     VkShaderStageFlagBits stage,
                                                                                     bool before_cmd) const
 {
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
     const DumpedImageFormat output_image_format = GetDumpedImageFormat(device_info,
@@ -1052,10 +1054,10 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
 
     assert(original_command_buffer_info);
     assert(original_command_buffer_info->parent_id != format::kNullHandleId);
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
-    const PhysicalDeviceInfo* phys_dev_info = object_info_table.GetPhysicalDeviceInfo(device_info->parent_id);
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
     graphics::VulkanResourcesUtil resource_util(device_info->handle,
@@ -1072,8 +1074,8 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
             assert(mutable_resources_clones_before.images[i].original_image != nullptr);
             assert(mutable_resources_clones_before.images[i].image != VK_NULL_HANDLE);
 
-            ImageInfo modified_image_info = *mutable_resources_clones_before.images[i].original_image;
-            modified_image_info.handle    = mutable_resources_clones_before.images[i].image;
+            VulkanImageInfo modified_image_info = *mutable_resources_clones_before.images[i].original_image;
+            modified_image_info.handle          = mutable_resources_clones_before.images[i].image;
 
             const uint32_t              desc_set    = mutable_resources_clones_before.images[i].desc_set;
             const uint32_t              binding     = mutable_resources_clones_before.images[i].desc_binding;
@@ -1137,6 +1139,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
                                            image_file_format,
                                            false,
                                            dump_images_raw,
+                                           dump_images_separate_alpha,
                                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             if (res != VK_SUCCESS)
             {
@@ -1157,7 +1160,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
         // Dump buffers
         for (size_t i = 0; i < mutable_resources_clones_before.buffers.size(); ++i)
         {
-            const BufferInfo* buffer_info = mutable_resources_clones_before.buffers[i].original_buffer;
+            const VulkanBufferInfo* buffer_info = mutable_resources_clones_before.buffers[i].original_buffer;
             assert(buffer_info != nullptr);
             assert(mutable_resources_clones_before.buffers[i].buffer != VK_NULL_HANDLE);
 
@@ -1190,8 +1193,8 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
         assert(mutable_resources_clones.images[i].original_image != nullptr);
         assert(mutable_resources_clones.images[i].image != VK_NULL_HANDLE);
 
-        ImageInfo modified_image_info = *mutable_resources_clones.images[i].original_image;
-        modified_image_info.handle    = mutable_resources_clones.images[i].image;
+        VulkanImageInfo modified_image_info = *mutable_resources_clones.images[i].original_image;
+        modified_image_info.handle          = mutable_resources_clones.images[i].image;
 
         const uint32_t              desc_set    = mutable_resources_clones.images[i].desc_set;
         const uint32_t              binding     = mutable_resources_clones.images[i].desc_binding;
@@ -1255,6 +1258,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
                                        image_file_format,
                                        false,
                                        dump_images_raw,
+                                       dump_images_separate_alpha,
                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         if (res != VK_SUCCESS)
         {
@@ -1277,8 +1281,8 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
     {
         assert(mutable_resources_clones.buffers[i].original_buffer != nullptr);
         assert(mutable_resources_clones.buffers[i].buffer != VK_NULL_HANDLE);
-        const BufferInfo*    buffer_info = mutable_resources_clones.buffers[i].original_buffer;
-        std::vector<uint8_t> data;
+        const VulkanBufferInfo* buffer_info = mutable_resources_clones.buffers[i].original_buffer;
+        std::vector<uint8_t>    data;
 
         VkResult res = resource_util.ReadFromBufferResource(
             mutable_resources_clones.buffers[i].buffer, buffer_info->size, 0, buffer_info->queue_family_index, data);
@@ -1308,7 +1312,7 @@ bool DispatchTraceRaysDumpingContext::IsRecording() const
 
 void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(DispatchParameters& disp_params)
 {
-    const PipelineInfo* compute_ppl = bound_pipelines[kBindPoint_compute];
+    const VulkanPipelineInfo* compute_ppl = bound_pipelines[kBindPoint_compute];
     if (compute_ppl == nullptr)
     {
         return;
@@ -1322,7 +1326,7 @@ void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(DispatchParameter
         return;
     }
 
-    const ShaderModuleInfo& compute_shader = shader_stage_entry->second;
+    const VulkanShaderModuleInfo& compute_shader = shader_stage_entry->second;
     for (const auto& shader_desc_set : compute_shader.used_descriptors_info)
     {
         const uint32_t desc_set_index             = shader_desc_set.first;
@@ -1332,7 +1336,7 @@ void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(DispatchParameter
             continue;
         }
 
-        const DescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
+        const VulkanDescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
 
         for (const auto& shader_desc_binding : shader_desc_set.second)
         {
@@ -1356,7 +1360,7 @@ void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(DispatchParameter
 
 void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(TraceRaysParameters& tr_params)
 {
-    const PipelineInfo* ray_tracing_ppl = bound_pipelines[kBindPoint_ray_tracing];
+    const VulkanPipelineInfo* ray_tracing_ppl = bound_pipelines[kBindPoint_ray_tracing];
     if (ray_tracing_ppl == nullptr)
     {
         return;
@@ -1364,7 +1368,7 @@ void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(TraceRaysParamete
 
     for (const auto& shader_stage_entry : ray_tracing_ppl->shaders)
     {
-        const ShaderModuleInfo& rt_stage_shader_info = shader_stage_entry.second;
+        const VulkanShaderModuleInfo& rt_stage_shader_info = shader_stage_entry.second;
         for (const auto& shader_desc_set : rt_stage_shader_info.used_descriptors_info)
         {
             const uint32_t desc_set_index             = shader_desc_set.first;
@@ -1374,7 +1378,7 @@ void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(TraceRaysParamete
                 continue;
             }
 
-            const DescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
+            const VulkanDescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
 
             for (const auto& shader_desc_binding : shader_desc_set.second)
             {
@@ -1413,7 +1417,7 @@ std::string DispatchTraceRaysDumpingContext::GenerateImageDescriptorFilename(VkF
 
     base_filename << capture_filename << '_';
 
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
     const DumpedImageFormat output_image_format = GetDumpedImageFormat(device_info,
@@ -1426,7 +1430,7 @@ std::string DispatchTraceRaysDumpingContext::GenerateImageDescriptorFilename(VkF
                                                                        image_file_format,
                                                                        dump_images_raw);
 
-    if (output_image_format != KFormatRaw && output_image_format != KFormatAstc)
+    if (output_image_format != KFormatRaw)
     {
         base_filename << "image_" << image_id << "_qs_" << qs_index << "_bcb_" << bcb_index << "_aspect_" << aspect_str;
     }
@@ -1488,14 +1492,14 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                                                                    bool     is_dispatch)
 {
     // Create a list of all descriptors referenced by all commands
-    std::unordered_set<const ImageInfo*> image_descriptors;
+    std::unordered_set<const VulkanImageInfo*> image_descriptors;
 
     struct buffer_descriptor_info
     {
         VkDeviceSize offset;
         VkDeviceSize range;
     };
-    std::unordered_map<const BufferInfo*, buffer_descriptor_info> buffer_descriptors;
+    std::unordered_map<const VulkanBufferInfo*, buffer_descriptor_info> buffer_descriptors;
 
     struct inline_uniform_block_info
     {
@@ -1530,7 +1534,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                         {
                             if (desc_binding.second.image_info[i].image_view_info != nullptr)
                             {
-                                const ImageInfo* img_info = object_info_table.GetImageInfo(
+                                const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
                                     desc_binding.second.image_info[i].image_view_info->image_id);
                                 if (img_info != nullptr && dumped_descriptors.image_descriptors.find(img_info) ==
                                                                dumped_descriptors.image_descriptors.end())
@@ -1552,7 +1556,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                     {
                         for (size_t i = 0; i < desc_binding.second.buffer_info.size(); ++i)
                         {
-                            const BufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
+                            const VulkanBufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
                             if (buffer_info != nullptr && dumped_descriptors.buffer_descriptors.find(buffer_info) ==
                                                               dumped_descriptors.buffer_descriptors.end())
                             {
@@ -1621,7 +1625,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                             {
                                 if (desc_binding.second.image_info[i].image_view_info != nullptr)
                                 {
-                                    const ImageInfo* img_info = object_info_table.GetImageInfo(
+                                    const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
                                         desc_binding.second.image_info[i].image_view_info->image_id);
                                     if (img_info != nullptr && dumped_descriptors.image_descriptors.find(img_info) ==
                                                                    dumped_descriptors.image_descriptors.end())
@@ -1643,7 +1647,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                         {
                             for (size_t i = 0; i < desc_binding.second.buffer_info.size(); ++i)
                             {
-                                const BufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
+                                const VulkanBufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
                                 if (buffer_info != nullptr && dumped_descriptors.buffer_descriptors.find(buffer_info) ==
                                                                   dumped_descriptors.buffer_descriptors.end())
                                 {
@@ -1692,7 +1696,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
 
     assert(original_command_buffer_info);
     assert(original_command_buffer_info->parent_id != format::kNullHandleId);
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
     for (const auto& img_info : image_descriptors)
@@ -1764,7 +1768,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
         }
     }
 
-    const PhysicalDeviceInfo* phys_dev_info = object_info_table.GetPhysicalDeviceInfo(device_info->parent_id);
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
     graphics::VulkanResourcesUtil resource_util(device_info->handle,
@@ -1775,10 +1779,10 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
 
     for (const auto& buf : buffer_descriptors)
     {
-        const BufferInfo*  buffer_info = buf.first;
-        const VkDeviceSize offset      = buf.second.offset;
-        const VkDeviceSize range       = buf.second.range;
-        const VkDeviceSize size        = range == VK_WHOLE_SIZE ? buffer_info->size - offset : range;
+        const VulkanBufferInfo* buffer_info = buf.first;
+        const VkDeviceSize      offset      = buf.second.offset;
+        const VkDeviceSize      range       = buf.second.range;
+        const VkDeviceSize      size        = range == VK_WHOLE_SIZE ? buffer_info->size - offset : range;
 
         std::vector<uint8_t> data;
         VkResult             res = resource_util.ReadFromBufferResource(
@@ -1978,10 +1982,10 @@ VkResult DispatchTraceRaysDumpingContext::FetchIndirectParams()
 {
     assert(original_command_buffer_info);
     assert(original_command_buffer_info->parent_id != format::kNullHandleId);
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(original_command_buffer_info->parent_id);
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(original_command_buffer_info->parent_id);
     assert(device_info);
 
-    const PhysicalDeviceInfo* phys_dev_info = object_info_table.GetPhysicalDeviceInfo(device_info->parent_id);
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
     graphics::VulkanResourcesUtil resource_util(device_info->handle,
@@ -2068,7 +2072,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
     if (output_json_per_command)
     {
         std::stringstream filename;
-        filename << "Dispatch_" << disp_index << "_qs_" << qs_index << "_bcb_" << bcb_index << ".json";
+        filename << "Dispatch_" << disp_index << "_qs_" << qs_index << "_bcb_" << bcb_index << "_dr.json";
         std::filesystem::path filedirname(dump_resource_path);
         std::filesystem::path filebasename(filename.str());
         std::string           full_filename = (filedirname / filebasename).string();
@@ -2148,7 +2152,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                 const uint32_t              binding     = image.desc_binding;
                 const uint32_t              array_index = image.array_index;
                 const VkShaderStageFlagBits stage       = image.stage;
-                const ImageInfo*            img_info    = image.original_image;
+                const VulkanImageInfo*      img_info    = image.original_image;
                 assert(img_info != nullptr);
 
                 auto& image_json_entry         = before_command_output_image_entries[output_image_index++];
@@ -2197,7 +2201,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                                                       aspect,
                                                       ImageFailedScaling(filename),
                                                       mip,
-                                                      layer);
+                                                      layer,
+                                                      dump_images_separate_alpha);
 
                             if (!dump_all_image_subresources)
                             {
@@ -2225,7 +2230,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                 const uint32_t              binding     = buffer.desc_binding;
                 const uint32_t              array_index = buffer.array_index;
                 const VkShaderStageFlagBits stage       = buffer.stage;
-                const BufferInfo*           buffer_info = buffer.original_buffer;
+                const VulkanBufferInfo*     buffer_info = buffer.original_buffer;
                 assert(buffer_info != nullptr);
 
                 std::string filename = GenerateDispatchTraceRaysBufferFilename(
@@ -2254,7 +2259,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
             const uint32_t              binding     = image.desc_binding;
             const uint32_t              array_index = image.array_index;
             const VkShaderStageFlagBits stage       = image.stage;
-            const ImageInfo*            img_info    = image.original_image;
+            const VulkanImageInfo*      img_info    = image.original_image;
             assert(img_info != nullptr);
 
             auto& image_json_entry         = image_outputs_json_entries[mutable_images_count++];
@@ -2303,7 +2308,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                                                   aspect,
                                                   ImageFailedScaling(filename),
                                                   mip,
-                                                  layer);
+                                                  layer,
+                                                  dump_images_separate_alpha);
 
                         if (!dump_all_image_subresources)
                         {
@@ -2332,7 +2338,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
             const uint32_t              binding     = buffer.desc_binding;
             const uint32_t              array_index = buffer.array_index;
             const VkShaderStageFlagBits stage       = buffer.stage;
-            const BufferInfo*           buffer_info = buffer.original_buffer;
+            const VulkanBufferInfo*     buffer_info = buffer.original_buffer;
             assert(buffer_info != nullptr);
 
             std::string filename = GenerateDispatchTraceRaysBufferFilename(
@@ -2377,7 +2383,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                             entry["binding"]    = desc_binding_index;
                             entry["arrayIndex"] = i;
 
-                            const ImageInfo* img_info = object_info_table.GetImageInfo(
+                            const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
                                 desc_binding.second.image_info[i].image_view_info->image_id);
                             assert(img_info);
 
@@ -2415,7 +2421,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonDispatchInfo(uint64_t qs
                                                                   aspect,
                                                                   ImageFailedScaling(filename),
                                                                   mip,
-                                                                  layer);
+                                                                  layer,
+                                                                  dump_images_separate_alpha);
 
                                         if (!dump_all_image_subresources)
                                         {
@@ -2514,7 +2521,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
     if (output_json_per_command)
     {
         std::stringstream filename;
-        filename << "TraceRays_" << tr_index << "_qs_" << qs_index << "_bcb_" << bcb_index << ".json";
+        filename << "TraceRays_" << tr_index << "_qs_" << qs_index << "_bcb_" << bcb_index << "_dr.json";
         std::filesystem::path filedirname(dump_resource_path);
         std::filesystem::path filebasename(filename.str());
         std::string           full_filename = (filedirname / filebasename).string();
@@ -2587,7 +2594,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
                 const uint32_t              binding     = image.desc_binding;
                 const uint32_t              array_index = image.array_index;
                 const VkShaderStageFlagBits stage       = image.stage;
-                const ImageInfo*            img_info    = image.original_image;
+                const VulkanImageInfo*      img_info    = image.original_image;
                 assert(img_info != nullptr);
 
                 std::vector<VkImageAspectFlagBits> aspects;
@@ -2636,7 +2643,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
                                                       aspect,
                                                       ImageFailedScaling(filename),
                                                       mip,
-                                                      layer);
+                                                      layer,
+                                                      dump_images_separate_alpha);
 
                             if (!dump_all_image_subresources)
                             {
@@ -2664,7 +2672,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
                 const uint32_t              binding     = buffer.desc_binding;
                 const uint32_t              array_index = buffer.array_index;
                 const VkShaderStageFlagBits stage       = buffer.stage;
-                const BufferInfo*           buffer_info = buffer.original_buffer;
+                const VulkanBufferInfo*     buffer_info = buffer.original_buffer;
                 assert(buffer_info != nullptr);
 
                 std::string filename = GenerateDispatchTraceRaysBufferFilename(
@@ -2692,7 +2700,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
             const uint32_t              binding     = image.desc_binding;
             const uint32_t              array_index = image.array_index;
             const VkShaderStageFlagBits stage       = image.stage;
-            const ImageInfo*            img_info    = image.original_image;
+            const VulkanImageInfo*      img_info    = image.original_image;
             assert(img_info != nullptr);
 
             auto& image_json_entry         = outputs_json_entries_after["images"][mutable_images_count++];
@@ -2741,7 +2749,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
                                                   aspect,
                                                   ImageFailedScaling(filename),
                                                   mip,
-                                                  layer);
+                                                  layer,
+                                                  dump_images_separate_alpha);
 
                         if (!dump_all_image_subresources)
                         {
@@ -2767,7 +2776,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
             const uint32_t              binding     = buffer.desc_binding;
             const uint32_t              array_index = buffer.array_index;
             const VkShaderStageFlagBits stage       = buffer.stage;
-            const BufferInfo*           buffer_info = buffer.original_buffer;
+            const VulkanBufferInfo*     buffer_info = buffer.original_buffer;
             assert(buffer_info != nullptr);
 
             std::string filename = GenerateDispatchTraceRaysBufferFilename(
@@ -2812,7 +2821,7 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
 
                                 auto& entry = tr_entry["descriptors"][shader_stage_name][stage_entry_index++];
 
-                                const ImageInfo* img_info = object_info_table.GetImageInfo(
+                                const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
                                     desc_binding.second.image_info[img].image_view_info->image_id);
                                 assert(img_info);
 
@@ -2856,7 +2865,8 @@ void DispatchTraceRaysDumpingContext::GenerateOutputJsonTraceRaysIndex(uint64_t 
                                                                       aspect,
                                                                       ImageFailedScaling(filename),
                                                                       mip,
-                                                                      layer);
+                                                                      layer,
+                                                                      dump_images_separate_alpha);
 
                                             if (!dump_all_image_subresources)
                                             {
@@ -2956,9 +2966,9 @@ void DispatchTraceRaysDumpingContext::InsertNewDispatchParameters(uint64_t index
     assert(new_entry.second);
 }
 
-void DispatchTraceRaysDumpingContext::InsertNewDispatchParameters(uint64_t          index,
-                                                                  const BufferInfo* buffer_info,
-                                                                  VkDeviceSize      offset)
+void DispatchTraceRaysDumpingContext::InsertNewDispatchParameters(uint64_t                index,
+                                                                  const VulkanBufferInfo* buffer_info,
+                                                                  VkDeviceSize            offset)
 {
     auto new_entry = dispatch_params.emplace(
         std::piecewise_construct,

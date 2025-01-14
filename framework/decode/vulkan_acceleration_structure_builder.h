@@ -26,7 +26,7 @@
 #include "decode/vulkan_resource_allocator.h"
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/vulkan_object_info_table.h"
-#include "decode/vulkan_buffer_tracker.h"
+#include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_internal_buffer_manager.h"
 #include "util/defines.h"
 
@@ -45,12 +45,12 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanAccelerationStructureBuilder
 {
   public:
-    VulkanAccelerationStructureBuilder(const encode::VulkanDeviceTable*                 device_table,
-                                       const PhysicalDeviceInfo*                        physical_device_info,
-                                       VkDevice                                         device,
-                                       VulkanResourceAllocator*                         allocator,
-                                       const VkPhysicalDeviceMemoryProperties&          properties,
-                                       VulkanBufferTracker*                             buffer_tracker);
+    VulkanAccelerationStructureBuilder(const encode::VulkanDeviceTable*        device_table,
+                                       const VulkanPhysicalDeviceInfo*         physical_device_info,
+                                       VkDevice                                device,
+                                       VulkanResourceAllocator*                allocator,
+                                       const VkPhysicalDeviceMemoryProperties& properties,
+                                       VulkanDeviceAddressTracker&             buffer_tracker);
 
     ~VulkanAccelerationStructureBuilder();
 
@@ -70,30 +70,30 @@ class VulkanAccelerationStructureBuilder
                                                     VkQueryPool                 pool,
                                                     uint32_t                    first_query);
 
-    void OnGetAccelerationStructureBuildSizes(const DeviceInfo*                                  device_info,
+    void OnGetAccelerationStructureBuildSizes(const VulkanDeviceInfo*                            device_info,
                                               VkAccelerationStructureBuildTypeKHR                type,
                                               const VkAccelerationStructureBuildGeometryInfoKHR* build_Info,
                                               const uint32_t*                                    max_primitive_counts,
                                               VkAccelerationStructureBuildSizesInfoKHR*          size_info);
 
-    void OnInitBufferDataUpdateAddress(const DeviceInfo*                         device_info,
-                                       const BufferInfo*                         buffer_info,
+    void OnInitBufferDataUpdateAddress(const VulkanDeviceInfo*                   device_info,
+                                       const VulkanBufferInfo*                   buffer_info,
                                        std::vector<format::AddressLocationInfo>& address_locations);
 
-    void OnInitBufferDataUpdateShaderGroupHandle(const DeviceInfo*                              device_info,
-                                                 const BufferInfo*                              buffer_info,
+    void OnInitBufferDataUpdateShaderGroupHandle(const VulkanDeviceInfo*                        device_info,
+                                                 const VulkanBufferInfo*                        buffer_info,
                                                  std::vector<format::ShaderHandleLocationInfo>& shader_locations);
 
-    VkResult OnCreateAccelerationStructure(const DeviceInfo*                           device_info,
+    VkResult OnCreateAccelerationStructure(const VulkanDeviceInfo*                     device_info,
                                            const VkAccelerationStructureCreateInfoKHR* create_info,
                                            const VkAllocationCallbacks*                pAllocator,
-                                           const BufferInfo*                           buffer_info,
+                                           const VulkanBufferInfo*                     buffer_info,
                                            format::HandleId                            capture_id,
                                            VkAccelerationStructureKHR*                 handle);
 
-    void OnDestroyAccelerationStructure(const AccelerationStructureKHRInfo* acceleration_structure_info);
+    void OnDestroyAccelerationStructure(const VulkanAccelerationStructureKHRInfo* acceleration_structure_info);
 
-    void OnDestroyBuffer(const BufferInfo* buffer_info);
+    void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         uint32_t                                                      info_count,
@@ -114,11 +114,12 @@ class VulkanAccelerationStructureBuilder
     // called before command gets executed
     // the query pool results contain the AS compacted sizes
     // inject duplicate of this command that puts the results in internal buffer
-    void OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info, const QueryPoolInfo* query_pool_info);
+    void OnCmdCopyQueryPoolResults(const VulkanCommandBufferInfo* command_buffer_info,
+                                   const VulkanQueryPoolInfo*     query_pool_info);
 
     // called before command gets executed
     // inject duplicate of this command to retrieve compact sizes
-    void OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info);
+    void OnGetQueryPoolResults(const VulkanDeviceInfo* device_info, const VulkanQueryPoolInfo* query_pool_info);
 
     VkDeviceAddress GetActualDeviceAddress(VkAccelerationStructureKHR handle);
 
@@ -174,12 +175,12 @@ class VulkanAccelerationStructureBuilder
 
   private:
     Functions                        functions_;
-    const PhysicalDeviceInfo*        physical_device_info_;
+    const VulkanPhysicalDeviceInfo*  physical_device_info_;
     VkDevice                         device_;
     VulkanResourceAllocator*         allocator_;
     VkPhysicalDeviceMemoryProperties physical_device_memory_properties_;
 
-    VulkanBufferTracker*        buffer_tracker_;
+    VulkanDeviceAddressTracker& device_address_tracker_;
     VulkanInternalBufferManager internal_buffer_manager_;
     struct DoubleBufferScratch
     {

@@ -25,9 +25,11 @@
 #include "util/page_guard_manager.h"
 
 #include "util/logging.h"
+#include "util/page_status_tracker.h"
 #include "util/platform.h"
 
 #include <cassert>
+#include <csetjmp>
 #include <cinttypes>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -118,7 +120,7 @@ static stack_t          s_old_stack     = {};
 static uint8_t* s_alt_stack      = nullptr;
 static size_t   s_alt_stack_size = 0;
 
-static void PageGuardExceptionHandler(int id, siginfo_t* info, void* data)
+static bool TryHandlePageGuardException(int id, siginfo_t* info, void* data)
 {
     bool              handled = false;
     PageGuardManager* manager = PageGuardManager::Get();
@@ -181,8 +183,12 @@ static void PageGuardExceptionHandler(int id, siginfo_t* info, void* data)
 #endif
         handled = manager->HandleGuardPageViolation(info->si_addr, is_write, true);
     }
+    return handled;
+}
 
-    if (!handled)
+static void PageGuardExceptionHandler(int id, siginfo_t* info, void* data)
+{
+    if (!TryHandlePageGuardException(id, info, data))
     {
         // This was not a SIGSEGV signal for an address that was protected with mprotect().
         // Raise the original signal handler for this case.
@@ -211,6 +217,18 @@ void PageGuardManager::InitializeSystemExceptionContext(void)
     {
         s_alt_stack_size = SIGSTKSZ;
         s_alt_stack      = new uint8_t[s_alt_stack_size];
+    }
+#endif
+#if defined(__ANDROID__)
+    AddSpecialSignalHandlerFn =
+        reinterpret_cast<PFN_AddSpecialSignalHandlerFn>(dlsym(RTLD_DEFAULT, "AddSpecialSignalHandlerFn"));
+    RemoveSpecialSignalHandlerFn =
+        reinterpret_cast<PFN_RemoveSpecialSignalHandlerFn>(dlsym(RTLD_DEFAULT, "RemoveSpecialSignalHandlerFn"));
+    if (!AddSpecialSignalHandlerFn || !RemoveSpecialSignalHandlerFn)
+    {
+        AddSpecialSignalHandlerFn    = nullptr;
+        RemoveSpecialSignalHandlerFn = nullptr;
+        GFXRECON_LOG_WARNING("PageGuardManager could not find libsigchain symbols. Falling back to sigaction.")
     }
 #endif
 }
@@ -342,6 +360,9 @@ bool PageGuardManager::CheckSignalHandler()
 void* PageGuardManager::SignalHandlerWatcher(void* args)
 {
     while (instance_->enable_signal_handler_watcher_ &&
+#if defined(__ANDROID__)
+           !instance_->libsigchain_active_ &&
+#endif
            (instance_->signal_handler_watcher_max_restores_ < 0 ||
             signal_handler_watcher_restores_ < static_cast<uint32_t>(instance_->signal_handler_watcher_max_restores_)))
     {
@@ -498,48 +519,88 @@ void PageGuardManager::AddExceptionHandler()
             exception_handler_count_ = 1;
         }
 #else
-        // Retrieve the current SIGSEGV handler info before replacing the current signal handler to determine if our
-        // replacement signal handler should use an alternate signal stack.
-        int result = sigaction(MEMPROT_SIGNAL, nullptr, &s_old_sigaction);
-
-        if (result != -1)
+#if defined(__ANDROID__)
+        if (!libsigchain_active_ && AddSpecialSignalHandlerFn)
         {
-            struct sigaction sa = {};
+            static std::jmp_buf abort_env;
 
-            sa.sa_flags = SA_SIGINFO;
-            sigemptyset(&sa.sa_mask);
-            sa.sa_sigaction = PageGuardExceptionHandler;
+            struct sigaction orig_abort_sa = {};
 
-            if ((s_old_sigaction.sa_flags & SA_ONSTACK) == SA_ONSTACK)
+            struct sigaction abort_sa = {};
+            abort_sa.sa_flags         = SA_SIGINFO;
+            sigemptyset(&abort_sa.sa_mask);
+            abort_sa.sa_sigaction = [](int id, siginfo_t* info, void* data) { std::longjmp(abort_env, 0); };
+
+            // Install temporary handler for SIGABRT to catch failure in AddSpecialSignalHandlerFn
+            sigaction(SIGABRT, &abort_sa, &orig_abort_sa);
+            if (setjmp(abort_env) == 0)
             {
-                // Replace the current alternate signal stack with one that is guatanteed to be valid for the page guard
-                // signal handler.
-                stack_t new_stack;
-                new_stack.ss_sp    = s_alt_stack;
-                new_stack.ss_flags = 0;
-                new_stack.ss_size  = s_alt_stack_size;
+                // Install special signal handler with libsigchain
+                SigchainAction sc = {};
+                sc.sc_sigaction   = TryHandlePageGuardException;
+                sigemptyset(&sc.sc_mask);
+                AddSpecialSignalHandlerFn(MEMPROT_SIGNAL, &sc);
 
-                sigaltstack(&new_stack, &s_old_stack);
-
-                sa.sa_flags |= SA_ONSTACK;
+                // If we got this far then it was successful
+                libsigchain_active_      = true;
+                exception_handler_       = reinterpret_cast<void*>(TryHandlePageGuardException);
+                exception_handler_count_ = 1;
+            }
+            else
+            {
+                GFXRECON_LOG_WARNING(
+                    "PageGuardManager libsigchain AddSpecialSignalHandlerFn failed, falling back to sigaction");
             }
 
-            result = sigaction(MEMPROT_SIGNAL, &sa, nullptr);
+            // Restore original SIGABRT handler
+            sigaction(SIGABRT, &orig_abort_sa, nullptr);
         }
-
-        if (result != -1)
+        if (!libsigchain_active_)
+#endif
         {
-            if (sigaction(MEMPROT_SIGNAL, nullptr, &s_old_sigaction) == -1)
+            // Retrieve the current SIGSEGV handler info before replacing the current signal handler to determine if our
+            // replacement signal handler should use an alternate signal stack.
+            int result = sigaction(MEMPROT_SIGNAL, nullptr, &s_old_sigaction);
+
+            if (result != -1)
             {
-                GFXRECON_LOG_ERROR("PageGuardManager failed to get exception handler (errno = %d)", errno);
+                struct sigaction sa = {};
+
+                sa.sa_flags = SA_SIGINFO;
+                sigemptyset(&sa.sa_mask);
+                sa.sa_sigaction = PageGuardExceptionHandler;
+
+                if ((s_old_sigaction.sa_flags & SA_ONSTACK) == SA_ONSTACK)
+                {
+                    // Replace the current alternate signal stack with one that is guaranteed to be valid for the page
+                    // guard signal handler.
+                    stack_t new_stack;
+                    new_stack.ss_sp    = s_alt_stack;
+                    new_stack.ss_flags = 0;
+                    new_stack.ss_size  = s_alt_stack_size;
+
+                    sigaltstack(&new_stack, &s_old_stack);
+
+                    sa.sa_flags |= SA_ONSTACK;
+                }
+
+                result = sigaction(MEMPROT_SIGNAL, &sa, nullptr);
             }
 
-            exception_handler_       = reinterpret_cast<void*>(PageGuardExceptionHandler);
-            exception_handler_count_ = 1;
-        }
-        else
-        {
-            GFXRECON_LOG_ERROR("PageGuardManager failed to register exception handler (errno = %d)", errno);
+            if (result != -1)
+            {
+                if (sigaction(MEMPROT_SIGNAL, nullptr, &s_old_sigaction) == -1)
+                {
+                    GFXRECON_LOG_ERROR("PageGuardManager failed to get exception handler (errno = %d)", errno);
+                }
+
+                exception_handler_       = reinterpret_cast<void*>(PageGuardExceptionHandler);
+                exception_handler_count_ = 1;
+            }
+            else
+            {
+                GFXRECON_LOG_ERROR("PageGuardManager failed to register exception handler (errno = %d)", errno);
+            }
         }
 #endif
     }
@@ -583,16 +644,27 @@ void PageGuardManager::ClearExceptionHandler(void* exception_handler)
                            GetLastError());
     }
 #else
-    if ((s_old_sigaction.sa_flags & SA_ONSTACK) == SA_ONSTACK)
+#if defined(__ANDROID__)
+    if (libsigchain_active_)
     {
-        // Restore the alternate signal stack.
-        sigaltstack(&s_old_stack, nullptr);
+        RemoveSpecialSignalHandlerFn(MEMPROT_SIGNAL,
+                                     reinterpret_cast<decltype(SigchainAction::sc_sigaction)>(exception_handler));
+        libsigchain_active_ = false;
     }
-
-    // Restore the old signal handler.
-    if (sigaction(MEMPROT_SIGNAL, &s_old_sigaction, nullptr) == -1)
+    else
+#endif
     {
-        GFXRECON_LOG_ERROR("PageGuardManager failed to remove exception handler (errno= %d)", errno);
+        if ((s_old_sigaction.sa_flags & SA_ONSTACK) == SA_ONSTACK)
+        {
+            // Restore the alternate signal stack.
+            sigaltstack(&s_old_stack, nullptr);
+        }
+
+        // Restore the old signal handler.
+        if (sigaction(MEMPROT_SIGNAL, &s_old_sigaction, nullptr) == -1)
+        {
+            GFXRECON_LOG_ERROR("PageGuardManager failed to remove exception handler (errno= %d)", errno);
+        }
     }
 #endif
 }
@@ -1373,6 +1445,31 @@ const void* PageGuardManager::GetMappedMemory(uint64_t memory_id) const
     }
 
     return nullptr;
+}
+
+void PageGuardManager::GetDirtyMemoryRegions(uint64_t                                         memory_id,
+                                             std::unordered_map<uint64_t, const MemoryInfo&>& memories_page_status)
+{
+    std::lock_guard<std::mutex> lock(tracked_memory_lock_);
+
+    if (memory_id == 0)
+    {
+        for (auto& entry : memory_info_)
+        {
+            if (entry.second.is_modified)
+            {
+                memories_page_status.emplace(entry.first, entry.second);
+            }
+        }
+    }
+    else
+    {
+        const auto entry = memory_info_.find(memory_id);
+        if (entry != memory_info_.end() && entry->second.is_modified)
+        {
+            memories_page_status.emplace(entry->first, entry->second);
+        }
+    }
 }
 
 GFXRECON_END_NAMESPACE(util)

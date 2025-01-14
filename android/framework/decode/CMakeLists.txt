@@ -5,6 +5,10 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/annotation_handler.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/api_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/common_consumer_base.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/common_handle_mapping_util.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/common_object_info_table.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/common_struct_handle_mappers.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/common_object_info_table.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/copy_shaders.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/custom_vulkan_struct_decoders.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/custom_vulkan_struct_decoders.cpp
@@ -24,6 +28,8 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/handle_pointer_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/json_writer.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/json_writer.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/mark_injected_commands.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/mark_injected_commands.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/pointer_decoder_base.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/pointer_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/portability.h
@@ -51,6 +57,9 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_decoder_base.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_default_allocator.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_default_allocator.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer_shaders.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_device_address_tracker.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_device_address_tracker.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_captured_swapchain.h

@@ -216,17 +216,6 @@ class MetadataJsonConsumer : public Base
     }
 
     virtual void
-    ProcessSetDeviceMemoryPropertiesCommand(format::HandleId                             physical_device_id,
-                                            const std::vector<format::DeviceMemoryType>& memory_types,
-                                            const std::vector<format::DeviceMemoryHeap>& memory_heaps) override
-    {
-        const util::JsonOptions& json_options = GetJsonOptions();
-        auto&                    jdata        = WriteMetaCommandStart("SetDeviceMemoryPropertiesCommand");
-        HandleToJson(jdata["physical_device_id"], physical_device_id, json_options);
-        WriteBlockEnd();
-    }
-
-    virtual void
     ProcessSetOpaqueAddressCommand(format::HandleId device_id, format::HandleId object_id, uint64_t address) override
     {
         const JsonOptions& json_options = GetJsonOptions();
@@ -416,7 +405,16 @@ class MetadataJsonConsumer : public Base
                 json_data[var]  = val;
             }
         }
+        WriteBlockEnd();
+    }
 
+    virtual void ProcessExecuteBlocksFromFile(uint32_t n_blocks, int64_t offset, const std::string& filename) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("ExecuteBlocksFromFile");
+        FieldToJson(jdata["n_blocks"], n_blocks, json_options);
+        FieldToJson(jdata["offset"], offset, json_options);
+        FieldToJson(jdata["filename"], filename, json_options);
         WriteBlockEnd();
     }
 

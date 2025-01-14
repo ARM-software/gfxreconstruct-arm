@@ -21,6 +21,7 @@
 ** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ** DEALINGS IN THE SOFTWARE.
 */
+#include <string>
 #include PROJECT_VERSION_HEADER_FILE
 #include "tool_settings.h"
 #include "decode/json_writer.h" /// @todo move to util?
@@ -47,7 +48,7 @@ using Dx12JsonConsumer =
 const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags,--"
                         "verbose";
 
-const char kArguments[] = "--output,--format,--frame-range";
+const char kArguments[] = "--output,--format,--log-level,--frame-range";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -197,20 +198,38 @@ int main(int argc, const char** argv)
     }
 #endif
 
-    const auto&                     positional_arguments = arg_parser.GetPositionalArguments();
-    std::string                     input_filename       = positional_arguments[0];
-    JsonFormat                      output_format        = GetOutputFormat(arg_parser);
-    std::string                     output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
-    std::string                     filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
-    std::string                     output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
-    std::string                     data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
-    std::vector<uint32_t>           frame_indices        = GetFrameIndices(arg_parser);
-    bool                            frame_range_option   = !arg_parser.GetArgumentValue(kFrameRange).empty();
-    bool                            dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
-    bool                            expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
-    bool                            file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
-    bool                            verbose              = arg_parser.IsOptionSet(kVerboseOption);
-    bool                            output_to_stdout     = output_filename == "stdout";
+    // Reinitialize logging with values retrieved from command line arguments
+    gfxrecon::util::Log::Settings log_settings;
+    GetLogSettings(arg_parser, log_settings);
+    gfxrecon::util::Log::Release();
+    gfxrecon::util::Log::Init(log_settings);
+
+    const auto& positional_arguments = arg_parser.GetPositionalArguments();
+    std::string input_filename       = positional_arguments[0];
+    JsonFormat  output_format        = GetOutputFormat(arg_parser);
+    std::string output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
+    std::string filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
+    std::string output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
+    std::string data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
+    bool        dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
+    bool        expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
+    bool        file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
+    bool        verbose              = arg_parser.IsOptionSet(kVerboseOption);
+    bool        output_to_stdout     = output_filename == "stdout";
+
+    std::vector<uint32_t> frame_indices      = GetFrameIndices(arg_parser);
+    bool                  frame_range_option = !arg_parser.GetArgumentValue(kFrameRange).empty();
+
+    bool   is_asset_file = false;
+    size_t last_dot_pos  = input_filename.find_last_of(".");
+    if (last_dot_pos != std::string::npos)
+    {
+        if (!input_filename.compare(last_dot_pos, 5, ".gfxa"))
+        {
+            is_asset_file = true;
+        }
+    }
+
     gfxrecon::decode::FileProcessor file_processor;
 
 #ifndef D3D12_SUPPORT
@@ -218,7 +237,7 @@ int main(int argc, const char** argv)
     bool detected_vulkan = false;
     gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
 
-    if (!detected_vulkan)
+    if (!detected_vulkan && !is_asset_file)
     {
         GFXRECON_LOG_INFO("Capture file does not contain Vulkan content.  D3D12 content may be present but "
                           "gfxrecon-convert is not compiled with D3D12 support.");

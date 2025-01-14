@@ -23,10 +23,9 @@
 import json
 import sys
 import re
-from base_generator import write
-from dx12_base_generator import Dx12BaseGenerator, Dx12GeneratorOptions
+from dx12_base_generator import Dx12BaseGenerator, Dx12GeneratorOptions, write
 from dx12_replay_consumer_header_generator import Dx12ReplayConsumerHeaderGenerator, Dx12ReplayConsumerHeaderGeneratorOptions
-from base_replay_consumer_body_generator import BaseReplayConsumerBodyGenerator
+from dx12_base_replay_consumer_body_generator import Dx12BaseReplayConsumerBodyGenerator
 
 
 class Dx12ReplayConsumerBodyGeneratorOptions(
@@ -54,7 +53,7 @@ class Dx12ReplayConsumerBodyGeneratorOptions(
 
 
 class Dx12ReplayConsumerBodyGenerator(
-    BaseReplayConsumerBodyGenerator, Dx12ReplayConsumerHeaderGenerator
+    Dx12BaseReplayConsumerBodyGenerator, Dx12ReplayConsumerHeaderGenerator
 ):
     """Generates C++ functions responsible for consuming Dx12 API calls."""
 
@@ -135,7 +134,7 @@ class Dx12ReplayConsumerBodyGenerator(
             header_dict
         )
         Dx12BaseGenerator.generate_feature(self)
-        BaseReplayConsumerBodyGenerator.generate_feature(self)
+        Dx12BaseReplayConsumerBodyGenerator.generate_feature(self)
         self.generate_dx12_method_feature()
 
     def generate_dx12_method_feature(self):
@@ -557,7 +556,7 @@ class Dx12ReplayConsumerBodyGenerator(
             )
             if class_name != 'ID3D12GraphicsCommandList':
                 code += (
-                    "            {0}* command_list{1};\n"
+                    "            graphics::dx12::{0}ComPtr command_list{1};\n"
                     "            command_set.list->QueryInterface(IID_PPV_ARGS(&command_list{1}));\n".format(class_name, class_name[-1])
                 )
                 indent_length = len(code)
@@ -614,6 +613,12 @@ class Dx12ReplayConsumerBodyGenerator(
 
         if is_object:
             code += "\n        replay_object,"
+
+        if return_type != 'void':
+            code += (
+                "\n        return_value,"
+                "\n        replay_result,"
+            )
 
         for value in values:
             code += ('\n' + "        " + value.name + ",")

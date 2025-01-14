@@ -26,6 +26,7 @@
 
 #include "util/defines.h"
 #include "format/format.h"
+#include "generated/generated_vulkan_struct_decoders.h"
 
 #include "decode/struct_pointer_decoder.h"
 
@@ -112,6 +113,9 @@ class MetadataConsumerBase
     virtual void ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                const uint8_t*                              data)
     {}
+    virtual void ProcessExecuteBlocksFromFile(uint32_t n_blocks, int64_t offset, const std::string& filename) {}
+
+    virtual void SetCurrentBlockIndex(uint64_t block_index) {}
 
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
@@ -120,16 +124,17 @@ class MetadataConsumerBase
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
     {}
+
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
     {}
+
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
     {}
-    virtual void SetCurrentBlockIndex(uint64_t block_index) {}
 
   protected:
-    uint64_t block_index_;
+    uint64_t block_index_ = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)

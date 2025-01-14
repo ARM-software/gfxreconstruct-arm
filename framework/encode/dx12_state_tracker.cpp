@@ -449,13 +449,16 @@ void Dx12StateTracker::TrackCommandListCreation(ID3D12CommandList_Wrapper* list_
                                                 D3D12_COMMAND_LIST_TYPE    command_list_type,
                                                 ID3D12CommandAllocator*    pCommandAllocator)
 {
-    auto cmd_alloc_wrapper = reinterpret_cast<ID3D12CommandAllocator_Wrapper*>(pCommandAllocator);
+    auto list_info               = list_wrapper->GetObjectInfo();
+    list_info->is_closed         = created_closed;
+    list_info->command_list_type = command_list_type;
 
-    auto list_info                           = list_wrapper->GetObjectInfo();
-    list_info->is_closed                     = created_closed;
-    list_info->command_list_type             = command_list_type;
-    list_info->create_command_allocator_id   = GetDx12WrappedId(pCommandAllocator);
-    list_info->create_command_allocator_info = cmd_alloc_wrapper->GetObjectInfo();
+    if (pCommandAllocator != nullptr)
+    {
+        auto cmd_alloc_wrapper                   = reinterpret_cast<ID3D12CommandAllocator_Wrapper*>(pCommandAllocator);
+        list_info->create_command_allocator_id   = cmd_alloc_wrapper->GetCaptureId();
+        list_info->create_command_allocator_info = cmd_alloc_wrapper->GetObjectInfo();
+    }
 }
 
 void Dx12StateTracker::TrackDescriptorCreation(ID3D12Device_Wrapper*           create_object_wrapper,
@@ -1192,6 +1195,34 @@ Dx12StateTracker::CommitAccelerationStructureCopyInfo(DxAccelerationStructureCop
     inputs_data_resource = dest_build_info.input_data_resource;
 
     return CommitAccelerationStructureBuildInfo(dest_build_info);
+}
+
+void Dx12StateTracker::TrackSetColorSpace1(IDXGISwapChain_Wrapper* wrapper,
+                                           HRESULT                 result,
+                                           DXGI_COLOR_SPACE_TYPE   ColorSpace)
+{
+    GFXRECON_ASSERT(wrapper != nullptr);
+    auto wrapper_info = wrapper->GetObjectInfo();
+
+    wrapper_info->set_color_space  = true;
+    wrapper_info->color_space_type = ColorSpace;
+}
+
+void Dx12StateTracker::TrackSetHDRMetaData(
+    IDXGISwapChain_Wrapper* wrapper, HRESULT result, DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData)
+{
+    GFXRECON_ASSERT(wrapper != nullptr);
+    auto wrapper_info = wrapper->GetObjectInfo();
+
+    wrapper_info->set_hdr_metadata  = true;
+    wrapper_info->hdr_metadata_type = Type;
+    wrapper_info->hdr_metadata_size = Size;
+
+    if (pMetaData != nullptr)
+    {
+        wrapper_info->hdr_metadata = new char[Size]();
+        memcpy(wrapper_info->hdr_metadata, pMetaData, Size);
+    }
 }
 
 #ifdef GFXRECON_AGS_SUPPORT

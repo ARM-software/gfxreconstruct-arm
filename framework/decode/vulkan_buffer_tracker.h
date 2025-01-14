@@ -36,22 +36,22 @@ class VulkanBufferTracker
 {
   public:
     VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
-                        const PhysicalDeviceInfo*        physical_device_info,
+                        const VulkanPhysicalDeviceInfo*  physical_device_info,
                         VkDevice                         device);
 
     ~VulkanBufferTracker();
 
-    void SetBufferInfo(BufferInfo* buffer_info);
+    void SetBufferInfo(VulkanBufferInfo* buffer_info);
 
     void UpdateBufferDeviceAddress(VkDeviceAddress& address);
 
-    BufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address);
+    VulkanBufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address);
 
-    BufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address);
+    VulkanBufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address);
 
     VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
 
-    void OnDestroyBuffer(const BufferInfo* buffer_info);
+    void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
   private:
     void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
@@ -61,10 +61,10 @@ class VulkanBufferTracker
     };
 
   private:
-    Functions                 functions_;
-    VkDevice                  device_;
-    const PhysicalDeviceInfo* physical_device_info_;
-    std::vector<BufferInfo*>  buffers_;
+    Functions                       functions_;
+    VkDevice                        device_;
+    const VulkanPhysicalDeviceInfo* physical_device_info_;
+    std::vector<VulkanBufferInfo*>  buffers_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

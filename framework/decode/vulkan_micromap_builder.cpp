@@ -7,12 +7,12 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanMicromapBuilder::VulkanMicromapBuilder(const encode::VulkanDeviceTable*        device_table,
-                                             const PhysicalDeviceInfo*               physical_device_info,
+                                             const VulkanPhysicalDeviceInfo*         physical_device_info,
                                              VkDevice                                device,
                                              VulkanResourceAllocator*                allocator,
                                              const VkPhysicalDeviceMemoryProperties& properties,
-                                             VulkanBufferTracker*                    buffer_tracker) :
-    buffer_tracker_(buffer_tracker),
+                                             VulkanDeviceAddressTracker&             device_address_tracker) :
+    device_address_tracker_(device_address_tracker),
     allocator_(allocator), physical_device_info_(physical_device_info),
     internal_buffer_manager_(device_table, physical_device_info, device, allocator, properties)
 
@@ -20,13 +20,24 @@ VulkanMicromapBuilder::VulkanMicromapBuilder(const encode::VulkanDeviceTable*   
     InitializeFunctionPointers(device_table);
 }
 
-void VulkanMicromapBuilder::OnGetMicromapBuildSizes(const DeviceInfo*                   device_info,
+void VulkanMicromapBuilder::OnGetMicromapBuildSizes(const VulkanDeviceInfo*             device_info,
                                                     VkAccelerationStructureBuildTypeKHR buildType,
                                                     VkMicromapBuildInfoEXT*             info,
                                                     VkMicromapBuildSizesInfoEXT*        size_info)
 {
-    buffer_tracker_->UpdateBufferDeviceAddress(info->data.deviceAddress);
-    buffer_tracker_->UpdateBufferDeviceAddress(info->triangleArray.deviceAddress);
+    auto address_remap = [this](VkDeviceAddress& capture_address) {
+        auto buffer_info = device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_address);
+        // TODO: we 'should' find that buffer here, check what's missing
+        if (buffer_info != nullptr && buffer_info->replay_address != 0)
+        {
+            uint64_t offset = capture_address - buffer_info->capture_address;
+            // in-place address-remap via const-cast
+            capture_address = buffer_info->replay_address + offset;
+        }
+    };
+
+    address_remap(info->data.deviceAddress);
+    address_remap(info->triangleArray.deviceAddress);
     functions_.get_micromap_build_sizes(device_info->handle, buildType, info, size_info);
     last_build_sizes_ = *size_info;
 }
@@ -40,7 +51,7 @@ void VulkanMicromapBuilder::OnMicromapCompactionDependencyCommand(VkMicromapEXT 
     }
 }
 
-VkResult VulkanMicromapBuilder::OnCreateMicromap(const DeviceInfo*            device_info,
+VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      device_info,
                                                  VkMicromapCreateInfoEXT*     info,
                                                  const VkAllocationCallbacks* pAllocator,
                                                  format::HandleId             capture_id,
@@ -151,7 +162,8 @@ void VulkanMicromapBuilder::UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& b
 
     format::HandleId capture_id = format::kNullHandleId;
     // When fastforwarding, the scratch buffers could be destroyed and not be recreated in state recreation
-    BufferInfo* original_scratch_entry = buffer_tracker_->GetBufferByCaptureDeviceAddress(capture_scratch_address);
+    const VulkanBufferInfo* original_scratch_entry =
+        device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_scratch_address);
     if (original_scratch_entry)
     {
         capture_id = original_scratch_entry->capture_id;
@@ -194,22 +206,45 @@ void VulkanMicromapBuilder::UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& b
 
 void VulkanMicromapBuilder::UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_info)
 {
+
+    auto address_remap = [this](VkDeviceAddress& capture_address) {
+        auto buffer_info = device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_address);
+        // TODO: we 'should' find that buffer here, check what's missing
+        if (buffer_info != nullptr && buffer_info->replay_address != 0)
+        {
+            uint64_t offset = capture_address - buffer_info->capture_address;
+            // in-place address-remap via const-cast
+            capture_address = buffer_info->replay_address + offset;
+        }
+    };
+
     auto& data          = build_info.data.deviceAddress;
     auto& triangleArray = build_info.triangleArray.deviceAddress;
-    buffer_tracker_->UpdateBufferDeviceAddress(data);
-    buffer_tracker_->UpdateBufferDeviceAddress(triangleArray);
+    address_remap(data);
+    address_remap(triangleArray);
 }
 
-void VulkanMicromapBuilder::OnDestroyBuffer(const BufferInfo* buffer_info)
+void VulkanMicromapBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
 {
     scratch_double_buffer_.scratches_previous.erase(buffer_info->capture_id);
     scratch_double_buffer_.scratches_current.erase(buffer_info->capture_id);
 }
 
-void VulkanMicromapBuilder::OnCmdBuildAccStrHandling(VulkanBufferTracker*                         buffer_tracker,
-                                                     uint32_t                                     info_count,
+void VulkanMicromapBuilder::OnCmdBuildAccStrHandling(VulkanDeviceAddressTracker& device_address_tracker,
+                                                     uint32_t                    info_count,
                                                      VkAccelerationStructureBuildGeometryInfoKHR* infos)
 {
+    auto address_remap = [&device_address_tracker](VkDeviceAddress& capture_address) {
+        auto buffer_info = device_address_tracker.GetBufferByCaptureDeviceAddress(capture_address);
+        // TODO: we 'should' find that buffer here, check what's missing
+        if (buffer_info != nullptr && buffer_info->replay_address != 0)
+        {
+            uint64_t offset = capture_address - buffer_info->capture_address;
+            // in-place address-remap via const-cast
+            capture_address = buffer_info->replay_address + offset;
+        }
+    };
+
     // replace indexBuffer address
     for (uint64_t i = 0; i < info_count; i++)
     {
@@ -249,7 +284,7 @@ void VulkanMicromapBuilder::OnCmdBuildAccStrHandling(VulkanBufferTracker*       
                 {
                     VkAccelerationStructureTrianglesOpacityMicromapEXT* micromap_struct =
                         (VkAccelerationStructureTrianglesOpacityMicromapEXT*)pNextStruct;
-                    buffer_tracker->UpdateBufferDeviceAddress(micromap_struct->indexBuffer.deviceAddress);
+                    address_remap(micromap_struct->indexBuffer.deviceAddress);
                 }
                 pNextStruct = pNextStruct->pNext;
             }
@@ -257,7 +292,7 @@ void VulkanMicromapBuilder::OnCmdBuildAccStrHandling(VulkanBufferTracker*       
     }
 }
 
-void VulkanMicromapBuilder::OnDestroyMicromap(const MicromapEXTInfo* micromap_info)
+void VulkanMicromapBuilder::OnDestroyMicromap(const VulkanMicromapEXTInfo* micromap_info)
 {
     micromaps_.erase(micromap_info->handle);
 }
@@ -290,8 +325,8 @@ void VulkanMicromapBuilder::OnCmdWriteMicromapsProperties(VkCommandBuffer comman
 
 // inject vkCmdCopyQueryPoolResults command that copies the results to internal buffer in the expected format
 // processing of the results happens in OnCreateMicromap
-void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const CommandBufferInfo* command_buffer_info,
-                                                      const QueryPoolInfo*     query_pool_info)
+void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferInfo* command_buffer_info,
+                                                      const VulkanQueryPoolInfo*     query_pool_info)
 {
     if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
     {
@@ -339,7 +374,8 @@ void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const CommandBufferInfo* c
 
 // inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
 // processed map
-void VulkanMicromapBuilder::OnGetQueryPoolResults(const DeviceInfo* device_info, const QueryPoolInfo* query_pool_info)
+void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    device_info,
+                                                  const VulkanQueryPoolInfo* query_pool_info)
 {
     if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
     {

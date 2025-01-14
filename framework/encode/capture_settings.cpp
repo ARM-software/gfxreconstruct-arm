@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <limits>
 #include <sstream>
+#include <string>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -92,6 +93,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define CAPTURE_TRIGGER_FRAMES_UPPER                         "CAPTURE_TRIGGER_FRAMES"
 #define CAPTURE_ANDROID_TRIGGER_LOWER                        "capture_android_trigger"
 #define CAPTURE_ANDROID_TRIGGER_UPPER                        "CAPTURE_ANDROID_TRIGGER"
+#define CAPTURE_ANDROID_DUMP_ASSETS_LOWER                    "capture_android_dump_assets"
+#define CAPTURE_ANDROID_DUMP_ASSETS_UPPER                    "CAPTURE_ANDROID_DUMP_ASSETS"
 #define CAPTURE_IUNKNOWN_WRAPPING_LOWER                      "capture_iunknown_wrapping"
 #define CAPTURE_IUNKNOWN_WRAPPING_UPPER                      "CAPTURE_IUNKNOWN_WRAPPING"
 #define CAPTURE_QUEUE_SUBMITS_LOWER                          "capture_queue_submits"
@@ -102,6 +105,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_LOWER         "render_pass_slice_command_buffer_begin"
 #define RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_UPPER         "RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN"
 #endif
+#define CAPTURE_USE_ASSET_FILE_LOWER                         "capture_use_asset_file"
+#define CAPTURE_USE_ASSET_FILE_UPPER                         "CAPTURE_USE_ASSET_FILE"
 #define PAGE_GUARD_COPY_ON_MAP_LOWER                         "page_guard_copy_on_map"
 #define PAGE_GUARD_COPY_ON_MAP_UPPER                         "PAGE_GUARD_COPY_ON_MAP"
 #define PAGE_GUARD_SEPARATE_READ_LOWER                       "page_guard_separate_read"
@@ -198,6 +203,7 @@ const char kCaptureTriggerEnvVar[]                           = GFXRECON_OPTION_S
 const char kCaptureTriggerFramesEnvVar[]                     = GFXRECON_OPTION_STR(CAPTURE_TRIGGER_FRAMES);
 const char kCaptureIUnknownWrappingEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_IUNKNOWN_WRAPPING);
 const char kCaptureQueueSubmitsEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_QUEUE_SUBMITS);
+const char kCaptureUseAssetFileEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_USE_ASSET_FILE);
 #ifdef ARM_INTERNAL
 const char kRenderPassSliceRangeEnvVar[]                     = GFXRECON_OPTION_STR(RENDER_PASS_SLICE_RANGE);
 const char kRenderPassSliceCommandBufferBeginEnvVar[]        = GFXRECON_OPTION_STR(RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN);
@@ -232,6 +238,7 @@ const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_S
 
 #if defined(__ANDROID__)
 const char kCaptureAndroidTriggerEnvVar[]                    = GFXRECON_OPTION_STR(CAPTURE_ANDROID_TRIGGER);
+const char kCaptureAndroidDumpAssetsEnvVar[]                 = GFXRECON_OPTION_STR(CAPTURE_ANDROID_DUMP_ASSETS);
 #endif
 
 // Capture options for settings file.
@@ -263,6 +270,7 @@ const std::string kOptionKeyCaptureTrigger                           = std::stri
 const std::string kOptionKeyCaptureTriggerFrames                     = std::string(kSettingsFilter) + std::string(CAPTURE_TRIGGER_FRAMES_LOWER);
 const std::string kOptionKeyCaptureIUnknownWrapping                  = std::string(kSettingsFilter) + std::string(CAPTURE_IUNKNOWN_WRAPPING_LOWER);
 const std::string kOptionKeyCaptureQueueSubmits                      = std::string(kSettingsFilter) + std::string(CAPTURE_QUEUE_SUBMITS_LOWER);
+const std::string kOptionKeyCaptureUseAssetFile                      = std::string(kSettingsFilter) + std::string(CAPTURE_USE_ASSET_FILE_LOWER);
 #ifdef ARM_INTERNAL
 const std::string kOptionKeyRenderPassSliceRange                     = std::string(kSettingsFilter) + std::string(RENDER_PASS_SLICE_RANGE_LOWER);
 const std::string kOptionKeyRenderPassSliceCommandBufferBegin        = std::string(kSettingsFilter) + std::string(RENDER_PASS_SLICE_COMMAND_BUFFER_BEGIN_LOWER);
@@ -349,6 +357,17 @@ void CaptureSettings::LoadRunTimeEnvVarSettings(CaptureSettings* settings)
         {
             settings->trace_settings_.trim_boundary = TrimBoundary::kFrames;
         }
+
+        value = util::platform::GetEnv(kCaptureAndroidDumpAssetsEnvVar);
+        if (value.empty())
+        {
+            settings->trace_settings_.runtime_write_assets = false;
+        }
+        else
+        {
+            settings->trace_settings_.runtime_write_assets =
+                ParseBoolString(value, settings->trace_settings_.runtime_write_assets);
+        }
     }
 #endif
 }
@@ -412,11 +431,14 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kCaptureTriggerEnvVar, kOptionKeyCaptureTrigger);
     LoadSingleOptionEnvVar(options, kCaptureTriggerFramesEnvVar, kOptionKeyCaptureTriggerFrames);
     LoadSingleOptionEnvVar(options, kCaptureQueueSubmitsEnvVar, kOptionKeyCaptureQueueSubmits);
+    LoadSingleOptionEnvVar(options, kCaptureUseAssetFileEnvVar, kOptionKeyCaptureUseAssetFile);
+
 #ifdef ARM_INTERNAL
     LoadSingleOptionEnvVar(options, kRenderPassSliceRangeEnvVar, kOptionKeyRenderPassSliceRange);
     LoadSingleOptionEnvVar(
         options, kRenderPassSliceCommandBufferBeginEnvVar, kOptionKeyRenderPassSliceCommandBufferBegin);
 #endif
+
     // Page guard environment variables
     LoadSingleOptionEnvVar(options, kPageGuardCopyOnMapEnvVar, kOptionKeyPageGuardCopyOnMap);
     LoadSingleOptionEnvVar(options, kPageGuardSeparateReadEnvVar, kOptionKeyPageGuardSeparateRead);
@@ -604,6 +626,9 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     settings->trace_settings_.quit_after_frame_ranges = ParseBoolString(
         FindOption(options, kOptionKeyQuitAfterCaptureFrames), settings->trace_settings_.quit_after_frame_ranges);
 
+    settings->trace_settings_.use_asset_file =
+        ParseBoolString(FindOption(options, kOptionKeyCaptureUseAssetFile), settings->trace_settings_.use_asset_file);
+
     // Page guard environment variables
     settings->trace_settings_.page_guard_copy_on_map = ParseBoolString(
         FindOption(options, kOptionKeyPageGuardCopyOnMap), settings->trace_settings_.page_guard_copy_on_map);
@@ -654,8 +679,8 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         FindOption(options, kOptionAccelStructPadding), settings->trace_settings_.accel_struct_padding);
 
     // IUnknown wrapping option
-    settings->trace_settings_.iunknown_wrapping =
-        ParseBoolString(FindOption(options, kOptionKeyCaptureIUnknownWrapping), settings->trace_settings_.disable_dxr);
+    settings->trace_settings_.iunknown_wrapping = ParseBoolString(
+        FindOption(options, kOptionKeyCaptureIUnknownWrapping), settings->trace_settings_.iunknown_wrapping);
 
     settings->trace_settings_.force_command_serialization = ParseBoolString(
         FindOption(options, kOptionForceCommandSerialization), settings->trace_settings_.force_command_serialization);

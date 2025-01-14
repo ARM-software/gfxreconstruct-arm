@@ -25,13 +25,18 @@
 #include "decode/file_processor.h"
 
 #include "decode/decode_allocator.h"
+#include "format/format.h"
 #include "format/format_util.h"
 #include "util/compressor.h"
+#include "util/file_path.h"
 #include "util/logging.h"
 #include "util/platform.h"
 
 #include <cassert>
+#include <cstdint>
+#include <memory>
 #include <numeric>
+#include <string>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -40,9 +45,9 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 const uint32_t kFirstFrame = 0;
 
 FileProcessor::FileProcessor() :
-    file_descriptor_(nullptr), current_frame_number_(kFirstFrame), bytes_read_(0),
-    error_state_(kErrorInvalidFileDescriptor), annotation_handler_(nullptr), compressor_(nullptr), block_index_(0),
-    api_call_index_(0), block_limit_(0), capture_uses_frame_markers_(false), first_frame_(kFirstFrame + 1)
+    current_frame_number_(kFirstFrame), error_state_(kErrorInvalidFileDescriptor), bytes_read_(0),
+    annotation_handler_(nullptr), compressor_(nullptr), block_index_(0), api_call_index_(0), block_limit_(0),
+    capture_uses_frame_markers_(false), first_frame_(kFirstFrame + 1), loading_trimmed_capture_state_(false)
 {}
 
 FileProcessor::FileProcessor(uint64_t block_limit) : FileProcessor()
@@ -58,9 +63,9 @@ FileProcessor::~FileProcessor()
         compressor_ = nullptr;
     }
 
-    if (file_descriptor_)
+    for (auto& file : active_files_)
     {
-        fclose(file_descriptor_);
+        util::platform::FileClose(file.second.fd);
     }
 
     DecodeAllocator::DestroyInstance();
@@ -76,23 +81,12 @@ void FileProcessor::WaitDecodersIdle()
 
 bool FileProcessor::Initialize(const std::string& filename)
 {
-    bool success = false;
+    bool success = OpenFile(filename);
 
-    int32_t result = util::platform::FileOpen(&file_descriptor_, filename.c_str(), "rb");
-
-    if ((result == 0) && (file_descriptor_ != nullptr))
+    if (success)
     {
-        success = ProcessFileHeader();
-
-        if (success)
-        {
-            error_state_ = kErrorNone;
-        }
-        else
-        {
-            fclose(file_descriptor_);
-            file_descriptor_ = nullptr;
-        }
+        success = SetActiveFile(filename, true);
+        success = success && ProcessFileHeader();
     }
     else
     {
@@ -100,7 +94,45 @@ bool FileProcessor::Initialize(const std::string& filename)
         error_state_ = kErrorOpeningFile;
     }
 
+    // Find absolute path of capture file
+    if (success)
+    {
+        absolute_path_ = util::filepath::GetBasedir(filename);
+    }
+
     return success;
+}
+
+std::string FileProcessor::ApplyAbsolutePath(const std::string& file)
+{
+    if (absolute_path_.empty())
+    {
+        return file;
+    }
+
+    return absolute_path_ + file;
+}
+
+bool FileProcessor::OpenFile(const std::string& filename)
+{
+    if (active_files_.find(filename) == active_files_.end())
+    {
+        FILE* fd;
+        int   result = util::platform::FileOpen(&fd, filename.c_str(), "rb");
+        if (result || fd == nullptr)
+        {
+            GFXRECON_LOG_ERROR("Failed to open file %s", filename.c_str());
+            error_state_ = kErrorOpeningFile;
+            return false;
+        }
+        else
+        {
+            active_files_.emplace(std::piecewise_construct, std::forward_as_tuple(filename), std::forward_as_tuple(fd));
+            error_state_ = kErrorNone;
+        }
+    }
+
+    return true;
 }
 
 bool FileProcessor::ProcessNextFrame()
@@ -114,11 +146,11 @@ bool FileProcessor::ProcessNextFrame()
     else
     {
         // If not EOF, determine reason for invalid state.
-        if (file_descriptor_ == nullptr)
+        if (GetFileDescriptor() == nullptr)
         {
             error_state_ = kErrorInvalidFileDescriptor;
         }
-        else if (ferror(file_descriptor_))
+        else if (ferror(GetFileDescriptor()))
         {
             error_state_ = kErrorReadingFile;
         }
@@ -181,6 +213,8 @@ bool FileProcessor::ProcessFileHeader()
 {
     bool               success = false;
     format::FileHeader file_header{};
+
+    ActiveFiles& active_file = active_files_[file_stack_.front().filename];
 
     if (ReadBytes(&file_header, sizeof(file_header)))
     {
@@ -263,6 +297,25 @@ void FileProcessor::ProcessAnnotation()
             // block.
             GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, block_header.size);
             success = SkipBytes(static_cast<size_t>(block_header.size));
+        }
+    }
+}
+
+void FileProcessor::DecrementRemainingCommands()
+{
+    if (file_stack_.empty())
+    {
+        return;
+    }
+
+    ActiveFileContext& current_file = GetCurrentFile();
+
+    if (!current_file.execute_till_eof)
+    {
+        --current_file.remaining_commands;
+        if (current_file.remaining_commands == 0)
+        {
+            file_stack_.pop_back();
         }
     }
 }
@@ -422,7 +475,7 @@ bool FileProcessor::ProcessBlocks()
             }
             else
             {
-                if (!feof(file_descriptor_))
+                if (!feof(GetFileDescriptor()))
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as it
                     // assumes that the block header has been successfully read and will print an incomplete block at
@@ -434,11 +487,24 @@ bool FileProcessor::ProcessBlocks()
                                        block_index_);
                     error_state_ = kErrorReadingBlockHeader;
                 }
+                else
+                {
+                    assert(!file_stack_.empty());
+
+                    ActiveFileContext& current_file = GetCurrentFile();
+                    if (current_file.execute_till_eof)
+                    {
+                        file_stack_.pop_back();
+                        success = !file_stack_.empty();
+                    }
+                }
             }
         }
         ++block_index_;
+        DecrementRemainingCommands();
     }
 
+    DecrementRemainingCommands();
     return success;
 }
 
@@ -498,7 +564,10 @@ bool FileProcessor::ReadCompressedParameterBuffer(size_t  compressed_buffer_size
 
 bool FileProcessor::ReadBytes(void* buffer, size_t buffer_size)
 {
-    if (util::platform::FileRead(buffer, buffer_size, file_descriptor_))
+    auto file_entry = active_files_.find(file_stack_.back().filename);
+    assert(file_entry != active_files_.end());
+
+    if (util::platform::FileRead(buffer, buffer_size, file_entry->second.fd))
     {
         bytes_read_ += buffer_size;
         return true;
@@ -508,7 +577,10 @@ bool FileProcessor::ReadBytes(void* buffer, size_t buffer_size)
 
 bool FileProcessor::SkipBytes(size_t skip_size)
 {
-    bool success = util::platform::FileSeek(file_descriptor_, skip_size, util::platform::FileSeekCurrent);
+    auto file_entry = active_files_.find(file_stack_.back().filename);
+    assert(file_entry != active_files_.end());
+
+    bool success = util::platform::FileSeek(file_entry->second.fd, skip_size, util::platform::FileSeekCurrent);
 
     if (success)
     {
@@ -519,10 +591,63 @@ bool FileProcessor::SkipBytes(size_t skip_size)
     return success;
 }
 
+bool FileProcessor::SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin)
+{
+    auto file_entry = active_files_.find(file_stack_.back().filename);
+    assert(file_entry != active_files_.end());
+
+    bool success = util::platform::FileSeek(file_entry->second.fd, offset, origin);
+
+    if (success && origin == util::platform::FileSeekCurrent)
+    {
+        // These technically count as bytes read/processed.
+        bytes_read_ += offset;
+    }
+
+    return success;
+}
+
+bool FileProcessor::SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin)
+{
+    return SeekActiveFile(file_stack_.back().filename, offset, origin);
+}
+
+bool FileProcessor::SetActiveFile(const std::string& filename, bool execute_till_eof)
+{
+    if (active_files_.find(filename) != active_files_.end())
+    {
+        file_stack_.emplace_back(filename, execute_till_eof);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool FileProcessor::SetActiveFile(const std::string&             filename,
+                                  int64_t                        offset,
+                                  util::platform::FileSeekOrigin origin,
+                                  bool                           execute_till_eof)
+{
+    if (active_files_.find(filename) != active_files_.end())
+    {
+        file_stack_.emplace_back(filename, execute_till_eof);
+        return SeekActiveFile(filename, offset, origin);
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void FileProcessor::HandleBlockReadError(Error error_code, const char* error_message)
 {
+    auto file_entry = active_files_.find(file_stack_.back().filename);
+    assert(file_entry != active_files_.end());
+
     // Report incomplete block at end of file as a warning, other I/O errors as an error.
-    if (feof(file_descriptor_) && !ferror(file_descriptor_))
+    if (feof(file_entry->second.fd) && !ferror(file_entry->second.fd))
     {
         GFXRECON_LOG_WARNING("Incomplete block at end of file");
     }
@@ -1968,6 +2093,122 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             decoder->DispatchSetEnvironmentVariablesCommand(header, env_string);
         }
     }
+    else if (meta_data_type == format::MetaDataType::kVulkanBuildAccelerationStructuresCommand)
+    {
+        format::VulkanMetaBuildAccelerationStructuresHeader header{};
+        size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success                      = ReadParameterBuffer(parameter_buffer_size);
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    DecodeAllocator::Begin();
+
+                    decoder->DispatchVulkanAccelerationStructuresBuildMetaCommand(parameter_buffer_.data(),
+                                                                                  parameter_buffer_size);
+
+                    DecodeAllocator::End();
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read acceleration structure init meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanCopyAccelerationStructuresCommand)
+    {
+        format::VulkanCopyAccelerationStructuresCommandHeader header{};
+        size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success                      = ReadParameterBuffer(parameter_buffer_size);
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    DecodeAllocator::Begin();
+
+                    decoder->DispatchVulkanAccelerationStructuresCopyMetaCommand(parameter_buffer_.data(),
+                                                                                 parameter_buffer_size);
+
+                    DecodeAllocator::End();
+                }
+            }
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kVulkanWriteAccelerationStructuresPropertiesCommand)
+    {
+        format::VulkanCopyAccelerationStructuresCommandHeader header{};
+        size_t parameter_buffer_size = static_cast<size_t>(block_header.size) - sizeof(meta_data_id);
+        success                      = ReadParameterBuffer(parameter_buffer_size);
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    DecodeAllocator::Begin();
+
+                    decoder->DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(parameter_buffer_.data(),
+                                                                                            parameter_buffer_size);
+
+                    DecodeAllocator::End();
+                }
+            }
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kExecuteBlocksFromFile)
+    {
+        format::ExecuteBlocksFromFile exec_from_file;
+        success = ReadBytes(&exec_from_file.thread_id, sizeof(exec_from_file.thread_id));
+        success = success && ReadBytes(&exec_from_file.n_blocks, sizeof(exec_from_file.n_blocks));
+        success = success && ReadBytes(&exec_from_file.offset, sizeof(exec_from_file.offset));
+        success = success && ReadBytes(&exec_from_file.filename_length, sizeof(exec_from_file.filename_length));
+
+        if (success)
+        {
+            std::string filename_c_str(exec_from_file.filename_length, '\0');
+            success = success && ReadBytes(filename_c_str.data(), exec_from_file.filename_length);
+            if (success)
+            {
+                std::string filename = util::filepath::Join(absolute_path_, filename_c_str);
+
+                // Check for self references
+                if (!filename.compare(file_stack_.back().filename))
+                {
+                    GFXRECON_LOG_WARNING(
+                        "ExecuteBlocksFromFile is referencing itself. Probably this is not intentional.");
+                }
+
+                success = OpenFile(filename);
+                if (success)
+                {
+                    for (auto decoder : decoders_)
+                    {
+                        decoder->DispatchExecuteBlocksFromFile(
+                            exec_from_file.thread_id, exec_from_file.n_blocks, exec_from_file.offset, filename);
+                    }
+
+                    SetActiveFile(
+                        filename, exec_from_file.offset, util::platform::FileSeekSet, exec_from_file.n_blocks == 0);
+                    // We need to add 1 because it will be decremented right after this function returns
+                    file_stack_.back().remaining_commands = exec_from_file.n_blocks + 1;
+                }
+            }
+        }
+
+        if (!success)
+        {
+            HandleBlockReadError(kErrorReadingBlockData, "Failed to read runtime info meta-data block");
+        }
+    }
     else
     {
         if ((meta_data_type == format::MetaDataType::kReserved23) ||
@@ -2052,11 +2293,13 @@ bool FileProcessor::ProcessStateMarker(const format::BlockHeader& block_header, 
         if (marker_type == format::kBeginMarker)
         {
             GFXRECON_LOG_INFO("Loading state for captured frame %" PRId64, frame_number);
+            loading_trimmed_capture_state_ = true;
         }
         else if (marker_type == format::kEndMarker)
         {
             GFXRECON_LOG_INFO("Finished loading state for captured frame %" PRId64, frame_number);
-            first_frame_ = frame_number;
+            first_frame_                   = frame_number;
+            loading_trimmed_capture_state_ = false;
         }
 
         for (auto decoder : decoders_)
@@ -2154,11 +2397,6 @@ bool FileProcessor::IsFrameDelimiter(format::ApiCallId call_id) const
                 (call_id == format::ApiCallId::ApiCall_IDXGISwapChain_Present) ||
                 (call_id == format::ApiCallId::ApiCall_IDXGISwapChain1_Present1));
     }
-}
-
-bool FileProcessor::IsFileValid() const
-{
-    return (file_descriptor_ && !feof(file_descriptor_) && !ferror(file_descriptor_));
 }
 
 void FileProcessor::PrintBlockInfo() const

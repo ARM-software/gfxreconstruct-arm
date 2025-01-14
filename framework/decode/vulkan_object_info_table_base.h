@@ -32,6 +32,7 @@
 
 #include <cassert>
 #include <functional>
+#include <type_traits>
 #include <unordered_map>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -49,11 +50,77 @@ struct has_handle_future<T, decltype((void)T::future, 0)>
 template <typename T>
 inline constexpr bool has_handle_future_v = has_handle_future<T>::value;
 
+// NOTE: There's nothing VulkanSpecific in these utilities
+// TODO: Find a better home for these
+
+// Utility functors to implement const and non-const versions of getters in a common impl
+template <typename Container>
+using ConstCorrectMappedTypePtr = decltype(&(std::declval<Container>().begin()->second));
+
+struct ObjectInfoGetterBase
+{
+    template <typename Map, typename MappedTypePtr>
+    MappedTypePtr GetObjectInfoImpl(format::HandleId id, Map* map)
+    {
+        assert(map != nullptr);
+
+        MappedTypePtr object_info = nullptr;
+
+        if (id != 0)
+        {
+            const auto entry = map->find(id);
+
+            if (entry != map->end())
+            {
+                object_info = &entry->second;
+            }
+        }
+
+        return object_info;
+    }
+    template <typename Map, typename MappedTypePtr>
+    MappedTypePtr GetAliasingObjectInfoImpl(format::HandleId id, Map* map)
+    {
+        MappedTypePtr object_info = GetObjectInfoImpl<Map, MappedTypePtr>(id, map);
+        if (object_info && (object_info->vulkan_alias != format::kNullHandleId))
+        {
+            object_info = GetObjectInfoImpl<Map, MappedTypePtr>(object_info->vulkan_alias, map);
+            // Note: if id has an alias and the alias is valid, the alias must not alias. Aliasing is single level.
+            assert(!object_info || (object_info->vulkan_alias == format::kNullHandleId));
+        }
+        return object_info;
+    }
+};
+
+// Because of " explicit specialization in non-namespace scope" these must be implemented outside the class below
+template <typename T>
+struct ObjectInfoGetter : public ObjectInfoGetterBase
+{
+    template <typename Map, typename MappedTypePtr = ConstCorrectMappedTypePtr<Map>>
+    MappedTypePtr operator()(format::HandleId id, Map* map)
+    {
+        return GetObjectInfoImpl<Map, MappedTypePtr>(id, map);
+    }
+};
+
+// Specialize to handle physical device aliasing. See comments for VulkanPhysicalDeviceInfo::vulkan_alias
+// Note: could do SFINAE a "has member" check on vulkan_alias, but as only physical device needs aliasing support at
+//       this time, it's simpler just to specialize for VulkanPhysicalDeviceInfo
+template <>
+struct ObjectInfoGetter<VulkanPhysicalDeviceInfo> : public ObjectInfoGetterBase
+{
+    template <typename Map, typename MappedTypePtr = ConstCorrectMappedTypePtr<Map>>
+    MappedTypePtr operator()(format::HandleId id, Map* map)
+    {
+        return GetAliasingObjectInfoImpl<Map, MappedTypePtr>(id, map);
+    }
+};
+
 class VulkanObjectInfoTableBase
 {
   protected:
     template <typename T>
-    void AddObjectInfo(T&& info, std::unordered_map<format::HandleId, T>* map)
+    void AddVkObjectInfo(T&& info, std::unordered_map<format::HandleId, T>* map)
     {
         assert(map != nullptr);
 
@@ -102,13 +169,13 @@ class VulkanObjectInfoTableBase
     // Note: the "dummy" template parameter is here for the sole purpose of working around a gcc issue which does
     // not allow full specialization in non-namespace scope (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85282)
     template <typename dummy>
-    void AddObjectInfo(SurfaceKHRInfo&& info, std::unordered_map<format::HandleId, SurfaceKHRInfo>* map)
+    void AddVkObjectInfo(VulkanSurfaceKHRInfo&& info, std::unordered_map<format::HandleId, VulkanSurfaceKHRInfo>* map)
     {
         assert(map != nullptr);
 
         if (info.capture_id != 0)
         {
-            auto result = map->emplace(info.capture_id, std::forward<SurfaceKHRInfo>(info));
+            auto result = map->emplace(info.capture_id, std::forward<VulkanSurfaceKHRInfo>(info));
 
             if (!result.second)
             {
@@ -123,50 +190,22 @@ class VulkanObjectInfoTableBase
                 auto iter = result.first;
                 if (iter->second.handle != info.handle)
                 {
-                    iter->second = std::forward<SurfaceKHRInfo>(info);
+                    iter->second = std::forward<VulkanSurfaceKHRInfo>(info);
                 }
             }
         }
     }
 
     template <typename T>
-    const T* GetObjectInfo(format::HandleId id, const std::unordered_map<format::HandleId, T>* map) const
+    const T* GetVkObjectInfo(format::HandleId id, const std::unordered_map<format::HandleId, T>* map) const
     {
-        assert(map != nullptr);
-
-        const T* object_info = nullptr;
-
-        if (id != 0)
-        {
-            const auto entry = map->find(id);
-
-            if (entry != map->end())
-            {
-                object_info = &entry->second;
-            }
-        }
-
-        return object_info;
+        return ObjectInfoGetter<T>()(id, map);
     }
 
     template <typename T>
-    T* GetObjectInfo(format::HandleId id, std::unordered_map<format::HandleId, T>* map)
+    T* GetVkObjectInfo(format::HandleId id, std::unordered_map<format::HandleId, T>* map)
     {
-        assert(map != nullptr);
-
-        T* object_info = nullptr;
-
-        if (id != 0)
-        {
-            auto entry = map->find(id);
-
-            if (entry != map->end())
-            {
-                object_info = &entry->second;
-            }
-        }
-
-        return object_info;
+        return ObjectInfoGetter<T>()(id, map);
     }
 };
 

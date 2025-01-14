@@ -132,7 +132,7 @@ class MarkingLayersUtil
     template <typename T>
     callbacks_it_t Callbacks(const decode::VulkanObjectInfo<T>* info)
     {
-        const decode::DeviceInfo* device_info = object_info_table_->GetDeviceInfo(info->parent_id);
+        const decode::VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(info->parent_id);
         return Callbacks(device_info->parent_id);
     }
     MarkingLayersUtil::callbacks_it_t Callbacks(const decode::VulkanObjectInfo<VkDevice>* info)

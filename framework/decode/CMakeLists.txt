@@ -33,6 +33,10 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h
                     ${CMAKE_CURRENT_LIST_DIR}/api_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/common_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_handle_mapping_util.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_object_info_table.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_struct_handle_mappers.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_object_info_table.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/copy_shaders.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_decoders.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_decoders.cpp
@@ -70,6 +74,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/json_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.h
+                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/portability.h
@@ -147,6 +153,9 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_decoder_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_default_allocator.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_default_allocator.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer_shaders.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_captured_swapchain.h
@@ -292,7 +301,7 @@ if (WIN32)
                                    ${CMAKE_SOURCE_DIR}/framework
                                    ${CMAKE_SOURCE_DIR}/external
                                    ${CMAKE_SOURCE_DIR}/external/precompiled/win64/include/
-                                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                                   $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
     else()
         target_include_directories(gfxrecon_decode
                                PUBLIC
@@ -300,7 +309,7 @@ if (WIN32)
                                    ${CMAKE_SOURCE_DIR}/framework
                                    ${CMAKE_SOURCE_DIR}/external
                                    ${CMAKE_SOURCE_DIR}/external/precompiled/win32/include/
-                                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                                   $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
     endif()
 elseif(APPLE)
     target_include_directories(gfxrecon_decode
@@ -311,7 +320,7 @@ elseif(APPLE)
                                ${CMAKE_SOURCE_DIR}/framework
                                ${CMAKE_SOURCE_DIR}/external
                                ${CMAKE_SOURCE_DIR}/external/precompiled/macos/include/
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 else()
     target_include_directories(gfxrecon_decode
                            PRIVATE
@@ -321,7 +330,7 @@ else()
                                ${CMAKE_SOURCE_DIR}/framework
                                ${CMAKE_SOURCE_DIR}/external
                                ${CMAKE_SOURCE_DIR}/external/precompiled/linux/include/
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 endif()
 
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)

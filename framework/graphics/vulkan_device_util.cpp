@@ -227,11 +227,13 @@ VulkanDeviceUtil::EnableRequiredPhysicalDeviceFeatures(uint32_t                 
                 result.feature_rayTracingPipelineShaderGroupHandleCaptureReplay =
                     rt_pipeline_features->rayTracingPipelineShaderGroupHandleCaptureReplay;
 
+                // retrieve raytracing-pipeline-properties
                 VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_properties{
                     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR, nullptr
                 };
                 GetPhysicalDeviceProperties(instance_api_version, instance_table, physical_device, rt_properties);
                 result.property_shaderGroupHandleSize = rt_properties.shaderGroupHandleSize;
+
                 if (result.feature_rayTracingPipelineShaderGroupHandleCaptureReplay)
                 {
                     result.property_shaderGroupHandleCaptureReplaySize =
@@ -276,7 +278,7 @@ void VulkanDeviceUtil::RestoreModifiedPhysicalDeviceFeatures()
 void VulkanDeviceUtil::GetReplayDeviceProperties(uint32_t                           instance_api_version,
                                                  const encode::VulkanInstanceTable* instance_table,
                                                  VkPhysicalDevice                   physical_device,
-                                                 decode::ReplayDeviceInfo*          replay_device_info)
+                                                 decode::VulkanReplayDeviceInfo*    replay_device_info)
 {
     GFXRECON_ASSERT(instance_table != nullptr);
     GFXRECON_ASSERT(replay_device_info != nullptr);

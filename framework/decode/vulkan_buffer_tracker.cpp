@@ -28,7 +28,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanBufferTracker::VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
-                                         const PhysicalDeviceInfo*        physical_device_info,
+                                         const VulkanPhysicalDeviceInfo*  physical_device_info,
                                          VkDevice                         device) :
     physical_device_info_(physical_device_info),
     device_(device)
@@ -41,9 +41,9 @@ VulkanBufferTracker::~VulkanBufferTracker()
     buffers_.clear();
 }
 
-void VulkanBufferTracker::SetBufferInfo(BufferInfo* buffer_info)
+void VulkanBufferTracker::SetBufferInfo(VulkanBufferInfo* buffer_info)
 {
-    auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+    auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const VulkanBufferInfo* entry) {
         return entry->handle == buffer_info->handle;
     });
 
@@ -58,12 +58,12 @@ void VulkanBufferTracker::SetBufferInfo(BufferInfo* buffer_info)
     }
 }
 
-void VulkanBufferTracker::OnDestroyBuffer(const BufferInfo* buffer_info)
+void VulkanBufferTracker::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
 {
     // On buffer destruction, we want to stop tracking them
     buffers_.erase(std::remove_if(buffers_.begin(),
                                   buffers_.end(),
-                                  [&buffer_info](const BufferInfo* entry) {
+                                  [&buffer_info](const VulkanBufferInfo* entry) {
                                       return entry->capture_id == buffer_info->capture_id;
                                   }),
                    buffers_.end());
@@ -94,7 +94,7 @@ void VulkanBufferTracker::UpdateBufferDeviceAddress(VkDeviceAddress& address)
         return;
 
     VkDeviceSize offset = 0;
-    auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+    auto         buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const VulkanBufferInfo* entry) {
         size_t buffer_size = entry->size;
         if (entry->capture_address == address)
         {
@@ -111,10 +111,10 @@ void VulkanBufferTracker::UpdateBufferDeviceAddress(VkDeviceAddress& address)
     address = (*buffer)->replay_address + offset;
 }
 
-BufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address)
+VulkanBufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address)
 {
     // Try to find buffer by runtime device address
-    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const VulkanBufferInfo* entry) {
         size_t buffer_size = entry->size;
         if (entry->replay_address == replay_address)
         {
@@ -130,9 +130,9 @@ BufferInfo* VulkanBufferTracker::GetBufferByReplayDeviceAddress(VkDeviceAddress 
     return *buffer;
 }
 
-BufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address)
+VulkanBufferInfo* VulkanBufferTracker::GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address)
 {
-    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const BufferInfo* entry) {
+    auto buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const VulkanBufferInfo* entry) {
         size_t buffer_size = entry->size;
         if (entry->capture_address == capture_address)
         {

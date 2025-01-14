@@ -94,6 +94,8 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/struct_pointer_encoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_common.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_common.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrappers.h
@@ -147,7 +149,7 @@ target_include_directories(gfxrecon_encode
                            PUBLIC
                                ${CMAKE_BINARY_DIR}
                                ${CMAKE_SOURCE_DIR}/framework
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
 target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
 

@@ -37,6 +37,18 @@ set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/external/cmake-modules")
 
+option(USE_STRICT_COMPILER_WARNINGS "Use a stricter compiler-warning level" OFF)
+
+if (USE_STRICT_COMPILER_WARNINGS)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wconversion -Wextra -Werror -Wshadow -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wconversion -Wextra -Werror -Wshadow -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers")
+    else ()
+        message(WARNING "option 'USE_STRICT_COMPILER_WARNINGS' is set, but not implemented for this platform")
+    endif ()
+endif (USE_STRICT_COMPILER_WARNINGS)
+
 # Version info
 set(GFXRECONSTRUCT_PROJECT_VERSION_MAJOR 1)
 set(GFXRECONSTRUCT_PROJECT_VERSION_MINOR 0)
@@ -44,7 +56,6 @@ set(GFXRECONSTRUCT_PROJECT_VERSION_PATCH 5)
 
 set(GFXRECON_PROJECT_VERSION_SHA1 "unknown-build-source")
 set(GFXRECONSTRUCT_PROJECT_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
-
 
 
 
@@ -175,6 +186,7 @@ if(MSVC)
     add_definitions(-D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 
     if(${D3D12_SUPPORT})
+        set(D3D12_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc")
         add_definitions(-DD3D12_SUPPORT)
 
         # Check Windows SDK version and print warning if there is a mismatch.
@@ -186,6 +198,12 @@ if(MSVC)
                 "set D3D12_SUPPORT=OFF or configure the build with the recommended Windows SDK version. See BUILD.md "
                 "for more information.")
         endif()
+        
+        find_package(DXC)
+        if (DXC_FOUND)
+            set(D3D12_INCLUDE_DIRECTORIES ${D3D12_INCLUDE_DIRECTORIES} ${DXC_INCLUDE_DIR})
+            add_definitions(-DGFXRECON_DXC_SUPPORT)
+        endif()        
 
     else()
         set(BUILD_LAUNCHER_AND_INTERCEPTOR OFF)
@@ -205,6 +223,8 @@ if(MSVC)
                 find_package(AGS)
                 if (AGS_FOUND)
                     add_definitions(-DGFXRECON_AGS_SUPPORT)
+
+                    set(D3D12_INCLUDE_DIRECTORIES ${D3D12_INCLUDE_DIRECTORIES} ${AGS_INCLUDE_DIR})
 
                     # The value for option GFXRECON_AGS_SUPPORT gets cached so use a non-cached variable
                     # to determine the final result.
@@ -337,18 +357,18 @@ if(BUILD_WERROR)
 endif()
 
 add_library(vulkan_registry INTERFACE)
-target_include_directories(vulkan_registry INTERFACE ${CMAKE_SOURCE_DIR}/external/Vulkan-Headers/include)
+target_include_directories(vulkan_registry SYSTEM INTERFACE ${CMAKE_SOURCE_DIR}/external/Vulkan-Headers/include)
 target_compile_definitions(vulkan_registry INTERFACE VK_NO_PROTOTYPES VK_ENABLE_BETA_EXTENSIONS)
 
 add_library(spirv_registry INTERFACE)
-target_include_directories(spirv_registry INTERFACE ${CMAKE_SOURCE_DIR}/external/SPIRV-Headers/include)
+target_include_directories(spirv_registry SYSTEM INTERFACE ${CMAKE_SOURCE_DIR}/external/SPIRV-Headers/include)
 
 add_library(vulkan_memory_allocator INTERFACE)
 target_compile_options(vulkan_memory_allocator INTERFACE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
         -Wno-nullability-completeness>
 )
-target_include_directories(vulkan_memory_allocator INTERFACE ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include)
+target_include_directories(vulkan_memory_allocator SYSTEM INTERFACE ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include)
 
 # SPIRV-Reflect included as submodule -> libspirv-reflect-static.a
 set(SPIRV_REFLECT_EXAMPLES OFF)
@@ -359,7 +379,7 @@ add_subdirectory(external/SPIRV-Reflect EXCLUDE_FROM_ALL)
 
 if (${RUN_TESTS})
     add_library(catch2 INTERFACE)
-    target_include_directories(catch2 INTERFACE external)
+    target_include_directories(catch2 SYSTEM INTERFACE external)
 endif()
 
 add_subdirectory(external/nlohmann)

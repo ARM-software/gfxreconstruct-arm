@@ -166,11 +166,11 @@ class CommonCaptureManager
 
     bool IsTrimHotkeyPressed();
 
-    CaptureSettings::RuntimeTriggerState GetRuntimeTriggerState();
-
     bool RuntimeTriggerEnabled();
 
     bool RuntimeTriggerDisabled();
+
+    bool RuntimeWriteAssetsEnabled();
 
     void WriteDisplayMessageCmd(format::ApiFamilyId api_family, const char* message);
 
@@ -351,6 +351,10 @@ class CommonCaptureManager
     {
         return capture_mode_;
     }
+    void SetCaptureMode(CaptureMode new_mode)
+    {
+        capture_mode_ = new_mode;
+    }
     bool GetDebugLayerSetting() const
     {
         return debug_layer_;
@@ -405,16 +409,18 @@ class CommonCaptureManager
         return screenshot_format_;
     }
 
-    std::string            CreateTrimFilename(const std::string& base_filename, const util::UintRange& trim_range);
-    std::string            CreateTrimDrawCallsFilename(const std::string&                    base_filename,
-                                                       const CaptureSettings::TrimDrawCalls& trim_draw_calls);
-    bool                   CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename);
-    void                   WriteCaptureOptions(nlohmann::ordered_json& operation_annotation);
-    nlohmann::ordered_json GetIgnoredBufferUsages();
-    void                   ActivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
-    void                   DeactivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
+    std::string CreateTrimFilename(const std::string& base_filename, const util::UintRange& trim_range);
+    std::string CreateTrimDrawCallsFilename(const std::string&                    base_filename,
+                                            const CaptureSettings::TrimDrawCalls& trim_draw_calls);
+    std::unique_ptr<util::FileOutputStream> CreateAssetFile();
+    std::string                             CreateAssetFilename(const std::string& base_filename) const;
+    bool CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename);
+    void WriteCaptureOptions(nlohmann::ordered_json& operation_annotation);
+    void ActivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
+    void DeactivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock);
 
-    void WriteFileHeader();
+    void WriteFileHeader(util::FileOutputStream* file_stream = nullptr);
+
     void BuildOptionList(const format::EnabledOptions&        enabled_options,
                          std::vector<format::FileOptionPair>* option_list);
 
@@ -437,10 +443,11 @@ class CommonCaptureManager
 
     void WriteCreateHeapAllocationCmd(format::ApiFamilyId api_family, uint64_t allocation_id, uint64_t allocation_size);
 
-    void WriteToFile(const void* data, size_t size);
+    void WriteToFile(const void* data, size_t size, util::FileOutputStream* file_stream = nullptr);
 
     template <size_t N>
-    void CombineAndWriteToFile(const std::pair<const void*, size_t> (&buffers)[N])
+    void CombineAndWriteToFile(const std::pair<const void*, size_t> (&buffers)[N],
+                               util::FileOutputStream* file_stream = nullptr)
     {
         static_assert(N != 1, "Use WriteToFile(void*, size) when writing a single buffer.");
 
@@ -454,7 +461,7 @@ class CommonCaptureManager
             scratch_buffer.insert(scratch_buffer.end(), data, data + size);
         }
 
-        WriteToFile(scratch_buffer.data(), scratch_buffer.size());
+        WriteToFile(scratch_buffer.data(), scratch_buffer.size(), file_stream);
     }
 
     void IncrementBlockIndex(uint64_t blocks)
@@ -467,6 +474,20 @@ class CommonCaptureManager
     {
         return block_index_.load();
     }
+    void SetWriteAssets()
+    {
+        write_assets_ = true;
+    }
+
+    bool WriteFrameStateFile();
+
+  private:
+    void                   WriteExecuteFromFile(util::FileOutputStream& out_stream,
+                                                const std::string&      filename,
+                                                format::ThreadId        thread_id,
+                                                uint32_t                n_blocks,
+                                                int64_t                 offset);
+    nlohmann::ordered_json GetIgnoredBufferUsages();
 
   protected:
     std::unique_ptr<util::Compressor> compressor_;
@@ -504,6 +525,8 @@ class CommonCaptureManager
     std::unique_ptr<util::FileOutputStream> file_stream_;
     format::EnabledOptions                  file_options_;
     std::string                             base_filename_;
+    std::string                             capture_filename_;
+    std::string                             asset_file_name_;
     bool                                    timestamp_filename_;
     bool                                    force_file_flush_;
     CaptureSettings::MemoryTrackingMode     memory_tracking_mode_;
@@ -525,32 +548,36 @@ class CommonCaptureManager
     uint32_t                     render_pass_slice_command_buffer_begin_;
     bool                         render_pass_slice_enabled_{ false };
 #endif
-    std::string                             trim_key_;
-    uint32_t                                trim_key_frames_;
-    uint32_t                                trim_key_first_frame_;
-    size_t                                  trim_current_range_;
-    uint32_t                                current_frame_;
-    uint32_t                                queue_submit_count_;
-    CaptureMode                             capture_mode_;
-    bool                                    previous_hotkey_state_;
-    CaptureSettings::RuntimeTriggerState    previous_runtime_trigger_state_;
-    bool                                    debug_layer_;
-    bool                                    debug_device_lost_;
-    bool                                    screenshots_enabled_;
-    std::vector<uint32_t>                   screenshot_indices_;
-    bool                                    disable_dxr_;
-    uint32_t                                accel_struct_padding_;
-    bool                                    iunknown_wrapping_;
-    bool                                    force_command_serialization_;
-    bool                                    queue_zero_only_;
-    bool                                    allow_pipeline_compile_required_;
-    bool                                    quit_after_frame_ranges_;
-    static std::function<void()>            delete_instance_func_;
-    uint32_t                                fence_query_delay_;
-    CaptureSettings::FenceQueryDelayUnit    fence_query_delay_unit_;
-    uint64_t                                fence_query_delay_timeout_threshold_;
-    std::vector<uint64_t>                   buffer_usages_to_ignore_;
-    bool                                    force_fifo_present_mode_;
+    std::string                          trim_key_;
+    uint32_t                             trim_key_frames_;
+    uint32_t                             trim_key_first_frame_;
+    size_t                               trim_current_range_;
+    uint32_t                             current_frame_;
+    uint32_t                             queue_submit_count_;
+    CaptureMode                          capture_mode_;
+    bool                                 previous_hotkey_state_;
+    CaptureSettings::RuntimeTriggerState previous_runtime_trigger_state_;
+    bool                                 debug_layer_;
+    bool                                 debug_device_lost_;
+    bool                                 screenshots_enabled_;
+    std::vector<uint32_t>                screenshot_indices_;
+    bool                                 disable_dxr_;
+    uint32_t                             accel_struct_padding_;
+    bool                                 iunknown_wrapping_;
+    bool                                 force_command_serialization_;
+    bool                                 queue_zero_only_;
+    bool                                 allow_pipeline_compile_required_;
+    bool                                 quit_after_frame_ranges_;
+    static std::function<void()>         delete_instance_func_;
+    uint32_t                             fence_query_delay_;
+    CaptureSettings::FenceQueryDelayUnit fence_query_delay_unit_;
+    uint64_t                             fence_query_delay_timeout_threshold_;
+    std::vector<uint64_t>                buffer_usages_to_ignore_;
+    bool                                 force_fifo_present_mode_;
+    bool                                 use_asset_file_;
+    bool                                 write_assets_;
+    bool                                 previous_write_assets_;
+    bool                                 write_state_files_;
 
     struct
     {
