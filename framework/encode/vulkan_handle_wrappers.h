@@ -184,6 +184,8 @@ struct FenceWrapper : public HandleWrapper<VkFence>
     // to the fence have been called. So if query_delay is not zero but the fence is validated by Vulkan,
     // vkGetFenceStatus will still return VK_NOT_READY.
     uint32_t query_delay{ 0 };
+    // Limits the number of times a validated vkGetFenceStatus can return VK_NOT_READY
+    uint32_t query_delay_limit{ UINT32_MAX };
 };
 
 struct EventWrapper : public HandleWrapper<VkEvent>

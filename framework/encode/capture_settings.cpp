@@ -155,6 +155,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define FENCE_QUERY_DELAY_UNIT_UPPER                         "FENCE_QUERY_DELAY_UNIT"
 #define FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD_LOWER            "fence_query_delay_timeout_threshold"
 #define FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD_UPPER            "FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD"
+#define FENCE_QUERY_DELAY_LIMIT_LOWER                        "fence_query_delay_limit"
+#define FENCE_QUERY_DELAY_LIMIT_UPPER                        "FENCE_QUERY_DELAY_LIMIT"
 #define BUFFER_USAGES_TO_IGNORE_LOWER                        "buffer_usages_to_ignore"
 #define BUFFER_USAGES_TO_IGNORE_UPPER                        "BUFFER_USAGES_TO_IGNORE"
 #define CAPTURE_PACKAGE_NAME_LOWER                           "capture_package_name"
@@ -232,6 +234,7 @@ const char kAnnotationDescriptorEnvVar[]                     = GFXRECON_OPTION_S
 const char kFenceQueryDelayEnvVar[]                          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY);
 const char kFenceQueryDelayUnitEnvVar[]                      = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_UNIT);
 const char kFenceQueryDelayTimeoutThresholdEnvVar[]          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD);
+const char kFenceQueryDelayLimitEnvVar[]                     = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_LIMIT);
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
 const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
 const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
@@ -299,6 +302,7 @@ const std::string kOptionKeyAnnotationDescriptor                     = std::stri
 const std::string kOptionFenceQueryDelay                             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LOWER);
 const std::string kOptionFenceQueryDelayUnit                         = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_UNIT_LOWER);
 const std::string kOptionFenceQueryDelayTimeoutThreshold             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD_LOWER);
+const std::string kOptionFenceQueryDelayLimit                        = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LIMIT_LOWER);
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
 const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
 const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
@@ -711,6 +715,8 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     settings->trace_settings_.fence_query_delay_timeout_threshold =
         ParseIntegerString(FindOption(options, kOptionFenceQueryDelayTimeoutThreshold),
                            settings->trace_settings_.fence_query_delay_timeout_threshold);
+    settings->trace_settings_.fence_query_delay_limit = ParseIntegerString(
+        FindOption(options, kOptionFenceQueryDelayLimit), settings->trace_settings_.fence_query_delay_limit);
 
     settings->trace_settings_.buffer_usages_to_ignore =
         ParseBufferUsages(FindOption(options, kOptionBufferUsagesToIgnore));

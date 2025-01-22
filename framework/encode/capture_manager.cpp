@@ -386,6 +386,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     fence_query_delay_                   = trace_settings.fence_query_delay;
     fence_query_delay_unit_              = trace_settings.fence_query_delay_unit;
     fence_query_delay_timeout_threshold_ = trace_settings.fence_query_delay_timeout_threshold;
+    fence_query_delay_limit_             = trace_settings.fence_query_delay_limit;
     buffer_usages_to_ignore_             = trace_settings.buffer_usages_to_ignore;
     force_fifo_present_mode_             = trace_settings.force_fifo_present_mode;
     use_asset_file_                      = trace_settings.use_asset_file;
@@ -1744,6 +1745,7 @@ void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation
             capture_options["fence-query-delay-unit"] = "frames";
         }
         capture_options["fence-query-delay-timeout-threshold"] = fence_query_delay_timeout_threshold_;
+        capture_options["fence-query-delay-limit"]             = fence_query_delay_limit_;
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {

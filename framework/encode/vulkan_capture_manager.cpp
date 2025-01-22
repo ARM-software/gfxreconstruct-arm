@@ -1853,11 +1853,21 @@ VkResult VulkanCaptureManager::OverrideGetFenceStatus(VkDevice device, VkFence f
     {
         FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
         assert(wrapper != nullptr);
-        if (wrapper->query_delay != 0)
+        if (wrapper->query_delay != 0 && wrapper->query_delay_limit != 0)
         {
             if (common_manager_->GetFenceQueryDelayUnit() == CaptureSettings::FenceQueryDelayUnit::kCalls)
             {
                 --wrapper->query_delay;
+            }
+
+            wrapper->query_delay_limit--;
+
+            if (wrapper->query_delay_limit == 0)
+            {
+                GFXRECON_LOG_WARNING("Fence %" PRIu64 " hit the GetFenceStatus limit of %d in frame %d",
+                                     wrapper->handle_id,
+                                     common_manager_->GetFenceQueryDelayLimit(),
+                                     common_manager_->GetCurrentFrame());
             }
 
             result = VK_NOT_READY;
@@ -2876,7 +2886,8 @@ void VulkanCaptureManager::ProcessFenceSubmit(VkFence fence)
     {
         FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
         assert(wrapper != nullptr);
-        wrapper->query_delay = common_manager_->GetFenceQueryDelay();
+        wrapper->query_delay       = common_manager_->GetFenceQueryDelay();
+        wrapper->query_delay_limit = common_manager_->GetFenceQueryDelayLimit();
     }
 }
 

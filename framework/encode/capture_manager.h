@@ -236,6 +236,10 @@ class CommonCaptureManager
     {
         return fence_query_delay_timeout_threshold_;
     }
+    uint32_t GetFenceQueryDelayLimit() const
+    {
+        return fence_query_delay_limit_;
+    }
 
   public:
     static int32_t GetPidFromPackageName(const char* progress_name);
@@ -572,6 +576,7 @@ class CommonCaptureManager
     uint32_t                             fence_query_delay_;
     CaptureSettings::FenceQueryDelayUnit fence_query_delay_unit_;
     uint64_t                             fence_query_delay_timeout_threshold_;
+    uint32_t                             fence_query_delay_limit_;
     std::vector<uint64_t>                buffer_usages_to_ignore_;
     bool                                 force_fifo_present_mode_;
     bool                                 use_asset_file_;
