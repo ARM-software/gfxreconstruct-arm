@@ -221,16 +221,6 @@ class ApiCaptureManager
     util::ScreenshotFormat            GetScreenshotFormat() { return common_manager_->GetScreenshotFormat(); }
     auto                              GetTrimBoundary() const { return common_manager_->GetTrimBoundary(); }
     auto                              GetTrimDrawCalls() const { return common_manager_->GetTrimDrawCalls(); }
-#ifdef ARM_INTERNAL
-    bool IsTrimRenderPassBegin() const
-    {
-        return (common_manager_->render_pass_slice_enabled_) &&
-               (packet_id_ == common_manager_->render_pass_slice_range_[0].first);
-    }
-
-  protected:
-    uint64_t packet_id_{};
-#endif
 
   protected:
     const format::ApiFamilyId api_family_;

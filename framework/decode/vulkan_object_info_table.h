@@ -55,19 +55,6 @@ class VulkanObjectInfoTable : public VulkanObjectInfoTableBase2
             }
         }
     }
-#ifdef ARM_INTERNAL
-    void ReplaceCommandBuffer(VkCommandBuffer target, VkCommandBuffer replacement)
-    {
-        for (auto& entry : commandBuffer_map_)
-        {
-            if (entry.second.handle == target)
-            {
-                entry.second.handle = replacement;
-                break;
-            }
-        }
-    }
-#endif
 };
 
 GFXRECON_END_NAMESPACE(decode)

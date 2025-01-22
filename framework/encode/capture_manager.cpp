@@ -533,18 +533,6 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
             trim_boundary_ = CaptureSettings::TrimBoundary::kUnknown;
             capture_mode_  = kModeTrack;
         }
-
-#ifdef ARM_INTERNAL
-        if (!trace_settings.render_pass_slice_range.empty())
-        {
-            render_pass_slice_range_ = trace_settings.render_pass_slice_range;
-            if (trace_settings.render_pass_slice_command_buffer_begin != 0)
-            {
-                render_pass_slice_command_buffer_begin_ = trace_settings.render_pass_slice_command_buffer_begin;
-                render_pass_slice_enabled_              = true;
-            }
-        }
-#endif
     }
 
     if (success)

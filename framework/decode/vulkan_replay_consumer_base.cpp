@@ -3332,18 +3332,6 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
 
     auto instance_table = GetInstanceTable(physical_device);
 
-#ifdef ARM_INTERNAL
-    encode::LoadVulkanFunction(get_device_proc_addr, replay_device, "vkSetPacketIdEXT", &pfn_set_packet_id_);
-    void (*pfn_pass_binding)(std::function<void(VkCommandBuffer, VkCommandBuffer)> binding) = nullptr;
-    encode::LoadVulkanFunction(get_device_proc_addr, replay_device, "vkSetCommandBufferReplacerEXT", &pfn_pass_binding);
-    std::function<void(VkCommandBuffer, VkCommandBuffer)> command_buffer_replacer = std::bind(
-        &VulkanObjectInfoTable::ReplaceCommandBuffer, object_info_table_, std::placeholders::_1, std::placeholders::_2);
-    if (nullptr != pfn_pass_binding)
-    {
-        pfn_pass_binding(command_buffer_replacer);
-    }
-#endif
-
     assert(device_info != nullptr);
     device_info->replay_device_group = std::move(create_state.replay_device_group);
     device_info->extensions          = std::move(create_state.trim_extensions);
@@ -12373,12 +12361,6 @@ void VulkanReplayConsumerBase::DestroyAsyncHandle(format::HandleId handle, std::
 void VulkanReplayConsumerBase::SetCurrentBlockIndex(uint64_t block_index)
 {
     VulkanConsumer::SetCurrentBlockIndex(block_index);
-#ifdef ARM_INTERNAL
-    if (nullptr != pfn_set_packet_id_)
-    {
-        pfn_set_packet_id_(block_index);
-    }
-#endif
     // poll main-dispatch-queue at beginning of new blocks
     main_thread_queue_.poll();
 }

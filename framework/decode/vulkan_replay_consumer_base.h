@@ -1801,9 +1801,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 
-#ifdef ARM_INTERNAL
-    void (*pfn_set_packet_id_)(uint64_t) = nullptr;
-#endif
   protected:
     // Used by pipeline cache handling, there are the following two cases for the flag to be set:
     //

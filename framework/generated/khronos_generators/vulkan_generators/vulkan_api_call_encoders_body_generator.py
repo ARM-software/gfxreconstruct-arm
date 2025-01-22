@@ -72,11 +72,6 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
     # Functions that can activate trimming from a post call command.
     POSTCALL_TRIM_TRIGGERS = ['vkQueueSubmit', 'vkQueueSubmit2', 'vkQueueSubmit2KHR', 'vkQueuePresentKHR', 'vkFrameBoundaryANDROID']
 
-#ifdef ARM_INTERNAL
-    # Functions that can activate trimming for render pass.
-    RENDERPASS_TRIM_TRIGGERS = ['vkCmdBeginRenderPass', 'vkCmdDispatch']
-#endif
-
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
@@ -274,14 +269,6 @@ class VulkanApiCallEncodersBodyGenerator(BaseGenerator):
             body += indent + 'CustomEncoderPreCall<format::ApiCallId::ApiCall_{}>::Dispatch({}, {});\n'.format(
                 name, capture_manager, arg_list
             )
-
-#ifdef ARM_INTERNAL
-        if name in self.RENDERPASS_TRIM_TRIGGERS:
-            body += indent + '#' + 'ifdef ARM_INTERNAL\n'
-            body += indent + 'if (manager->IsTrimRenderPassBegin())\n'
-            body += indent + '    commandBuffer = manager->TargetCommandBuffer();\n'
-            body += indent + '#' + 'endif\n'
-#endif
 
         if not encode_after:
             body += self.make_parameter_encoding(

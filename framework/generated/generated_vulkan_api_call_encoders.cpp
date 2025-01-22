@@ -4248,10 +4248,6 @@ VKAPI_ATTR void VKAPI_CALL CmdDispatch(
     }
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdDispatch>::Dispatch(manager, commandBuffer, groupCountX, groupCountY, groupCountZ);
-    #ifdef ARM_INTERNAL
-    if (manager->IsTrimRenderPassBegin())
-        commandBuffer = manager->TargetCommandBuffer();
-    #endif
 
     auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdDispatch);
     if (encoder)
@@ -5184,10 +5180,6 @@ VKAPI_ATTR void VKAPI_CALL CmdBeginRenderPass(
     }
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdBeginRenderPass>::Dispatch(manager, commandBuffer, pRenderPassBegin, contents);
-    #ifdef ARM_INTERNAL
-    if (manager->IsTrimRenderPassBegin())
-        commandBuffer = manager->TargetCommandBuffer();
-    #endif
 
     auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdBeginRenderPass);
     if (encoder)
