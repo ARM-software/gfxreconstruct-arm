@@ -449,11 +449,42 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
                     }
                     else
                     {
-                        // TODO: multi-plane image format support when strides do not match.
-                        GFXRECON_LOG_ERROR(
-                            "Ignoring fill memory command for AHardwareBuffer with multi-plane format and "
-                            "mismatched capture/replay strides (Memory ID = %" PRIu64 "): support not yet implemented",
-                            memory_id);
+                        bool copy_directly = true;
+                        for (uint64_t i = 0; i < ahb_info.plane_info.size(); i++)
+                        {
+                            size_t capture_row_pitch = ahb_info.plane_info[i].capture_row_pitch;
+                            size_t replay_row_pitch  = ahb_info.plane_info[i].replay_row_pitch;
+                            if (capture_row_pitch != replay_row_pitch)
+                            {
+                                copy_directly = false;
+                            }
+                        }
+
+                        if (copy_directly)
+                        {
+                            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size);
+                            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, offset);
+
+                            size_t data_size   = static_cast<size_t>(size);
+                            size_t data_offset = static_cast<size_t>(offset);
+
+                            util::platform::MemoryCopy(static_cast<uint8_t*>(buffer_data) + data_offset,
+                                                       data_size,
+                                                       data + data_offset,
+                                                       data_size);
+                            GFXRECON_LOG_DEBUG("Directly fill memory for AHardwareBuffer with multi-plane format for "
+                                               "same capture/replay strides (Memory ID = %" PRIu64 ")",
+                                               memory_id);
+                        }
+                        else
+                        {
+                            // TODO: multi-plane image format support when strides do not match.
+                            GFXRECON_LOG_ERROR(
+                                "Ignoring fill memory command for AHardwareBuffer with multi-plane format and "
+                                "mismatched capture/replay strides (Memory ID = %" PRIu64
+                                "): support not yet implemented",
+                                memory_id);
+                        }
                     }
 
                     lock_result = AHardwareBuffer_unlock(ahb_info.hardware_buffer, nullptr);
