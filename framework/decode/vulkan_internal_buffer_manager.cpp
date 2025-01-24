@@ -60,22 +60,6 @@ void VulkanInternalBufferManager::AddEntry(
     }
 }
 
-void VulkanInternalBufferManager::SetBufferInfo(VulkanBufferInfo* buffer_info)
-{
-    auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
-        return entry->info_.handle == buffer_info->handle;
-    });
-
-    // Handle reuse, update the data in the entry
-    if (existing_buffer != buffers_.end())
-    {
-        (*existing_buffer)->info_ = *buffer_info;
-    }
-    else
-    {
-        buffers_.push_back(std::make_unique<BufferInfoWrapper>(*buffer_info, allocator_, physical_device_info_));
-    }
-}
 
 // TODO: this is exactly the same method as in VulkanInternalBufferManager. Try to remove this duplication
 VkDeviceAddress VulkanInternalBufferManager::GetBufferDeviceAddress(VkBuffer buffer)
@@ -138,13 +122,17 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     allocator_->BindBufferMemoryDirect(buffer, memory, 0, buffer_allocator_data, memory_allocator_data, &found_flags);
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
-    std::unique_ptr<BufferInfoWrapper> entry =
-        std::make_unique<BufferInfoWrapper>(VulkanBufferInfo(), allocator_, physical_device_info_);
+    std::unique_ptr<BufferInfoWrapper> entry = std::make_unique<BufferInfoWrapper>(
+        VulkanBufferInfo(), VulkanDeviceMemoryInfo(), allocator_, physical_device_info_);
     entry->info_.allocator_data        = buffer_allocator_data;
-    entry->info_.replay_address        = GetBufferDeviceAddress(buffer);
     entry->info_.handle                = buffer;
     entry->memory_info_.handle         = memory;
     entry->memory_info_.allocator_data = memory_allocator_data;
+
+    if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+    {
+        entry->info_.replay_address = GetBufferDeviceAddress(buffer);
+    }
 
     return entry;
 }

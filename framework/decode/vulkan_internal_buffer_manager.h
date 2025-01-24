@@ -45,15 +45,16 @@ class VulkanInternalBufferManager
         const VulkanPhysicalDeviceInfo* physical_device_info_;
 
         BufferInfoWrapper(VulkanBufferInfo                buffer_info,
+                          VulkanDeviceMemoryInfo          memory_info,
                           VulkanResourceAllocator*        allocator,
                           const VulkanPhysicalDeviceInfo* physical_device_info) :
             info_(buffer_info),
-            allocator_(allocator), physical_device_info_(physical_device_info)
+            memory_info_(memory_info), allocator_(allocator), physical_device_info_(physical_device_info)
         {}
         ~BufferInfoWrapper()
         {
             util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
-            allocator_->DestroyBuffer(info_.handle, nullptr, info_.allocator_data);
+            allocator_->DestroyBufferDirect(info_.handle, nullptr, info_.allocator_data);
             allocator_->FreeMemoryDirect(memory_info_.handle, nullptr, memory_info_.allocator_data);
             util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
         }
@@ -68,8 +69,6 @@ class VulkanInternalBufferManager
     ~VulkanInternalBufferManager();
 
     void AddEntry(std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>& buffer_entry);
-
-    void SetBufferInfo(VulkanBufferInfo* buffer_info);
 
     std::unique_ptr<BufferInfoWrapper>
     CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags mem_prop_flags = {});

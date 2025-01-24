@@ -370,22 +370,50 @@ void VulkanRayTracingModifier::WriteFixDeviceAddressCmd(format::HandleId        
 
 void VulkanRayTracingModifier::WriteInitBufferDataFixCmd()
 {
-    if (init_buffer_shader_handles_.size())
+    if (init_buffer_entries_.size())
     {
-        for (auto& object : init_buffer_shader_handles_)
+        for (auto& init_buffer : init_buffer_entries_)
         {
-            WriteFixShaderGroupHandleCmd(object.first, object.second.size(), object.second.data());
-        }
-        init_buffer_shader_handles_.clear();
-    }
+            auto& object = init_buffer.second;
+            if (object.shader_handle_locations.size())
+            {
+                WriteFixShaderGroupHandleCmd(
+                    object.buffer_id, object.shader_handle_locations.size(), object.shader_handle_locations.data());
+            }
 
-    if (init_buffer_device_addresses_.size())
-    {
-        for (auto& object : init_buffer_device_addresses_)
-        {
-            WriteFixDeviceAddressCmd(object.first, object.second.size(), object.second.data(), 0, nullptr);
+            if (object.device_address_locations.size())
+            {
+                WriteFixDeviceAddressCmd(object.buffer_id,
+                                         object.device_address_locations.size(),
+                                         object.device_address_locations.data(),
+                                         0,
+                                         nullptr);
+            }
+
+            if (object.init_buffer_data.size())
+            {
+                size_t                          data_size = static_cast<size_t>(object.init_buffer_data.size());
+                format::InitBufferCommandHeader init_buffer_cmd;
+
+                init_buffer_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+                init_buffer_cmd.meta_header.block_header.size =
+                    format::GetMetaDataBlockBaseSize(init_buffer_cmd) + data_size;
+                init_buffer_cmd.meta_header.meta_data_id = format::MakeMetaDataId(
+                    format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitBufferCommand);
+                init_buffer_cmd.thread_id = 1;
+                init_buffer_cmd.device_id = object.device_id;
+                init_buffer_cmd.buffer_id = object.buffer_id;
+                init_buffer_cmd.data_size = data_size;
+
+                auto new_call       = CreatePreCall();
+                new_call->type      = NewCallDataType::MetaDataCall;
+                new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_Unknown;
+                new_call->thread_id = 1;
+                new_call->parameter_buffer.Write(&init_buffer_cmd, sizeof(init_buffer_cmd));
+                new_call->parameter_buffer.Write(object.init_buffer_data.data(), data_size);
+            }
         }
-        init_buffer_device_addresses_.clear();
+        init_buffer_entries_.clear();
     }
 }
 
@@ -445,18 +473,32 @@ void VulkanRayTracingModifier::ProcessInitBufferCommand(format::HandleId device_
         return;
     }
 
+    InitBufferObject init_buffer_object;
+    init_buffer_object.device_id = device_id;
+    init_buffer_object.buffer_id = buffer_id;
+
     // Find shader group handle values inside data
     auto shader_handle_locations = GetShaderGroupHandlesInFillMemory(data, data_size);
     if (shader_handle_locations.size())
     {
-        init_buffer_shader_handles_.emplace(std::make_pair(buffer_id, shader_handle_locations));
+        init_buffer_object.shader_handle_locations = shader_handle_locations;
     }
 
     // Here only find as device address values inside data
     auto as_address_locations = GetAccelerationStructureDeviceAddressesInFillMemory(data, data_size);
     if (as_address_locations.size())
     {
-        init_buffer_device_addresses_.emplace(std::make_pair(buffer_id, as_address_locations));
+        init_buffer_object.device_address_locations = as_address_locations;
+    }
+
+    if (shader_handle_locations.size() || as_address_locations.size())
+    {
+        init_buffer_object.init_buffer_data.resize(data_size);
+        std::memcpy(init_buffer_object.init_buffer_data.data(), data, data_size);
+
+        init_buffer_entries_.emplace(std::make_pair(buffer_id, init_buffer_object));
+
+        delete_device_address_meta_command[block_index_] = true;
     }
 }
 

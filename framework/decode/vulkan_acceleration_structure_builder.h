@@ -76,14 +76,6 @@ class VulkanAccelerationStructureBuilder
                                               const uint32_t*                                    max_primitive_counts,
                                               VkAccelerationStructureBuildSizesInfoKHR*          size_info);
 
-    void OnInitBufferDataUpdateAddress(const VulkanDeviceInfo*                   device_info,
-                                       const VulkanBufferInfo*                   buffer_info,
-                                       std::vector<format::AddressLocationInfo>& address_locations);
-
-    void OnInitBufferDataUpdateShaderGroupHandle(const VulkanDeviceInfo*                        device_info,
-                                                 const VulkanBufferInfo*                        buffer_info,
-                                                 std::vector<format::ShaderHandleLocationInfo>& shader_locations);
-
     VkResult OnCreateAccelerationStructure(const VulkanDeviceInfo*                     device_info,
                                            const VkAccelerationStructureCreateInfoKHR* create_info,
                                            const VkAllocationCallbacks*                pAllocator,

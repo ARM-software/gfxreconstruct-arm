@@ -600,13 +600,6 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
             location_info->new_address = address + offset;
         }
     }
-
-    if (buffer_info)
-    {
-        GetAccelerationStructureBuilder(device_info)
-            .OnInitBufferDataUpdateAddress(device_info, buffer_info, other_address_locations);
-        other_address_locations.clear();
-    }
 }
 
 void VulkanReplayConsumerBase::ProcessFixShaderGroupHandleCommand(
@@ -682,12 +675,6 @@ void VulkanReplayConsumerBase::ProcessFixShaderGroupHandleCommand(
             GFXRECON_LOG_WARNING(
                 "Did not find shader group handle traced data in ShaderHandleLocationInfo[%" PRIu64 "]", i);
         }
-    }
-
-    if (buffer_info)
-    {
-        GetAccelerationStructureBuilder(device_info)
-            .OnInitBufferDataUpdateShaderGroupHandle(device_info, buffer_info, shader_group_handle_locations);
     }
 }
 
@@ -1200,6 +1187,31 @@ void VulkanReplayConsumerBase::ProcessInitBufferCommand(format::HandleId device_
 {
     VulkanDeviceInfo*       device_info = object_info_table_->GetVkDeviceInfo(device_id);
     const VulkanBufferInfo* buffer_info = object_info_table_->GetVkBufferInfo(buffer_id);
+    auto                    allocator   = device_info->allocator.get();
+
+    if ((allocator != nullptr) && (!allocator->SupportsOpaqueDeviceAddresses()))
+    {
+        for (format::ShaderHandleLocationInfo& location : shader_group_handle_locations)
+        {
+            auto old_value_ptr = const_cast<uint8_t*>(data) + location.offset_in_memory;
+            if (0 == std::memcmp(location.original_handles, old_value_ptr, location.group_size))
+            {
+                std::memcpy(old_value_ptr, location.new_handles, location.group_size);
+            }
+        }
+        shader_group_handle_locations.clear();
+
+        for (format::AddressLocationInfo& location : other_address_locations)
+        {
+            uint64_t* old_value_ptr =
+                reinterpret_cast<uint64_t*>(const_cast<uint8_t*>(data) + location.offset_in_memory);
+            if (*old_value_ptr == location.adjusted_address)
+            {
+                *old_value_ptr = location.new_address;
+            }
+        }
+        other_address_locations.clear();
+    }
 
     if ((device_info != nullptr) && (buffer_info != nullptr))
     {
@@ -5531,33 +5543,6 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
         allocator->ReportBindBuffer2Incompatibility(
             bindInfoCount, replay_bind_infos, allocator_buffer_datas.data(), allocator_memory_datas.data());
     }
-
-    for (uint32_t i = 0; i < bindInfoCount; ++i)
-    {
-        auto buffer_info  = buffer_infos[i];
-        auto memory_info  = memory_infos[i];
-        auto memoryOffset = memory_offsets[i];
-
-        // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
-        // Fill out this data based on original memory device address and binding offset
-        auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
-        if (entry != device_info->opaque_addresses.end())
-        {
-            auto                      memory_device_address   = entry->second;
-            auto                      original_buffer_address = memory_device_address + memoryOffset;
-            VkBufferDeviceAddressInfo info                    = {};
-            info.sType                                        = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            info.pNext                                        = nullptr;
-            info.buffer                                       = buffer_info->handle;
-
-            buffer_info->capture_address = original_buffer_address;
-            buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
-            buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
-
-            GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
-        }
-    }
-
     return result;
 }
 
@@ -5890,8 +5875,6 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
             GetAccelerationStructureBuilder(device_info).OnDestroyBuffer(buffer_info);
             GetMicromapBuilder(device_info).OnDestroyBuffer(buffer_info);
         }
-
-        GetDeviceAddressTracker(device_info).RemoveBuffer(buffer_info);
     }
     buffer_info = nullptr;
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
@@ -10095,20 +10078,23 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
         VkStridedDeviceAddressRegionKHR* in_pHitShaderBindingTable      = pHitShaderBindingTable->GetPointer();
         VkStridedDeviceAddressRegionKHR* in_pCallableShaderBindingTable = pCallableShaderBindingTable->GetPointer();
 
-        // identify buffer(s) by their device-address
-        const auto& address_tracker  = GetDeviceAddressTracker(device_info);
-        auto&       address_replacer = GetDeviceAddressReplacer(device_info);
+        if (!device_info->allocator->SupportsOpaqueDeviceAddresses())
+        {
+            // identify buffer(s) by their device-address
+            const auto& address_tracker  = GetDeviceAddressTracker(device_info);
+            auto&       address_replacer = GetDeviceAddressReplacer(device_info);
 
-        auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(command_buffer_info->bound_pipeline_id);
-        GFXRECON_ASSERT(bound_pipeline != nullptr)
+            auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(command_buffer_info->bound_pipeline_id);
+            GFXRECON_ASSERT(bound_pipeline != nullptr)
 
-        address_replacer.ProcessCmdTraceRays(command_buffer_info,
-                                             in_pRaygenShaderBindingTable,
-                                             in_pMissShaderBindingTable,
-                                             in_pHitShaderBindingTable,
-                                             in_pCallableShaderBindingTable,
-                                             address_tracker,
-                                             bound_pipeline->shader_group_handle_map);
+            address_replacer.ProcessCmdTraceRays(command_buffer_info,
+                                                 in_pRaygenShaderBindingTable,
+                                                 in_pMissShaderBindingTable,
+                                                 in_pHitShaderBindingTable,
+                                                 in_pCallableShaderBindingTable,
+                                                 address_tracker,
+                                                 bound_pipeline->shader_group_handle_map);
+        }
 
         func(commandBuffer,
              in_pRaygenShaderBindingTable,
