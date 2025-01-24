@@ -136,6 +136,46 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         }
     }
 
+    // This method is used by custom commands for IDXGIAdapter::GetDesc, IDXGIAdapter1::GetDesc1,
+    // IDXGIAdapter2::GetDesc2, and IDXGIAdapter4::GetDesc3.
+    template <class T>
+    void PostCall_IDXGIAdapter_GetDesc(const ApiCallInfo&       call_info,
+                                       DxObjectInfo*            object_info,
+                                       HRESULT                  capture_return_value,
+                                       HRESULT                  replay_return_value,
+                                       StructPointerDecoder<T>* desc)
+    {
+        GFXRECON_UNREFERENCED_PARAMETER(call_info);
+        GFXRECON_UNREFERENCED_PARAMETER(object_info);
+
+        if (SUCCEEDED(capture_return_value) && SUCCEEDED(replay_return_value))
+        {
+            auto capture_desc = desc->GetPointer();
+            auto replay_desc  = desc->GetOutputPointer();
+
+            GFXRECON_ASSERT((capture_desc != nullptr) && (replay_desc != nullptr));
+
+            AddAdapterLuid(capture_desc->AdapterLuid, replay_desc->AdapterLuid);
+        }
+    }
+
+    void PostCall_IDXGIFactory2_GetSharedResourceAdapterLuid(const ApiCallInfo&                  call_info,
+                                                             DxObjectInfo*                       object_info,
+                                                             HRESULT                             capture_return_value,
+                                                             HRESULT                             replay_return_value,
+                                                             uint64_t                            hResource,
+                                                             StructPointerDecoder<Decoded_LUID>* pLuid);
+
+    void PostCall_ID3D12Device_GetAdapterLuid(const ApiCallInfo&  call_info,
+                                              DxObjectInfo*       object_info,
+                                              const Decoded_LUID& capture_return_value,
+                                              const LUID&         replay_return_value);
+
+    void PostCall_ApiCall_ID3D12SwapChainAssistant_GetLUID(const ApiCallInfo&  call_info,
+                                                           DxObjectInfo*       object_info,
+                                                           const Decoded_LUID& capture_return_value,
+                                                           const LUID&         replay_return_value);
+
     void
     PreCall_ID3D12GraphicsCommandList_ResourceBarrier(const ApiCallInfo&                                    call_info,
                                                       DxObjectInfo*                                         object_info,
@@ -153,6 +193,11 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                    DxObjectInfo*      object_info,
                                                    StructPointerDecoder<Decoded_D3D12_CONSTANT_BUFFER_VIEW_DESC>* pDesc,
                                                    Decoded_D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor);
+
+    void PostCall_ID3D12Device_CreateSampler(const ApiCallInfo&                                call_info,
+                                             DxObjectInfo*                                     object_info,
+                                             StructPointerDecoder<Decoded_D3D12_SAMPLER_DESC>* pDesc,
+                                             Decoded_D3D12_CPU_DESCRIPTOR_HANDLE               DestDescriptor);
 
     void
     PostCall_ID3D12Device_CreateShaderResourceView(const ApiCallInfo& call_info,
@@ -233,7 +278,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void RemoveObject(DxObjectInfo* info);
 
-    void SetDumpTarget(TrackDumpDrawcall& track_dump_target);
+    void SetDumpTarget(TrackDumpDrawCall& track_dump_target);
 
     IDXGIAdapter* GetAdapter();
 
@@ -354,6 +399,12 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                   StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC1>* desc,
                                                   DxObjectInfo*                           restrict_to_output_info,
                                                   HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
+
+    HRESULT OverrideEnumAdapterByLuid(DxObjectInfo*                replay_object_info,
+                                      HRESULT                      original_result,
+                                      Decoded_LUID                 adapter_luid,
+                                      Decoded_GUID                 riid,
+                                      HandlePointerDecoder<void*>* adapter);
 
     HRESULT
     OverrideCreateDXGIFactory2(HRESULT                      original_result,
@@ -741,6 +792,12 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                Decoded_GUID                                                     riid,
                                                HandlePointerDecoder<void*>* pipelineState);
 
+    HRESULT OverrideCreatePipelineState(DxObjectInfo* device_object_info,
+                                        HRESULT       original_result,
+                                        StructPointerDecoder<Decoded_D3D12_PIPELINE_STATE_STREAM_DESC>* pDesc,
+                                        Decoded_GUID                                                    riid,
+                                        HandlePointerDecoder<void*>* ppPipelineState);
+
     HRESULT OverrideSetFullscreenState(DxObjectInfo* swapchain_info,
                                        HRESULT       original_result,
                                        BOOL          Fullscreen,
@@ -895,6 +952,59 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     Dx12ResourceValueMapper* GetResourceValueMapper() { return resource_value_mapper_.get(); }
 
+    template <typename CountT>
+    void SetOutputArrayCount(format::HandleId object_id, VariableLengthArrayIndices index, CountT count)
+    {
+        auto info = GetObjectInfo(object_id);
+        if (info != nullptr)
+        {
+            info->array_counts[index] = static_cast<size_t>(count);
+        }
+    }
+
+    template <typename CountT, typename ArrayT>
+    CountT GetOutputArrayCount(const char*                   func_name,
+                               HRESULT                       original_result,
+                               format::HandleId              object_id,
+                               VariableLengthArrayIndices    index,
+                               const PointerDecoder<CountT>* original_count,
+                               const ArrayT*                 original_array)
+    {
+        assert((original_count != nullptr) && (original_array != nullptr));
+
+        CountT replay_count = 0;
+
+        if (!original_count->IsNull())
+        {
+            // Start with array count set equal to the capture count and then adjust if the replay count is different.
+            replay_count = (*original_count->GetPointer());
+
+            // When the array parameter is not null, adjust the count using the value stored by the previous call with a
+            // null array parameter. But only adjust the replay array count if the call succeeded on capture so that
+            // errors generated at capture continue to be generated at replay.
+            if (!original_array->IsNull() && (original_result == S_OK))
+            {
+                auto info = GetObjectInfo(object_id);
+                if (info != nullptr)
+                {
+                    auto entry = info->array_counts.find(index);
+                    if ((entry != info->array_counts.end()) && (entry->second != replay_count))
+                    {
+                        GFXRECON_LOG_INFO("Replay adjusted the %s array count: capture count = %" PRIuPTR
+                                          ", replay count = %" PRIuPTR,
+                                          func_name,
+                                          static_cast<size_t>(replay_count),
+                                          entry->second);
+                        replay_count = static_cast<CountT>(entry->second);
+                    }
+                }
+            }
+        }
+
+        return replay_count;
+    }
+
+  protected:
     DxReplayOptions                    options_;
     std::unique_ptr<Dx12DumpResources> dump_resources_{ nullptr };
 
@@ -937,6 +1047,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void InitializeD3D12Device(HandlePointerDecoder<void*>* device);
 
     void DetectAdapters();
+
+    void AddAdapterLuid(const LUID& capture_luid, const LUID& replay_luid);
+
+    LUID GetAdapterLuid(const LUID& capture_luid);
 
     void RaiseFatalError(const char* message) const;
 
@@ -1029,6 +1143,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unordered_map<uint64_t, MappedMemoryEntry>       mapped_memory_;
     std::unordered_map<uint64_t, void*>                   heap_allocations_;
     std::unordered_map<uint64_t, HANDLE>                  event_objects_;
+    std::unordered_map<uint64_t, LUID>                    adapter_luid_map_;
     std::function<void(const char*)>                      fatal_error_handler_;
     Dx12DescriptorMap                                     descriptor_map_;
     graphics::Dx12GpuVaMap                                gpu_va_map_;

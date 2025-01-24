@@ -22,6 +22,8 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
+#include "encode/capture_settings.h"
+#include <string>
 #include PROJECT_VERSION_HEADER_FILE
 
 #include "encode/capture_manager.h"
@@ -39,7 +41,12 @@
 #include "util/platform.h"
 
 #include <cassert>
+#include <cstdlib>
 #include <unordered_map>
+
+#if defined(__unix__)
+extern char** environ;
+#endif
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -52,7 +59,7 @@ std::mutex                                     CommonCaptureManager::ThreadData:
 format::ThreadId                               CommonCaptureManager::ThreadData::thread_count_ = 0;
 std::unordered_map<uint64_t, format::ThreadId> CommonCaptureManager::ThreadData::id_map_;
 
-int32_t                                                        CommonCaptureManager::progress_id_ = INT32_MAX;
+int32_t                                                        CommonCaptureManager::process_id_ = INT32_MAX;
 CommonCaptureManager*                                          CommonCaptureManager::singleton_;
 std::mutex                                                     CommonCaptureManager::instance_lock_;
 thread_local std::unique_ptr<CommonCaptureManager::ThreadData> CommonCaptureManager::thread_data_;
@@ -93,16 +100,15 @@ CommonCaptureManager::CommonCaptureManager() :
     force_file_flush_(false), timestamp_filename_(true),
     memory_tracking_mode_(CaptureSettings::MemoryTrackingMode::kPageGuard), page_guard_align_buffer_sizes_(false),
     page_guard_track_ahb_memory_(false), page_guard_unblock_sigsegv_(false), page_guard_signal_handler_watcher_(false),
-    page_guard_memory_mode_(kMemoryModeShadowInternal), trim_enabled_(false),
+    page_guard_memory_mode_(kMemoryModeShadowInternal), page_guard_external_memory_(false), trim_enabled_(false),
     trim_boundary_(CaptureSettings::TrimBoundary::kUnknown), trim_current_range_(0), current_frame_(kFirstFrame),
     queue_submit_count_(0), capture_mode_(kModeWrite), previous_hotkey_state_(false),
     previous_runtime_trigger_state_(CaptureSettings::RuntimeTriggerState::kNotUsed), debug_layer_(false),
     debug_device_lost_(false), screenshot_prefix_(""), screenshots_enabled_(false), disable_dxr_(false),
     accel_struct_padding_(0), iunknown_wrapping_(false), force_command_serialization_(false), queue_zero_only_(false),
-    allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false), page_guard_external_memory_(false)
-{
-    block_index_ = 0;
-}
+    allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false), use_asset_file_(false), block_index_(0),
+    write_assets_(false), previous_write_assets_(false)
+{}
 
 CommonCaptureManager::~CommonCaptureManager()
 {
@@ -170,8 +176,9 @@ bool CommonCaptureManager::LockedCreateInstance(ApiCaptureManager*           api
         GFXRECON_LOG_INFO("capture_package_name = %s", capture_package_name.c_str());
         if (!capture_package_name.empty())
         {
-            progress_id_ = GetPidFromPackageName(capture_package_name.c_str());
+            process_id_ = GetPidFromPackageName(capture_package_name.c_str());
         }
+
         // Initialize capture manager with default settings.
         success = Initialize(api_capture_singleton->GetApiFamily(), base_filename, trace_settings);
         if (!success)
@@ -358,28 +365,30 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
 {
     bool success = true;
 
-    base_filename_                   = base_filename;
-    file_options_                    = trace_settings.capture_file_options;
-    timestamp_filename_              = trace_settings.time_stamp_file;
-    memory_tracking_mode_            = trace_settings.memory_tracking_mode;
-    force_file_flush_                = trace_settings.force_flush;
-    debug_layer_                     = trace_settings.debug_layer;
-    debug_device_lost_               = trace_settings.debug_device_lost;
-    debug_set_objects_name_          = trace_settings.debug_set_objects_name;
-    screenshots_enabled_             = !trace_settings.screenshot_ranges.empty();
-    screenshot_format_               = trace_settings.screenshot_format;
-    screenshot_indices_              = CalcScreenshotIndices(trace_settings.screenshot_ranges);
-    screenshot_prefix_               = PrepScreenshotPrefix(trace_settings.screenshot_dir);
-    disable_dxr_                     = trace_settings.disable_dxr;
-    accel_struct_padding_            = trace_settings.accel_struct_padding;
-    iunknown_wrapping_               = trace_settings.iunknown_wrapping;
-    force_command_serialization_     = trace_settings.force_command_serialization;
-    queue_zero_only_                 = trace_settings.queue_zero_only;
-    allow_pipeline_compile_required_ = trace_settings.allow_pipeline_compile_required;
-    fence_query_delay_               = trace_settings.fence_query_delay;
-    fence_query_delay_unit_          = trace_settings.fence_query_delay_unit;
-    force_fifo_present_mode_         = trace_settings.force_fifo_present_mode;
-    buffer_usages_to_ignore_         = trace_settings.buffer_usages_to_ignore;
+    base_filename_                       = base_filename;
+    file_options_                        = trace_settings.capture_file_options;
+    timestamp_filename_                  = trace_settings.time_stamp_file;
+    memory_tracking_mode_                = trace_settings.memory_tracking_mode;
+    force_file_flush_                    = trace_settings.force_flush;
+    debug_layer_                         = trace_settings.debug_layer;
+    debug_device_lost_                   = trace_settings.debug_device_lost;
+    debug_set_objects_name_              = trace_settings.debug_set_objects_name;
+    screenshots_enabled_                 = !trace_settings.screenshot_ranges.empty();
+    screenshot_format_                   = trace_settings.screenshot_format;
+    screenshot_indices_                  = CalcScreenshotIndices(trace_settings.screenshot_ranges);
+    screenshot_prefix_                   = PrepScreenshotPrefix(trace_settings.screenshot_dir);
+    disable_dxr_                         = trace_settings.disable_dxr;
+    accel_struct_padding_                = trace_settings.accel_struct_padding;
+    iunknown_wrapping_                   = trace_settings.iunknown_wrapping;
+    force_command_serialization_         = trace_settings.force_command_serialization;
+    queue_zero_only_                     = trace_settings.queue_zero_only;
+    allow_pipeline_compile_required_     = trace_settings.allow_pipeline_compile_required;
+    fence_query_delay_                   = trace_settings.fence_query_delay;
+    fence_query_delay_unit_              = trace_settings.fence_query_delay_unit;
+    fence_query_delay_timeout_threshold_ = trace_settings.fence_query_delay_timeout_threshold;
+    buffer_usages_to_ignore_             = trace_settings.buffer_usages_to_ignore;
+    force_fifo_present_mode_             = trace_settings.force_fifo_present_mode;
+    use_asset_file_                      = trace_settings.use_asset_file;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;
@@ -407,6 +416,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
         page_guard_unblock_sigsegv_                     = trace_settings.page_guard_unblock_sigsegv;
         page_guard_signal_handler_watcher_              = trace_settings.page_guard_signal_handler_watcher;
         page_guard_copy_on_map_                         = trace_settings.page_guard_copy_on_map;
+        page_guard_external_memory_                     = trace_settings.page_guard_external_memory;
         page_guard_signal_handler_watcher_max_restores_ = trace_settings.page_guard_signal_handler_watcher_max_restores;
         page_guard_separate_read_                       = trace_settings.page_guard_separate_read;
 
@@ -444,6 +454,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     }
 
     if (trace_settings.trim_ranges.empty() && trace_settings.trim_key.empty() &&
+        trace_settings.trim_boundary != CaptureSettings::TrimBoundary::kDrawCalls &&
         trace_settings.runtime_capture_trigger == CaptureSettings::RuntimeTriggerState::kNotUsed)
     {
         // Use default kModeWrite capture mode.
@@ -509,6 +520,11 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
                 capture_mode_ = kModeTrack;
             }
         }
+        else if (trim_boundary_ == CaptureSettings::TrimBoundary::kDrawCalls)
+        {
+            trim_draw_calls_ = trace_settings.trim_draw_calls;
+            capture_mode_    = kModeTrack;
+        }
         else
         {
             // if/else blocks above should have covered all "else" cases from the parent conditional.
@@ -516,6 +532,18 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
             trim_boundary_ = CaptureSettings::TrimBoundary::kUnknown;
             capture_mode_  = kModeTrack;
         }
+
+#ifdef ARM_INTERNAL
+        if (!trace_settings.render_pass_slice_range.empty())
+        {
+            render_pass_slice_range_ = trace_settings.render_pass_slice_range;
+            if (trace_settings.render_pass_slice_command_buffer_begin != 0)
+            {
+                render_pass_slice_command_buffer_begin_ = trace_settings.render_pass_slice_command_buffer_begin;
+                render_pass_slice_enabled_              = true;
+            }
+        }
+#endif
     }
 
     if (success)
@@ -720,17 +748,11 @@ bool CommonCaptureManager::IsTrimHotkeyPressed()
     return hotkey_pressed;
 }
 
-CaptureSettings::RuntimeTriggerState CommonCaptureManager::GetRuntimeTriggerState()
+bool CommonCaptureManager::RuntimeTriggerEnabled()
 {
     CaptureSettings settings;
     CaptureSettings::LoadRunTimeEnvVarSettings(&settings);
-
-    return settings.GetTraceSettings().runtime_capture_trigger;
-}
-
-bool CommonCaptureManager::RuntimeTriggerEnabled()
-{
-    CaptureSettings::RuntimeTriggerState state = GetRuntimeTriggerState();
+    CaptureSettings::RuntimeTriggerState state = settings.GetTraceSettings().runtime_capture_trigger;
 
     bool result = (state == CaptureSettings::RuntimeTriggerState::kEnabled &&
                    (previous_runtime_trigger_state_ == CaptureSettings::RuntimeTriggerState::kDisabled ||
@@ -743,7 +765,9 @@ bool CommonCaptureManager::RuntimeTriggerEnabled()
 
 bool CommonCaptureManager::RuntimeTriggerDisabled()
 {
-    CaptureSettings::RuntimeTriggerState state = GetRuntimeTriggerState();
+    CaptureSettings settings;
+    CaptureSettings::LoadRunTimeEnvVarSettings(&settings);
+    CaptureSettings::RuntimeTriggerState state = settings.GetTraceSettings().runtime_capture_trigger;
 
     bool result = ((state == CaptureSettings::RuntimeTriggerState::kDisabled ||
                     state == CaptureSettings::RuntimeTriggerState::kNotUsed) &&
@@ -754,15 +778,34 @@ bool CommonCaptureManager::RuntimeTriggerDisabled()
     return result;
 }
 
-void CommonCaptureManager::CheckContinueCaptureForWriteMode(format::ApiFamilyId api_family,
-                                                            uint32_t            current_boundary_count)
+bool CommonCaptureManager::RuntimeWriteAssetsEnabled()
+{
+    CaptureSettings settings;
+    CaptureSettings::LoadRunTimeEnvVarSettings(&settings);
+    bool write_assets = settings.GetTraceSettings().runtime_write_assets;
+
+    if (previous_write_assets_ != write_assets)
+    {
+        write_assets_          = true;
+        previous_write_assets_ = write_assets;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+void CommonCaptureManager::CheckContinueCaptureForWriteMode(format::ApiFamilyId              api_family,
+                                                            uint32_t                         current_boundary_count,
+                                                            std::shared_lock<ApiCallMutexT>& current_lock)
 {
     if (!trim_ranges_.empty())
     {
         if (current_boundary_count == (trim_ranges_[trim_current_range_].last + 1))
         {
             // Stop recording and close file.
-            DeactivateTrimming();
+            DeactivateTrimming(current_lock);
             GFXRECON_LOG_INFO("Finished recording graphics API capture");
 
             // Advance to next range
@@ -773,6 +816,7 @@ void CommonCaptureManager::CheckContinueCaptureForWriteMode(format::ApiFamilyId 
                 trim_enabled_  = false;
                 trim_boundary_ = CaptureSettings::TrimBoundary::kUnknown;
                 capture_mode_  = kModeDisabled;
+
                 // Clean up all of the capture manager's state trackers
                 for (auto& manager_it : api_capture_managers_)
                 {
@@ -788,7 +832,7 @@ void CommonCaptureManager::CheckContinueCaptureForWriteMode(format::ApiFamilyId 
                 bool        success    = CreateCaptureFile(api_family, CreateTrimFilename(base_filename_, trim_range));
                 if (success)
                 {
-                    ActivateTrimming();
+                    ActivateTrimming(current_lock);
                 }
                 else
                 {
@@ -804,13 +848,38 @@ void CommonCaptureManager::CheckContinueCaptureForWriteMode(format::ApiFamilyId 
              RuntimeTriggerDisabled())
     {
         // Stop recording and close file.
-        DeactivateTrimming();
+        DeactivateTrimming(current_lock);
         GFXRECON_LOG_INFO("Finished recording graphics API capture");
     }
 }
 
-void CommonCaptureManager::CheckStartCaptureForTrackMode(format::ApiFamilyId api_family,
-                                                         uint32_t            current_boundary_count)
+void CommonCaptureManager::DeactivateTrimmingDrawCalls(std::shared_lock<ApiCallMutexT>& current_lock)
+{
+    if (trim_enabled_)
+    {
+        if ((capture_mode_ & kModeWrite) == kModeWrite)
+        {
+            // Stop recording and close file.
+            DeactivateTrimming(current_lock);
+            GFXRECON_LOG_INFO("Finished recording graphics API capture");
+
+            // No more trim ranges to capture. Capture can be disabled and resources can be released.
+            trim_enabled_  = false;
+            trim_boundary_ = CaptureSettings::TrimBoundary::kUnknown;
+            capture_mode_  = kModeDisabled;
+            // Clean up all of the capture manager's state trackers
+            for (auto& manager_it : api_capture_managers_)
+            {
+                manager_it.first->DestroyStateTracker();
+            }
+            compressor_ = nullptr;
+        }
+    }
+}
+
+void CommonCaptureManager::CheckStartCaptureForTrackMode(format::ApiFamilyId              api_family,
+                                                         uint32_t                         current_boundary_count,
+                                                         std::shared_lock<ApiCallMutexT>& current_lock)
 {
     if (!trim_ranges_.empty())
     {
@@ -820,7 +889,7 @@ void CommonCaptureManager::CheckStartCaptureForTrackMode(format::ApiFamilyId api
             bool        success    = CreateCaptureFile(api_family, CreateTrimFilename(base_filename_, trim_range));
             if (success)
             {
-                ActivateTrimming();
+                ActivateTrimming(current_lock);
             }
             else
             {
@@ -838,11 +907,51 @@ void CommonCaptureManager::CheckStartCaptureForTrackMode(format::ApiFamilyId api
         {
 
             trim_key_first_frame_ = current_boundary_count;
-            ActivateTrimming();
+            ActivateTrimming(current_lock);
         }
         else
         {
             GFXRECON_LOG_FATAL("Failed to initialize capture for hotkey trim trigger; capture has been disabled");
+            trim_enabled_ = false;
+            capture_mode_ = kModeDisabled;
+        }
+    }
+
+    // Check to see if an asset dumping has been requested outside of capture range
+    if (use_asset_file_ && (RuntimeWriteAssetsEnabled() || write_assets_) && capture_mode_ == kModeTrack)
+    {
+        capture_mode_ |= kModeWrite;
+
+        auto thread_data = GetThreadData();
+        assert(thread_data != nullptr);
+
+        std::unique_ptr<util::FileOutputStream> asset_file_stream = CreateAssetFile();
+        if (asset_file_stream)
+        {
+            for (auto& manager : api_capture_managers_)
+            {
+                manager.first->WriteAssets(asset_file_stream.get(), &asset_file_name_, thread_data->thread_id_);
+            }
+        }
+
+        capture_mode_ = kModeTrack;
+        write_assets_ = false;
+    }
+}
+
+void CommonCaptureManager::ActivateTrimmingDrawCalls(format::ApiFamilyId              api_family,
+                                                     std::shared_lock<ApiCallMutexT>& current_lock)
+{
+    if (((capture_mode_ & kModeWrite) != kModeWrite) && ((capture_mode_ & kModeTrack) == kModeTrack))
+    {
+        bool success = CreateCaptureFile(api_family, CreateTrimDrawCallsFilename(base_filename_, trim_draw_calls_));
+        if (success)
+        {
+            ActivateTrimming(current_lock);
+        }
+        else
+        {
+            GFXRECON_LOG_FATAL("Failed to initialize capture for trim draw calls; capture has been disabled");
             trim_enabled_ = false;
             capture_mode_ = kModeDisabled;
         }
@@ -893,7 +1002,7 @@ void CommonCaptureManager::WriteFrameMarker(format::MarkerType marker_type)
     }
 }
 
-void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family)
+void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock)
 {
     // Write an end-of-frame marker to the capture file.
     WriteFrameMarker(format::MarkerType::kEndMarker);
@@ -906,13 +1015,13 @@ void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family)
         {
             // Currently capturing a frame range.
             // Check for end of range or hotkey trigger to stop capture.
-            CheckContinueCaptureForWriteMode(api_family, current_frame_);
+            CheckContinueCaptureForWriteMode(api_family, current_frame_, current_lock);
         }
         else if ((capture_mode_ & kModeTrack) == kModeTrack)
         {
             // Capture is not active.
             // Check for start of capture frame range or hotkey trigger to start capture
-            CheckStartCaptureForTrackMode(api_family, current_frame_);
+            CheckStartCaptureForTrackMode(api_family, current_frame_, current_lock);
         }
     }
 
@@ -930,22 +1039,25 @@ void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family)
     }
 }
 
-void CommonCaptureManager::PreQueueSubmit(format::ApiFamilyId api_family)
+void CommonCaptureManager::PreQueueSubmit(format::ApiFamilyId api_family, std::shared_lock<ApiCallMutexT>& current_lock)
 {
-    ++queue_submit_count_;
 
     if (trim_enabled_ && (trim_boundary_ == CaptureSettings::TrimBoundary::kQueueSubmits))
     {
         if (((capture_mode_ & kModeWrite) != kModeWrite) && ((capture_mode_ & kModeTrack) == kModeTrack))
         {
             // Capture is not active, check for start of capture frame range.
-            CheckStartCaptureForTrackMode(api_family, queue_submit_count_);
+            CheckStartCaptureForTrackMode(api_family, queue_submit_count_, current_lock);
         }
     }
 }
 
-void CommonCaptureManager::PostQueueSubmit(format::ApiFamilyId api_family)
+void CommonCaptureManager::PostQueueSubmit(format::ApiFamilyId              api_family,
+                                           std::shared_lock<ApiCallMutexT>& current_lock)
 {
+    // 0-based
+    ++queue_submit_count_;
+
     if (trim_enabled_ && (trim_boundary_ == CaptureSettings::TrimBoundary::kQueueSubmits))
     {
         if ((capture_mode_ & kModeWrite) == kModeWrite)
@@ -953,7 +1065,7 @@ void CommonCaptureManager::PostQueueSubmit(format::ApiFamilyId api_family)
             // Currently capturing a queue submit range, check for end of range.
             // It checks the boundary count with +1. That is for trim frames.
             // It will write one more QueueSubmit for trim QueueSubmits, so +1.
-            CheckContinueCaptureForWriteMode(api_family, queue_submit_count_ + 1);
+            CheckContinueCaptureForWriteMode(api_family, queue_submit_count_ + 1, current_lock);
         }
     }
 }
@@ -991,23 +1103,88 @@ std::string CommonCaptureManager::CreateTrimFilename(const std::string&     base
     return util::filepath::InsertFilenamePostfix(base_filename, range_string);
 }
 
+std::string CommonCaptureManager::CreateTrimDrawCallsFilename(const std::string&                    base_filename,
+                                                              const CaptureSettings::TrimDrawCalls& trim_draw_calls)
+{
+    std::string range_string = "_";
+
+    uint32_t total = trim_draw_calls.draw_call_indices.last - trim_draw_calls.draw_call_indices.first + 1;
+    uint32_t bundle_total =
+        trim_draw_calls.bundle_draw_call_indices.last - trim_draw_calls.bundle_draw_call_indices.first + 1;
+    const char* boundary_str = (total > 1 || bundle_total > 1) ? "draw_calls_" : "draw_call_";
+
+    range_string += boundary_str;
+    range_string += std::to_string(trim_draw_calls.submit_index) + "_" + std::to_string(trim_draw_calls.command_index) +
+                    "_" + std::to_string(trim_draw_calls.draw_call_indices.first);
+    if (total > 1)
+    {
+        range_string += "_through_";
+        range_string += std::to_string(trim_draw_calls.draw_call_indices.last);
+    }
+
+    range_string += "_" + std::to_string(trim_draw_calls.bundle_draw_call_indices.first);
+
+    if (bundle_total > 1)
+    {
+        range_string += "_through_";
+        range_string += std::to_string(trim_draw_calls.bundle_draw_call_indices.last);
+    }
+
+    return util::filepath::InsertFilenamePostfix(base_filename, range_string);
+}
+
+std::unique_ptr<util::FileOutputStream> CommonCaptureManager::CreateAssetFile()
+{
+    if (asset_file_name_.empty())
+    {
+        asset_file_name_ = CreateAssetFilename(base_filename_);
+
+        if (timestamp_filename_)
+        {
+            asset_file_name_ = util::filepath::GenerateTimestampedFilename(asset_file_name_);
+        }
+    }
+
+    std::unique_ptr<util::FileOutputStream> asset_file_stream =
+        std::make_unique<util::FileOutputStream>(asset_file_name_, kFileStreamBufferSize, true);
+    if (!asset_file_stream->IsValid())
+    {
+        GFXRECON_LOG_ERROR("Failed opening asset file %s", asset_file_name_.c_str())
+        return nullptr;
+    }
+
+    if (!asset_file_stream->GetOffset())
+    {
+        WriteFileHeader(asset_file_stream.get());
+    }
+
+    return std::move(asset_file_stream);
+}
+
+std::string CommonCaptureManager::CreateAssetFilename(const std::string& base_filename) const
+{
+    std::string asset_filename = util::filepath::InsertFilenamePostfix(base_filename, "_asset_file", ".gfxa");
+    return asset_filename;
+}
+
 bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename)
 {
     if (!IsCaptureApp())
         return true;
-    bool        success          = true;
-    std::string capture_filename = base_filename;
+
+    bool success      = true;
+    capture_filename_ = base_filename;
 
     if (timestamp_filename_)
     {
-        capture_filename = util::filepath::GenerateTimestampedFilename(capture_filename);
+        capture_filename_ = util::filepath::GenerateTimestampedFilename(capture_filename_);
     }
 
-    file_stream_ = std::make_unique<util::FileOutputStream>(capture_filename, kFileStreamBufferSize);
+    file_stream_ = std::make_unique<util::FileOutputStream>(capture_filename_, kFileStreamBufferSize);
 
     if (file_stream_->IsValid())
     {
-        GFXRECON_LOG_INFO("Recording graphics API capture to %s", capture_filename.c_str());
+        GFXRECON_LOG_INFO("Recording graphics API capture to %s", capture_filename_.c_str());
         WriteFileHeader();
 
         gfxrecon::util::filepath::FileInfo info{};
@@ -1015,31 +1192,96 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
         WriteExeFileInfo(api_family, info);
 
         // Save parameters of the capture in an annotation.
-        std::string operation_annotation = "{\n"
-                                           "    \"tool\": \"capture\",\n"
-                                           "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationTimestamp;
-        operation_annotation += "\": \"";
-        operation_annotation += util::datetime::UtcNowString();
-        operation_annotation += "\",\n";
-        operation_annotation += "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationGfxreconstructVersion;
-        operation_annotation += "\": \"" GFXRECON_PROJECT_VERSION_STRING "\",\n";
-        operation_annotation += "    \"";
-        operation_annotation += gfxrecon::format::kOperationAnnotationVulkanVersion;
-        operation_annotation += "\": \"";
-        operation_annotation += std::to_string(VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += '.';
-        operation_annotation += std::to_string(VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += '.';
-        operation_annotation += std::to_string(VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
-        operation_annotation += "\"";
+        nlohmann::ordered_json operation_annotation;
+        operation_annotation["tool"] = "capture";
+
+        operation_annotation[format::kOperationAnnotationTimestamp]             = util::datetime::UtcNowString();
+        operation_annotation[format::kOperationAnnotationGfxreconstructVersion] = GFXRECON_PROJECT_VERSION_STRING;
+        operation_annotation[format::kOperationAnnotationVulkanVersion] =
+            std::to_string(VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE)) + '.' +
+            std::to_string(VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE)) + '.' +
+            std::to_string(VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
 
         WriteCaptureOptions(operation_annotation);
-
-        operation_annotation += "\n}";
         ForcedWriteAnnotation(
-            format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.c_str());
+            format::AnnotationType::kJson, format::kAnnotationLabelOperation, operation_annotation.dump().c_str());
+
+        // Gather environment variables in format::kEnvironmentStringDelimeter -delimited string
+        std::string env_vars;
+#ifdef _WINDOWS
+        const LPCH env_string  = GetEnvironmentStrings();
+        int        offset      = 0;
+        int        base_offset = 0;
+
+        // Initial loop to count total length
+        while (env_string[offset] != '\0')
+        {
+            const char* c = env_string + offset;
+
+            while (env_string[offset] != '\0') offset += 1;
+            offset += 1;
+
+            // Environment variables starting with '=' are relics from the DOS era and can be ignored
+            // Said variables are always at the front, so we can simply bump base_offset to skip them
+            // more details: https://devblogs.microsoft.com/oldnewthing/20100506-00/?p=14133
+            if (*c == '=')
+                base_offset = offset;
+        }
+        env_vars.reserve(offset - base_offset);
+        offset = base_offset;
+
+        // Second loop to copy string data into allocated buffer
+        while (env_string[offset] != '\0')
+        {
+            const char* c = env_string + offset;
+            env_vars += c;
+            env_vars += format::kEnvironmentStringDelimeter;
+
+            // Advance offset until it points to next null byte of string
+            while (env_string[offset] != '\0') offset += 1;
+
+            // Advance offset to point at the first character of the next string
+            // or null if we're out of strings
+            offset += 1;
+        }
+        FreeEnvironmentStrings(env_string);
+#elif __unix__
+        int    current      = 0;
+        size_t total_length = 0;
+        // Initial loop to count total length
+        while (environ[current] != nullptr)
+        {
+            total_length += util::platform::StringLength(environ[current]);
+            current += 1;
+        }
+        current = 0;
+        env_vars.reserve(total_length);
+        // Second loop to copy string data into allocated buffer
+        while (environ[current] != nullptr)
+        {
+            env_vars += environ[current];
+            env_vars += format::kEnvironmentStringDelimeter;
+            current += 1;
+        }
+#endif
+        if (!env_vars.empty())
+        {
+            env_vars[env_vars.size() - 1] = '\0';
+
+            format::SetEnvironmentVariablesCommand env_block{};
+            env_block.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(env_block) + env_vars.size();
+            env_block.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+            env_block.meta_header.meta_data_id =
+                format::MakeMetaDataId(api_family, format::MetaDataType::kSetEnvironmentVariablesCommand);
+
+            auto thread_data    = GetThreadData();
+            env_block.thread_id = thread_data->thread_id_;
+
+            env_block.string_length = env_vars.size();
+
+            // Write to file
+            CombineAndWriteToFile({ { &env_block, sizeof(env_block) }, { env_vars.c_str(), env_vars.size() } });
+        }
     }
     else
     {
@@ -1050,29 +1292,80 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
     return success;
 }
 
-void CommonCaptureManager::ActivateTrimming()
+void CommonCaptureManager::ActivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock)
 {
-    capture_mode_ |= kModeWrite;
-
-    auto thread_data = GetThreadData();
-    assert(thread_data != nullptr);
-
-    for (auto& manager : api_capture_managers_)
+    auto has_shared_lock = current_lock.owns_lock();
+    if (has_shared_lock)
     {
-        manager.first->WriteTrackedState(file_stream_.get(), thread_data->thread_id_);
+        current_lock.unlock();
+    }
+
+    {
+        auto exclusive_api_call_lock = std::unique_lock<CommonCaptureManager::ApiCallMutexT>{};
+        if (!GetForceCommandSerialization())
+        {
+            // If command serialization is active, the caller already holds the exclusive lock.
+            exclusive_api_call_lock = AcquireExclusiveApiCallLock();
+        }
+
+        capture_mode_ |= kModeWrite;
+
+        auto thread_data = GetThreadData();
+        assert(thread_data != nullptr);
+        if (use_asset_file_)
+        {
+            std::unique_ptr<util::FileOutputStream> asset_file_stream = CreateAssetFile();
+            for (auto& manager : api_capture_managers_)
+            {
+                manager.first->WriteTrackedStateWithAssetFile(
+                    file_stream_.get(), thread_data->thread_id_, asset_file_stream.get(), &asset_file_name_);
+            }
+        }
+        else
+        {
+            for (auto& manager : api_capture_managers_)
+            {
+                manager.first->WriteTrackedState(file_stream_.get(), thread_data->thread_id_);
+            }
+        }
+    }
+
+    if (has_shared_lock)
+    {
+        current_lock.lock();
     }
 }
 
-void CommonCaptureManager::DeactivateTrimming()
+void CommonCaptureManager::DeactivateTrimming(std::shared_lock<ApiCallMutexT>& current_lock)
 {
-    capture_mode_ &= ~kModeWrite;
+    auto has_shared_lock = current_lock.owns_lock();
+    if (has_shared_lock)
+    {
+        current_lock.unlock();
+    }
 
-    assert(file_stream_);
-    file_stream_->Flush();
-    file_stream_ = nullptr;
+    {
+        auto exclusive_api_call_lock = std::unique_lock<CommonCaptureManager::ApiCallMutexT>{};
+        if (!GetForceCommandSerialization())
+        {
+            // If command serialization is active, the caller already holds the exclusive lock.
+            exclusive_api_call_lock = AcquireExclusiveApiCallLock();
+        }
+
+        capture_mode_ &= ~kModeWrite;
+
+        assert(file_stream_);
+        file_stream_->Flush();
+        file_stream_ = nullptr;
+    }
+
+    if (has_shared_lock)
+    {
+        current_lock.lock();
+    }
 }
 
-void CommonCaptureManager::WriteFileHeader()
+void CommonCaptureManager::WriteFileHeader(util::FileOutputStream* file_stream)
 {
     if (!IsCaptureApp())
         return;
@@ -1087,7 +1380,8 @@ void CommonCaptureManager::WriteFileHeader()
     file_header.num_options   = static_cast<uint32_t>(option_list.size());
 
     CombineAndWriteToFile({ { &file_header, sizeof(file_header) },
-                            { option_list.data(), option_list.size() * sizeof(format::FileOptionPair) } });
+                            { option_list.data(), option_list.size() * sizeof(format::FileOptionPair) } },
+                          file_stream);
 
     // File header does not count as a block
     assert(block_index_ > 0);
@@ -1289,6 +1583,7 @@ void CommonCaptureManager::WriteCreateHeapAllocationCmd(format::ApiFamilyId api_
 {
     if (!IsCaptureApp())
         return;
+
     if (IsCaptureModeWrite())
     {
         format::CreateHeapAllocationCommand allocation_cmd;
@@ -1308,10 +1603,11 @@ void CommonCaptureManager::WriteCreateHeapAllocationCmd(format::ApiFamilyId api_
     }
 }
 
-void CommonCaptureManager::WriteToFile(const void* data, size_t size)
+void CommonCaptureManager::WriteToFile(const void* data, size_t size, util::FileOutputStream* file_stream)
 {
     if (!IsCaptureApp())
         return;
+
     if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
     {
         util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -1326,10 +1622,12 @@ void CommonCaptureManager::WriteToFile(const void* data, size_t size)
         }
     }
 
-    file_stream_->Write(data, size);
+    util::FileOutputStream* output_stream = (file_stream != nullptr) ? file_stream : file_stream_.get();
+
+    output_stream->Write(data, size);
     if (force_file_flush_)
     {
-        file_stream_->Flush();
+        output_stream->Flush();
     }
 
     if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
@@ -1363,124 +1661,119 @@ void CommonCaptureManager::AtExit()
     }
 }
 
-void CommonCaptureManager::WriteCaptureOptions(std::string& operation_annotation)
+void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation_annotation)
 {
     if (!IsCaptureApp())
         return;
+
+    nlohmann::ordered_json         capture_options;
     CaptureSettings::TraceSettings default_settings = default_settings_.GetTraceSettings();
-    std::string                    buffer;
 
     if (force_file_flush_ != default_settings.force_flush)
     {
-        buffer += "\n    \"file-flush\": ";
-        buffer += force_file_flush_ ? "true," : "false,";
+        capture_options["file-flush"] = force_file_flush_;
     }
 
     if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kUnassisted)
     {
-        buffer += "\n    \"memory-tracking-mode\": \"unassisted\",";
+        capture_options["memory-tracking-mode"] = "unassisted";
     }
     else if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kAssisted)
     {
-        buffer += "\n    \"memory-tracking-mode\": \"assisted\",";
+        capture_options["memory-tracking-mode"] = "assisted";
     }
     else
     {
-        std::string page_guard_options_buffer;
+        nlohmann::ordered_json page_guard_options;
         if (page_guard_copy_on_map_ != default_settings.page_guard_copy_on_map)
         {
-            page_guard_options_buffer += "\n    \"page-guard-copy-on-map\": ";
-            page_guard_options_buffer += page_guard_copy_on_map_ ? "true," : "false,";
+            page_guard_options["page-guard-copy-on-map"] = page_guard_copy_on_map_;
         }
         if (page_guard_separate_read_ != default_settings.page_guard_separate_read)
         {
-            page_guard_options_buffer += "\n    \"page-guard-separate-read\": ";
-            page_guard_options_buffer += page_guard_separate_read_ ? "true," : "false,";
+            page_guard_options["page-guard-separate-read"] = page_guard_separate_read_;
         }
         if (page_guard_external_memory_ != default_settings.page_guard_external_memory)
         {
-            page_guard_options_buffer += "\n    \"page-guard-external-memory\": ";
-            page_guard_options_buffer += page_guard_external_memory_ ? "true," : "false,";
+            page_guard_options["page-guard-external-memory"] = page_guard_external_memory_;
         }
         if (!page_guard_external_memory_ && page_guard_memory_mode_ != PageGuardMemoryMode::kMemoryModeShadowInternal)
         {
-            page_guard_options_buffer += "\n    \"page-guard-persistent-memory\": ";
-            page_guard_options_buffer +=
-                (page_guard_memory_mode_ == PageGuardMemoryMode::kMemoryModeShadowPersistent) ? "true," : "false,";
+            page_guard_options["page-guard-persistent-memory"] =
+                page_guard_memory_mode_ == PageGuardMemoryMode::kMemoryModeShadowPersistent;
         }
         if (page_guard_align_buffer_sizes_ != default_settings.page_guard_align_buffer_sizes)
         {
-            page_guard_options_buffer += "\n    \"page-guard-align-buffer-sizes\": ";
-            page_guard_options_buffer += page_guard_align_buffer_sizes_ ? "true," : "false,";
+            page_guard_options["page-guard-align-buffer-sizes"] = page_guard_align_buffer_sizes_;
         }
         if (page_guard_unblock_sigsegv_ != default_settings.page_guard_unblock_sigsegv)
         {
-            page_guard_options_buffer += "\n    \"page-guard-unblock-sigsegv\": ";
-            page_guard_options_buffer += page_guard_unblock_sigsegv_ ? "true," : "false,";
+            page_guard_options["page-guard-unblock-sigsegv"] = page_guard_unblock_sigsegv_;
         }
         if (page_guard_signal_handler_watcher_ != default_settings.page_guard_signal_handler_watcher)
         {
-            page_guard_options_buffer += "\n    \"page-guard-signal-handler-watcher\": ";
-            page_guard_options_buffer += page_guard_signal_handler_watcher_ ? "true," : "false,";
+            page_guard_options["page-guard-signal-handler-watcher"] = page_guard_signal_handler_watcher_;
         }
         if (page_guard_signal_handler_watcher_max_restores_ !=
             default_settings.page_guard_signal_handler_watcher_max_restores)
         {
-            page_guard_options_buffer += "\n    \"page-guard-signal-handler-watcher-max-restores\": " +
-                                         std::to_string(page_guard_signal_handler_watcher_max_restores_) + ',';
+            page_guard_options["page-guard-signal-handler-watcher-max-restores"] =
+                page_guard_signal_handler_watcher_max_restores_;
         }
 
-        if (!page_guard_options_buffer.empty())
+        if (!page_guard_options.empty())
         {
-            buffer += "\n    \"memory-tracking-mode\": \"page_guard\",";
-            buffer += page_guard_options_buffer;
+            capture_options["memory-tracking-mode"] = "page_guard";
+            capture_options["page-guard-options"]   = page_guard_options;
         }
     }
 
     if (force_command_serialization_ != default_settings.force_command_serialization)
     {
-        buffer += "\n    \"force-command-serialization\": ";
-        buffer += force_command_serialization_ ? "true," : "false,";
+        capture_options["force-command-serialization"] = force_command_serialization_;
     }
     if (fence_query_delay_ != default_settings.fence_query_delay)
     {
-        buffer += "\n    \"fence-query-delay\": " + std::to_string(fence_query_delay_) + ',';
-        buffer += "\n    \"fence-query-delay-unit\": \"";
+        capture_options["fence-query-delay"] = fence_query_delay_;
         if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kCalls)
         {
-            buffer += "calls";
+            capture_options["fence-query-delay-unit"] = "calls";
         }
         else if (fence_query_delay_unit_ == CaptureSettings::FenceQueryDelayUnit::kFrames)
         {
-            buffer += "frames";
+            capture_options["fence-query-delay-unit"] = "frames";
         }
-        buffer += "\",";
+        capture_options["fence-query-delay-timeout-threshold"] = fence_query_delay_timeout_threshold_;
     }
     if (queue_zero_only_ != default_settings.queue_zero_only)
     {
-        buffer += "\n    \"queue-zero-only\": ";
-        buffer += queue_zero_only_ ? "true," : "false,";
+        capture_options["queue-zero-only"] = queue_zero_only_;
     }
     if (force_fifo_present_mode_ != default_settings.force_fifo_present_mode)
     {
-        buffer += "\n    \"force-fifo-present-mode\": ";
-        buffer += force_fifo_present_mode_ ? "true," : "false,";
+        capture_options["force-fifo-present-mode"] = force_fifo_present_mode_;
     }
 
-    if (buffer.empty())
+    if (buffer_usages_to_ignore_ != default_settings.buffer_usages_to_ignore)
     {
-        return;
+        capture_options["buffer-usages-to-ignore"] = GetIgnoredBufferUsages();
     }
+    if (!capture_options.empty())
+    {
+        operation_annotation[format::kOperationAnnotationCaptureParameters] = capture_options;
+    }
+}
 
-    // Erase the trailing comma
-    buffer.pop_back();
+nlohmann::ordered_json CommonCaptureManager::GetIgnoredBufferUsages()
+{
+    nlohmann::ordered_json::array_t ignored_usages;
+    ignored_usages.reserve(buffer_usages_to_ignore_.size());
 
-    // Add the comma after the vulkan version only if there is something more to write
-    operation_annotation += ",\n    \"";
-    operation_annotation += gfxrecon::format::kOperationAnnotationCaptureParameters;
-    operation_annotation += "\": \n    {";
-    operation_annotation += buffer;
-    operation_annotation += "\n    }";
+    for (uint64_t usage : buffer_usages_to_ignore_)
+    {
+        ignored_usages.push_back(util::BitmaskToString<VkBufferUsageFlagBits>(usage));
+    }
+    return ignored_usages;
 }
 
 GFXRECON_END_NAMESPACE(encode)

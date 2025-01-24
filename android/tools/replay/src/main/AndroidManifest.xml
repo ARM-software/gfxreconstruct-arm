@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.lunarg.gfxreconstruct.replay">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
@@ -15,10 +14,10 @@
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
         android:extractNativeLibs="true"
-        android:hasCode="false">
-        <activity android:name="android.app.NativeActivity"
+        android:hasCode="true">
+        <activity android:name=".ReplayActivity"
                   android:exported="true"
-                  android:configChanges="orientation|screenSize|keyboard|keyboardHidden"
+                  android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout"
                   android:screenOrientation="unspecified">
             <meta-data android:name="android.app.lib_name"
                        android:value="gfxrecon-replay" />

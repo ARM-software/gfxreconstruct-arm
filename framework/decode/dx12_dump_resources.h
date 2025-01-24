@@ -56,14 +56,8 @@ enum class Dx12DumpResourceType : uint32_t
     kCbv,
     kExecuteIndirectArg,
     kExecuteIndirectCount,
-};
-
-enum class Dx12DumpResourcePos : uint32_t
-{
-    kUnknown,
-    kBeforeDrawCall,
-    kDrawCall,
-    kAfterDrawCall,
+    kGraphicsRootParameters,
+    kComputeRootParameters,
 };
 
 struct CopyResourceData
@@ -83,7 +77,7 @@ struct CopyResourceData
     uint64_t                                        total_size{ 0 };
     bool                                            is_cpu_accessible{ false };
 
-    std::vector<std::vector<uint8_t>> datas; // copy resource drawcall
+    std::vector<std::vector<uint8_t>> datas; // copy resource draw call
 
     graphics::dx12::ID3D12GraphicsCommandListComPtr cmd_list{ nullptr };
     graphics::dx12::ID3D12ResourceComPtr            read_resource{ nullptr };
@@ -91,7 +85,7 @@ struct CopyResourceData
 
     std::vector<std::pair<std::string, int32_t>> json_path;
     Dx12DumpResourceType                         resource_type{ Dx12DumpResourceType::kUnknown };
-    Dx12DumpResourcePos                          dump_position{ Dx12DumpResourcePos::kUnknown };
+    graphics::dx12::Dx12DumpResourcePos          dump_position{ graphics::dx12::Dx12DumpResourcePos::kUnknown };
 
     format::HandleId descriptor_heap_id{ format::kNullHandleId };
     uint32_t         descriptor_heap_index{ 0 };
@@ -113,7 +107,7 @@ struct CopyResourceData
         read_resource                   = nullptr;
         read_resource_is_staging_buffer = false;
         resource_type                   = Dx12DumpResourceType::kUnknown;
-        dump_position                   = Dx12DumpResourcePos::kUnknown;
+        dump_position                   = graphics::dx12::Dx12DumpResourcePos::kUnknown;
         descriptor_heap_id              = format::kUnknown;
         descriptor_heap_index           = 0;
     }
@@ -121,15 +115,9 @@ struct CopyResourceData
 
 typedef std::shared_ptr<CopyResourceData> CopyResourceDataPtr;
 
-struct CommandSet
-{
-    graphics::dx12::ID3D12CommandAllocatorComPtr    allocator;
-    graphics::dx12::ID3D12GraphicsCommandListComPtr list;
-};
-
 struct TrackDumpResources
 {
-    TrackDumpDrawcall target{};
+    TrackDumpDrawCall target{};
 
     // render target
     std::vector<format::HandleId>            render_target_heap_ids;
@@ -141,8 +129,8 @@ struct TrackDumpResources
     graphics::dx12::ID3D12ResourceComPtr         copy_staging_buffer{ nullptr };
     uint64_t                                     copy_staging_buffer_size{ 0 };
 
-    std::array<CommandSet, 3> split_command_sets;
-    std::array<CommandSet, 3> split_bundle_command_sets;
+    std::array<graphics::dx12::CommandSet, 3> split_command_sets;
+    std::array<graphics::dx12::CommandSet, 3> split_bundle_command_sets;
 
     graphics::dx12::ID3D12FenceComPtr fence;
     HANDLE                            fence_event;
@@ -163,9 +151,33 @@ class Dx12DumpResourcesDelegate
   public:
     virtual ~Dx12DumpResourcesDelegate() {}
 
-    virtual void BeginDumpResources(const std::string& filename, const TrackDumpResources& track_dump_resources) = 0;
-    virtual void DumpResource(CopyResourceDataPtr resource_data)                                                 = 0;
-    virtual void EndDumpResources()                                                                              = 0;
+    virtual void BeginDumpResources(const std::string&        dump_resources_output_dir,
+                                    const std::string&        capture_file_name,
+                                    const TrackDumpResources& track_dump_resources)                                 = 0;
+    virtual void DumpResource(CopyResourceDataPtr resource_data)                                                    = 0;
+    virtual void EndDumpResources()                                                                                 = 0;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const std::string&                                  key,
+                                 uint64_t                                            value)                                                                    = 0;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const uint32_t                                      index,
+                                 uint64_t                                            value)                                                                    = 0;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const std::string&                                  key,
+                                 const std::string&                                  value)                                                          = 0;
+    virtual void WriteNote(const std::vector<std::pair<std::string, int32_t>>& json_path, const std::string& value) = 0;
+    virtual void WriteRootParameterInfo(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                        uint32_t                                            root_parameter_index,
+                                        const TrackRootParameter&                           root_parameter)                                   = 0;
+    virtual void WriteNotFoundView(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                   format::HandleId                                    heap_id,
+                                   uint32_t                                            heap_index)                                                             = 0;
+    virtual void WriteNULLResource(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                   format::HandleId                                    heap_id,
+                                   uint32_t                                            heap_index)                                                             = 0;
+    virtual void WriteNULLBufferLocation(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                         format::HandleId                                    heap_id,
+                                         uint32_t                                            heap_index)                                                       = 0;
 };
 
 class DefaultDx12DumpResourcesDelegate : public Dx12DumpResourcesDelegate
@@ -173,10 +185,34 @@ class DefaultDx12DumpResourcesDelegate : public Dx12DumpResourcesDelegate
   public:
     virtual ~DefaultDx12DumpResourcesDelegate() {}
 
-    virtual void BeginDumpResources(const std::string&        capture_file_name,
+    virtual void BeginDumpResources(const std::string&        dump_resources_output_dir,
+                                    const std::string&        capture_file_name,
                                     const TrackDumpResources& track_dump_resources) override;
     virtual void DumpResource(CopyResourceDataPtr resource_data) override;
     virtual void EndDumpResources() override;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const std::string&                                  key,
+                                 uint64_t                                            value) override;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const uint32_t                                      index,
+                                 uint64_t                                            value) override;
+    virtual void WriteSingleData(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                 const std::string&                                  key,
+                                 const std::string&                                  value) override;
+    virtual void WriteNote(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                           const std::string&                                  value) override;
+    virtual void WriteRootParameterInfo(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                        uint32_t                                            root_parameter_index,
+                                        const TrackRootParameter&                           root_parameter) override;
+    virtual void WriteNotFoundView(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                   format::HandleId                                    heap_id,
+                                   uint32_t                                            heap_index) override;
+    virtual void WriteNULLResource(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                   format::HandleId                                    heap_id,
+                                   uint32_t                                            heap_index) override;
+    virtual void WriteNULLBufferLocation(const std::vector<std::pair<std::string, int32_t>>& json_path,
+                                         format::HandleId                                    heap_id,
+                                         uint32_t                                            heap_index) override;
 
   private:
     void WriteResource(const CopyResourceDataPtr resource_data);
@@ -189,7 +225,10 @@ class DefaultDx12DumpResourcesDelegate : public Dx12DumpResourcesDelegate
     void WriteBlockStart();
     void WriteBlockEnd();
 
-    constexpr const char* NameDrawCall() const { return "drawcall"; }
+    nlohmann::ordered_json* FindDrawCallJsonNode(const std::vector<std::pair<std::string, int32_t>>& json_path);
+
+    constexpr const char* NameDrawCall() const { return "draw_call"; }
+    constexpr const char* NameNotes() const { return "notes"; }
 
     bool WriteBinaryFile(const std::string& filename, const std::vector<uint8_t>& data, uint64_t offset, uint64_t size);
 
@@ -204,9 +243,13 @@ class DefaultDx12DumpResourcesDelegate : public Dx12DumpResourcesDelegate
     FILE*                  json_file_handle_{ nullptr };
     nlohmann::ordered_json json_data_;
     nlohmann::ordered_json header_;
-    nlohmann::ordered_json drawcall_;
+    nlohmann::ordered_json draw_call_;
     uint32_t               num_objects_{ 0 };
     uint32_t               num_files_{ 0 };
+
+    // Record notes to avoid writing deplciate note.
+    // key: notes path. value: notes
+    std::unordered_map<std::string, std::set<std::string>> notes_;
 };
 
 // TODO: This class copys a lot of code to write json from VulkanExportJsonConsumerBase.
@@ -220,11 +263,11 @@ class Dx12DumpResources
 
     void SetDelegate(Dx12DumpResourcesDelegate* delegate) { user_delegate_ = delegate; }
 
-    std::vector<CommandSet> GetCommandListsForDumpResources(DxObjectInfo*     command_list_object_info,
-                                                            uint64_t          block_index,
-                                                            format::ApiCallId api_call_id);
+    std::vector<graphics::dx12::CommandSet> GetCommandListsForDumpResources(DxObjectInfo*     command_list_object_info,
+                                                                            uint64_t          block_index,
+                                                                            format::ApiCallId api_call_id);
 
-    inline void SetDumpTarget(TrackDumpDrawcall& track_dump_target)
+    inline void SetDumpTarget(TrackDumpDrawCall& track_dump_target)
     {
         track_dump_resources_.target = track_dump_target;
     }
@@ -255,27 +298,47 @@ class Dx12DumpResources
                          StructPointerDecoder<Decoded_D3D12_RENDER_PASS_DEPTH_STENCIL_DESC>* pDepthStencil,
                          D3D12_RENDER_PASS_FLAGS                                             Flags,
                          uint64_t                                                            block_index);
+    void GetDescriptorSubresourceIndices(DHShaderResourceViewInfo& info, const DxObjectInfo* resource);
+    void GetDescriptorSubresourceIndices(DHUnorderedAccessViewInfo& info, const DxObjectInfo* resource);
+    void GetDescriptorSubresourceIndices(DHRenderTargetViewInfo& info, const DxObjectInfo* resource);
+    void GetDescriptorSubresourceIndices(DHDepthStencilViewInfo& info, const DxObjectInfo* resource);
 
   private:
     void StartDump(ID3D12Device* device, const std::string& filename);
     void FinishDump(DxObjectInfo* queue_object_info);
     void CloseDump();
 
-    void CopyDrawcallResources(DxObjectInfo*                        queue_object_info,
-                               const std::vector<format::HandleId>& front_command_list_ids,
-                               Dx12DumpResourcePos                  pos);
+    void WriteDescripotTable(DxObjectInfo*                                queue_object_info,
+                             const std::vector<format::HandleId>&         front_command_list_ids,
+                             graphics::dx12::Dx12DumpResourcePos          pos,
+                             std::vector<std::pair<std::string, int32_t>> json_path,
+                             const D3D12DescriptorHeapInfo*               heap_info,
+                             format::HandleId                             heap_id,
+                             uint32_t                                     heap_index,
+                             const D3D12_DESCRIPTOR_RANGE1*               range);
 
-    void CopyDrawcallResourceByGPUVA(DxObjectInfo*                                       queue_object_info,
+    void WriteRootParameters(DxObjectInfo*                                           queue_object_info,
+                             const std::vector<format::HandleId>&                    front_command_list_ids,
+                             graphics::dx12::Dx12DumpResourcePos                     pos,
+                             Dx12DumpResourceType                                    res_type,
+                             const std::vector<format::HandleId>&                    descriptor_heap_ids,
+                             const std::unordered_map<uint32_t, TrackRootParameter>& root_parameters);
+
+    void CopyDrawCallResources(DxObjectInfo*                        queue_object_info,
+                               const std::vector<format::HandleId>& front_command_list_ids,
+                               graphics::dx12::Dx12DumpResourcePos  pos);
+
+    bool CopyDrawCallResourceByGPUVA(DxObjectInfo*                                       queue_object_info,
                                      const std::vector<format::HandleId>&                front_command_list_ids,
                                      D3D12_GPU_VIRTUAL_ADDRESS                           capture_source_gpu_va,
                                      uint64_t                                            source_size,
                                      const std::vector<std::pair<std::string, int32_t>>& json_path,
                                      Dx12DumpResourceType                                resource_type,
-                                     Dx12DumpResourcePos                                 pos,
+                                     graphics::dx12::Dx12DumpResourcePos                 pos,
                                      format::HandleId                                    descriptor_heap_id,
                                      uint32_t                                            descriptor_heap_index);
 
-    void CopyDrawcallResourceBySubresource(DxObjectInfo*                                       queue_object_info,
+    bool CopyDrawCallResourceBySubresource(DxObjectInfo*                                       queue_object_info,
                                            const std::vector<format::HandleId>&                front_command_list_ids,
                                            format::HandleId                                    source_resource_id,
                                            uint64_t                                            source_offset,
@@ -283,11 +346,11 @@ class Dx12DumpResources
                                            const std::vector<uint32_t>&                        subresource_indices,
                                            const std::vector<std::pair<std::string, int32_t>>& json_path,
                                            Dx12DumpResourceType                                resource_type,
-                                           Dx12DumpResourcePos                                 pos,
+                                           graphics::dx12::Dx12DumpResourcePos                 pos,
                                            format::HandleId                                    descriptor_heap_id,
                                            uint32_t                                            descriptor_heap_index);
 
-    void CopyDrawcallResource(DxObjectInfo*                        queue_object_info,
+    void CopyDrawCallResource(DxObjectInfo*                        queue_object_info,
                               const std::vector<format::HandleId>& front_command_list_ids,
                               format::HandleId                     source_resource_id,
                               uint64_t                             source_offset,

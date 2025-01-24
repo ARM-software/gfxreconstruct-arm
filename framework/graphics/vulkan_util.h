@@ -64,7 +64,7 @@ static T* GetPNextStruct(const Parent_T* parent, VkStructureType struct_type)
     return nullptr;
 }
 
-static const char* kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
+[[maybe_unused]] static const char* kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
 
 struct DeviceFaultData
 {

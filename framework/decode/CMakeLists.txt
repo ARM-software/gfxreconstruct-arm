@@ -33,6 +33,10 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h
                     ${CMAKE_CURRENT_LIST_DIR}/api_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/common_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_handle_mapping_util.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_object_info_table.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_struct_handle_mappers.h
+                    ${CMAKE_CURRENT_LIST_DIR}/common_object_info_table.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/copy_shaders.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_decoders.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_decoders.cpp
@@ -70,6 +74,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/json_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.h
+                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/portability.h
@@ -147,6 +153,11 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_decoder_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_default_allocator.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_default_allocator.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_address_replacer_shaders.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_captured_swapchain.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_captured_swapchain.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_json_consumer_base.h
@@ -214,10 +225,6 @@ target_sources(gfxrecon_decode
                     $<$<BOOL:${GFXRECON_TOCPP_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_cpp_structs.cpp>
                     $<$<BOOL:${GFXRECON_TOCPP_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_cpp_consumer_extension.h>
                     $<$<BOOL:${GFXRECON_TOCPP_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_cpp_consumer_extension.cpp>
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_skia_modifier.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_skia_modifier.cpp
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_consumer.h
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.h
                     ${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.cpp
@@ -276,16 +283,8 @@ target_sources(gfxrecon_decode
 endif()
 
 if (MSVC)
-    # These files may fail to compile with VS2017 and older, requiring the default section limit of 2^16 to be increased.
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_decode_pnext_struct.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_json_consumer.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/test/main.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    if (MSVC_VERSION LESS 1920)
-        set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_decode_pnext_struct.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-        set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_replay_consumer.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-        set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/vulkan_object_cleanup_util.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-        set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_consumer_base.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    endif()
+    # gfxrecon_decode exceeds the default number of sections during compilation, use this flag to increase the limit
+    target_compile_options(gfxrecon_decode PRIVATE /bigobj)
 endif()
 
 if (TARGET ZLIB::ZLIB)
@@ -302,7 +301,7 @@ if (WIN32)
                                    ${CMAKE_SOURCE_DIR}/framework
                                    ${CMAKE_SOURCE_DIR}/external
                                    ${CMAKE_SOURCE_DIR}/external/precompiled/win64/include/
-                                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                                   $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
     else()
         target_include_directories(gfxrecon_decode
                                PUBLIC
@@ -310,7 +309,7 @@ if (WIN32)
                                    ${CMAKE_SOURCE_DIR}/framework
                                    ${CMAKE_SOURCE_DIR}/external
                                    ${CMAKE_SOURCE_DIR}/external/precompiled/win32/include/
-                                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                                   $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
     endif()
 elseif(APPLE)
     target_include_directories(gfxrecon_decode
@@ -321,7 +320,7 @@ elseif(APPLE)
                                ${CMAKE_SOURCE_DIR}/framework
                                ${CMAKE_SOURCE_DIR}/external
                                ${CMAKE_SOURCE_DIR}/external/precompiled/macos/include/
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 else()
     target_include_directories(gfxrecon_decode
                            PRIVATE
@@ -331,7 +330,7 @@ else()
                                ${CMAKE_SOURCE_DIR}/framework
                                ${CMAKE_SOURCE_DIR}/external
                                ${CMAKE_SOURCE_DIR}/external/precompiled/linux/include/
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 endif()
 
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)

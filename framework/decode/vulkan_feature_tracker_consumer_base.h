@@ -225,40 +225,39 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
     bool ProcessCore12Features();
     bool ProcessCore13Features();
 
-    void PrintCore10Features(VkPhysicalDeviceFeatures core10);
-    void PrintCore11Features(VkPhysicalDeviceVulkan11Features core11);
-    void PrintCore12Features(VkPhysicalDeviceVulkan12Features core12);
-    void PrintCore13Features(VkPhysicalDeviceVulkan13Features core13);
-
   private:
-    std::vector<std::string> core10_members_as_strings_;
-    VkPhysicalDeviceFeatures core10_{};
-    VkPhysicalDeviceFeatures capture_core10_{};
-    VkPhysicalDeviceFeatures output_core10_{};
+    // capture_corexx_ holds the data in the order of passing (first encounter is the first element)
+    // output_corexx_ holds the data in the reverse order of passing (first encounter is the last element)
+    // same logic for capture_xxxxx_extensions_vector_ and output_xxxxx_extensions_vector_
 
-    std::vector<std::string>         core11_members_as_strings_;
-    VkPhysicalDeviceVulkan11Features core11_{};
-    VkPhysicalDeviceVulkan11Features capture_core11_{};
-    VkPhysicalDeviceVulkan11Features output_core11_{};
+    std::vector<std::string>              core10_members_as_strings_{};
+    VkPhysicalDeviceFeatures              core10_{};
+    std::vector<VkPhysicalDeviceFeatures> capture_core10_{};
+    std::vector<VkPhysicalDeviceFeatures> output_core10_{};
 
-    std::vector<std::string>         core12_members_as_strings_;
-    VkPhysicalDeviceVulkan12Features core12_{};
-    VkPhysicalDeviceVulkan12Features capture_core12_{};
-    VkPhysicalDeviceVulkan12Features output_core12_{};
+    std::vector<std::string>                      core11_members_as_strings_{};
+    VkPhysicalDeviceVulkan11Features              core11_{};
+    std::vector<VkPhysicalDeviceVulkan11Features> capture_core11_{};
+    std::vector<VkPhysicalDeviceVulkan11Features> output_core11_{};
 
-    std::vector<std::string>         core13_members_as_strings_;
-    VkPhysicalDeviceVulkan13Features core13_{};
-    VkPhysicalDeviceVulkan13Features capture_core13_{};
-    VkPhysicalDeviceVulkan13Features output_core13_{};
+    std::vector<std::string>                      core12_members_as_strings_{};
+    VkPhysicalDeviceVulkan12Features              core12_{};
+    std::vector<VkPhysicalDeviceVulkan12Features> capture_core12_{};
+    std::vector<VkPhysicalDeviceVulkan12Features> output_core12_{};
 
-    std::vector<std::string> capture_instance_extensions_vector{};
-    std::vector<std::string> capture_device_extensions_vector{};
+    std::vector<std::string>                      core13_members_as_strings_{};
+    VkPhysicalDeviceVulkan13Features              core13_{};
+    std::vector<VkPhysicalDeviceVulkan13Features> capture_core13_{};
+    std::vector<VkPhysicalDeviceVulkan13Features> output_core13_{};
 
-    std::unordered_map<std::string, VkBool32> supported_instance_extensions_map{};
-    std::unordered_map<std::string, VkBool32> supported_device_extensions_map{};
+    std::vector<std::vector<std::string>> capture_instance_extensions_vector_{};
+    std::vector<std::vector<std::string>> capture_device_extensions_vector_{};
 
-    std::vector<std::string> output_instance_extensions_vector{};
-    std::vector<std::string> output_device_extensions_vector{};
+    std::unordered_map<std::string, VkBool32> supported_instance_extensions_map_{};
+    std::unordered_map<std::string, VkBool32> supported_device_extensions_map_{};
+
+    std::vector<std::vector<std::string>> output_instance_extensions_vector_{};
+    std::vector<std::vector<std::string>> output_device_extensions_vector_{};
 
     std::string consumer_output_log_{};
 };

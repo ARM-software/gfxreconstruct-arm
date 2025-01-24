@@ -47,10 +47,8 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 struct Decoded_VkBaseOutStructure
 {
     using struct_type = VkBaseOutStructure;
-
     VkBaseOutStructure* decoded_value{ nullptr };
-
-    PNextNode* pNext{ nullptr };
+    PNextNode*          pNext{ nullptr };
 };
 
 // Decoded union wrappers.
@@ -166,7 +164,7 @@ struct Decoded_VkAccelerationStructureGeometryKHR
     Decoded_VkAccelerationStructureGeometryDataKHR* geometry{ nullptr };
 };
 
-struct Decoded_VkPushDescriptorSetWithTemplateInfoKHR
+struct Decoded_VkPushDescriptorSetWithTemplateInfo
 {
     using struct_type = VkPushDescriptorSetWithTemplateInfoKHR;
 
@@ -208,6 +206,50 @@ struct Decoded_SECURITY_ATTRIBUTES
     SECURITY_ATTRIBUTES* decoded_value{ nullptr };
 
     StructPointerDecoder<Decoded_SECURITY_DESCRIPTOR>* lpSecurityDescriptor{ nullptr };
+};
+
+// This union wrapper does not have a DecodeStruct function.  It is decoded by the
+// Decoded_VkIndirectExecutionSetCreateInfoEXT DecodeStruct function, based on the value of
+// VkIndirectExecutionSetCreateInfoEXT::type.
+struct Decoded_VkIndirectExecutionSetInfoEXT
+{
+    using struct_type = VkIndirectExecutionSetEXT;
+
+    Decoded_VkIndirectExecutionSetPipelineInfoEXT* pPipelineInfo;
+    Decoded_VkIndirectExecutionSetShaderInfoEXT*   pShaderInfo;
+};
+
+struct Decoded_VkIndirectExecutionSetCreateInfoEXT
+{
+    using struct_type = VkIndirectExecutionSetCreateInfoEXT;
+
+    VkIndirectExecutionSetCreateInfoEXT* decoded_value{ nullptr };
+
+    PNextNode*                             pNext{ nullptr };
+    VkIndirectExecutionSetInfoTypeEXT      decoded_type;
+    Decoded_VkIndirectExecutionSetInfoEXT* info;
+};
+
+struct Decoded_VkIndirectCommandsTokenDataEXT
+{
+    using struct_type = VkIndirectCommandsTokenDataEXT;
+
+    Decoded_VkIndirectCommandsPushConstantTokenEXT* pPushConstant;
+    Decoded_VkIndirectCommandsVertexBufferTokenEXT* pVertexBuffer;
+    Decoded_VkIndirectCommandsIndexBufferTokenEXT*  pIndexBuffer;
+    Decoded_VkIndirectCommandsExecutionSetTokenEXT* pExecutionSet;
+};
+
+struct Decoded_VkIndirectCommandsLayoutTokenEXT
+{
+    using struct_type = VkIndirectCommandsLayoutTokenEXT;
+
+    VkIndirectCommandsLayoutTokenEXT* decoded_value;
+
+    PNextNode*                              pNext{ nullptr };
+    VkIndirectCommandsTokenTypeEXT          decoded_type;
+    Decoded_VkIndirectCommandsTokenDataEXT* data;
+    uint32_t                                offset;
 };
 
 GFXRECON_END_NAMESPACE(decode)

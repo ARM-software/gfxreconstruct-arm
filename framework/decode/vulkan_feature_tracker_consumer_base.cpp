@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <stdexcept>
+#include <algorithm>
 
 #include "generated/generated_vulkan_api_call_encoders.h"
 
@@ -309,8 +310,8 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
                                    "maintenance4" };
 
     // extensions & alias extensions
-    supported_instance_extensions_map = { { VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false } };
-    supported_device_extensions_map   = { { VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME, false } };
+    supported_instance_extensions_map_ = { { VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false } };
+    supported_device_extensions_map_   = { { VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME, false } };
 }
 
 void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
@@ -329,22 +330,20 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
                                                            pCreateInfoDec->enabledExtensionCount);
-            capture_instance_extensions_vector = extensions_vector;
+            capture_instance_extensions_vector_.push_back(extensions_vector);
         }
         else
         {
-            auto pCreateInfoDec = pCreateInfo->GetMetaStructPointer()->decoded_value;
+            assert(pCreateInfoDec->enabledExtensionCount >= output_instance_extensions_vector_.back().size());
 
-            uint32_t extensions_count = output_instance_extensions_vector.size();
-
-            const char* extensions[extensions_count]{};
-            for (uint32_t i = 0; i < extensions_count; i++)
+            std::vector<const char*> extensions(output_instance_extensions_vector_.back().size());
+            for (uint32_t i = 0; i < extensions.size(); i++)
             {
-                extensions[i] = output_instance_extensions_vector[i].c_str();
+                extensions[i] = output_instance_extensions_vector_.back()[i].c_str();
             }
 
-            pCreateInfoDec->ppEnabledExtensionNames = extensions;
-            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+            pCreateInfoDec->ppEnabledExtensionNames = extensions.data();
+            pCreateInfoDec->enabledExtensionCount   = extensions.size();
 
             parameter_buffer_->Clear();
 
@@ -353,6 +352,8 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateInstance(
             EncodeStructPtr(&encoder, pAllocator->GetPointer());
             encoder.EncodeHandleIdPtr(pInstance->GetPointer());
             encoder.EncodeEnumValue(returnValue);
+
+            output_instance_extensions_vector_.pop_back();
         }
     }
 }
@@ -373,11 +374,12 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
     {
         if (!IsModificationPass())
         {
-            capture_core10_ = *pEnabledFeatures;
+            capture_core10_.push_back(*pEnabledFeatures);
         }
         else
         {
-            *((VkPhysicalDeviceFeatures*)pEnabledFeatures) = output_core10_;
+            *((VkPhysicalDeviceFeatures*)pEnabledFeatures) = output_core10_.back();
+            output_core10_.pop_back();
         }
     }
 
@@ -388,50 +390,57 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
         {
             if (!IsModificationPass())
             {
-                capture_core10_ = ((VkPhysicalDeviceFeatures2*)pNext)->features;
+                capture_core10_.push_back(((VkPhysicalDeviceFeatures2*)pNext)->features);
             }
             else
             {
-                ((VkPhysicalDeviceFeatures2*)pNext)->features = output_core10_;
+                ((VkPhysicalDeviceFeatures2*)pNext)->features = output_core10_.back();
+                output_core10_.pop_back();
             }
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES)
         {
             if (!IsModificationPass())
             {
-                capture_core11_ = *((VkPhysicalDeviceVulkan11Features*)pNext);
+                capture_core11_.push_back(*((VkPhysicalDeviceVulkan11Features*)pNext));
             }
             else
             {
-                *((VkPhysicalDeviceVulkan11Features*)pNext) = output_core11_;
+                *((VkPhysicalDeviceVulkan11Features*)pNext) = output_core11_.back();
+                output_core11_.pop_back();
             }
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
         {
             if (!IsModificationPass())
             {
-                capture_core12_ = *((VkPhysicalDeviceVulkan12Features*)pNext);
+                capture_core12_.push_back(*((VkPhysicalDeviceVulkan12Features*)pNext));
             }
             else
             {
-                *((VkPhysicalDeviceVulkan12Features*)pNext) = output_core12_;
+                *((VkPhysicalDeviceVulkan12Features*)pNext) = output_core12_.back();
+                output_core12_.pop_back();
             }
         }
         else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
         {
             if (!IsModificationPass())
             {
-                capture_core13_ = *((VkPhysicalDeviceVulkan13Features*)pNext);
+                capture_core13_.push_back(*((VkPhysicalDeviceVulkan13Features*)pNext));
             }
             else
             {
-                *((VkPhysicalDeviceVulkan13Features*)pNext) = output_core13_;
+                *((VkPhysicalDeviceVulkan13Features*)pNext) = output_core13_.back();
+                output_core13_.pop_back();
             }
         }
         pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
     }
 
+    // TODO: find a way around having this variables here. The reason they are here is because if we assign the fields
+    // in pCreateInfo to point to them they need to be alive until the EncodeStructPtr call.
     std::vector<const char*> extensions;
+    std::vector<std::string> copy_of_instance_data;
 
     if (pCreateInfoDec->enabledExtensionCount)
     {
@@ -440,19 +449,24 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
             std::vector<std::string> extensions_vector(pCreateInfoDec->ppEnabledExtensionNames,
                                                        pCreateInfoDec->ppEnabledExtensionNames +
                                                            pCreateInfoDec->enabledExtensionCount);
-            capture_device_extensions_vector = extensions_vector;
+            capture_device_extensions_vector_.push_back(extensions_vector);
         }
         else
         {
-            // TODO: change output_device_extensions_vector to std:vector<const char*>, remove this loop
-            uint32_t extensions_count = output_device_extensions_vector.size();
-            for (uint32_t i = 0; i < extensions_count; i++)
+            // TODO: Remove this copy_of_instance_data. This is currently required since the pointers need to be
+            // available until encoding, but we don't know if we can pop the original vector at that time
+            copy_of_instance_data = output_device_extensions_vector_.back();
+            output_device_extensions_vector_.pop_back();
+
+            assert(pCreateInfoDec->enabledExtensionCount >= copy_of_instance_data.size());
+
+            for (uint32_t i = 0; i < copy_of_instance_data.size(); i++)
             {
-                extensions.push_back(output_device_extensions_vector[i].c_str());
+                extensions.push_back(copy_of_instance_data[i].c_str());
             }
 
             pCreateInfoDec->ppEnabledExtensionNames = extensions.data();
-            pCreateInfoDec->enabledExtensionCount   = extensions_count;
+            pCreateInfoDec->enabledExtensionCount   = extensions.size();
         }
     }
 
@@ -868,8 +882,8 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateSampler(
         pCreateInfoDec->addressModeV == VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE ||
         pCreateInfoDec->addressModeW == VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE)
     {
-        core12_.samplerMirrorClampToEdge                                                    = true;
-        supported_device_extensions_map[VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME] = true;
+        core12_.samplerMirrorClampToEdge                                                     = true;
+        supported_device_extensions_map_[VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME] = true;
     }
 }
 
@@ -1000,7 +1014,7 @@ void VulkanFeatureTrackerConsumerBase::checkSwapchainColorspaceEXT(VkColorSpaceK
         s == VK_COLOR_SPACE_HDR10_HLG_EXT || s == VK_COLOR_SPACE_HDR10_ST2084_EXT ||
         s == VK_COLOR_SPACE_PASS_THROUGH_EXT)
     {
-        supported_instance_extensions_map[VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME] = true;
+        supported_instance_extensions_map_[VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME] = true;
     }
 }
 
@@ -1030,207 +1044,300 @@ bool VulkanFeatureTrackerConsumerBase::CanOptimize()
 
 bool VulkanFeatureTrackerConsumerBase::ProcessInstanceExtensions()
 {
-    bool detected_unused_extension = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_extension_global = false;
+    bool detected_unused_extension_local  = false;
 
     std::string output_log{};
 
-    output_instance_extensions_vector = capture_instance_extensions_vector;
-
-    for (auto it = supported_instance_extensions_map.begin(); it != supported_instance_extensions_map.end(); it++)
+    for (uint64_t i = 0; i < capture_instance_extensions_vector_.size(); i++)
     {
-        std::string extension_name = it->first;
-        VkBool32    is_used        = it->second;
+        detected_unused_extension_local = false;
+        output_log += "\tFrom vkCreateInstance encounter number " + std::to_string(i + 1) + ":\r\n";
 
-        auto it2 = std::find(
-            output_instance_extensions_vector.begin(), output_instance_extensions_vector.end(), extension_name);
+        output_instance_extensions_vector_.push_back(capture_instance_extensions_vector_[i]);
 
-        if (!is_used && (it2 != output_instance_extensions_vector.end()))
+        for (auto it = supported_instance_extensions_map_.begin(); it != supported_instance_extensions_map_.end(); it++)
         {
-            detected_unused_extension = true;
-            output_instance_extensions_vector.erase(it2);
-            output_log += "\t" + extension_name + "\r\n";
+            std::string extension_name = it->first;
+            VkBool32    is_used        = it->second;
+
+            auto it2 = std::find(output_instance_extensions_vector_[i].begin(),
+                                 output_instance_extensions_vector_[i].end(),
+                                 extension_name);
+
+            if (!is_used && (it2 != output_instance_extensions_vector_[i].end()))
+            {
+                detected_unused_extension_global = true;
+                detected_unused_extension_local  = true;
+                output_instance_extensions_vector_[i].erase(it2);
+                output_log += "\t\t" + extension_name + "\r\n";
+            }
+        }
+
+        if (!detected_unused_extension_local)
+        {
+            output_log += "\t\tNone\r\n";
         }
     }
-
-    if (detected_unused_extension)
+    if (detected_unused_extension_global)
     {
         consumer_output_log_ += "Instance Extensions to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_extension;
+    std::reverse(output_instance_extensions_vector_.begin(), output_instance_extensions_vector_.end());
+
+    return detected_unused_extension_global;
 }
 
 bool VulkanFeatureTrackerConsumerBase::ProcessDeviceExtensions()
 {
-    bool detected_unused_extension = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_extension_global = false;
+    bool detected_unused_extension_local  = false;
 
     std::string output_log{};
 
-    output_device_extensions_vector = capture_device_extensions_vector;
-
-    for (auto it = supported_device_extensions_map.begin(); it != supported_device_extensions_map.end(); it++)
+    for (uint64_t i = 0; i < capture_device_extensions_vector_.size(); i++)
     {
-        std::string extension_name = it->first;
-        VkBool32    is_used        = it->second;
+        detected_unused_extension_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
 
-        auto it2 =
-            std::find(output_device_extensions_vector.begin(), output_device_extensions_vector.end(), extension_name);
+        output_device_extensions_vector_.push_back(capture_device_extensions_vector_[i]);
 
-        if (!is_used && (it2 != output_device_extensions_vector.end()))
+        for (auto it = supported_device_extensions_map_.begin(); it != supported_device_extensions_map_.end(); it++)
         {
-            detected_unused_extension = true;
-            output_device_extensions_vector.erase(it2);
-            output_log += "\t" + extension_name + "\r\n";
+            std::string extension_name = it->first;
+            VkBool32    is_used        = it->second;
+
+            auto it2 = std::find(
+                output_device_extensions_vector_[i].begin(), output_device_extensions_vector_[i].end(), extension_name);
+
+            if (!is_used && (it2 != output_device_extensions_vector_[i].end()))
+            {
+                detected_unused_extension_global = true;
+                detected_unused_extension_local  = true;
+                output_device_extensions_vector_[i].erase(it2);
+                output_log += "\t\t" + extension_name + "\r\n";
+            }
+        }
+
+        if (!detected_unused_extension_local)
+        {
+            output_log += "\t\tNone\r\n";
         }
     }
 
-    if (detected_unused_extension)
+    if (detected_unused_extension_global)
     {
         consumer_output_log_ += "Device Extensions to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_extension;
+    std::reverse(output_device_extensions_vector_.begin(), output_device_extensions_vector_.end());
+
+    return detected_unused_extension_global;
 }
 
 bool VulkanFeatureTrackerConsumerBase::ProcessCore10Features()
 {
-    bool detected_unused_feature = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_feature_global = false;
+    bool detected_unused_feature_local  = false;
 
     std::string output_log{};
 
-    // iterate through struct members, this is a workaround until this function will be generated
-    VkBool32* p_output_core10   = (VkBool32*)(&output_core10_);
-    VkBool32* p_core10          = (VkBool32*)(&core10_);
-    VkBool32* p_capture_core10_ = (VkBool32*)(&capture_core10_);
-
-    for (int i = 0; i < core10_members_as_strings_.size(); i++)
+    for (uint64_t i = 0; i < capture_core10_.size(); i++)
     {
-        *p_output_core10 = (*p_core10) & (*p_capture_core10_);
-        if ((*p_output_core10) != (*p_capture_core10_))
+        detected_unused_feature_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
+
+        output_core10_.push_back(capture_core10_[i]);
+
+        // iterate through struct members, this is a workaround until this function will be generated
+        VkBool32* p_output_core10   = (VkBool32*)(&(output_core10_[i]));
+        VkBool32* p_core10          = (VkBool32*)(&core10_);
+        VkBool32* p_capture_core10_ = (VkBool32*)(&(capture_core10_[i]));
+
+        for (uint64_t j = 0; j < core10_members_as_strings_.size(); j++)
         {
-            output_log += "\t" + core10_members_as_strings_[i] + "\r\n";
-            detected_unused_feature = true;
+            *p_output_core10 = (*p_core10) & (*p_capture_core10_);
+            if ((*p_output_core10) != (*p_capture_core10_))
+            {
+                output_log += "\t\t" + core10_members_as_strings_[j] + "\r\n";
+                detected_unused_feature_global = true;
+                detected_unused_feature_local  = true;
+            }
+            p_output_core10++;
+            p_core10++;
+            p_capture_core10_++;
         }
-        p_output_core10++;
-        p_core10++;
-        p_capture_core10_++;
+
+        if (!detected_unused_feature_local)
+        {
+            output_log += "\t\tNone\r\n";
+        }
     }
 
-    if (detected_unused_feature)
+    if (detected_unused_feature_global)
     {
-
         consumer_output_log_ += "Core10 Features to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_feature;
+    std::reverse(output_core10_.begin(), output_core10_.end());
+
+    return detected_unused_feature_global;
 }
 
 bool VulkanFeatureTrackerConsumerBase::ProcessCore11Features()
 {
-    bool detected_unused_feature = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_feature_global = false;
+    bool detected_unused_feature_local  = false;
 
     std::string output_log{};
 
-    // bitwise AND every member except sType and pNext
-    output_core11_.sType = capture_core11_.sType;
-    output_core11_.pNext = capture_core11_.pNext;
-
-    // iterate through struct members, this is a workaround until this function will be generated
-    VkBool32* p_output_core11   = (VkBool32*)(&output_core11_.storageBuffer16BitAccess);
-    VkBool32* p_core11          = (VkBool32*)(&core11_.storageBuffer16BitAccess);
-    VkBool32* p_capture_core11_ = (VkBool32*)(&capture_core11_.storageBuffer16BitAccess);
-
-    for (int i = 0; i < core11_members_as_strings_.size(); i++)
+    for (uint64_t i = 0; i < capture_core11_.size(); i++)
     {
-        *p_output_core11 = (*p_core11) & (*p_capture_core11_);
-        if ((*p_output_core11) != (*p_capture_core11_))
+        detected_unused_feature_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
+
+        output_core11_.push_back(capture_core11_[i]);
+
+        // bitwise AND every member except sType and pNext
+        // iterate through struct members, this is a workaround until this function will be generated
+        VkBool32* p_output_core11   = (VkBool32*)(&(output_core11_[i].storageBuffer16BitAccess));
+        VkBool32* p_core11          = (VkBool32*)(&core11_.storageBuffer16BitAccess);
+        VkBool32* p_capture_core11_ = (VkBool32*)(&(capture_core11_[i].storageBuffer16BitAccess));
+
+        for (uint64_t j = 0; j < core11_members_as_strings_.size(); j++)
         {
-            output_log += "\t" + core11_members_as_strings_[i] + "\r\n";
-            detected_unused_feature = true;
+            *p_output_core11 = (*p_core11) & (*p_capture_core11_);
+            if ((*p_output_core11) != (*p_capture_core11_))
+            {
+                output_log += "\t\t" + core11_members_as_strings_[j] + "\r\n";
+                detected_unused_feature_global = true;
+                detected_unused_feature_local  = true;
+            }
+            p_output_core11++;
+            p_core11++;
+            p_capture_core11_++;
         }
-        p_output_core11++;
-        p_core11++;
-        p_capture_core11_++;
+
+        if (!detected_unused_feature_local)
+        {
+            output_log += "\t\tNone\r\n";
+        }
     }
 
-    if (detected_unused_feature)
+    if (detected_unused_feature_global)
     {
         consumer_output_log_ += "Core11 Features to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_feature;
+    std::reverse(output_core11_.begin(), output_core11_.end());
+
+    return detected_unused_feature_global;
 }
 
 bool VulkanFeatureTrackerConsumerBase::ProcessCore12Features()
 {
-    bool detected_unused_feature = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_feature_global = false;
+    bool detected_unused_feature_local  = false;
 
     std::string output_log{};
 
-    // bitwise AND every member except sType and pNext
-    output_core12_.sType = capture_core12_.sType;
-    output_core12_.pNext = capture_core12_.pNext;
-
-    // iterate through struct members, this is a workaround until this function will be generated
-    VkBool32* p_output_core12   = (VkBool32*)(&output_core12_.samplerMirrorClampToEdge);
-    VkBool32* p_core12          = (VkBool32*)(&core12_.samplerMirrorClampToEdge);
-    VkBool32* p_capture_core12_ = (VkBool32*)(&capture_core12_.samplerMirrorClampToEdge);
-
-    for (int i = 0; i < core12_members_as_strings_.size(); i++)
+    for (uint64_t i = 0; i < capture_core12_.size(); i++)
     {
-        *p_output_core12 = (*p_core12) & (*p_capture_core12_);
-        if ((*p_output_core12) != (*p_capture_core12_))
-        {
-            output_log += "\t" + core12_members_as_strings_[i] + "\r\n";
-            detected_unused_feature = true;
-        }
-        p_output_core12++;
-        p_core12++;
-        p_capture_core12_++;
-    }
+        detected_unused_feature_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
 
-    if (detected_unused_feature)
+        output_core12_.push_back(capture_core12_[i]);
+
+        // bitwise AND every member except sType and pNext
+        // iterate through struct members, this is a workaround until this function will be generated
+        VkBool32* p_output_core12   = (VkBool32*)(&(output_core12_[i].samplerMirrorClampToEdge));
+        VkBool32* p_core12          = (VkBool32*)(&core12_.samplerMirrorClampToEdge);
+        VkBool32* p_capture_core12_ = (VkBool32*)(&(capture_core12_[i].samplerMirrorClampToEdge));
+
+        for (uint64_t j = 0; j < core12_members_as_strings_.size(); j++)
+        {
+            *p_output_core12 = (*p_core12) & (*p_capture_core12_);
+            if ((*p_output_core12) != (*p_capture_core12_))
+            {
+                output_log += "\t\t" + core12_members_as_strings_[j] + "\r\n";
+                detected_unused_feature_global = true;
+                detected_unused_feature_local  = true;
+            }
+            p_output_core12++;
+            p_core12++;
+            p_capture_core12_++;
+        }
+
+        if (!detected_unused_feature_local)
+        {
+            output_log += "\t\tNone\r\n";
+        }
+    }
+    if (detected_unused_feature_global)
     {
         consumer_output_log_ += "Core12 Features to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_feature;
+    std::reverse(output_core12_.begin(), output_core12_.end());
+
+    return detected_unused_feature_global;
 }
 
 bool VulkanFeatureTrackerConsumerBase::ProcessCore13Features()
 {
-    bool detected_unused_feature = false;
+    // TODO: improve/rewrite logging
+    bool detected_unused_feature_global = false;
+    bool detected_unused_feature_local  = false;
 
     std::string output_log{};
 
-    // bitwise AND every member except sType and pNext
-    output_core13_.sType = capture_core13_.sType;
-    output_core13_.pNext = capture_core13_.pNext;
-
-    // iterate through struct members, this is a workaround until this function will be generated
-    VkBool32* p_output_core13   = (VkBool32*)(&output_core13_.robustImageAccess);
-    VkBool32* p_core13          = (VkBool32*)(&core13_.robustImageAccess);
-    VkBool32* p_capture_core13_ = (VkBool32*)(&capture_core13_.robustImageAccess);
-
-    for (int i = 0; i < core13_members_as_strings_.size(); i++)
+    for (uint64_t i = 0; i < capture_core13_.size(); i++)
     {
-        *p_output_core13 = (*p_core13) & (*p_capture_core13_);
-        if ((*p_output_core13) != (*p_capture_core13_))
+        detected_unused_feature_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
+
+        output_core13_.push_back(capture_core13_[i]);
+
+        // bitwise AND every member except sType and pNext
+        // iterate through struct members, this is a workaround until this function will be generated
+        VkBool32* p_output_core13   = (VkBool32*)(&(output_core13_[i].robustImageAccess));
+        VkBool32* p_core13          = (VkBool32*)(&core13_.robustImageAccess);
+        VkBool32* p_capture_core13_ = (VkBool32*)(&(capture_core13_[i].robustImageAccess));
+
+        for (uint64_t j = 0; j < core13_members_as_strings_.size(); j++)
         {
-            output_log += "\t" + core13_members_as_strings_[i] + "\r\n";
-            detected_unused_feature = true;
+            *p_output_core13 = (*p_core13) & (*p_capture_core13_);
+            if ((*p_output_core13) != (*p_capture_core13_))
+            {
+                output_log += "\t\t" + core13_members_as_strings_[j] + "\r\n";
+                detected_unused_feature_global = true;
+                detected_unused_feature_local  = true;
+            }
+            p_output_core13++;
+            p_core13++;
+            p_capture_core13_++;
         }
-        p_output_core13++;
-        p_core13++;
-        p_capture_core13_++;
+
+        if (!detected_unused_feature_local)
+        {
+            output_log += "\t\tNone\r\n";
+        }
     }
 
-    if (detected_unused_feature)
+    if (detected_unused_feature_global)
     {
         consumer_output_log_ += "Core13 Features to be removed:\r\n" + output_log;
     }
 
-    return detected_unused_feature;
+    std::reverse(output_core13_.begin(), output_core13_.end());
+
+    return detected_unused_feature_global;
 }
 
 GFXRECON_END_NAMESPACE(decode)

@@ -86,9 +86,11 @@ template <>
 struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain_Present>
 {
     template <typename... Args>
-    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    static void Dispatch(D3D12CaptureManager*                                   manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PostProcess_IDXGISwapChain_Present(args...);
+        manager->PostProcess_IDXGISwapChain_Present(current_lock, args...);
     }
 };
 
@@ -96,9 +98,11 @@ template <>
 struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain1_Present1>
 {
     template <typename... Args>
-    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    static void Dispatch(D3D12CaptureManager*                                   manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PostProcess_IDXGISwapChain1_Present1(args...);
+        manager->PostProcess_IDXGISwapChain1_Present1(current_lock, args...);
     }
 };
 
@@ -169,6 +173,26 @@ struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain3_ResizeBu
     static void Dispatch(D3D12CaptureManager* manager, Args... args)
     {
         manager->PostProcess_IDXGISwapChain3_ResizeBuffers1(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPreCall<format::ApiCallId::ApiCall_IDXGISwapChain_ResizeTarget>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PreProcess_IDXGISwapChain_ResizeTarget(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain_ResizeTarget>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_IDXGISwapChain_ResizeTarget(args...);
     }
 };
 
@@ -388,9 +412,11 @@ template <>
 struct CustomWrapperPreCall<format::ApiCallId::ApiCall_ID3D12CommandQueue_ExecuteCommandLists>
 {
     template <typename... Args>
-    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    static void Dispatch(D3D12CaptureManager*                                   manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PreProcess_ID3D12CommandQueue_ExecuteCommandLists(args...);
+        manager->PreProcess_ID3D12CommandQueue_ExecuteCommandLists(current_lock, args...);
     }
 };
 
@@ -398,9 +424,11 @@ template <>
 struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12CommandQueue_ExecuteCommandLists>
 {
     template <typename... Args>
-    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    static void Dispatch(D3D12CaptureManager*                                   manager,
+                         std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                         Args... args)
     {
-        manager->PostProcess_ID3D12CommandQueue_ExecuteCommandLists(args...);
+        manager->PostProcess_ID3D12CommandQueue_ExecuteCommandLists(current_lock, args...);
     }
 };
 
@@ -763,6 +791,26 @@ struct CustomWrapperPostCall<format::ApiCallId::ApiCall_CreateDXGIFactory2>
     static void Dispatch(D3D12CaptureManager* manager, Args... args)
     {
         manager->PostProcess_CreateDXGIFactory2(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain3_SetColorSpace1>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_IDXGISwapChain3_SetColorSpace1(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGISwapChain4_SetHDRMetaData>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_IDXGISwapChain4_SetHDRMetaData(args...);
     }
 };
 

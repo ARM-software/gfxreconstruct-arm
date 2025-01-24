@@ -25,6 +25,7 @@
 
 #include "util/logging.h"
 #include "util/platform.h"
+#include <cstring>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
@@ -45,7 +46,7 @@ FileOutputStream::FileOutputStream(const std::string& filename, size_t buffer_si
     }
     else
     {
-        GFXRECON_LOG_ERROR("fopen(%s, %s) failed (errno = %d)", filename.c_str(), mode, result);
+        GFXRECON_LOG_ERROR("fopen(%s, %s) failed (errno = %d: %s)", filename.c_str(), mode, result, strerror(result));
     }
 }
 
@@ -69,14 +70,14 @@ void FileOutputStream::Reset(FILE* file)
     file_ = file;
 }
 
-size_t FileOutputStream::Write(const void* data, size_t len)
+bool FileOutputStream::Write(const void* data, size_t len)
 {
-    return platform::FileWrite(data, 1, len, file_);
+    return platform::FileWrite(data, len, file_);
 }
 
-size_t FileNoLockOutputStream::Write(const void* data, size_t len)
+bool FileNoLockOutputStream::Write(const void* data, size_t len)
 {
-    return platform::FileWriteNoLock(data, 1, len, file_);
+    return platform::FileWriteNoLock(data, len, file_);
 }
 
 GFXRECON_END_NAMESPACE(util)

@@ -472,6 +472,40 @@ class VulkanDecoder : public VulkanDecoderBase
 
     size_t Decode_vkGetDeviceImageSparseMemoryRequirements(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
+    size_t Decode_vkCmdSetLineStipple(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkMapMemory2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkUnmapMemory2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdBindIndexBuffer2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetRenderingAreaGranularity(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetDeviceImageSubresourceLayout(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetImageSubresourceLayout2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdPushDescriptorSet(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdSetRenderingAttachmentLocations(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdSetRenderingInputAttachmentIndices(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdBindDescriptorSets2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdPushConstants2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdPushDescriptorSet2(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCopyMemoryToImage(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCopyImageToMemory(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCopyImageToImage(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkTransitionImageLayout(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
     size_t Decode_vkDestroySurfaceKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetPhysicalDeviceSurfaceSupportKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
@@ -732,10 +766,6 @@ class VulkanDecoder : public VulkanDecoderBase
 
     size_t Decode_vkQueueSubmit2KHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
-    size_t Decode_vkCmdWriteBufferMarker2AMD(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
-
-    size_t Decode_vkGetQueueCheckpointData2NV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
-
     size_t Decode_vkCmdCopyBuffer2KHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkCmdCopyImage2KHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
@@ -763,6 +793,16 @@ class VulkanDecoder : public VulkanDecoderBase
     size_t Decode_vkGetDeviceImageSubresourceLayoutKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetImageSubresourceLayout2KHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCreatePipelineBinariesKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkDestroyPipelineBinaryKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetPipelineKeyKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetPipelineBinaryDataKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkReleaseCapturedPipelineDataKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
@@ -813,6 +853,8 @@ class VulkanDecoder : public VulkanDecoderBase
     size_t Decode_vkCmdDrawIndirectByteCountEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetImageViewHandleNVX(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetImageViewHandle64NVX(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetImageViewAddressNVX(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
@@ -944,6 +986,8 @@ class VulkanDecoder : public VulkanDecoderBase
 
     size_t Decode_vkCmdWriteBufferMarkerAMD(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
+    size_t Decode_vkCmdWriteBufferMarker2AMD(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
     size_t Decode_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetCalibratedTimestampsEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
@@ -961,6 +1005,8 @@ class VulkanDecoder : public VulkanDecoderBase
     size_t Decode_vkCmdSetCheckpointNV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetQueueCheckpointDataNV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetQueueCheckpointData2NV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkInitializePerformanceApiINTEL(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
@@ -1236,6 +1282,8 @@ class VulkanDecoder : public VulkanDecoderBase
 
     size_t Decode_vkCmdOpticalFlowExecuteNV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
+    size_t Decode_vkAntiLagUpdateAMD(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
     size_t Decode_vkCreateShadersEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkDestroyShaderEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
@@ -1243,6 +1291,8 @@ class VulkanDecoder : public VulkanDecoderBase
     size_t Decode_vkGetShaderBinaryDataEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkCmdBindShadersEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdSetDepthClampRangeEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkGetFramebufferTilePropertiesQCOM(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
@@ -1259,6 +1309,26 @@ class VulkanDecoder : public VulkanDecoderBase
     size_t Decode_vkQueueNotifyOutOfBandNV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkCmdSetAttachmentFeedbackLoopEnableEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetGeneratedCommandsMemoryRequirementsEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdPreprocessGeneratedCommandsEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCmdExecuteGeneratedCommandsEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCreateIndirectCommandsLayoutEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkDestroyIndirectCommandsLayoutEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkCreateIndirectExecutionSetEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkDestroyIndirectExecutionSetEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkUpdateIndirectExecutionSetPipelineEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkUpdateIndirectExecutionSetShaderEXT(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
+
+    size_t Decode_vkGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 
     size_t Decode_vkCreateAccelerationStructureKHR(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);
 

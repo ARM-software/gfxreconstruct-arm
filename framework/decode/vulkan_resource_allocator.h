@@ -36,9 +36,9 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-struct DeviceMemoryInfo;
-struct BufferInfo;
-struct ImageInfo;
+struct VulkanDeviceMemoryInfo;
+struct VulkanBufferInfo;
+struct VulkanImageInfo;
 
 class VulkanResourceAllocator
 {
@@ -68,11 +68,15 @@ class VulkanResourceAllocator
         PFN_vkCmdCopyBuffer                          cmd_copy_buffer{ nullptr };
         PFN_vkCreateImage                            create_image{ nullptr };
         PFN_vkDestroyImage                           destroy_image{ nullptr };
+        PFN_vkCreateVideoSessionKHR                  create_video_session{ nullptr };
+        PFN_vkDestroyVideoSessionKHR                 destroy_video_session{ nullptr };
         PFN_vkGetImageMemoryRequirements             get_image_memory_requirements{ nullptr };
         PFN_vkGetImageMemoryRequirements2            get_image_memory_requirements2{ nullptr };
+        PFN_vkGetVideoSessionMemoryRequirementsKHR   get_video_session_memory_requirements{ nullptr };
         PFN_vkGetImageSubresourceLayout              get_image_subresource_layout{ nullptr };
         PFN_vkBindImageMemory                        bind_image_memory{ nullptr };
         PFN_vkBindImageMemory2                       bind_image_memory2{ nullptr };
+        PFN_vkBindVideoSessionMemoryKHR              bind_video_session_memory{ nullptr };
         PFN_vkGetInstanceProcAddr                    get_instance_proc_addr{ nullptr };
         PFN_vkGetDeviceProcAddr                      get_device_proc_addr{ nullptr };
         PFN_vkGetDeviceQueue                         get_device_queue{ nullptr };
@@ -124,6 +128,16 @@ class VulkanResourceAllocator
     virtual void
     DestroyImage(VkImage image, const VkAllocationCallbacks* allocation_callbacks, ResourceData allocator_data) = 0;
 
+    virtual VkResult CreateVideoSession(const VkVideoSessionCreateInfoKHR* create_info,
+                                        const VkAllocationCallbacks*       allocation_callbacks,
+                                        format::HandleId                   capture_id,
+                                        VkVideoSessionKHR*                 session,
+                                        std::vector<ResourceData>*         allocator_datas) = 0;
+
+    virtual void DestroyVideoSession(VkVideoSessionKHR            session,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     std::vector<ResourceData>    allocator_datas) = 0;
+
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
                                            VkSubresourceLayout*       layout,
@@ -168,6 +182,13 @@ class VulkanResourceAllocator
                                       const ResourceData*          allocator_image_datas,
                                       const MemoryData*            allocator_memory_datas,
                                       VkMemoryPropertyFlags*       bind_memory_properties) = 0;
+
+    virtual VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
+                                            uint32_t                               bind_info_count,
+                                            const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                            const ResourceData*                    allocator_session_datas,
+                                            const MemoryData*                      allocator_memory_datas,
+                                            VkMemoryPropertyFlags*                 bind_memory_properties) = 0;
 
     virtual VkResult MapMemory(VkDeviceMemory   memory,
                                VkDeviceSize     offset,
@@ -217,9 +238,19 @@ class VulkanResourceAllocator
                                                  const ResourceData*          allocator_resource_datas,
                                                  const MemoryData*            allocator_memory_datas) = 0;
 
-    // Direct allocation methods that perform memory allocation and resource creation without performing memory
-    // translation.  These methods allow the replay tool to allocate staging resources through the resource allocator so
-    // that the allocator is aware of all allocations performed at replay.
+    virtual void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
+                                                       uint32_t                               bind_info_count,
+                                                       const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                                       const ResourceData*                    allocator_resource_datas,
+                                                       const MemoryData* allocator_memory_datas) = 0;
+
+    // Direct allocation methods allocate memory and create resources without performing memory translation, while using
+    // the replay memory type of the current allocator implementation.
+    //
+    // Replay allocates staging resources, which were not created during capture, for operations such as screenshot
+    // creation and resource initialization during the initial state setup for trimmed files. Allocating staging
+    // resources through the resource allocator allows the resource allocator to be aware of all memory allocations
+    // performed for replay.
     virtual VkResult CreateBufferDirect(const VkBufferCreateInfo*    create_info,
                                         const VkAllocationCallbacks* allocation_callbacks,
                                         VkBuffer*                    buffer,
@@ -281,6 +312,8 @@ class VulkanResourceAllocator
     virtual bool SupportsExternalMemory() = 0;
 
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) { return 0; }
+
+    virtual bool SupportBindVideoSessionMemory() = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -408,14 +408,70 @@ void FieldToJson(nlohmann::ordered_json&                      jdata,
     }
 }
 
-void FieldToJson(nlohmann::ordered_json&                                     jdata,
-                 const Decoded_VkPushDescriptorSetWithTemplateInfoKHR* const pData,
-                 const util::JsonOptions&                                    options)
+void FieldToJson(nlohmann::ordered_json&                                  jdata,
+                 const Decoded_VkPushDescriptorSetWithTemplateInfo* const pData,
+                 const util::JsonOptions&                                 options)
 {
     HandleToJson(jdata["descriptorUpdateTemplate"], pData->descriptorUpdateTemplate, options);
     HandleToJson(jdata["layout"], pData->layout, options);
     FieldToJson(jdata["set"], pData->decoded_value->set, options);
     FieldToJson(jdata["pData"], &pData->pData, options);
+}
+
+void FieldToJson(nlohmann::ordered_json&                                  jdata,
+                 const Decoded_VkIndirectExecutionSetCreateInfoEXT* const pData,
+                 const util::JsonOptions&                                 options)
+{
+    FieldToJson(jdata["type"], pData->decoded_type, options);
+    switch (pData->decoded_type)
+    {
+        case VK_INDIRECT_EXECUTION_SET_INFO_TYPE_PIPELINES_EXT:
+            FieldToJson(jdata["info"], pData->info->pPipelineInfo, options);
+            break;
+        case VK_INDIRECT_EXECUTION_SET_INFO_TYPE_SHADER_OBJECTS_EXT:
+            FieldToJson(jdata["info"], pData->info->pShaderInfo, options);
+            break;
+        default:
+            break;
+    }
+}
+
+void FieldToJson(nlohmann::ordered_json&                               jdata,
+                 const Decoded_VkIndirectCommandsLayoutTokenEXT* const pData,
+                 const util::JsonOptions&                              options)
+{
+    FieldToJson(jdata["type"], pData->decoded_type, options);
+    switch (pData->decoded_type)
+    {
+        case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
+        case VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT:
+            FieldToJson(jdata["data"], pData->data->pPushConstant, options);
+            break;
+        case VK_INDIRECT_COMMANDS_TOKEN_TYPE_VERTEX_BUFFER_EXT:
+            FieldToJson(jdata["data"], pData->data->pVertexBuffer, options);
+            break;
+        case VK_INDIRECT_COMMANDS_TOKEN_TYPE_INDEX_BUFFER_EXT:
+            FieldToJson(jdata["data"], pData->data->pIndexBuffer, options);
+            break;
+        case VK_INDIRECT_COMMANDS_TOKEN_TYPE_EXECUTION_SET_EXT:
+            FieldToJson(jdata["data"], pData->data->pExecutionSet, options);
+            break;
+        default:
+            break;
+    }
+    FieldToJson(jdata["offset"], pData->offset, options);
+}
+
+void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryType& data, const util::JsonOptions& options)
+{
+    FieldToJson(decode::VkMemoryPropertyFlags_t(), jdata["property_flags"], data.property_flags, options);
+    FieldToJson(jdata["heap_index"], data.heap_index, options);
+}
+
+void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryHeap& data, const util::JsonOptions& options)
+{
+    FieldToJson(jdata["size"], data.size, options);
+    FieldToJson(decode::VkMemoryHeapFlags_t(), jdata["flags"], data.flags, options);
 }
 
 GFXRECON_END_NAMESPACE(decode)

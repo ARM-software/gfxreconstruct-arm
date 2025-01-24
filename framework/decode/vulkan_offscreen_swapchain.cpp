@@ -29,7 +29,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VkResult VulkanOffscreenSwapchain::CreateSurface(VkResult                            original_result,
-                                                 InstanceInfo*                       instance_info,
+                                                 VulkanInstanceInfo*                 instance_info,
                                                  const std::string&                  wsi_extension,
                                                  VkFlags                             flags,
                                                  HandlePointerDecoder<VkSurfaceKHR>* surface,
@@ -48,8 +48,7 @@ VkResult VulkanOffscreenSwapchain::CreateSurface(VkResult                       
 
     // For multi-surface captures, when replay is restricted to a specific surface, only create a surface for
     // the specified index.
-    if ((swapchain_options_.select_surface_index == -1) ||
-        (swapchain_options_.select_surface_index == create_surface_count_))
+    if ((swapchain_options_.surface_index == -1) || (swapchain_options_.surface_index == create_surface_count_))
     {
 
         const format::HandleId* id             = surface->GetPointer();
@@ -62,7 +61,7 @@ VkResult VulkanOffscreenSwapchain::CreateSurface(VkResult                       
     {
         if (surface != nullptr)
         {
-            auto surface_info                      = reinterpret_cast<SurfaceKHRInfo*>(surface->GetConsumerData(0));
+            auto surface_info = reinterpret_cast<VulkanSurfaceKHRInfo*>(surface->GetConsumerData(0));
             surface_info->surface_creation_skipped = true;
         }
 
@@ -76,14 +75,14 @@ VkResult VulkanOffscreenSwapchain::CreateSurface(VkResult                       
 }
 
 void VulkanOffscreenSwapchain::DestroySurface(PFN_vkDestroySurfaceKHR      func,
-                                              const InstanceInfo*          instance_info,
-                                              const SurfaceKHRInfo*        surface_info,
+                                              const VulkanInstanceInfo*    instance_info,
+                                              const VulkanSurfaceKHRInfo*  surface_info,
                                               const VkAllocationCallbacks* allocator)
 {}
 
 VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                              original_result,
                                                       PFN_vkCreateSwapchainKHR              func,
-                                                      const DeviceInfo*                     device_info,
+                                                      const VulkanDeviceInfo*               device_info,
                                                       const VkSwapchainCreateInfoKHR*       create_info,
                                                       const VkAllocationCallbacks*          allocator,
                                                       HandlePointerDecoder<VkSwapchainKHR>* swapchain,
@@ -104,14 +103,14 @@ VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                  
     }
 
     util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    device_table_->GetDeviceQueue(device, default_queue_family_index_, 0, &default_queue_);
+    default_queue_ = GetDeviceQueue(device_table_, device_info, default_queue_family_index_, 0);
     util::MarkingLayersUtil::instance().EndInjected(device_info);
 
     // If this option is set, a command buffer submission with a `VkFrameBoundaryEXT` must be called each time
     // `vkQueuePresentKHR` should have been called by the offscreen swapchain. So a maximum of work must be done at
     // swapchain creation: Allocation and recording of an empty command buffer, initialization of a `VkFrameBoundaryEXT`
     // structure... (Don't forget to free everything at swapchain destruction)
-    if (swapchain_options_.insert_frame_boundary)
+    if (swapchain_options_.offscreen_swapchain_frame_boundary)
     {
         frame_boundary_.sType       = VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT;
         frame_boundary_.pNext       = nullptr;
@@ -129,10 +128,10 @@ VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                  
     return original_result;
 }
 
-void VulkanOffscreenSwapchain::DestroySwapchainKHR(PFN_vkDestroySwapchainKHR    func,
-                                                   const DeviceInfo*            device_info,
-                                                   const SwapchainKHRInfo*      swapchain_info,
-                                                   const VkAllocationCallbacks* allocator)
+void VulkanOffscreenSwapchain::DestroySwapchainKHR(PFN_vkDestroySwapchainKHR     func,
+                                                   const VulkanDeviceInfo*       device_info,
+                                                   const VulkanSwapchainKHRInfo* swapchain_info,
+                                                   const VkAllocationCallbacks*  allocator)
 {
     if ((device_info != nullptr) && (swapchain_info != nullptr))
     {
@@ -142,8 +141,8 @@ void VulkanOffscreenSwapchain::DestroySwapchainKHR(PFN_vkDestroySwapchainKHR    
 
 VkResult VulkanOffscreenSwapchain::GetSwapchainImagesKHR(VkResult                    original_result,
                                                          PFN_vkGetSwapchainImagesKHR func,
-                                                         const DeviceInfo*           device_info,
-                                                         SwapchainKHRInfo*           swapchain_info,
+                                                         const VulkanDeviceInfo*     device_info,
+                                                         VulkanSwapchainKHRInfo*     swapchain_info,
                                                          uint32_t                    capture_image_count,
                                                          uint32_t*                   image_count,
                                                          VkImage*                    images)
@@ -171,8 +170,8 @@ VkResult VulkanOffscreenSwapchain::GetSwapchainImagesKHR(VkResult               
 
 VkResult VulkanOffscreenSwapchain::AcquireNextImageKHR(VkResult                  original_result,
                                                        PFN_vkAcquireNextImageKHR func,
-                                                       const DeviceInfo*         device_info,
-                                                       SwapchainKHRInfo*         swapchain_info,
+                                                       const VulkanDeviceInfo*   device_info,
+                                                       VulkanSwapchainKHRInfo*   swapchain_info,
                                                        uint64_t                  timeout,
                                                        VkSemaphore               semaphore,
                                                        VkFence                   fence,
@@ -208,8 +207,8 @@ VkResult VulkanOffscreenSwapchain::AcquireNextImageKHR(VkResult                 
 
 VkResult VulkanOffscreenSwapchain::AcquireNextImage2KHR(VkResult                         original_result,
                                                         PFN_vkAcquireNextImage2KHR       func,
-                                                        const DeviceInfo*                device_info,
-                                                        SwapchainKHRInfo*                swapchain_info,
+                                                        const VulkanDeviceInfo*          device_info,
+                                                        VulkanSwapchainKHRInfo*          swapchain_info,
                                                         const VkAcquireNextImageInfoKHR* acquire_info,
                                                         uint32_t                         capture_image_index,
                                                         uint32_t*                        image_index)
@@ -242,14 +241,14 @@ VkResult VulkanOffscreenSwapchain::AcquireNextImage2KHR(VkResult                
     return original_result;
 }
 
-VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                              original_result,
-                                                   PFN_vkQueuePresentKHR                 func,
-                                                   const std::vector<uint32_t>&          capture_image_indices,
-                                                   const std::vector<SwapchainKHRInfo*>& swapchain_infos,
-                                                   const QueueInfo*                      queue_info,
-                                                   const VkPresentInfoKHR*               present_info)
+VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                                    original_result,
+                                                   PFN_vkQueuePresentKHR                       func,
+                                                   const std::vector<uint32_t>&                capture_image_indices,
+                                                   const std::vector<VulkanSwapchainKHRInfo*>& swapchain_infos,
+                                                   const VulkanQueueInfo*                      queue_info,
+                                                   const VkPresentInfoKHR*                     present_info)
 {
-    if (swapchain_options_.insert_frame_boundary)
+    if (swapchain_options_.offscreen_swapchain_frame_boundary)
     {
         std::vector<VkImage> images(present_info->swapchainCount);
         for (uint32_t i = 0; i < images.size(); ++i)
@@ -298,12 +297,12 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
 
 // queue_info could be nullptr. It means it doesn't specify a VkQueue and use default_queue. Its purpose is to singal
 // semaphores or fence. All VkQueue should work.
-VkResult VulkanOffscreenSwapchain::SignalSemaphoresFence(const QueueInfo*   queue_info,
-                                                         uint32_t           wait_semaphore_count,
-                                                         const VkSemaphore* wait_semaphores,
-                                                         uint32_t           signal_semaphore_count,
-                                                         const VkSemaphore* signal_semaphores,
-                                                         VkFence            fence)
+VkResult VulkanOffscreenSwapchain::SignalSemaphoresFence(const VulkanQueueInfo* queue_info,
+                                                         uint32_t               wait_semaphore_count,
+                                                         const VkSemaphore*     wait_semaphores,
+                                                         uint32_t               signal_semaphore_count,
+                                                         const VkSemaphore*     signal_semaphores,
+                                                         VkFence                fence)
 {
     uint32_t queue_family_index = default_queue_family_index_;
     if (queue_info)

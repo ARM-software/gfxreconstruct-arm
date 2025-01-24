@@ -28,11 +28,11 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 void VulkanSwapchain::Clean()
 {
-    if (swapchain_options_.select_surface_index >= create_surface_count_)
+    if (swapchain_options_.surface_index >= create_surface_count_)
     {
         GFXRECON_LOG_WARNING("Rendering was restricted to surface index %u, but a surface was never created for that "
                              "index; replay created %d surface(s)",
-                             swapchain_options_.select_surface_index,
+                             swapchain_options_.surface_index,
                              create_surface_count_);
     }
 
@@ -47,7 +47,7 @@ void VulkanSwapchain::Clean()
 }
 
 VkResult VulkanSwapchain::CreateSurface(VkResult                            original_result,
-                                        InstanceInfo*                       instance_info,
+                                        VulkanInstanceInfo*                 instance_info,
                                         const std::string&                  wsi_extension,
                                         VkFlags                             flags,
                                         HandlePointerDecoder<VkSurfaceKHR>* surface,
@@ -75,8 +75,7 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
 
     // For multi-surface captures, when replay is restricted to a specific surface, only create a surface for
     // the specified index.
-    if ((swapchain_options_.select_surface_index == -1) ||
-        (swapchain_options_.select_surface_index == create_surface_count_))
+    if ((swapchain_options_.surface_index == -1) || (swapchain_options_.surface_index == create_surface_count_))
     {
         // Create a window for our surface.
         assert(application_);
@@ -96,13 +95,15 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
             GFXRECON_LOG_FATAL("Failed to create a window for use with surface creation.  Replay cannot continue.");
             return VK_ERROR_UNKNOWN;
         }
+        ++created_window_count_;
+        window_factory->created_window_.emplace(window, created_window_count_);
 
         result = window->CreateSurface(instance_table_, instance, flags, replay_surface);
 
         if ((result == VK_SUCCESS) && (replay_surface != nullptr))
         {
             auto surface_id   = surface->GetPointer();
-            auto surface_info = reinterpret_cast<SurfaceKHRInfo*>(surface->GetConsumerData(0));
+            auto surface_info = reinterpret_cast<VulkanSurfaceKHRInfo*>(surface->GetConsumerData(0));
             assert((surface_id != nullptr) && (surface_info != nullptr));
             assert(!surface_info->surface_creation_skipped);
 
@@ -118,7 +119,7 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
     {
         if (surface != nullptr)
         {
-            auto surface_info                      = reinterpret_cast<SurfaceKHRInfo*>(surface->GetConsumerData(0));
+            auto surface_info = reinterpret_cast<VulkanSurfaceKHRInfo*>(surface->GetConsumerData(0));
             surface_info->surface_creation_skipped = true;
         }
 
@@ -132,8 +133,8 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
 }
 
 void VulkanSwapchain::DestroySurface(PFN_vkDestroySurfaceKHR      func,
-                                     const InstanceInfo*          instance_info,
-                                     const SurfaceKHRInfo*        surface_info,
+                                     const VulkanInstanceInfo*    instance_info,
+                                     const VulkanSurfaceKHRInfo*  surface_info,
                                      const VkAllocationCallbacks* allocator)
 {
     assert(instance_info != nullptr);
@@ -167,11 +168,11 @@ void VulkanSwapchain::DestroySurface(PFN_vkDestroySurfaceKHR      func,
 
 VkResult VulkanSwapchain::AcquireNextImageKHR(VkResult                  original_result,
                                               PFN_vkAcquireNextImageKHR func,
-                                              const DeviceInfo*         device_info,
-                                              SwapchainKHRInfo*         swapchain_info,
+                                              const VulkanDeviceInfo*   device_info,
+                                              VulkanSwapchainKHRInfo*   swapchain_info,
                                               uint64_t                  timeout,
-                                              SemaphoreInfo*            semaphore_info,
-                                              FenceInfo*                fence_info,
+                                              VulkanSemaphoreInfo*      semaphore_info,
+                                              VulkanFenceInfo*          fence_info,
                                               uint32_t                  capture_image_index,
                                               uint32_t*                 image_index)
 {

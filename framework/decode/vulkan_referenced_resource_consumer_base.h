@@ -184,11 +184,10 @@ class VulkanReferencedResourceConsumerBase : public VulkanConsumer
                                                                uint32_t           set,
                                                                DescriptorUpdateTemplateDecoder* pData) override;
 
-    virtual void
-    Process_vkCmdPushDescriptorSetWithTemplate2KHR(const ApiCallInfo& call_info,
-                                                   format::HandleId   commandBuffer,
-                                                   StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>*
-                                                       pPushDescriptorSetWithTemplateInfo) override;
+    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   commandBuffer,
+        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo) override;
 
     virtual void Process_vkUpdateDescriptorSetWithTemplateKHR(const ApiCallInfo&               call_info,
                                                               format::HandleId                 device,
@@ -233,6 +232,13 @@ class VulkanReferencedResourceConsumerBase : public VulkanConsumer
 
     virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId                     tlas,
                                                      const std::vector<format::HandleId>& blases) override;
+
+    virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
+    virtual void
+    ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
 
     virtual void Process_vkCmdTraceRaysKHR(
         const ApiCallInfo&                                             call_info,

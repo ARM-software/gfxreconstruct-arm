@@ -74,6 +74,7 @@ class CaptureSettings
         kUnknown,
         kFrames,
         kQueueSubmits,
+        kDrawCalls,
     };
 
     enum class FenceQueryDelayUnit
@@ -83,6 +84,15 @@ class CaptureSettings
     };
 
     const static char kDefaultCaptureFileName[];
+
+    struct TrimDrawCalls
+    {
+        // 0-based
+        uint32_t        submit_index{ 0 };
+        uint32_t        command_index{ 0 };
+        util::UintRange draw_call_indices;
+        util::UintRange bundle_draw_call_indices;
+    };
 
     struct ResourveValueAnnotationInfo
     {
@@ -105,9 +115,15 @@ class CaptureSettings
         util::ScreenshotFormat       screenshot_format;
         TrimBoundary                 trim_boundary{ TrimBoundary::kUnknown };
         std::vector<util::UintRange> trim_ranges;
+        TrimDrawCalls                trim_draw_calls;
+#ifdef ARM_INTERNAL
+        std::vector<util::UintRange> render_pass_slice_range;
+        uint32_t                     render_pass_slice_command_buffer_begin{};
+#endif
         std::string                  trim_key;
         uint32_t                     trim_key_frames{ 0 };
         RuntimeTriggerState          runtime_capture_trigger{ kNotUsed };
+        bool                         runtime_write_assets{ false };
         std::string                  capture_package_name{ "" };
         int                          page_guard_signal_handler_watcher_max_restores{ 1 };
         bool                         page_guard_copy_on_map{ util::PageGuardManager::kDefaultEnableCopyOnMap };
@@ -125,10 +141,12 @@ class CaptureSettings
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
         FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
+        uint64_t                     fence_query_delay_timeout_threshold{ 0 };
         bool                         queue_zero_only{ false };
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };
         bool                         force_fifo_present_mode{ true };
+        bool                         use_asset_file{ false };
 
         // An optimization for the page_guard memory tracking mode that eliminates the need for shadow memory by
         // overriding vkAllocateMemory so that all host visible allocations use the external memory extension with a
@@ -197,8 +215,11 @@ class CaptureSettings
 
     static util::Log::Severity ParseLogLevelString(const std::string& value_string, util::Log::Severity default_value);
 
-    static void
-    ParseUintRangeList(const std::string& value_string, std::vector<util::UintRange>* frames, const char* option_name);
+    static void ParseUintRangeList(const std::string&            value_string,
+                                   std::vector<util::UintRange>* frames,
+                                   const char*                   option_name,
+                                   bool                          check_overlap_range = true,
+                                   bool                          allow_zero          = false);
 
     static std::string ParseTrimKeyString(const std::string& value_string);
 

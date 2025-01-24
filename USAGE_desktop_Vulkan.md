@@ -230,6 +230,23 @@ reset. The signal used one of the real time signals, the first in the range
 `userfaultfd` is less efficient performance wise than `page_guard` but
 should be fast enough for real-world applications and games.
 
+##### Disabling Debug Breaks Triggered by the GFXReconstruct Layer
+
+When running an application in a debugger with the layer enabled, the
+access violations triggered by the layer's memory tracking behavior may
+cause the debugger to break. For example, on macOS using LLDB, these
+debug breaks may be disabled with the following command:
+
+```text
+process handle SIGSEGV -n true -p true -s false
+```
+
+The equivalent command for GDB is:
+
+```text
+handle SIGSEGV nostop noprint
+```
+
 ### Capture Options
 
 The GFXReconstruct layer supports several options, which may be enabled
@@ -269,11 +286,12 @@ option values.
 | ---------------------------------------------- | ------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Capture File Name                              | GFXRECON_CAPTURE_FILE                                   | STRING  | Path to use when creating the capture file.  Default is: `gfxrecon_capture.gfxr`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Capture Specific Frames                        | GFXRECON_CAPTURE_FRAMES                                 | STRING  | Specify one or more comma-separated frame ranges to capture.  Each range will be written to its own file.  A frame range can be specified as a single value, to specify a single frame to capture, or as two hyphenated values, to specify the first and last frame to capture.  Frame ranges should be specified in ascending order and cannot overlap. Note that frame numbering is 1-based (i.e. the first frame is frame 1). Example: `200,301-305` will create two capture files, one containing a single frame and one containing five frames.  Default is: Empty string (all frames are captured).                                                                                                                                                                                                                                                                                                                                                                   |
-| Capture specific app                           | GFXRECON_CAPTURE_PACKAGE_NAME                           | STRING  | Specify one app name to be captured. Default is: ""                                                                   |
+| Capture specific app                           | GFXRECON_CAPTURE_PACKAGE_NAME                           | STRING  | Specify one app name to be captured. Default is: ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Quit after capturing frame ranges              | GFXRECON_QUIT_AFTER_CAPTURE_FRAMES                      | BOOL    | Setting it to `true` will force the application to terminate once all frame ranges specified by `GFXRECON_CAPTURE_FRAMES` have been captured. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Hotkey Capture Trigger                         | GFXRECON_CAPTURE_TRIGGER                                | STRING  | Specify a hotkey (any one of F1-F12, TAB, CONTROL) that will be used to start/stop capture.  Example: `F3` will set the capture trigger to F3 hotkey. One capture file will be generated for each pair of start/stop hotkey presses. Default is: Empty string (hotkey capture trigger is disabled).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Hotkey Capture Trigger Frames                  | GFXRECON_CAPTURE_TRIGGER_FRAMES                         | STRING  | Specify a limit on the number of frames to be captured via hotkey.  Example: `1` will capture exactly one frame when the trigger key is pressed. Default is: Empty string (no limit)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Capture Specific GPU Queue Submits             | GFXRECON_CAPTURE_QUEUE_SUBMITS                          | STRING  | Specify one or more comma-separated GPU queue submit call ranges to capture.  Queue submit calls are `vkQueueSubmit` for Vulkan and `ID3D12CommandQueue::ExecuteCommandLists` for DX12. Queue submit ranges work as described above in `GFXRECON_CAPTURE_FRAMES` but on GPU queue submit calls instead of frames.  Default is: Empty string (all queue submits are captured).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Hotkey Capture Trigger Frames                  | GFXRECON_CAPTURE_TRIGGER_FRAMES                         | STRING  | Specify a limit on the number of frames to be captured via hotkey.  Example: `1` will capture exactly one frame when the trigger key is pressed. Default is: Empty string (no limit)                                                                                                                                                                                                                                                      |
+| Use asset file                                 | GFXRECON_CAPTURE_USE_ASSET_FILE                         | BOOL    | When set to `true` assets (images, buffers and descriptors) will be stored separately into an asset file instead of the capture file.                                                                                                                                                                                                                                                       |
+| Capture Specific GPU Queue Submits             | GFXRECON_CAPTURE_QUEUE_SUBMITS                          | STRING  | Specify one or more comma-separated GPU queue submit call ranges to capture.  Queue submit calls are `vkQueueSubmit` for Vulkan and `ID3D12CommandQueue::ExecuteCommandLists` for DX12. Queue submit ranges work as described above in `GFXRECON_CAPTURE_FRAMES` but on GPU queue submit calls instead of frames. The index is 0-based. Default is: Empty string (all queue submits are captured).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Capture File Compression Type                  | GFXRECON_CAPTURE_COMPRESSION_TYPE                       | STRING  | Compression format to use with the capture file.  Valid values are: `LZ4`, `ZLIB`, `ZSTD`, and `NONE`. Default is: `LZ4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Capture File Timestamp                         | GFXRECON_CAPTURE_FILE_TIMESTAMP                         | BOOL    | Add a timestamp to the capture file as described by [Timestamps](#timestamps).  Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Capture File Flush After Write                 | GFXRECON_CAPTURE_FILE_FLUSH                             | BOOL    | Flush output stream after each packet is written to the capture file.  Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -301,34 +319,8 @@ option values.
 | Allow Pipeline Compile Required                | GFXRECON_ALLOW_PIPELINE_COMPILE_REQUIRED                | BOOL    | The default behaviour forces VK_PIPELINE_COMPILE_REQUIRED to be returned from Create*Pipelines calls which have VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT set, and skips dispatching and recording the calls. This forces applications to fallback to recompiling pipelines without caching, the Vulkan calls for which will be captured. Enabling this option causes capture to record the application's calls and implementation's return values unmodified, but the resulting captures are fragile to changes in Vulkan implementations if they use pipeline caching.                                                                                                                                                                                                                                                                                                                                                                                     |
 | Delay fence queries                            | GFXRECON_FENCE_QUERY_DELAY                              | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Fence Query Delay unit                         | GFXRECON_FENCE_QUERY_DELAY_UNIT                         | STRING  | Specify the "unit of time" used for the delay fence queries option. If set to `calls` then fence query delay is the number of calls to `vkGetFenceStatus`/`vkWaitForFences` that will be delayed. If set to `frames` then fence query delay is the number of frames for which called will be delayed. Default is `calls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Ignore device address lookup in buffers        | GFXRECON_BUFFER_USAGES_TO_IGNORE                        | STRING  | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. Potential values: `transfer_src`, `transfer_dst` ,`uniform_texel`, `storage_texel`, `uniform`, `storage`, `index`, `vertex`, `indirect`, `shader_address`, `acc_input`, `acc_storage`, `shader_binding` `resource_descriptor` ,`push_descriptors`, `ignore_all`. It is possible to combine usages using binary 'or' operator.
+| Fence Query Delay Timeout Threshold            | GFXRECON_FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD            | INTEGER | Specify a timeout threshold (in nanoseconds) as to what is considered a "fence query" when calling `vkWaitForFences`. Calls to `vkWaitForFences` can either be understood as a synchronization step where you actually want to wait for the underlying command to complete and reaching the timeout is a failure in the command, or as a "delayed query" where you just want to query the fence for a certain amount of time and will try again later if timeout is reached. This option sets the threshold of the timeout value to differentiate these two usages.                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-#### Raytracing capture issues
-
-If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. To remedy that, buffer_usages_to_ignore option allows to skip lookups in buffers based on buffer usage:
-
-GFXRECON_BUFFER_USAGES_TO_IGNORE | VkBufferUsageFlagBits |
-------| -------------|
-`transfer_src`        | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-`transfer_dst`        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-`uniform_texel`       | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
-`storage_texel`       | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
-`uniform`             | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-`storage`             | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-`index`               | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-`vertex`              | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-`indirect`            | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-`shader_address`      | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-`acc_input`           | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-`acc_storage`         | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
-`shader_binding`      | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR
-`resource_descriptor` | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
-`push_descriptors`    | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
-`ignore_all`          | Do not perform lookup at all
-
-
- It is possible to combine usages using binary 'or' operator, for example: 
-`export GFXRECON_BUFFER_USAGES_TO_IGNORE='transfer_src|transfer_dst|uniform'`                                                                                                                                                                                                                                                                                                                                                                                   |
 #### Memory Tracking Known Issues
 
 ### Capture Limitations
@@ -472,6 +464,17 @@ configured to capture only from frame 100 through frame 200 into a new capture f
 
 `gfxrecon-capture.py -f 100-200 gfxrecon-replay gfxrecon-example-capture.gfxr``
 
+### Asset files
+
+When doing a trimmed capture, `GFXRECON_CAPTURE_USE_ASSET_FILE` gives the option to
+dump all assets (images, buffers and descriptors) separetly in a different capture
+file called the asset file. When this option is enabled assets are tracked and
+only those that are changed during a tracking period (outside of a trim range) are
+dumped into the asset file. This first time a trim range is encountered (or the
+hotkey is pressed) all assets will be dumped, but the next time this happens only
+the assets that have been changed will be dumped. This should speed up the dumping
+process.
+
 ### Capture Script
 
 The `gfxrecon-capture-vulkan.py` tool is a convenience script that can be used to
@@ -558,7 +561,7 @@ The `gfxrecon-replay` tool for desktop accepts the following command line
 arguments:
 
 ```text
-gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
+gfxrecon-replay         [-h | --help] [--version] [--cpu-mask <binary-mask>] [--gpu <index>]
                         [--pause-frame <N>] [--paused] [--sync] [--screenshot-all]
                         [--screenshots <N1(-N2),...>] [--screenshot-format <format>]
                         [--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]
@@ -575,8 +578,10 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--measurement-file <file>] [--quit-after-measurement-range]
                         [--flush-measurement-range]
                         [--log-level <level>] [--log-file <file>] [--log-debugview]
-                        [--api <api>] [--no-debug-popup] [--use-colorspace-fallback]
-                        [--preload-measurement-range] [--wait-before-present]
+                        [--api <api>]
+                        [--preload-measurement-range]
+                        [--no-debug-popup] [--use-colorspace-fallback]
+                        [--wait-before-present]
                         [--dump-resources <arg>] [--dump-resources-before-draw]
                         [--dump-resources-scale <scale>] [--dump-resources-dir <dir>]
                         [--dump-resources-image-format <format>]
@@ -586,6 +591,7 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--dump-resources-json-output-per-command]
                         [--dump-resources-dump-immutable-resources]
                         [--dump-resources-dump-all-image-subresources]
+                        [--dump-resources-dump-raw-images]
                         [--pbi-all] [--pbis <index1,index2>]
                         [--pipeline-creation-jobs | --pcj <num_jobs>]
                         <file>
@@ -602,6 +608,13 @@ Optional arguments:
   --log-file <file>     Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled).
   --log-debugview       Log messages with OutputDebugStringA. Windows only.
+  --cpu-mask <binary-mask>
+                        Set of CPU cores used by the replayer.
+                        `binary-mask` is a succession of '0' and '1' that specifies
+                        used/unused cores. For example '1010' activates the first and
+                        third cores and deactivate all other cores.
+                        If the option is not set, all cores can be used. If the option
+                        is set only for some cores, the other cores are not used.
   --gpu <index>         Use the specified device for replay, where index
                         is the zero-based index to the array of physical devices
                         returned by vkEnumeratePhysicalDevices.  Replay may fail
@@ -735,18 +748,6 @@ Optional arguments:
   --use-ext-frame-boundary
                         Convert all offscreen frame boundaries to `VK_EXT_frame_boundary`
                         frame boundaries.
-  --save-pipeline-cache <cache-file>
-                        If set, produces pipeline caches at replay time instead of using
-                        the one saved at capture time and save those caches in <cache-file>.
-  --load-pipeline-cache <cache-file>
-                        If set, loads data created by the `--save-pipeline-cache`
-                        option in <cache-file> and uses it to create the pipelines instead
-                        of the pipeline caches saved at capture time.
-  --add-new-pipeline-caches
-                        If set, allows gfxreconstruct to create new vkPipelineCache objects
-                        when it encounters a pipeline created without cache. This option can
-                        be used in coordination with `--save-pipeline-cache` and
-                        `--load-pipeline-cache`.
   --flush-inside-measurement-range
                         If this is specified the replayer will flush and wait
                         for all current GPU work to finish at the end of each
@@ -791,8 +792,9 @@ Optional arguments:
               before calling Present. This is needed for accurate acquisition
               of instrumentation data on some platforms.
    --dump-resources <arg>
-              <arg> is BeginCommandBuffer=<n>,Draw=<m>,BeginRenderPass=<o>,
-              NextSubpass=<p>,Dispatch=<q>,CmdTraceRays=<r>,QueueSubmit=<s>
+              <arg> is BeginCommandBuffer=<n>,Draw=<o>,BeginRenderPass=<p>,
+              NextSubpass=<q>,EndRenderPass=<r>,Dispatch=<s>,TraceRays=<t>,
+              QueueSubmit=<u>
               GPU resources are dumped after the given vkCmdDraw*,
               vkCmdDispatch, or vkCmdTraceRaysKHR is replayed.
               Dump gpu resources after the given vmCmdDraw*, vkCmdDispatch, or vkCmdTraceRaysKHR is replayed. The parameter for
@@ -837,6 +839,10 @@ Optional arguments:
               Enables dumping of resources that are used as inputs in the commands requested for dumping.
   --dump-resources-dump-all-image-subresources
               Enables dumping of all image sub resources (mip map levels and array layers).
+  --dump-resources-dump-raw-images
+              When enabled all image resources will be dumped verbatim as raw bin files.
+  --dump-resources-dump-separate-alpha
+              When enabled alpha channel of dumped images will be dumped in a separate file.
   --pbi-all
               Print all block information.
   --pbis <index1,index2>
@@ -845,6 +851,20 @@ Optional arguments:
               Specify the number of asynchronous pipeline-creation jobs as integer.
               If <num_jobs> is negative it will be added to the number of cpu-cores, e.g. -1 -> num_cores - 1.
               Default: 0 (do not use asynchronous operations)
+  --save-pipeline-cache <cache-file>
+                        If set, produces pipeline caches at replay time instead of using
+                        the one saved at capture time and save those caches in <cache-file>.
+  --load-pipeline-cache <cache-file>
+                        If set, loads data created by the `--save-pipeline-cache`
+                        option in <cache-file> and uses it to create the pipelines instead
+                        of the pipeline caches saved at capture time.
+  --add-new-pipeline-caches
+                        If set, allows gfxreconstruct to create new vkPipelineCache objects
+                        when it encounters a pipeline created without cache. This option can
+                        be used in coordination with `--save-pipeline-cache` and
+                        `--load-pipeline-cache`.
+  --quit-after-frame
+              Specify a frame after which replay will terminate.
 ```
 
 ### Key Controls

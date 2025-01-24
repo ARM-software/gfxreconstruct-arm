@@ -43,7 +43,7 @@ struct ApiCallInfo
     /// Convert.
     /// @see ApiDecoder::SetCurrentBlockIndex() which can pass the block index
     /// to decoders so it is available for any block type, not just API calls.
-    uint64_t         index{ 0 };
+    uint64_t index{ 0 };
 
     /// Thread id of captured function call.
     format::ThreadId thread_id{ 0 };
@@ -87,10 +87,13 @@ class ApiDecoder
     virtual void DispatchExeFileInfo(format::ThreadId thread_id, format::ExeFileInfoBlock& info) = 0;
 
     virtual void DispatchFillMemoryCommand(
-        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) = 0;
+        format::ThreadId thread_id, uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) = 0;
 
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) = 0;
+
+    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                  const format::ShaderHandleLocationInfo*          infos) = 0;
 
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
@@ -193,16 +196,34 @@ class ApiDecoder
 
     virtual void DispatchGetDx12RuntimeInfo(const format::Dx12RuntimeInfoCommandHeader& runtime_info_header){};
 
+    virtual void DispatchExecuteBlocksFromFile(format::ThreadId   thread_id,
+                                               uint32_t           n_blocks,
+                                               int64_t            offset,
+                                               const std::string& filename){};
+
     virtual void SetCurrentBlockIndex(uint64_t block_index){};
 
     virtual void SetCurrentApiCallId(format::ApiCallId api_call_id){};
 
     virtual void DispatchSetTlasToBlasDependencyCommand(format::HandleId                     tlas,
                                                         const std::vector<format::HandleId>& blases){};
+
+    virtual void DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                             const std::vector<format::HandleId>& children){};
+
+    virtual void
+    DispatchAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                             const std::vector<format::HandleId>& children){};
+
+    virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                        const char*                             env_string){};
+
     virtual void DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
                                                                       size_t         buffer_size){};
+
     virtual void DispatchVulkanAccelerationStructuresCopyMetaCommand(const uint8_t* parameter_buffer,
                                                                      size_t         buffer_size){};
+
     virtual void DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(const uint8_t* parameter_buffer,
                                                                                 size_t         buffer_size){};
 };

@@ -192,12 +192,30 @@ bool SpirVParsingUtil::ParseBufferReferences(const uint32_t* const spirv_code, s
 
     std::vector<Instruction> instructions;
 
-    // First build up instructions object to make it easier to work with the SPIR-V
+    bool found_buffer_ref = false;
+
+    // build up instructions object to make it easier to work with the SPIR-V
+    // also checks for required capability
     while (spirv_ptr < spirv_end)
     {
         Instruction& insn = instructions.emplace_back(spirv_ptr);
         spirv_ptr += insn.length();
         GFXRECON_ASSERT(insn.length() > 0);
+
+        if (insn.opcode() == spv::OpCapability && insn.word(1) == spv::CapabilityPhysicalStorageBufferAddresses)
+        {
+            found_buffer_ref = true;
+        }
+
+        // arrived at 'OpFunction' -> we have seen all metadata incl. capabilities
+        if (insn.opcode() == spv::OpFunction)
+        {
+            // CapabilityPhysicalStorageBufferAddresses not found
+            if (!found_buffer_ref)
+            {
+                return true;
+            }
+        }
     }
     if (spirv_ptr != spirv_end)
     {
@@ -282,8 +300,13 @@ bool SpirVParsingUtil::ParseBufferReferences(const uint32_t* const spirv_code, s
                                                                    buffer_reference_info.binding,
                                                                    buffer_reference_info.set,
                                                                    &spv_result);
-                                td        = spv_descriptor_binding->type_description;
-                                root_name = spv_descriptor_binding->name;
+
+                                td = spv_descriptor_binding->type_description;
+
+                                // spirv_reflect sets the name by tracking SPIR-V instructions like OpName. Some
+                                // optimizations may remove these instructions, resulting in a nullptr name. Actually we
+                                // can find some title removes all such names.
+                                root_name = spv_descriptor_binding->name ? spv_descriptor_binding->name : "";
                             }
 
                             if (root_name.empty())
@@ -478,6 +501,107 @@ std::vector<SpirVParsingUtil::BufferReferenceInfo> SpirVParsingUtil::GetBufferRe
         ret.push_back(buffer_ref_info);
     }
     return ret;
+}
+
+static VkDescriptorType SpvReflectToVkDescriptorType(SpvReflectDescriptorType type)
+{
+    switch (type)
+    {
+        case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER:
+            return VK_DESCRIPTOR_TYPE_SAMPLER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+
+        case SPV_REFLECT_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+            return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+
+        default:
+            GFXRECON_LOG_WARNING("%s(): Unrecognised SPIRV-Reflect descriptor type");
+            assert(0);
+            return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    }
+}
+
+bool SpirVParsingUtil::SPIRVReflectPerformReflectionOnShaderModule(
+    size_t                                                          spirv_size,
+    const uint32_t*                                                 spirv_code,
+    encode::vulkan_state_info::ShaderReflectionDescriptorSetsInfos& shader_reflection)
+{
+    assert(spirv_size);
+    assert(spirv_code != nullptr);
+
+    shader_reflection.clear();
+
+    spv_reflect::ShaderModule reflection(spirv_size, spirv_code);
+    if (reflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS)
+    {
+        GFXRECON_LOG_WARNING("Could not generate reflection data about shader module")
+        assert(0);
+        return false;
+    }
+
+    // Scan shader descriptor bindings
+    uint32_t         count  = 0;
+    SpvReflectResult result = reflection.EnumerateDescriptorBindings(&count, nullptr);
+    if (result != SPV_REFLECT_RESULT_SUCCESS)
+    {
+        // GFXRECON_LOG_ERROR("Shader reflection on shader %" PRIu64 " failed", shader_info->capture_id);
+        assert(0);
+        return false;
+    }
+
+    if (count)
+    {
+        std::vector<SpvReflectDescriptorBinding*> bindings(count, nullptr);
+        result = reflection.EnumerateDescriptorBindings(&count, bindings.data());
+        if (result != SPV_REFLECT_RESULT_SUCCESS)
+        {
+            // GFXRECON_LOG_ERROR("Shader reflection on shader %" PRIu64 " failed", shader_info->capture_id);
+            assert(0);
+            return false;
+        }
+
+        for (const auto binding : bindings)
+        {
+            VkDescriptorType type     = SpvReflectToVkDescriptorType(binding->descriptor_type);
+            bool             readonly = ((binding->decoration_flags & SPV_REFLECT_DECORATION_NON_WRITABLE) ==
+                             SPV_REFLECT_DECORATION_NON_WRITABLE);
+            const bool       is_array = binding->array.dims_count > 0;
+
+            shader_reflection[binding->set].emplace(binding->binding,
+                                                    encode::vulkan_state_info::ShaderReflectionDescriptorInfo(
+                                                        type, readonly, binding->accessed, binding->count, is_array));
+        }
+    }
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(util)

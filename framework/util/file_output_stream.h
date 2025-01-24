@@ -29,6 +29,7 @@
 #include "util/output_stream.h"
 #include "util/platform.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <string>
 
@@ -54,9 +55,11 @@ class FileOutputStream : public OutputStream
 
     virtual bool IsValid() override { return (file_ != nullptr); }
 
-    virtual size_t Write(const void* data, size_t len) override;
+    virtual bool Write(const void* data, size_t len) override;
 
     virtual void Flush() override { platform::FileFlush(file_); }
+
+    virtual int64_t GetOffset() const { return platform::FileTell(file_); }
 
   protected:
     FileOutputStream(const FileOutputStream&)            = delete;
@@ -75,7 +78,7 @@ class FileNoLockOutputStream : public FileOutputStream
     {}
     FileNoLockOutputStream(FILE* file, bool owned = false) : FileOutputStream(file, owned) {}
 
-    virtual size_t Write(const void* data, size_t len) override;
+    virtual bool Write(const void* data, size_t len) override;
 };
 
 GFXRECON_END_NAMESPACE(util)

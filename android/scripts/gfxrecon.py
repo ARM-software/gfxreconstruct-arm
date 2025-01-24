@@ -41,7 +41,7 @@ valid_commands = [
 
 # Application info
 app_name = 'com.lunarg.gfxreconstruct.replay'
-app_activity = '"com.lunarg.gfxreconstruct.replay/android.app.NativeActivity"'
+app_activity = '"com.lunarg.gfxreconstruct.replay/.ReplayActivity"'
 app_action = 'android.intent.action.MAIN'
 app_category = 'android.intent.category.LAUNCHER'
 
@@ -94,6 +94,7 @@ def CreateReplayParser():
     parser.add_argument('--log-file', metavar='DEVICE_FILE', help='Write log messages to a file at the specified path instead of logcat (forwarded to replay tool)')
     parser.add_argument('--pause-frame', metavar='N', help='Pause after replaying frame number N (forwarded to replay tool)')
     parser.add_argument('--paused', action='store_true', default=False, help='Pause after replaying the first frame (same as "--pause-frame 1"; forwarded to replay tool)')
+    parser.add_argument('--cpu-mask', metavar='binary_mask', help='Set of CPU cores used by the replayer. `binary-mask` is a succession of "0" and "1" that specifies used/unused cores. For example "1010" activates the first and third cores and deactivate all other cores. If the option is not set, all cores can be used. If the option is set only for some cores, the other cores are not used. (forwarded to replay tool)')
     parser.add_argument('--trigger-script-path', metavar='DEVICE_FILE', help='Path to the script needed to trigger)')
     parser.add_argument('--trigger-script-frame', metavar='RANGES', help='Frame ranges to trigger the script.)')
     parser.add_argument('--screenshot-all', action='store_true', default=False, help='Generate screenshots for all frames.  When this option is specified, --screenshots is ignored (forwarded to replay tool)')
@@ -121,9 +122,6 @@ def CreateReplayParser():
     parser.add_argument('--flush-measurement-range', action='store_true', default=False, help='If this is specified the replayer will flush and wait for all current GPU work to finish at the start and end of the measurement range. (forwarded to replay tool)')
     parser.add_argument('--preload-measurement-range', action='store_true', default=False, help='Preloads a frame range specified with --measurement-frame-range from the trace file into a continuous, expandable buffer, in order to mitigate the impact of read file commands on performance measurements.')
     parser.add_argument('--dsf','--disable-subpass-fusion', action='store_true', default=False, help='Force disable subpass fusion. Try to nudge the driver to "fuse" subpasses of the render pass into 1 pass, by using on-chip storage instead of using RAM for data transfer (forwarded to replay tool).')
-    parser.add_argument('--save-pipeline-cache', metavar='DEVICE_FILE', help='If set, produces pipeline caches at replay time instead of using the one saved at capture time and save those caches in DEVICE_FILE. (forwarded to replay tool)')
-    parser.add_argument('--load-pipeline-cache', metavar='DEVICE_FILE', help='If set, loads data created by the `--save-pipeline-cache` option in DEVICE_FILE and uses it to create the pipelines instead of the pipeline caches saved at capture time. (forwarded to replay tool)')
-    parser.add_argument('--add-new-pipeline-caches', action='store_true', default=False, help='If set, allows gfxreconstruct to create new vkPipelineCache objects when it encounters a pipeline created without cache. This option can be used in coordination with `--save-pipeline-cache` and `--load-pipeline-cache`. (forwarded to replay tool)')
     parser.add_argument('--wait-before-present', action='store_true', default=False, help='Force wait on completion of queue operations for all queues before calling Present. This is needed for accurate acquisition of instrumentation data on some platforms.')
     parser.add_argument('-m', '--memory-translation', metavar='MODE', choices=['none', 'remap', 'realign', 'rebind'], help='Enable memory translation for replay on GPUs with memory types that are not compatible with the capture GPU\'s memory types.  Available modes are: none, remap, realign, rebind (forwarded to replay tool)')
     parser.add_argument('--swapchain', metavar='MODE', choices=['virtual', 'captured', 'offscreen'], help='Choose a swapchain mode to replay. Available modes are: virtual, captured, offscreen (forwarded to replay tool)')
@@ -144,9 +142,15 @@ def CreateReplayParser():
     parser.add_argument('--dump-resources-json-output-per-command', action='store_true', default=False, help= 'Enables storing a json output file for each dumped command. Default is disabled.')
     parser.add_argument('--dump-resources-dump-immutable-resources', action='store_true', default=False, help= 'Dump immutable immutable shader resources.')
     parser.add_argument('--dump-resources-dump-all-image-subresources', action='store_true', default=False, help= 'Dump all available mip levels and layers when dumping images.')
+    parser.add_argument('--dump-resources-dump-raw-images', action='store_true', default=False, help= 'Dump images verbatim as raw binary files.')
+    parser.add_argument('--dump-resources-dump-separate-alpha', action='store_true', default=False, help= 'Dump image alpha in a separate image file.')
     parser.add_argument('--pbi-all', action='store_true', default=False, help='Print all block information.')
     parser.add_argument('--pbis', metavar='RANGES', default=False, help='Print block information between block index1 and block index2')
     parser.add_argument('--pcj', '--pipeline-creation-jobs', action='store_true', default=False, help='Specify the number of pipeline-creation-jobs or background-threads.')
+    parser.add_argument('--save-pipeline-cache', metavar='DEVICE_FILE', help='If set, produces pipeline caches at replay time instead of using the one saved at capture time and save those caches in DEVICE_FILE. (forwarded to replay tool)')
+    parser.add_argument('--load-pipeline-cache', metavar='DEVICE_FILE', help='If set, loads data created by the `--save-pipeline-cache` option in DEVICE_FILE and uses it to create the pipelines instead of the pipeline caches saved at capture time. (forwarded to replay tool)')
+    parser.add_argument('--add-new-pipeline-caches', action='store_true', default=False, help='If set, allows gfxreconstruct to create new vkPipelineCache objects when it encounters a pipeline created without cache. This option can be used in coordination with `--save-pipeline-cache` and `--load-pipeline-cache`. (forwarded to replay tool)')
+    parser.add_argument('--quit-after-frame', metavar='FRAME', help='Specify a frame after which replay will terminate.')
     return parser
 
 def MakeExtrasString(args):
@@ -169,6 +173,10 @@ def MakeExtrasString(args):
 
     if args.paused:
         arg_list.append('--paused')
+
+    if args.cpu_mask:
+        arg_list.append('--cpu-mask')
+        arg_list.append('{}'.format(args.cpu_mask))
 
     if args.screenshot_all:
         arg_list.append('--screenshot-all')
@@ -262,9 +270,6 @@ def MakeExtrasString(args):
     if args.use_ext_frame_boundary:
         arg_list.append('--use-ext-frame-boundary')
 
-    if args.offscreen_swapchain_frame_boundary:
-        arg_list.append('--offscreen-swapchain-frame-boundary')
-
     if args.sgfs:
         arg_list.append('--sgfs')
         arg_list.append('{}'.format(args.sgfs))
@@ -276,17 +281,6 @@ def MakeExtrasString(args):
     if args.preload_measurement_range:
         arg_list.append('--preload-measurement-range')
 
-    if args.save_pipeline_cache:
-        arg_list.append('--save-pipeline-cache')
-        arg_list.append('{}'.format(args.save_pipeline_cache))
-
-    if args.load_pipeline_cache:
-        arg_list.append('--load-pipeline-cache')
-        arg_list.append('{}'.format(args.load_pipeline_cache))
-
-    if args.add_new_pipeline_caches:
-        arg_list.append('--add-new-pipeline-caches')
-
     if args.memory_translation:
         arg_list.append('-m')
         arg_list.append('{}'.format(args.memory_translation))
@@ -294,8 +288,6 @@ def MakeExtrasString(args):
     if args.dsf:
         arg_list.append('--dsf')
 
-    if args.flush_inside_measurement_range:
-        arg_list.append('--flush-inside-measurement-range')
     if args.wait_before_present:
         arg_list.append('--wait-before-present')
 
@@ -336,10 +328,16 @@ def MakeExtrasString(args):
 
     if args.dump_resources_dump_all_image_subresources:
         arg_list.append('--dump-resources-dump-all-image-subresources')
+        
+    if args.dump_resources_dump_raw_images:
+        arg_list.append('--dump-resources-dump-raw-images')
 
     if args.marking_layers:
         arg_list.append('--marking-layers')
         arg_list.append('{}'.format(args.marking_layers))
+        
+    if args.dump_resources_dump_separate_alpha:
+        arg_list.append('--dump-resources-dump-separate-alpha')
 
     if args.pbi_all:
         arg_list.append('--pbi-all')
@@ -351,6 +349,21 @@ def MakeExtrasString(args):
     if args.pcj:
         arg_list.append('--pcj')
         arg_list.append('{}'.format(args.pcj))
+
+    if args.save_pipeline_cache:
+        arg_list.append('--save-pipeline-cache')
+        arg_list.append('{}'.format(args.save_pipeline_cache))
+
+    if args.load_pipeline_cache:
+        arg_list.append('--load-pipeline-cache')
+        arg_list.append('{}'.format(args.load_pipeline_cache))
+
+    if args.add_new_pipeline_caches:
+        arg_list.append('--add-new-pipeline-caches')
+
+    if args.quit_after_frame:
+        arg_list.append('--quit-after-frame')
+        arg_list.append('{}'.format(args.quit_after_frame))
 
     if args.file:
         arg_list.append(args.file)

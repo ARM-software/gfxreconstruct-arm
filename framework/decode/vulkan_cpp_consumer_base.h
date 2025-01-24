@@ -574,11 +574,10 @@ class VulkanCppConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
 
-    virtual void
-    Process_vkCmdPushDescriptorSetWithTemplate2KHR(const ApiCallInfo& call_info,
-                                                   format::HandleId   commandBuffer,
-                                                   StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>*
-                                                       pPushDescriptorSetWithTemplateInfo) override;
+    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   commandBuffer,
+        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo) override;
 
     // String utilities
     static std::string ToEscape(const char* value);
@@ -648,7 +647,8 @@ class VulkanCppConsumerBase : public VulkanConsumer
                                             const std::vector<format::DeviceMemoryType>& memory_types,
                                             const std::vector<format::DeviceMemoryHeap>& memory_heaps) override;
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
 

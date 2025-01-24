@@ -74,9 +74,9 @@ class VulkanConsumerBase : public CommonConsumerBase
     {}
 
     virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-        const ApiCallInfo&                                                    call_info,
-        format::HandleId                                                      commandBuffer,
-        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo)
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   commandBuffer,
+        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo)
     {}
 
     virtual void Process_vkCreateRayTracingPipelinesKHR(
@@ -92,6 +92,14 @@ class VulkanConsumerBase : public CommonConsumerBase
     {}
 
     virtual void ProcessSetTlasToBlasRelationCommand(format::HandleId tlas, const std::vector<format::HandleId>& blases)
+    {}
+
+    virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children)
+    {}
+
+    virtual void ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                                         const std::vector<format::HandleId>& children)
     {}
 };
 

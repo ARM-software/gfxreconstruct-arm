@@ -115,15 +115,9 @@ class AgsReplayConsumer : public AgsConsumerBase
     void CheckReplayResult(const char*            call_name,
                            AGSDriverVersionResult capture_result,
                            AGSDriverVersionResult replay_result);
-    void LoadAgsDll();
 
-    AGSContext*             captured_context_{ nullptr };
-    AGSContext*             current_context_{ nullptr };
-    Dx12ReplayConsumerBase* dx12_replay_consumer_{ nullptr };
-
-    AgsDispatchTable_6_0_1        ags_dispatch_table_;
-    util::platform::LibraryHandle ags_dll_{ nullptr };
-    bool                          ags_dll_loaded_{ false };
+    std::map<AGSContext*, AGSContext*> context_map_; // Map of captured context to current context
+    Dx12ReplayConsumerBase*            dx12_replay_consumer_{ nullptr };
 };
 
 GFXRECON_END_NAMESPACE(decode)

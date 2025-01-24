@@ -64,12 +64,14 @@ const size_t   kMaxPhysicalDeviceNameSize = 256;
 const HandleId kNullHandleId              = 0;
 const size_t   kAdapterDescriptionSize    = 128;
 const int8_t   kNoneIndex                 = -1;
+const size_t   kMaxShaderGroupHandleSize  = 32;
 
 /// Label for operation annotation, which captures parameters used by tools
 /// operating on a capture file.
 const char* const kAnnotationLabelOperation          = "operation";
 const char* const kAnnotationLabelReplayOptions      = "replayopts";
 const char* const kAnnotationLabelRemovedResource    = "removed-resource";
+const char* const kAnnotationLabelTransformer        = "transformer";
 const char* const kAnnotationPipelineCreationAttempt = "pipelinecreationattempt";
 
 const char* const kOperationAnnotationGfxreconstructVersion = "gfxrecon-version";
@@ -121,38 +123,42 @@ enum AdapterType
 
 enum class MetaDataType : uint16_t
 {
-    kUnknownMetaDataType                                = 0,
-    kDisplayMessageCommand                              = 1,
-    kFillMemoryCommand                                  = 2,
-    kResizeWindowCommand                                = 3,
-    kSetSwapchainImageStateCommand                      = 4,
-    kBeginResourceInitCommand                           = 5,
-    kEndResourceInitCommand                             = 6,
-    kInitBufferCommand                                  = 7,
-    kInitImageCommand                                   = 8,
-    kCreateHardwareBufferCommand_deprecated             = 9,
-    kDestroyHardwareBufferCommand                       = 10,
-    kSetDevicePropertiesCommand                         = 11,
-    kSetDeviceMemoryPropertiesCommand                   = 12,
-    kResizeWindowCommand2                               = 13,
-    kSetOpaqueAddressCommand                            = 14,
-    kSetRayTracingShaderGroupHandlesCommand             = 15,
-    kCreateHeapAllocationCommand                        = 16,
-    kInitSubresourceCommand                             = 17,
-    kExeFileInfoCommand                                 = 18,
-    kInitDx12AccelerationStructureCommand               = 19,
-    kFillMemoryResourceValueCommand                     = 20,
-    kDxgiAdapterInfoCommand                             = 21,
-    kDriverInfoCommand                                  = 22,
-    kReserved23                                         = 23,
-    kCreateHardwareBufferCommand                        = 24,
-    kReserved25                                         = 25,
-    kDx12RuntimeInfoCommand                             = 26,
-    kParentToChildDependency                            = 27,
+    kUnknownMetaDataType                    = 0,
+    kDisplayMessageCommand                  = 1,
+    kFillMemoryCommand                      = 2,
+    kResizeWindowCommand                    = 3,
+    kSetSwapchainImageStateCommand          = 4,
+    kBeginResourceInitCommand               = 5,
+    kEndResourceInitCommand                 = 6,
+    kInitBufferCommand                      = 7,
+    kInitImageCommand                       = 8,
+    kCreateHardwareBufferCommand_deprecated = 9,
+    kDestroyHardwareBufferCommand           = 10,
+    kSetDevicePropertiesCommand             = 11,
+    kSetDeviceMemoryPropertiesCommand       = 12,
+    kResizeWindowCommand2                   = 13,
+    kSetOpaqueAddressCommand                = 14,
+    kSetRayTracingShaderGroupHandlesCommand = 15,
+    kCreateHeapAllocationCommand            = 16,
+    kInitSubresourceCommand                 = 17,
+    kExeFileInfoCommand                     = 18,
+    kInitDx12AccelerationStructureCommand   = 19,
+    kFillMemoryResourceValueCommand         = 20,
+    kDxgiAdapterInfoCommand                 = 21,
+    kDriverInfoCommand                      = 22,
+    kReserved23                             = 23,
+    kCreateHardwareBufferCommand            = 24,
+    kReserved25                             = 25,
+    kDx12RuntimeInfoCommand                 = 26,
+    kParentToChildDependency                = 27,
     kVulkanBuildAccelerationStructuresCommand           = 28,
     kVulkanCopyAccelerationStructuresCommand            = 29,
     kVulkanWriteAccelerationStructuresPropertiesCommand = 30,
-    kFixDeviceAddressCommand                            = 31
+    kFixDeviceAddressCommand                            = 31,
+    kSetEnvironmentVariablesCommand         = 32,
+    kViewRelativeLocation                   = 33,
+    kExecuteBlocksFromFile                  = 34,
+    kFixShaderGroupHandleCommand            = 35,
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -225,12 +231,13 @@ struct EnabledOptions
 // Resource values are values contained in resource data that may require special handling (e.g., mapping for replay).
 enum class ResourceValueType : uint8_t
 {
-    kUnknown                      = 0,
-    kGpuVirtualAddress            = 1,
-    kGpuDescriptorHandle          = 2,
-    kShaderIdentifier             = 3,
-    kIndirectArgumentDispatchRays = 4,
-    kExecuteIndirectCountBuffer   = 5
+    kUnknown                       = 0,
+    kGpuVirtualAddress             = 1,
+    kGpuDescriptorHandle           = 2,
+    kShaderIdentifier              = 3,
+    kIndirectArgumentDispatchRays  = 4,
+    kExecuteIndirectCountBuffer    = 5,
+    kRaytracingInstanceDescPointer = 6,
 };
 
 #pragma pack(push)
@@ -342,6 +349,25 @@ struct AddressLocationInfo
     uint64_t         adjusted_address; // Address found in memory
     uint64_t         offset_in_memory;
     uint64_t         new_address; // Set on replay
+};
+
+struct FixShaderGroupHandleCommandHeader
+{
+    MetaDataHeader meta_header;
+    // This could be either shader group handle for standalone binary blobs, or memory id for data associated with
+    // particular vkDeviceMemory
+    format::HandleId relation_id;
+    uint64_t         num_of_locations;
+};
+
+struct ShaderHandleLocationInfo
+{
+    format::HandleId id; // ray tracing pipeline handle
+    uint32_t         group;
+    uint32_t         group_size;
+    uint64_t         offset_in_memory;
+    uint8_t          original_handles[kMaxShaderGroupHandleSize];
+    uint8_t          new_handles[kMaxShaderGroupHandleSize];
 };
 
 struct FillMemoryResourceValueCommandHeader
@@ -654,8 +680,10 @@ struct Dx12RuntimeInfoCommandHeader
 
 enum ParentToChildDependencyType : uint32_t
 {
-    kUnknownDependency                = 0,
-    kAccelerationStructuresDependency = 1
+    kUnknownDependency                         = 0,
+    kAccelerationStructuresDependency          = 1,
+    kMicromapCompactionDependency              = 2,
+    kAccelerationStructureCompactionDependency = 3
 };
 
 struct ParentToChildDependencyHeader
@@ -665,6 +693,17 @@ struct ParentToChildDependencyHeader
     ParentToChildDependencyType dependency_type;
     format::HandleId            parent_id;
     uint32_t                    child_count;
+};
+
+static constexpr char kEnvironmentStringDelimeter = (char)-1;
+struct SetEnvironmentVariablesCommand
+{
+    MetaDataHeader meta_header;
+    ThreadId       thread_id;
+    uint64_t       string_length;
+
+    // In the capture file, a string will immediately follow this block
+    // containing a list of environment variables and their values
 };
 
 struct VulkanMetaBuildAccelerationStructuresHeader
@@ -680,6 +719,22 @@ struct VulkanWriteAccelerationStructuresPropertiesCommandHeader
 struct VulkanCopyAccelerationStructuresCommandHeader
 {
     format::MetaDataHeader meta_header;
+};
+
+struct ExecuteBlocksFromFile
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+
+    // Number of commands to execute from file.
+    // 0 means execute till the end of file.
+    uint32_t n_blocks;
+
+    // The offset from the start of the file to start executing
+    int64_t offset;
+
+    // Number of characters in file name
+    uint32_t filename_length;
 };
 
 // Restore size_t to normal behavior.

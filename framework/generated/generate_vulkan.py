@@ -34,8 +34,8 @@ KHRONOS_REGISTRY_DIR = os.path.normpath(
         SCRIPT_DIR, '..', '..', 'external', 'Vulkan-Headers', 'registry'
     )
 )
-BASE_GENERATOR_DIR = os.path.join(SCRIPT_DIR, 'base_generators')
-GENERATOR_DIR = os.path.join(SCRIPT_DIR, 'vulkan_generators')
+KHRONOS_GENERATOR_DIR = os.path.join(SCRIPT_DIR, 'khronos_generators')
+GENERATOR_DIR = os.path.join(SCRIPT_DIR, 'khronos_generators', 'vulkan_generators')
 VK_HEADERS_DIR = os.path.join(
     SCRIPT_DIR, '..', '..', 'external', 'Vulkan-Headers'
 )
@@ -50,7 +50,7 @@ generate_targets = [
     'generated_vulkan_struct_trackers.h',
     'generated_vulkan_struct_trackers.cpp',
     'generated_vulkan_struct_deep_copy.cpp',
-    'generated_vulkan_struct_deep_copy_pnext.cpp',
+    'generated_vulkan_struct_deep_copy_stype.cpp',
     'generated_vulkan_api_call_encoders.h',
     'generated_vulkan_api_call_encoders.cpp',
     'generated_vulkan_command_buffer_util.h',
@@ -92,6 +92,7 @@ generate_targets = [
     'generated_vulkan_cpp_consumer_extension.h',
     'generated_vulkan_cpp_consumer_extension.cpp',
     'generated_vulkan_stype_util.h',
+    'generated_vulkan_skiavk_modifier.h',
 ]
 
 if __name__ == '__main__':
@@ -133,8 +134,8 @@ if __name__ == '__main__':
 
 
 
-    BASE_GENERATOR_DIR = os.path.normpath(
-        os.path.join(SCRIPT_DIR, BASE_GENERATOR_DIR)
+    KHRONOS_GENERATOR_DIR = os.path.normpath(
+        os.path.join(SCRIPT_DIR, KHRONOS_GENERATOR_DIR)
     )
     env = os.environ.copy()
     if not 'PYTHONPATH' in env:
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     env['PYTHONPATH'] = os.pathsep.join(
         [
             KHRONOS_REGISTRY_DIR,
-            BASE_GENERATOR_DIR,
+            KHRONOS_GENERATOR_DIR,
             GENERATOR_DIR,
             VK_HEADERS_DIR,
         ]

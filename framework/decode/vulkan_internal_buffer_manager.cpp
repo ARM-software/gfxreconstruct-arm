@@ -27,7 +27,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
-                                                         const PhysicalDeviceInfo*               physical_device_info,
+                                                         const VulkanPhysicalDeviceInfo*         physical_device_info,
                                                          VkDevice                                device,
                                                          VulkanResourceAllocator*                allocator,
                                                          const VkPhysicalDeviceMemoryProperties& memory_properties) :
@@ -60,7 +60,7 @@ void VulkanInternalBufferManager::AddEntry(
     }
 }
 
-void VulkanInternalBufferManager::SetBufferInfo(BufferInfo* buffer_info)
+void VulkanInternalBufferManager::SetBufferInfo(VulkanBufferInfo* buffer_info)
 {
     auto existing_buffer = std::find_if(buffers_.begin(), buffers_.end(), [&](const auto& entry) {
         return entry->info_.handle == buffer_info->handle;
@@ -125,9 +125,11 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     graphics::FindMemoryTypeIndex(
         physical_device_memory_properties_, requirements.memoryTypeBits, desired_flags, &mem_type_index, &found_flags);
 
-    VkMemoryAllocateInfo allocate_info{ .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                        .allocationSize  = requirements.size,
-                                        .memoryTypeIndex = mem_type_index };
+    VkMemoryAllocateInfo allocate_info;
+    allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext           = nullptr;
+    allocate_info.allocationSize  = requirements.size;
+    allocate_info.memoryTypeIndex = mem_type_index;
 
     VkDeviceMemory                      memory{};
     VulkanResourceAllocator::MemoryData memory_allocator_data{};
@@ -137,10 +139,12 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
     std::unique_ptr<BufferInfoWrapper> entry =
-        std::make_unique<BufferInfoWrapper>(BufferInfo(), allocator_, physical_device_info_);
-    entry->info_.allocator_data = buffer_allocator_data;
-    entry->info_.replay_address = GetBufferDeviceAddress(buffer);
-    entry->info_.handle         = buffer;
+        std::make_unique<BufferInfoWrapper>(VulkanBufferInfo(), allocator_, physical_device_info_);
+    entry->info_.allocator_data        = buffer_allocator_data;
+    entry->info_.replay_address        = GetBufferDeviceAddress(buffer);
+    entry->info_.handle                = buffer;
+    entry->memory_info_.handle         = memory;
+    entry->memory_info_.allocator_data = memory_allocator_data;
 
     return entry;
 }

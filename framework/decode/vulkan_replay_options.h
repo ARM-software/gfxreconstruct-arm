@@ -57,32 +57,24 @@ static constexpr int kUnspecifiedColorAttachment = -1;
 struct VulkanReplayOptions : public ReplayOptions
 {
     bool                         enable_vulkan{ true };
-    bool                         skip_failed_allocations{ false };
     bool                         omit_pipeline_cache_data{ false };
     bool                         remove_unsupported_features{ false };
     bool                         disable_subpass_fusion{ false };
-    bool                         virtual_swapchain_skip_blit{ false };
     bool                         use_ext_frame_boundary{ false };
     bool                         use_colorspace_fallback{ false };
     bool                         offscreen_swapchain_frame_boundary{ false };
     util::SwapchainOption        swapchain_option{ util::SwapchainOption::kVirtual };
+    bool                         virtual_swapchain_skip_blit{ false };
     int32_t                      override_gpu_group_index{ -1 };
     int32_t                      surface_index{ -1 };
     CreateResourceAllocator      create_resource_allocator;
-    util::ScreenshotFormat       screenshot_format{ util::ScreenshotFormat::kBmp };
-    std::vector<ScreenshotRange> screenshot_ranges;
-    std::string                  screenshot_dir;
-    std::string                  screenshot_file_prefix{ kDefaultScreenshotFilePrefix };
     uint32_t                     screenshot_width, screenshot_height;
     float                        screenshot_scale;
-    std::string                  replace_dir;
-    bool                         preload_measurement_range{ false };
-    bool                         wait_before_present{ false };
+    std::string                  replace_shader_dir;
     SkipGetFenceStatus           skip_get_fence_status{ SkipGetFenceStatus::NoSkip };
     std::vector<util::UintRange> skip_get_fence_ranges;
-    std::string                  load_pipeline_cache_filename;
-    std::string                  save_pipeline_cache_filename;
-    bool                         add_new_pipeline_caches;
+    bool                         wait_before_present{ false };
+
     // Dumping resources related configurable replay options
     std::vector<uint64_t>                           BeginCommandBuffer_Indices;
     std::vector<std::vector<uint64_t>>              Draw_Indices;
@@ -91,7 +83,6 @@ struct VulkanReplayOptions : public ReplayOptions
     std::vector<std::vector<uint64_t>>              TraceRays_Indices;
     std::unordered_set<uint64_t>                    QueueSubmit_Indices;
     std::string                                     dump_resources;
-    std::string                                     dump_resources_output_dir;
     util::ScreenshotFormat                          dump_resources_image_format{ util::ScreenshotFormat::kBmp };
 
     // Flag to quickly check whether the feature is enabled or not
@@ -104,8 +95,16 @@ struct VulkanReplayOptions : public ReplayOptions
     bool  dump_resources_json_per_command{ false };
     bool  dump_resources_dump_immutable_resources{ false };
     bool  dump_resources_dump_all_image_subresources{ false };
+    bool  dump_resources_dump_raw_images{ false };
+    bool  dump_resources_dump_separate_alpha{ false };
 
     std::vector<std::string> marking_layers_names;
+
+    bool preload_measurement_range{ false };
+
+    std::string load_pipeline_cache_filename;
+    std::string save_pipeline_cache_filename;
+    bool        add_new_pipeline_caches;
 };
 
 GFXRECON_END_NAMESPACE(decode)

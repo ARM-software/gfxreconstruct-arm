@@ -32,7 +32,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 FileTransformer::FileTransformer() :
-    file_header_{}, input_file_(nullptr), output_file_(nullptr), bytes_read_(0), bytes_written_(0),
+    input_file_(nullptr), output_file_(nullptr), bytes_read_(0), bytes_written_(0),
     error_state_(kErrorInvalidFileDescriptor), loading_state_(false)
 {}
 
@@ -49,8 +49,14 @@ FileTransformer::~FileTransformer()
     }
 }
 
-bool FileTransformer::Initialize(const std::string& input_filename, const std::string& output_filename)
+bool FileTransformer::Initialize(const std::string& input_filename,
+                                 const std::string& output_filename,
+                                 const std::string& tool)
 {
+    input_filename_  = input_filename;
+    output_filename_ = output_filename;
+    tool_            = tool;
+
     bool success = false;
 
     int32_t result = util::platform::FileOpen(&input_file_, input_filename.c_str(), "rb");
@@ -97,10 +103,42 @@ bool FileTransformer::Initialize(const std::string& input_filename, const std::s
     return success;
 }
 
+bool FileTransformer::Initialize(const std::string& input_filename, const std::string& output_filename)
+{
+    return Initialize(input_filename, output_filename, "");
+}
+
 // Returns false if processing failed.  Use GetErrorState() to determine error condition for failure case.
 bool FileTransformer::Process()
 {
     bool success = true;
+
+    const char*  label        = format::kAnnotationLabelTransformer;
+    const size_t label_length = util::platform::StringLength(label);
+
+    if (!tool_.empty())
+    {
+        std::string data = "";
+        data += "{\n";
+        data += "  \"input\": " + input_filename_ + ",\n";
+        data += "  \"output\": " + output_filename_ + ",\n";
+        data += "  \"tool\": " + tool_ + "\n";
+        data += "}";
+        const size_t data_length = data.size();
+
+        format::AnnotationHeader annotation;
+        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+        annotation.block_header.type = format::BlockType::kAnnotation;
+        annotation.annotation_type   = format::kJson;
+        annotation.label_length      = label_length;
+        annotation.data_length       = data_length;
+        if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
+            !WriteBytes(data.c_str(), data_length))
+        {
+            HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write transformer annotation");
+            return false;
+        }
+    }
 
     block_index_ = 0;
     while (success)
@@ -131,17 +169,18 @@ bool FileTransformer::Process()
 
 bool FileTransformer::ProcessFileHeader()
 {
-    bool success = false;
+    bool               success = false;
+    format::FileHeader file_header{};
 
-    if (ReadBytes(&file_header_, sizeof(file_header_)))
+    if (ReadBytes(&file_header, sizeof(file_header)))
     {
-        success = format::ValidateFileHeader(file_header_);
+        success = format::ValidateFileHeader(file_header);
 
         if (success)
         {
-            file_options_.resize(file_header_.num_options);
+            file_options_.resize(file_header.num_options);
 
-            size_t option_data_size = file_header_.num_options * sizeof(format::FileOptionPair);
+            size_t option_data_size = file_header.num_options * sizeof(format::FileOptionPair);
 
             success = ReadBytes(file_options_.data(), option_data_size);
 
@@ -166,7 +205,7 @@ bool FileTransformer::ProcessFileHeader()
             if (success)
             {
                 // Write header to output file.
-                success = WriteFileHeader(file_header_, file_options_);
+                success = WriteFileHeader(file_header, file_options_);
             }
         }
         else
@@ -397,16 +436,22 @@ bool FileTransformer::ReadCompressedParameterBuffer(size_t  compressed_buffer_si
 
 bool FileTransformer::ReadBytes(void* buffer, size_t buffer_size)
 {
-    size_t bytes_read = util::platform::FileRead(buffer, 1, buffer_size, input_file_);
-    bytes_read_ += bytes_read;
-    return (bytes_read == buffer_size);
+    if (util::platform::FileRead(buffer, buffer_size, input_file_))
+    {
+        bytes_read_ += buffer_size;
+        return true;
+    }
+    return false;
 }
 
 bool FileTransformer::WriteBytes(const void* buffer, size_t buffer_size)
 {
-    size_t bytes_written = util::platform::FileWrite(buffer, 1, buffer_size, output_file_);
-    bytes_written_ += bytes_written;
-    return (bytes_written == buffer_size);
+    if (util::platform::FileWrite(buffer, buffer_size, output_file_))
+    {
+        bytes_written_ += buffer_size;
+        return true;
+    }
+    return false;
 }
 
 bool FileTransformer::SkipBytes(uint64_t skip_size)

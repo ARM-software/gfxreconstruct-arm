@@ -64,6 +64,7 @@ const char kLogLevelArgument[]                   = "--log-level";
 const char kLogFileArgument[]                    = "--log-file";
 const char kLogDebugView[]                       = "--log-debugview";
 const char kNoDebugPopup[]                       = "--no-debug-popup";
+const char kCpuMaskArgument[]                    = "--cpu-mask";
 const char kOverrideGpuArgument[]                = "--gpu";
 const char kOverrideGpuGroupArgument[]           = "--gpu-group";
 const char kPausedOption[]                       = "--paused";
@@ -104,6 +105,7 @@ const char kOutput[]                             = "--output";
 const char kMeasurementRangeArgument[]           = "--measurement-frame-range";
 const char kMeasurementFileArgument[]            = "--measurement-file";
 const char kQuitAfterMeasurementRangeOption[]    = "--quit-after-measurement-range";
+const char kQuitAfterFrameArgument[]             = "--quit-after-frame";
 const char kFlushMeasurementRangeOption[]        = "--flush-measurement-range";
 const char kFlushInsideMeasurementRangeOption[]  = "--flush-inside-measurement-range";
 const char kSwapchainOption[]                    = "--swapchain";
@@ -111,20 +113,19 @@ const char kEnableUseCapturedSwapchainIndices[] =
     "--use-captured-swapchain-indices"; // The same: util::SwapchainOption::kCaptured
 const char kVirtualSwapchainSkipBlitShortOption[] = "--vssb";
 const char kVirtualSwapchainSkipBlitLongOption[]  = "--virtual-swapchain-skip-blit";
+const char kColorspaceFallback[]                  = "--use-colorspace-fallback";
 const char kUseExtFrameBoundaryOption[]           = "--use-ext-frame-boundary";
 const char kOffscreenSwapchainFrameBoundary[]     = "--offscreen-swapchain-frame-boundary";
-const char kColorspaceFallback[]                  = "--use-colorspace-fallback";
 const char kFormatArgument[]                      = "--format";
 const char kIncludeBinariesOption[]               = "--include-binaries";
 const char kExpandFlagsOption[]                   = "--expand-flags";
 const char kFilePerFrameOption[]                  = "--file-per-frame";
+const char kSkipGetFenceStatusShortArgument[]     = "--sgfs";
+const char kSkipGetFenceRangesShortArgument[]     = "--sgfr";
 const char kSkipGetFenceStatus[]                  = "--skip-get-fence-status";
 const char kSkipGetFenceRanges[]                  = "--skip-get-fence-ranges";
 const char kFrameRange[]                          = "--frame-range";
 const char kDisableSubpassFusionOption[]          = "--dsf";
-const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
-const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
-const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
 const char kMarkingLayersArgument[]               = "--marking-layers";
 const char kWaitBeforePresent[]                   = "--wait-before-present";
 const char kPrintBlockInfoAllOption[]             = "--pbi-all";
@@ -133,10 +134,9 @@ const char kNumPipelineCreationJobs[]             = "--pipeline-creation-jobs";
 const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
 const char kTriggerScriptNameArgument[]           = "--trigger-script-path";
 const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
-const char kSkipGetFenceStatusShortArgument[]     = "--sgfs";
-const char kSkipGetFenceStatusLongArgument[]      = "--skip-get-fence-status";
-const char kSkipGetFenceRangesShortArgument[]     = "--sgfr";
-const char kSkipGetFenceRangesLongArgument[]      = "--skip-get-fence-ranges";
+const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
+const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
+const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -154,6 +154,9 @@ const char kDumpResourcesDumpVertexIndexBuffers[] = "--dump-resources-dump-verte
 const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-output-per-command";
 const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
 const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
+const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
+const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
+const char kVerboseOption[]                       = "--verbose";
 
 enum class WsiPlatform
 {
@@ -433,6 +436,12 @@ static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
         case WsiPlatform::kHeadless:
         {
             return VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME;
+        }
+#endif
+#if defined(VK_USE_PLATFORM_DISPLAY_KHR)
+        case WsiPlatform::kDisplay:
+        {
+            return VK_KHR_DISPLAY_EXTENSION_NAME;
         }
 #endif
         default:
@@ -729,6 +738,25 @@ static std::string GetTriggerScriptName(const gfxrecon::util::ArgumentParser& ar
     return arg_parser.GetArgumentValue(kTriggerScriptNameArgument);
 }
 
+static bool GetQuitAfterFrame(const gfxrecon::util::ArgumentParser& arg_parser, uint32_t& quit_frame)
+{
+    const std::string& value = arg_parser.GetArgumentValue(kQuitAfterFrameArgument);
+    if (!value.empty())
+    {
+        if (std::count_if(value.begin(), value.end(), ::isdigit) != value.length())
+        {
+            GFXRECON_LOG_WARNING("Ignoring invalid quit after frame \"%s\", which contains non-numeric values",
+                                 value.c_str());
+            return false;
+        }
+
+        quit_frame = std::stoi(value);
+        return true;
+    }
+
+    return false;
+}
+
 static void
 GetMeasurementFrameRange(const gfxrecon::util::ArgumentParser& arg_parser, uint32_t& start_frame, uint32_t& end_frame)
 {
@@ -782,6 +810,7 @@ GetMeasurementFrameRange(const gfxrecon::util::ArgumentParser& arg_parser, uint3
         }
     }
 }
+
 static gfxrecon::decode::CreateResourceAllocator
 GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           arg_parser,
                                const std::string&                              filename,
@@ -960,10 +989,29 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
         options.num_pipeline_creation_jobs = std::stoi(arg_parser.GetArgumentValue(kNumPipelineCreationJobs));
     }
 
+    options.cpu_mask = arg_parser.GetArgumentValue(kCpuMaskArgument);
+    if (!options.cpu_mask.empty())
+    {
+        if (gfxrecon::util::platform::SetCpuAffinity(options.cpu_mask))
+        {
+            GFXRECON_LOG_INFO("CPU mask successfully set: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to set CPU mask: %s", options.cpu_mask.c_str());
+            GFXRECON_LOG_ERROR("Resuming with CPU mask: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
+    }
+
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);
     if (!override_gpu.empty())
     {
         options.override_gpu_index = std::stoi(override_gpu);
+    }
+
+    if (arg_parser.IsArgumentSet(kQuitAfterFrameArgument))
+    {
+        options.quit_after_frame = true;
     }
 
     IsForceWindowed(options, arg_parser);
@@ -1064,7 +1112,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.virtual_swapchain_skip_blit = true;
     }
 
-    replay_options.replace_dir = arg_parser.GetArgumentValue(kShaderReplaceArgument);
+    replay_options.replace_shader_dir = arg_parser.GetArgumentValue(kShaderReplaceArgument);
     replay_options.create_resource_allocator =
         GetCreateResourceAllocatorFunc(arg_parser, filename, replay_options, tracked_object_info_table);
 
@@ -1104,7 +1152,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     std::string skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatusShortArgument);
     if (skip_get_fence_status.empty())
     {
-        skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatusLongArgument);
+        skip_get_fence_status = arg_parser.GetArgumentValue(kSkipGetFenceStatus);
     }
 
     if (!skip_get_fence_status.empty())
@@ -1129,11 +1177,11 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.skip_get_fence_ranges =
             gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRangesShortArgument);
     }
-    else if (arg_parser.IsArgumentSet(kSkipGetFenceRangesLongArgument))
+    else if (arg_parser.IsArgumentSet(kSkipGetFenceRanges))
     {
-        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRangesLongArgument);
+        const std::string& skip_get_fence_ranges = arg_parser.GetArgumentValue(kSkipGetFenceRanges);
         replay_options.skip_get_fence_ranges =
-            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRangesLongArgument);
+            gfxrecon::util::GetUintRanges(skip_get_fence_ranges.c_str(), kSkipGetFenceRanges);
     }
     else
     {
@@ -1172,12 +1220,18 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         arg_parser.IsOptionSet(kDumpResourcesDumpImmutableResources);
     replay_options.dump_resources_dump_all_image_subresources =
         arg_parser.IsOptionSet(kDumpResourcesDumpImageSubresources);
+    replay_options.dump_resources_dump_raw_images     = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
+    replay_options.dump_resources_dump_separate_alpha = arg_parser.IsOptionSet(kDumpResourcesDumpSeparateAlpha);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())
     {
         replay_options.dump_resources_color_attachment_index = std::stoi(dr_color_att_idx);
     }
+
+    replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
+    replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
+    replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
 
     return replay_options;
 }
@@ -1214,21 +1268,23 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
     }
 
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
-    if (!dump_resources.empty())
+    if (!dump_resources.empty() && dump_resources.find_first_not_of("0123456789,") == std::string::npos)
     {
-        // If the option parameter does not split into three comma separated values, consider
-        // it a Vulkan option and ignore it. It it does split into three comma separated values,
+        // If the option parameter does not split into three comma separated numbers, consider
+        // it a Vulkan option and ignore it. If it does split into three comma separated numbers,
         // the arg is for dx12 and should have already been validated in the Vulkan option parsing.
         // In that case, we simply extract and save the values here.
         std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
         if (values.size() == 3)
         {
-            replay_options.dump_resources_target.submit_index   = std::stoi(values[0]);
-            replay_options.dump_resources_target.command_index  = std::stoi(values[1]);
-            replay_options.dump_resources_target.drawcall_index = std::stoi(values[2]);
-            replay_options.enable_dump_resources                = true;
+            replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
+            replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
+            replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
+            replay_options.enable_dump_resources                 = true;
         }
     }
+
+    replay_options.dump_resources_output_dir = GetDumpResourcesDir(arg_parser);
 
     const std::string& memory_usage = arg_parser.GetArgumentValue(kBatchingMemoryUsageArgument);
     if (!memory_usage.empty())
@@ -1294,4 +1350,5 @@ static bool CheckOptionPrintUsage(const char* exe_name, const gfxrecon::util::Ar
 
     return false;
 }
+
 #endif // GFXRECON_PLATFORM_SETTINGS_H

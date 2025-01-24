@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
-** Copyright (c) 2018-2020 LunarG, Inc.
+** Copyright (c) 2018-2024 LunarG, Inc.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -60,6 +60,21 @@ void        ProcessAppCmd(struct android_app* app, int32_t cmd);
 int32_t     ProcessInputEvent(struct android_app* app, AInputEvent* event);
 void        DestroyActivity(struct android_app* app);
 
+static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
+
+extern "C"
+{
+    uint64_t MainGetCurrentBlockIndex()
+    {
+        return file_processor->GetCurrentBlockIndex();
+    }
+
+    bool MainGetLoadingTrimmedState()
+    {
+        return file_processor->GetLoadingTrimmedState();
+    }
+}
+
 void android_main(struct android_app* app)
 {
     gfxrecon::util::Log::Init(gfxrecon::decode::kDefaultLogLevel);
@@ -105,10 +120,9 @@ void android_main(struct android_app* app)
 
         try
         {
-            std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor =
-                arg_parser.IsOptionSet(kPreloadMeasurementRangeOption)
-                    ? std::make_unique<gfxrecon::decode::PreloadFileProcessor>()
-                    : std::make_unique<gfxrecon::decode::FileProcessor>();
+            file_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption)
+                                 ? std::make_unique<gfxrecon::decode::PreloadFileProcessor>()
+                                 : std::make_unique<gfxrecon::decode::FileProcessor>();
 
             if (!file_processor->Initialize(filename))
             {
@@ -136,8 +150,8 @@ void android_main(struct android_app* app)
                     return;
                 }
 
-                gfxrecon::decode::VulkanReplayConsumer replay_consumer(application, replay_options);
-                gfxrecon::decode::VulkanDecoder        decoder;
+                gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
+                gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
                 uint32_t measurement_start_frame;
                 uint32_t measurement_end_frame;
@@ -146,19 +160,33 @@ void android_main(struct android_app* app)
                 std::string measurement_file_name;
                 GetMeasurementFilename(arg_parser, measurement_file_name);
 
+                bool     quit_after_frame = false;
+                uint32_t quit_frame;
+
+                if (replay_options.quit_after_frame)
+                {
+                    quit_after_frame = true;
+                    GetQuitAfterFrame(arg_parser, quit_frame);
+                }
+
                 gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(measurement_start_frame),
                                                      static_cast<uint64_t>(measurement_end_frame),
                                                      replay_options.quit_after_measurement_frame_range,
                                                      replay_options.flush_measurement_frame_range,
                                                      replay_options.flush_inside_measurement_range,
                                                      replay_options.preload_measurement_range,
-                                                     measurement_file_name);
+                                                     measurement_file_name,
+                                                     quit_after_frame,
+                                                     quit_frame);
 
-                replay_consumer.SetFatalErrorHandler([](const char* message) { throw std::runtime_error(message); });
-                replay_consumer.SetFpsInfo(&fps_info);
+                vulkan_replay_consumer.SetFatalErrorHandler(
+                    [](const char* message) { throw std::runtime_error(message); });
+                vulkan_replay_consumer.SetFpsInfo(&fps_info);
 
-                decoder.AddConsumer(&replay_consumer);
-                file_processor->AddDecoder(&decoder);
+                vulkan_decoder.AddConsumer(&vulkan_replay_consumer);
+
+                file_processor->AddDecoder(&vulkan_decoder);
+
                 application->SetPauseFrame(GetPauseFrame(arg_parser));
                 application->SetTriggerScriptName(GetTriggerScriptName(arg_parser));
                 application->SetTriggerScriptFrame(GetTriggerScriptRanges(arg_parser));

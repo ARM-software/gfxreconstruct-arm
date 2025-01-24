@@ -23,7 +23,6 @@
 #ifndef GFXRECON_DECODE_VULKAN_BUFFER_TRACKER_H
 #define GFXRECON_DECODE_VULKAN_BUFFER_TRACKER_H
 
-#include "decode/vulkan_resource_allocator.h"
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/vulkan_object_info_table.h"
 #include "util/defines.h"
@@ -37,23 +36,22 @@ class VulkanBufferTracker
 {
   public:
     VulkanBufferTracker(const encode::VulkanDeviceTable* device_table,
-                        const PhysicalDeviceInfo*        physical_device_info,
-                        VkDevice                         device,
-                        VulkanResourceAllocator*         allocator);
+                        const VulkanPhysicalDeviceInfo*  physical_device_info,
+                        VkDevice                         device);
 
     ~VulkanBufferTracker();
 
-    void SetBufferInfo(BufferInfo* buffer_info);
+    void SetBufferInfo(VulkanBufferInfo* buffer_info);
 
     void UpdateBufferDeviceAddress(VkDeviceAddress& address);
 
-    BufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address);
+    VulkanBufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address);
 
-    BufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address);
+    VulkanBufferInfo* GetBufferByCaptureDeviceAddress(VkDeviceAddress capture_address);
 
     VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
 
-    void OnDestroyBuffer(const BufferInfo* buffer_info);
+    void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
   private:
     void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
@@ -63,11 +61,10 @@ class VulkanBufferTracker
     };
 
   private:
-    Functions                 functions_;
-    VkDevice                  device_;
-    VulkanResourceAllocator*  allocator_;
-    const PhysicalDeviceInfo* physical_device_info_;
-    std::vector<BufferInfo*>  buffers_;
+    Functions                       functions_;
+    VkDevice                        device_;
+    const VulkanPhysicalDeviceInfo* physical_device_info_;
+    std::vector<VulkanBufferInfo*>  buffers_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

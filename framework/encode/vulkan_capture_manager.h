@@ -34,7 +34,6 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_tracker.h"
-#include "encode/vulkan_device_address_tracker.h"
 #include "format/api_call_id.h"
 #include "format/format.h"
 #include "format/platform_types.h"
@@ -43,6 +42,7 @@
 #include "util/defines.h"
 
 #include "vulkan/vulkan.h"
+#include "vulkan/vulkan_core.h"
 
 #include <atomic>
 #include <cassert>
@@ -314,6 +314,9 @@ class VulkanCaptureManager : public ApiCaptureManager
                                     const VkAllocationCallbacks* pAllocator,
                                     VkDeviceMemory*              pMemory);
 
+    void OverrideGetPhysicalDeviceProperties2(VkPhysicalDevice             physicalDevice,
+                                              VkPhysicalDeviceProperties2* pProperties);
+
     VkResult OverrideGetPhysicalDeviceToolPropertiesEXT(VkPhysicalDevice                   physicalDevice,
                                                         uint32_t*                          pToolCount,
                                                         VkPhysicalDeviceToolPropertiesEXT* pToolProperties);
@@ -383,12 +386,20 @@ class VulkanCaptureManager : public ApiCaptureManager
     void OverrideCmdCopyAccelerationStructureKHR(VkCommandBuffer                           command_buffer,
                                                  const VkCopyAccelerationStructureInfoKHR* pInfo);
 
+    void OverrideCmdCopyMicromapEXT(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* pInfo);
+
     void OverrideCmdWriteAccelerationStructuresPropertiesKHR(VkCommandBuffer commandBuffer,
                                                              uint32_t        accelerationStructureCount,
                                                              const VkAccelerationStructureKHR* pAccelerationStructures,
                                                              VkQueryType                       queryType,
                                                              VkQueryPool                       queryPool,
                                                              uint32_t                          firstQuery);
+    void OverrideCmdWriteMicromapsPropertiesEXT(VkCommandBuffer      commandBuffer,
+                                                uint32_t             micromapCount,
+                                                const VkMicromapEXT* pMicromaps,
+                                                VkQueryType          queryType,
+                                                VkQueryPool          queryPool,
+                                                uint32_t             firstQuery);
 
     void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
                                           VkDevice                        device,
@@ -548,13 +559,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                       const VkAllocationCallbacks*    pAllocator,
                                       VkSwapchainKHR*                 pSwapchain);
 
-    void PreProcess_vkCmdPushConstants(VkCommandBuffer    commandBuffer,
-                                       VkPipelineLayout   layout,
-                                       VkShaderStageFlags stageFlags,
-                                       uint32_t           offset,
-                                       uint32_t           size,
-                                       const void*        pValues);
-
     void PostProcess_vkAcquireNextImageKHR(VkResult result,
                                            VkDevice,
                                            VkSwapchainKHR swapchain,
@@ -592,7 +596,10 @@ class VulkanCaptureManager : public ApiCaptureManager
         ProcessFenceSubmit(pAcquireInfo->fence);
     }
 
-    void PostProcess_vkQueuePresentKHR(VkResult result, VkQueue queue, const VkPresentInfoKHR* pPresentInfo)
+    void PostProcess_vkQueuePresentKHR(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                       VkResult                                               result,
+                                       VkQueue                                                queue,
+                                       const VkPresentInfoKHR*                                pPresentInfo)
     {
         if (IsCaptureModeTrack() && ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR)))
         {
@@ -603,7 +610,7 @@ class VulkanCaptureManager : public ApiCaptureManager
                 pPresentInfo->swapchainCount, pPresentInfo->pSwapchains, pPresentInfo->pImageIndices, queue);
         }
 
-        EndFrame();
+        EndFrame(current_lock);
     }
 
     void PostProcess_vkQueueBindSparse(
@@ -643,7 +650,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(buffer);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -665,7 +673,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -688,7 +697,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -710,7 +720,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(image);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -732,7 +743,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -755,7 +767,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -779,7 +792,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(image);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -803,7 +817,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -829,7 +844,8 @@ class VulkanCaptureManager : public ApiCaptureManager
         GFXRECON_UNREFERENCED_PARAMETER(device);
         GFXRECON_UNREFERENCED_PARAMETER(pInfo);
 
-        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard) &&
+        if ((GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd) &&
             GetPageGuardAlignBufferSizes() && (pSparseMemoryRequirements != nullptr))
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -854,7 +870,6 @@ class VulkanCaptureManager : public ApiCaptureManager
         wrapper->bind_offset    = memoryOffset;
         vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
-        memory_wrapper->bound_buffers.insert(wrapper);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
@@ -876,8 +891,8 @@ class VulkanCaptureManager : public ApiCaptureManager
             wrapper->bind_offset = pBindInfos[i].memoryOffset;
             vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
                 vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(pBindInfos[i].memory);
-            memory_wrapper->bound_buffers.insert(wrapper);
         }
+
         if (IsCaptureModeTrack() && (result == VK_SUCCESS) && (pBindInfos != nullptr))
         {
             assert(state_tracker_ != nullptr);
@@ -920,6 +935,16 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
+#ifdef ARM_INTERNAL
+    void PostProcess_vkEndCommandBuffer(VkResult result, VkCommandBuffer commandBuffer)
+    {
+        if (commandBuffer == tail_cmd_buf_)
+        {
+            replace_command_buffer_(tail_cmd_buf_, orig_cmd_buf_);
+        }
+    }
+#endif
+
     void PostProcess_vkCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,
                                           VkSubpassContents)
@@ -949,7 +974,32 @@ class VulkanCaptureManager : public ApiCaptureManager
             assert(state_tracker_ != nullptr);
             state_tracker_->TrackEndRenderPass(commandBuffer);
         }
+#ifdef ARM_INTERNAL
+        SecondReplace(commandBuffer);
+#endif
     }
+#ifdef ARM_INTERNAL
+    void PostProcess_vkBeginCommandBuffer(VkResult,
+                                          VkCommandBuffer                 commandBuffer,
+                                          const VkCommandBufferBeginInfo* pBeginInfo);
+    void PreProcess_vkCmdDispatch(VkCommandBuffer commandBuffer, uint32_t, uint32_t, uint32_t)
+    {
+        FirstReplace(commandBuffer);
+    }
+    void PreProcess_vkCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
+                                         const VkRenderPassBeginInfo* pRenderPassBegin,
+                                         VkSubpassContents)
+    {
+        FirstReplace(commandBuffer);
+    }
+
+    void PostProcess_VkCmdPushConstants(VkCommandBuffer    commandBuffer,
+                                        VkPipelineLayout   layout,
+                                        VkShaderStageFlags stageFlags,
+                                        uint32_t           offset,
+                                        uint32_t           size,
+                                        const void*        pValues);
+#endif
 
     void PostProcess_vkCmdEndRenderPass2(VkCommandBuffer commandBuffer, const VkSubpassEndInfoKHR*)
     {
@@ -1017,10 +1067,14 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void
-    PostProcess_vkQueueSubmit(VkResult result, VkQueue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence)
+    void PostProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                   VkResult                                               result,
+                                   VkQueue                                                queue,
+                                   uint32_t                                               submitCount,
+                                   const VkSubmitInfo*                                    pSubmits,
+                                   VkFence)
     {
-        PostQueueSubmit();
+        PostQueueSubmit(current_lock);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
@@ -1036,30 +1090,46 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                           pSubmits[i].pSignalSemaphores);
             }
         }
+#ifdef ARM_INTERNAL
+        bool submmited = false;
+#endif
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
-            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
             {
                 break;
             }
 
             for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; ++j)
             {
+#ifdef ARM_INTERNAL
+                submmited |= (pSubmits[i].pCommandBuffers[j] == orig_cmd_buf_);
+#endif
                 auto cmd_buffer_wrapper =
                     vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(pSubmits[i].pCommandBuffers[j]);
-                if (CheckCommandBufferWrapperForFrameBoundary(cmd_buffer_wrapper))
+                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
                 {
                     break;
                 }
             }
         }
+#ifdef ARM_INTERNAL
+        if (common_manager_->render_pass_slice_enabled_ && submmited)
+        {
+            SubmitTargetCommandBuffer(current_lock, queue);
+        }
+#endif
     }
 
-    void PostProcess_vkQueueSubmit2(
-        VkResult result, VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence)
+    void PostProcess_vkQueueSubmit2(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                    VkResult                                               result,
+                                    VkQueue                                                queue,
+                                    uint32_t                                               submitCount,
+                                    const VkSubmitInfo2*                                   pSubmits,
+                                    VkFence                                                fence)
     {
-        PostQueueSubmit();
+        PostQueueSubmit(current_lock);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
@@ -1079,7 +1149,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
         for (uint32_t i = 0; i < submitCount; ++i)
         {
-            if (CheckPNextChainForFrameBoundary(reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
             {
                 break;
             }
@@ -1088,7 +1158,8 @@ class VulkanCaptureManager : public ApiCaptureManager
             {
                 auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
                     pSubmits[i].pCommandBufferInfos[j].commandBuffer);
-                if (CheckCommandBufferWrapperForFrameBoundary(cmd_buffer_wrapper))
+
+                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
                 {
                     break;
                 }
@@ -1308,23 +1379,33 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     void PostProcess_vkFreeMemory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks* pAllocator);
 
-    void PreProcess_vkQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+    void PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                  VkQueue                                                queue,
+                                  uint32_t                                               submitCount,
+                                  const VkSubmitInfo*                                    pSubmits,
+                                  VkFence                                                fence);
 
-    void PreProcess_vkQueueSubmit2(VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+    void PreProcess_vkQueueSubmit2(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                   VkQueue                                                queue,
+                                   uint32_t                                               submitCount,
+                                   const VkSubmitInfo2*                                   pSubmits,
+                                   VkFence                                                fence);
 
-    void PreProcess_vkCreateDescriptorUpdateTemplate(VkResult                                    result,
-                                                     VkDevice                                    device,
-                                                     const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
-                                                     const VkAllocationCallbacks*                pAllocator,
-                                                     VkDescriptorUpdateTemplate* pDescriptorUpdateTemplate);
+    void PostProcess_vkCreateDescriptorUpdateTemplate(VkResult                                    result,
+                                                      VkDevice                                    device,
+                                                      const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
+                                                      const VkAllocationCallbacks*                pAllocator,
+                                                      VkDescriptorUpdateTemplate* pDescriptorUpdateTemplate);
 
-    void PreProcess_vkCreateDescriptorUpdateTemplateKHR(VkResult                                    result,
-                                                        VkDevice                                    device,
-                                                        const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
-                                                        const VkAllocationCallbacks*                pAllocator,
-                                                        VkDescriptorUpdateTemplate* pDescriptorUpdateTemplate);
+    void PostProcess_vkCreateDescriptorUpdateTemplateKHR(VkResult                                    result,
+                                                         VkDevice                                    device,
+                                                         const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
+                                                         const VkAllocationCallbacks*                pAllocator,
+                                                         VkDescriptorUpdateTemplate* pDescriptorUpdateTemplate);
 
-    void PreProcess_vkGetBufferDeviceAddress(VkDevice device, const VkBufferDeviceAddressInfo* pInfo);
+    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress                  address,
+                                              VkDevice                         device,
+                                              const VkBufferDeviceAddressInfo* pInfo);
 
     void PreProcess_vkGetBufferOpaqueCaptureAddress(VkDevice device, const VkBufferDeviceAddressInfo* pInfo);
 
@@ -1337,8 +1418,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     void PostProcess_vkGetAccelerationStructureDeviceAddressKHR(
         VkDeviceAddress result, VkDevice device, const VkAccelerationStructureDeviceAddressInfoKHR* pInfo)
     {
-        auto id = GetWrappedId<AccelerationStructureKHRWrapper>(pInfo->accelerationStructure);
-        address_tracker.TrackAccelerationStructureDeviceAddress(id, result);
+        auto wrapper = GetWrapper<AccelerationStructureKHRWrapper>(pInfo->accelerationStructure);
     }
 
     void PreProcess_vkGetRayTracingShaderGroupHandlesKHR(
@@ -1370,8 +1450,6 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     void PostProcess_vkCmdDebugMarkerInsertEXT(VkCommandBuffer                   commandBuffer,
                                                const VkDebugMarkerMarkerInfoEXT* pMarkerInfo);
-
-    void PostProcess_vkSetDebugUtilsObjectNameEXT(VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
 
     void PostProcess_vkCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
                                                    const VkDebugUtilsLabelEXT* pLabelInfo);
@@ -1431,12 +1509,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                         const VkRenderPassCreateInfo* pCreateInfo,
                                         const VkAllocationCallbacks*  pAllocator,
                                         VkRenderPass*                 pRenderPass);
-    void PostProcess_vkCreateGraphicsPipelines(VkDevice                            device,
-                                               VkPipelineCache                     pipelineCache,
-                                               uint32_t                            createInfoCount,
-                                               const VkGraphicsPipelineCreateInfo* pCreateInfos,
-                                               const VkAllocationCallbacks*        pAllocator,
-                                               VkPipeline*                         pPipelines);
     void PostProcess_vkCreateDescriptorSetLayout(VkDevice                               device,
                                                  const VkDescriptorSetLayoutCreateInfo* pCreateInfo,
                                                  const VkAllocationCallbacks*           pAllocator,
@@ -1461,22 +1533,12 @@ class VulkanCaptureManager : public ApiCaptureManager
                                          const VkAllocationCallbacks*   pAllocator,
                                          VkCommandPool*                 pCommandPool);
 
-    void PostProcess_vkFrameBoundaryANDROID(VkDevice device, VkSemaphore semaphore, VkImage image)
+    void PostProcess_vkFrameBoundaryANDROID(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                            VkDevice                                               device,
+                                            VkSemaphore                                            semaphore,
+                                            VkImage                                                image)
     {
-        EndFrame();
-    }
-
-    void PostProcess_vkGetBufferDeviceAddress(VkDeviceAddress address, const VkBufferDeviceAddressInfo* pInfo)
-    {
-        if (address != 0)
-        {
-            BufferWrapper* wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pInfo->buffer);
-            address_tracker.TrackBufferDeviceAddress(wrapper->handle_id, wrapper->created_size, address);
-            if (IsCaptureModeTrack())
-            {
-                state_tracker_->TrackGetBufferDeviceAddress(address, pInfo);
-            }
-        }
+        EndFrame(current_lock);
     }
 
     void PostProcess_vkCreateShaderModule(VkResult                        result,
@@ -1490,6 +1552,290 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                        VkAccelerationStructureKHR   acceleration_structure,
                                                        const VkAllocationCallbacks* callbacks);
 
+    void PostProcess_vkCmdBindDescriptorSets(VkCommandBuffer        commandBuffer,
+                                             VkPipelineBindPoint    pipelineBindPoint,
+                                             VkPipelineLayout       layout,
+                                             uint32_t               firstSet,
+                                             uint32_t               descriptorSetCount,
+                                             const VkDescriptorSet* pDescriptorSets,
+                                             uint32_t               dynamicOffsetCount,
+                                             const uint32_t*        pDynamicOffsets);
+
+    void PostProcess_vkCmdBindDescriptorSets2KHR(VkCommandBuffer                    commandBuffer,
+                                                 const VkBindDescriptorSetsInfoKHR* pBindDescriptorSetsInfo);
+
+    void PostProcess_vkCmdCopyBuffer(VkCommandBuffer     commandBuffer,
+                                     VkBuffer            srcBuffer,
+                                     VkBuffer            dstBuffer,
+                                     uint32_t            regionCount,
+                                     const VkBufferCopy* pRegions);
+
+    void PostProcess_vkCmdCopyImage(VkCommandBuffer    commandBuffer,
+                                    VkImage            srcImage,
+                                    VkImageLayout      srcImageLayout,
+                                    VkImage            dstImage,
+                                    VkImageLayout      dstImageLayout,
+                                    uint32_t           regionCount,
+                                    const VkImageCopy* pRegions);
+
+    void PostProcess_vkCmdCopyBufferToImage(VkCommandBuffer          commandBuffer,
+                                            VkBuffer                 srcBuffer,
+                                            VkImage                  dstImage,
+                                            VkImageLayout            dstImageLayout,
+                                            uint32_t                 regionCount,
+                                            const VkBufferImageCopy* pRegions);
+
+    void PostProcess_vkCmdCopyImageToBuffer(VkCommandBuffer          commandBuffer,
+                                            VkImage                  srcImage,
+                                            VkImageLayout            srcImageLayout,
+                                            VkBuffer                 dstBuffer,
+                                            uint32_t                 regionCount,
+                                            const VkBufferImageCopy* pRegions);
+
+    void PostProcess_vkCmdCopyBuffer2(VkCommandBuffer commandBuffer, const VkCopyBufferInfo2* pCopyBufferInfo);
+
+    void PostProcess_vkCmdCopyImage2(VkCommandBuffer commandBuffer, const VkCopyImageInfo2* pCopyImageInfo);
+
+    void PostProcess_vkCmdCopyBufferToImage2(VkCommandBuffer                 commandBuffer,
+                                             const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo);
+
+    void PostProcess_vkCmdCopyImageToBuffer2(VkCommandBuffer                 commandBuffer,
+                                             const VkCopyImageToBufferInfo2* pCopyImageToBufferInfo);
+
+    void PostProcess_vkCmdCopyBuffer2KHR(VkCommandBuffer commandBuffer, const VkCopyBufferInfo2* pCopyBufferInfo);
+
+    void PostProcess_vkCmdCopyImage2KHR(VkCommandBuffer commandBuffer, const VkCopyImageInfo2* pCopyImageInfo);
+
+    void PostProcess_vkCmdCopyBufferToImage2KHR(VkCommandBuffer                 commandBuffer,
+                                                const VkCopyBufferToImageInfo2* pCopyBufferToImageInfo);
+
+    void PostProcess_vkCmdCopyImageToBuffer2KHR(VkCommandBuffer                 commandBuffer,
+                                                const VkCopyImageToBufferInfo2* pCopyImageToBufferInfo);
+
+    void PostProcess_vkCmdBlitImage(VkCommandBuffer    commandBuffer,
+                                    VkImage            srcImage,
+                                    VkImageLayout      srcImageLayout,
+                                    VkImage            dstImage,
+                                    VkImageLayout      dstImageLayout,
+                                    uint32_t           regionCount,
+                                    const VkImageBlit* pRegions,
+                                    VkFilter           filter);
+
+    void PostProcess_vkCmdBlitImage2(VkCommandBuffer commandBuffer, const VkBlitImageInfo2* pBlitImageInfo);
+
+    void PostProcess_vkCmdBlitImage2KHR(VkCommandBuffer commandBuffer, const VkBlitImageInfo2* pBlitImageInfo);
+
+    void PostProcess_vkCmdUpdateBuffer(VkCommandBuffer commandBuffer,
+                                       VkBuffer        dstBuffer,
+                                       VkDeviceSize    dstOffset,
+                                       VkDeviceSize    dataSize,
+                                       const void*     pData);
+
+    void PostProcess_vkCmdFillBuffer(
+        VkCommandBuffer commandBuffer, VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize size, uint32_t data);
+
+    void PostProcess_vkCmdClearColorImage(VkCommandBuffer                commandBuffer,
+                                          VkImage                        image,
+                                          VkImageLayout                  imageLayout,
+                                          const VkClearColorValue*       pColor,
+                                          uint32_t                       rangeCount,
+                                          const VkImageSubresourceRange* pRanges);
+
+    void PostProcess_vkCmdClearDepthStencilImage(VkCommandBuffer                 commandBuffer,
+                                                 VkImage                         image,
+                                                 VkImageLayout                   imageLayout,
+                                                 const VkClearDepthStencilValue* pDepthStencil,
+                                                 uint32_t                        rangeCount,
+                                                 const VkImageSubresourceRange*  pRanges);
+
+    void PostProcess_vkCmdBindPipeline(VkCommandBuffer     commandBuffer,
+                                       VkPipelineBindPoint pipelineBindPoint,
+                                       VkPipeline          pipeline);
+
+    void PostProcess_vkCreateGraphicsPipelines(VkResult                            result,
+                                               VkDevice                            device,
+                                               VkPipelineCache                     pipelineCache,
+                                               uint32_t                            createInfoCount,
+                                               const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                               const VkAllocationCallbacks*        pAllocator,
+                                               VkPipeline*                         pPipelines);
+
+    void PostProcess_vkCreateComputePipelines(VkResult                           result,
+                                              VkDevice                           device,
+                                              VkPipelineCache                    pipelineCache,
+                                              uint32_t                           createInfoCount,
+                                              const VkComputePipelineCreateInfo* pCreateInfos,
+                                              const VkAllocationCallbacks*       pAllocator,
+                                              VkPipeline*                        pPipelines);
+
+    void PostProcess_vkCreateRayTracingPipelinesKHR(VkResult                                 result,
+                                                    VkDevice                                 device,
+                                                    VkDeferredOperationKHR                   deferredOperation,
+                                                    VkPipelineCache                          pipelineCache,
+                                                    uint32_t                                 createInfoCount,
+                                                    const VkRayTracingPipelineCreateInfoKHR* pCreateInfos,
+                                                    const VkAllocationCallbacks*             pAllocator,
+                                                    VkPipeline*                              pPipelines);
+
+    void PostProcess_vkCmdDraw(VkCommandBuffer commandBuffer,
+                               uint32_t        vertexCount,
+                               uint32_t        instanceCount,
+                               uint32_t        firstVertex,
+                               uint32_t        firstInstance);
+
+    void PostProcess_vkCmdDrawIndexed(VkCommandBuffer commandBuffer,
+                                      uint32_t        indexCount,
+                                      uint32_t        instanceCount,
+                                      uint32_t        firstIndex,
+                                      int32_t         vertexOffset,
+                                      uint32_t        firstInstance);
+
+    void PostProcess_vkCmdDrawIndirect(
+        VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void PostProcess_vkCmdDrawIndexedIndirect(
+        VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void PostProcess_vkCmdDrawIndirectCount(VkCommandBuffer commandBuffer,
+                                            VkBuffer        buffer,
+                                            VkDeviceSize    offset,
+                                            VkBuffer        countBuffer,
+                                            VkDeviceSize    countBufferOffset,
+                                            uint32_t        maxDrawCount,
+                                            uint32_t        stride);
+
+    void PostProcess_vkCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer,
+                                                   VkBuffer        buffer,
+                                                   VkDeviceSize    offset,
+                                                   VkBuffer        countBuffer,
+                                                   VkDeviceSize    countBufferOffset,
+                                                   uint32_t        maxDrawCount,
+                                                   uint32_t        stride);
+
+    void PostProcess_vkCmdDrawIndirectCountKHR(VkCommandBuffer commandBuffer,
+                                               VkBuffer        buffer,
+                                               VkDeviceSize    offset,
+                                               VkBuffer        countBuffer,
+                                               VkDeviceSize    countBufferOffset,
+                                               uint32_t        maxDrawCount,
+                                               uint32_t        stride);
+
+    void PostProcess_vkCmdDrawIndexedIndirectCountKHR(VkCommandBuffer commandBuffer,
+                                                      VkBuffer        buffer,
+                                                      VkDeviceSize    offset,
+                                                      VkBuffer        countBuffer,
+                                                      VkDeviceSize    countBufferOffset,
+                                                      uint32_t        maxDrawCount,
+                                                      uint32_t        stride);
+
+    void PostProcess_vkCmdDispatch(VkCommandBuffer commandBuffer,
+                                   uint32_t        groupCountX,
+                                   uint32_t        groupCountY,
+                                   uint32_t        groupCountZ);
+
+    void PostProcess_vkCmdDispatchIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset);
+
+    void PostProcess_vkCmdDispatchBase(VkCommandBuffer commandBuffer,
+                                       uint32_t        baseGroupX,
+                                       uint32_t        baseGroupY,
+                                       uint32_t        baseGroupZ,
+                                       uint32_t        groupCountX,
+                                       uint32_t        groupCountY,
+                                       uint32_t        groupCountZ);
+
+    void PostProcess_vkCmdDispatchBaseKHR(VkCommandBuffer commandBuffer,
+                                          uint32_t        baseGroupX,
+                                          uint32_t        baseGroupY,
+                                          uint32_t        baseGroupZ,
+                                          uint32_t        groupCountX,
+                                          uint32_t        groupCountY,
+                                          uint32_t        groupCountZ);
+
+    void PostProcess_vkCmdTraceRaysNV(VkCommandBuffer commandBuffer,
+                                      VkBuffer        raygenShaderBindingTableBuffer,
+                                      VkDeviceSize    raygenShaderBindingOffset,
+                                      VkBuffer        missShaderBindingTableBuffer,
+                                      VkDeviceSize    missShaderBindingOffset,
+                                      VkDeviceSize    missShaderBindingStride,
+                                      VkBuffer        hitShaderBindingTableBuffer,
+                                      VkDeviceSize    hitShaderBindingOffset,
+                                      VkDeviceSize    hitShaderBindingStride,
+                                      VkBuffer        callableShaderBindingTableBuffer,
+                                      VkDeviceSize    callableShaderBindingOffset,
+                                      VkDeviceSize    callableShaderBindingStride,
+                                      uint32_t        width,
+                                      uint32_t        height,
+                                      uint32_t        depth);
+
+    void PostProcess_vkCmdTraceRaysKHR(VkCommandBuffer                        commandBuffer,
+                                       const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+                                       const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+                                       const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+                                       const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+                                       uint32_t                               width,
+                                       uint32_t                               height,
+                                       uint32_t                               depth);
+
+    void PostProcess_vkCmdTraceRaysIndirectKHR(VkCommandBuffer                        commandBuffer,
+                                               const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+                                               const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+                                               const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+                                               const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+                                               VkDeviceAddress                        indirectDeviceAddress);
+
+    void PostProcess_vkCmdTraceRaysIndirect2KHR(VkCommandBuffer commandBuffer, VkDeviceAddress indirectDeviceAddress);
+
+    void PostProcess_vkCmdResolveImage(VkCommandBuffer       commandBuffer,
+                                       VkImage               srcImage,
+                                       VkImageLayout         srcImageLayout,
+                                       VkImage               dstImage,
+                                       VkImageLayout         dstImageLayout,
+                                       uint32_t              regionCount,
+                                       const VkImageResolve* pRegions);
+
+    void PostProcess_vkCmdResolveImage2(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo);
+
+    void PostProcess_vkCmdResolveImage2KHR(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo);
+
+    void PostProcess_vkCmdDrawMeshTasksNV(VkCommandBuffer commandBuffer, uint32_t taskCount, uint32_t firstTask);
+
+    void PostProcess_vkCmdDrawMeshTasksIndirectNV(
+        VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void PostProcess_vkCmdDrawMeshTasksIndirectCountNV(VkCommandBuffer commandBuffer,
+                                                       VkBuffer        buffer,
+                                                       VkDeviceSize    offset,
+                                                       VkBuffer        countBuffer,
+                                                       VkDeviceSize    countBufferOffset,
+                                                       uint32_t        maxDrawCount,
+                                                       uint32_t        stride);
+
+    void PostProcess_vkCmdDrawMeshTasksEXT(VkCommandBuffer commandBuffer,
+                                           uint32_t        groupCountX,
+                                           uint32_t        groupCountY,
+                                           uint32_t        groupCountZ);
+
+    void PostProcess_vkCmdDrawMeshTasksIndirectEXT(
+        VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void PostProcess_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer commandBuffer,
+                                                        VkBuffer        buffer,
+                                                        VkDeviceSize    offset,
+                                                        VkBuffer        countBuffer,
+                                                        VkDeviceSize    countBufferOffset,
+                                                        uint32_t        maxDrawCount,
+                                                        uint32_t        stride);
+
+    void PostProcess_vkCmdBeginRendering(VkCommandBuffer commandBuffer, const VkRenderingInfo* pRenderingInfo);
+
+    void PostProcess_vkSetDebugUtilsObjectNameEXT(VkResult                             result,
+                                                  VkDevice                             device,
+                                                  const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+
+    void PostProcess_vkSetDebugUtilsObjectTagEXT(VkResult                            result,
+                                                 VkDevice                            device,
+                                                 const VkDebugUtilsObjectTagInfoEXT* pTagInfo);
+
 #if defined(__ANDROID__)
     void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
 #endif
@@ -1498,12 +1844,6 @@ class VulkanCaptureManager : public ApiCaptureManager
         std::lock_guard<std::mutex> lock(mapped_memory_lock_);
         return memories[id];
     }
-
-    void PreProcess_vkCmdUpdateBuffer(VkCommandBuffer commandBuffer,
-                                      VkBuffer        dstBuffer,
-                                      VkDeviceSize    dstOffset,
-                                      VkDeviceSize    dataSize,
-                                      const void*     pData);
 
   protected:
     VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
@@ -1519,6 +1859,15 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     virtual void WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id) override;
 
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                format::ThreadId        thread_id,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name) override;
+
+    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
+                             const std::string*      asset_file_name,
+                             format::ThreadId        thread_id) override;
+
   private:
     struct HardwareBufferInfo
     {
@@ -1533,9 +1882,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                uint32_t                      width,
                                uint32_t                      height,
                                VkSurfaceTransformFlagBitsKHR pre_transform);
-    void WriteCreateHardwareBufferCmd(format::HandleId                                    memory_id,
-                                      AHardwareBuffer*                                    buffer,
-                                      const std::vector<format::HardwareBufferPlaneInfo>& plane_info);
     void WriteDestroyHardwareBufferCmd(AHardwareBuffer* buffer);
     void WriteSetDevicePropertiesCommand(format::HandleId                  physical_device_id,
                                          const VkPhysicalDeviceProperties& properties);
@@ -1564,18 +1910,21 @@ class VulkanCaptureManager : public ApiCaptureManager
     const VkImportAndroidHardwareBufferInfoANDROID*
     FindAllocateMemoryExtensions(const VkMemoryAllocateInfo* allocate_info);
 
-    void ProcessReferenceToAndroidHardwareBuffer(VkDevice device, AHardwareBuffer* hardware_buffer);
+    void ProcessHardwareBuffer(format::ThreadId thread_id, AHardwareBuffer* hardware_buffer, VkDevice device);
     void ProcessImportAndroidHardwareBuffer(VkDevice device, VkDeviceMemory memory, AHardwareBuffer* hardware_buffer);
     void ReleaseAndroidHardwareBuffer(AHardwareBuffer* hardware_buffer);
     bool CheckBindAlignment(VkDeviceSize memoryOffset);
 
-    bool CheckCommandBufferWrapperForFrameBoundary(const vulkan_wrappers::CommandBufferWrapper* command_buffer_wrapper);
+    bool CheckCommandBufferWrapperForFrameBoundary(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                                   const vulkan_wrappers::CommandBufferWrapper* command_buffer_wrapper);
 
-    bool CheckPNextChainForFrameBoundary(const VkBaseInStructure* current);
+    bool CheckPNextChainForFrameBoundary(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
+                                         const VkBaseInStructure*                               current);
+
     void ProcessFenceSubmit(VkFence fence);
     bool IsExtensionBeingFaked(const char* extension);
 
-    virtual void EndFrame() override;
+    virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock) override;
 
   private:
     void QueueSubmitWriteFillMemoryCmd();
@@ -1587,9 +1936,40 @@ class VulkanCaptureManager : public ApiCaptureManager
     std::vector<const char*>                        faked_extensions_;
     HardwareBufferMap                               hardware_buffers_;
     std::mutex                                      deferred_operation_mutex;
-    VulkanDeviceAddressTracker                      address_tracker;
     std::unordered_map<format::HandleId, vulkan_wrappers::DeviceMemoryWrapper*> memories;
     std::mutex                                                                  mapped_memory_lock_;
+
+#ifdef ARM_INTERNAL
+  public:
+    uint64_t GetPacketId()
+    {
+        return packet_id_;
+    };
+    void SetPacketId(uint64_t packet_id)
+    {
+        packet_id_ = packet_id;
+    };
+    void SetReplaceCommandBuffer(std::function<void(VkCommandBuffer, VkCommandBuffer)> replace_command_buffer)
+    {
+        replace_command_buffer_ = replace_command_buffer;
+    };
+    VkCommandBuffer TargetCommandBuffer() const
+    {
+        return target_cmd_buf_;
+    };
+    bool RenderPassSliceEnabled()
+    {
+        return common_manager_->render_pass_slice_enabled_;
+    };
+
+  private:
+    void InsertQueuePresent(VkQueue queue, VkDevice device);
+    void FirstReplace(VkCommandBuffer commandBuffer);
+    void SecondReplace(VkCommandBuffer commandBuffer);
+    void SubmitTargetCommandBuffer(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock, VkQueue queue);
+    VkCommandBuffer orig_cmd_buf_, target_cmd_buf_, tail_cmd_buf_{ VK_NULL_HANDLE };
+    std::function<void(VkCommandBuffer, VkCommandBuffer)> replace_command_buffer_ = NULL;
+#endif
 };
 
 GFXRECON_END_NAMESPACE(encode)

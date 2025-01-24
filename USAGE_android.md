@@ -263,7 +263,7 @@ Together, the last 4 commands look like the following:
 adb shell settings put global enable_gpu_debug_layers 1
 adb shell settings put global gpu_debug_app ${Package Name}
 adb shell settings put global gpu_debug_layers VK_LAYER_LUNARG_gfxreconstruct
-adb shell settings put global gpu_debug_layers_app com.lunarg.gfxreconstruct.replay
+adb shell settings put global gpu_debug_layer_app com.lunarg.gfxreconstruct.replay
 ```
 You can also restrict the layer to a specific application using these three steps:
 1. adb push the GFXReconstruct capture layer to /data/local/debug/vulkan directory.
@@ -314,9 +314,11 @@ option values.
 | ---------------------------------------------- | ------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Capture File Name                              | debug.gfxrecon.capture_file                                   | STRING  | Path to use when creating the capture file.  Default is: `/sdcard/gfxrecon_capture.gfxr`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Capture Specific Frames                        | debug.gfxrecon.capture_frames                                 | STRING  | Specify one or more comma-separated frame ranges to capture.  Each range will be written to its own file.  A frame range can be specified as a single value, to specify a single frame to capture, or as two hyphenated values, to specify the first and last frame to capture.  Frame ranges should be specified in ascending order and cannot overlap. Note that frame numbering is 1-based (i.e. the first frame is frame 1).  Example: `200,301-305` will create two capture files, one containing a single frame and one containing five frames.  Default is: Empty string (all frames are captured).                                                                                                                                                                                                                                                                                                                                                                  |
-| Capture Specific app                           | debug.gfxrecon.capture_package_name                           | STRING  | Specify one app package name to be captured. Default is: ""                                                           |
+| Capture Specific app                           | debug.gfxrecon.capture_package_name                           | STRING  | Specify one app package name to be captured. Default is: ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Quit after capturing frame ranges              | debug.gfxrecon.quit_after_capture_frames                      | BOOL    | Setting it to `true` will force the application to terminate once all frame ranges specified by `debug.gfxrecon.capture_frames` have been captured. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Capture trigger for Android                    | debug.gfxrecon.capture_android_trigger                        | BOOL    | Set during runtime to `true` to start capturing and to `false` to stop. If not set at all then it is disabled (non-trimmed capture). Default is not set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Use asset file                                 | debug.gfxrecon.capture_use_asset_file                         | BOOL    | When set to `true` assets (images, buffers and descriptors) will be stored separately into an asset file instead of the capture file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Dump asset file                                 | debug.gfxrecon.capture_android_dump_assets                   | BOOL    | Setting this triggers a dump of all assets into the asset file. Since android options cannot be set by the layer, dumping is done whenever this option switches between from `false` to `true` or from `true` to `false`. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Capture File Compression Type                  | debug.gfxrecon.capture_compression_type                       | STRING  | Compression format to use with the capture file.  Valid values are: `LZ4`, `ZLIB`, `ZSTD`, and `NONE`. Default is: `LZ4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Capture File Timestamp                         | debug.gfxrecon.capture_file_timestamp                         | BOOL    | Add a timestamp to the capture file as described by [Timestamps](#timestamps).  Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Capture File Flush After Write                 | debug.gfxrecon.capture_file_flush                             | BOOL    | Flush output stream after each packet is written to the capture file.  Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -337,11 +339,10 @@ option values.
 | Omit calls with NULL AHardwareBuffer*          | debug.gfxrecon.omit_null_hardware_buffers                     | BOOL    | Some GFXReconstruct capture files may replay with a NULL AHardwareBuffer* parameter, for example, vkGetAndroidHardwareBufferPropertiesANDROID.  Although this is invalid Vulkan usage, some drivers may ignore these calls and some may not. This option causes replay to omit Vulkan calls for which the AHardwareBuffer* would be NULL. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Page guard unblock SIGSEGV                     | debug.gfxrecon.page_guard_unblock_sigsegv                     | BOOL    | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this enviroment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Page guard signal handler watcher              | debug.gfxrecon.page_guard_signal_handler_watcher              | BOOL    | When the `page_guard` memory tracking mode is enabled, setting this enviroment variable to `true` will spawn a thread which will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Page guard signal handler watcher max restores | debug.gfxrecon.page_guard_signal_handler_watcher_max_restores | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative value will make the watcher thread run indefinitely. Default is `1`                                                                                                                                                                                                                                 |
-| Ignore device address lookup in buffers        | debug.gfxrecon.buffer_usages_to_ignore                        | STRING  | If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. This option makes it possible to skip lookups in buffers based on buffer usage. Potential values: `transfer_src`, `transfer_dst` ,`uniform_texel`, `storage_texel`, `uniform`, `storage`, `index`, `vertex`, `indirect`, `shader_address`, `acc_input`, `acc_storage`, `shader_binding` `resource_descriptor` ,`push_descriptors`, `ignore_all`. It is possible to combine usages using binary 'or' operator.         |
-| Delay fence queries                            | debug.gfxrecon.fence_query_delay                              | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Page guard signal handler watcher max restores | debug.gfxrecon.page_guard_signal_handler_watcher_max_restores | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative value will make the watcher thread run indefinitely. Default is `1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Force FIFO present mode                        | debug.gfxrecon.force_fifo_present_mode                        | BOOL    | When the `force_fifo_present_mode` is enabled, force all present modes in vkGetPhysicalDeviceSurfacePresentModesKHR to VK_PRESENT_MODE_FIFO_KHR, app present mode is set in vkCreateSwapchain to VK_PRESENT_MODE_FIFO_KHR. Otherwise the original present mode will be used. Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Delay fence queries                            | debug.gfxrecon.fence_query_delay                              | INTEGER | Fences queried using `vkGetFenceStatus` and `vkWaitForFences` won't return `VK_SUCCESS` before a number of such queries and will instead return `VK_NOT_READY` and `VK_TIMEOUT`. Default is `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Fence Query Delay unit                         | debug.gfxrecon.fence_query_delay_unit                         | STRING  | Specify the "unit of time" used for the delay fence queries option. If set to `calls` then fence query delay is the number of calls to `vkGetFenceStatus`/`vkWaitForFences` that will be delayed. If set to `frames` then fence query delay is the number of frames for which called will be delayed. Default is `calls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Force FIFO present mode                        | debug.gfxrecon.force_fifo_present_mode                        | BOOL    | When the `force_fifo_present_mode` is enabled, force all present modes in vkGetPhysicalDeviceSurfacePresentModesKHR to VK_PRESENT_MODE_FIFO_KHR, and app can be setted present mode in vkCreateSwapchain to VK_PRESENT_MODE_FIFO_KHR. Otherwise the original present mode will be used. Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 #### Settings File
 
@@ -371,32 +372,6 @@ A sample layer settings file, documenting each available setting, can be found
 in the GFXReconstruct GitHub repository at `layer/vk_layer_settings.txt`. Most
 binary distributions of the GFXReconstruct software will also include a sample
 settings file.
-
-
-#### Selecting parameters for buffer_usages_to_ignore
-
-If an application uses device addresses gfxreconstruct will perform lookup in buffers for those addresses in buffers. Sometimes it gives it gives false positives results. To remedy that, buffer_usages_to_ignore option allows to skip lookups in buffers based on buffer usage:
-debug.gfxrecon.buffer_usages_to_ignore | VkBufferUsageFlagBits |
-------| -------------|
-`transfer_src`        | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-`transfer_dst`        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-`uniform_texel`       | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
-`storage_texel`       | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
-`uniform`             | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-`storage`             | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-`index`               | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-`vertex`              | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-`indirect`            | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-`shader_address`      | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-`acc_input`           | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-`acc_storage`         | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
-`shader_binding`      | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR
-`resource_descriptor` | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
-`push_descriptors`    | VK_BUFFER_USAGE_PUSH_DESCRIPTORS_DESCRIPTOR_BUFFER_BIT_EXT
-`ignore_all`          | Do not perform lookup at all
-
- It is possible to combine usages using binary 'or' operator, for example: 
- `setprop debug.gfxrecon.buffer_usages_to_ignore 'transfer_src|transfer_dst|uniform'`
 
 #### Selecting settings for the page_guard Memory Tracking Mode
 
@@ -507,6 +482,17 @@ Each time the option is set accordingly, a new trimmed capture is started/stoppe
 An existing capture file can be trimmed by replaying the capture with the capture layer
 enabled and a trimming frame range or capture trigger enabled. (However, replay for
 some content may be fast enough using the trigger property may be difficult.)
+
+### Asset files
+
+When doing a trimmed capture, `debug.gfxrecon.capture_use_asset_file` gives the
+option to dump all assets (images, buffers and descriptors) separetly in a
+different capture file called the asset file. When this option is enabled
+assets are tracked and only those that are changed during a tracking period
+(outside of a trim range) are dumped into the asset file. This first time a
+trim range is encountered (or the hotkey is pressed) all assets will be dumped,
+but the next time this happens only the assets that have been changed will be
+dumped. This should speed up the dumping process.
 
 ### Capture Limitations
 
@@ -726,7 +712,7 @@ queryable permission to apply.
 The `gfxrecon.py replay` command has the following usage:
 
 ```text
-usage: gfxrecon.py replay [-h] [--push-file LOCAL_FILE] [--version] [--pause-frame N]
+usage: gfxrecon.py replay [-h] [--push-file LOCAL_FILE] [--version] [--cpu-mask <binary-mask>] [--pause-frame N]
                           [--paused] [--screenshot-all] [--screenshots RANGES]
                           [--screenshot-format FORMAT] [--screenshot-dir DIR]
                           [--screenshot-prefix PREFIX] [--screenshot-scale SCALE]
@@ -750,7 +736,9 @@ usage: gfxrecon.py replay [-h] [--push-file LOCAL_FILE] [--version] [--pause-fra
                           [--dump-resources-json-output-per-command]
                           [--dump-resources-dump-immutable-resources]
                           [--dump-resources-dump-all-image-subresources]
+                          [--dump-resources-dump-raw-images]
                           [--pbi-all] [--pbis <index1,index2>]
+                          [--quit-after-frame]
                           [file]
 
 Launch the replay tool.
@@ -775,6 +763,13 @@ optional arguments:
   -p LOCAL_FILE, --push-file LOCAL_FILE
                         Local file to push to the location on device specified
                         by <file>
+  --cpu-mask <binary-mask>
+                        Set of CPU cores used by the replayer.
+                        `binary-mask` is a succession of '0' and '1' that specifies
+                        used/unused cores. For example '1010' activates the first and
+                        third cores and deactivate all other cores.
+                        If the option is not set, all cores can be used. If the option
+                        is set only for some cores, the other cores are not used.
   --screenshot-all      Generate screenshots for all frames. When this option
                         is specified, --screenshots is ignored (forwarded to
                         replay tool)
@@ -823,7 +818,7 @@ optional arguments:
                         See gfxrecon-extract.
   --opcd, --omit-pipeline-cache-data
                         Omit pipeline cache data from calls to
-                        vkCreatePipelineCache and skip calls to
+                        vkCreatePipelineCache and skip calls to--cpu-mask <binary-mask>
                         vkGetPipelineCacheData (forwarded to replay tool)
   --surface-index N     Restrict rendering to the Nth surface object created.
                         Used with captures that include multiple surfaces.
@@ -879,23 +874,6 @@ optional arguments:
                         Convert all offscreen frame boundaries to
                         `VK_EXT_frame_boundary` frame boundaries.
                         (forwarded to replay tool)
-  --save-pipeline-cache DEVICE_FILE
-                        If set, produces pipeline caches at replay time instead
-                        of using the one saved at capture time and save those
-                        caches in DEVICE_FILE.
-                        (forwarded to replay tool)
-  --load-pipeline-cache DEVICE_FILE
-                        If set, loads data created by the
-                        `--save-pipeline-cache` option in DEVICE_FILE
-                        and uses it to create the pipelines instead of the
-                        pipeline caches saved at capture time.
-                        (forwarded to replay tool)
-  --add-new-pipeline-caches
-                        If set, allows gfxreconstruct to create new
-                        vkPipelineCache objects when it encounters a pipeline
-                        created without cache. This option can be used in
-                        coordination with `--save-pipeline-cache` and
-                        `--load-pipeline-cache`. (forwarded to replay tool)
   --flush-inside-measurement-range
                         If this is specified the replayer will flush and wait
                         for all current GPU work to finish at the end of each
@@ -930,8 +908,9 @@ optional arguments:
                         before calling Present. This is needed for accurate acquisition
                         of instrumentation data on some platforms.
    --dump-resources <arg>
-                        <arg> is BeginCommandBuffer=<n>,Draw=<m>,BeginRenderPass=<o>,
-                        NextSubpass=<p>,Dispatch=<q>,CmdTraceRays=<r>,QueueSubmit=<s>
+                        <arg> is BeginCommandBuffer=<n>,Draw=<o>,BeginRenderPass=<p>,
+                        NextSubpass=<q>,EndRenderPass=<r>,Dispatch=<s>,TraceRays=<t>,
+                        QueueSubmit=<u>
                         GPU resources are dumped after the given vkCmdDraw*,
                         vkCmdDispatch, or vkCmdTraceRaysKHR is replayed.
                         Dump gpu resources after the given vmCmdDraw*, vkCmdDispatch, or
@@ -977,10 +956,33 @@ optional arguments:
               Enables dumping of resources that are used as inputs in the commands requested for dumping
   --dump-resources-dump-all-image-subresources
               Enables dumping of all image sub resources (mip map levels and array layers)
+  --dump-resources-dump-raw-images
+              When enabled all image resources will be dumped verbatim as raw bin files.
+  --dump-resources-dump-separate-alpha
+              When enabled alpha channel of dumped images will be dumped in a separate file.
   --pbi-all
               Print all block information.
   --pbis <index1,index2>
               Print block information between block index1 and block index2.
+  --save-pipeline-cache DEVICE_FILE
+                        If set, produces pipeline caches at replay time instead
+                        of using the one saved at capture time and save those
+                        caches in DEVICE_FILE.
+                        (forwarded to replay tool)
+  --load-pipeline-cache DEVICE_FILE
+                        If set, loads data created by the
+                        `--save-pipeline-cache` option in DEVICE_FILE
+                        and uses it to create the pipelines instead of the
+                        pipeline caches saved at capture time.
+                        (forwarded to replay tool)
+  --add-new-pipeline-caches
+                        If set, allows gfxreconstruct to create new
+                        vkPipelineCache objects when it encounters a pipeline
+                        created without cache. This option can be used in
+                        coordination with `--save-pipeline-cache` and
+                        `--load-pipeline-cache`. (forwarded to replay tool)
+  --quit-after-frame
+              Specify a frame after which replay will terminate.
 ```
 
 The command will force-stop an active replay process before starting the replay

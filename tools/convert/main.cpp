@@ -21,6 +21,7 @@
 ** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ** DEALINGS IN THE SOFTWARE.
 */
+#include <string>
 #include PROJECT_VERSION_HEADER_FILE
 #include "tool_settings.h"
 #include "decode/json_writer.h" /// @todo move to util?
@@ -33,20 +34,21 @@
 #include "generated/generated_vulkan_json_consumer.h"
 #include "decode/marker_json_consumer.h"
 #include "decode/metadata_json_consumer.h"
-#if defined(CONVERT_EXPERIMENTAL_D3D12)
+#if defined(D3D12_SUPPORT)
 #include "generated/generated_dx12_json_consumer.h"
 #endif
 
 using gfxrecon::util::JsonFormat;
 using VulkanJsonConsumer = gfxrecon::decode::MetadataJsonConsumer<
     gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::VulkanExportJsonConsumer>>;
-#if defined(CONVERT_EXPERIMENTAL_D3D12)
+#if defined(D3D12_SUPPORT)
 using Dx12JsonConsumer =
     gfxrecon::decode::MetadataJsonConsumer<gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::Dx12JsonConsumer>>;
 #endif
-const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags";
+const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags,--"
+                        "verbose";
 
-const char kArguments[] = "--output,--format,--frame-range";
+const char kArguments[] = "--output,--format,--log-level,--frame-range";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -87,6 +89,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("                  \tFrame ranges should be specified in ascending order and cannot "
                            "overlap. Frame numbering is zero-indexed and inclusive.");
     GFXRECON_WRITE_CONSOLE("                  \tExample: 0-2,5,8-10 will generate data for 7 frames.");
+    GFXRECON_WRITE_CONSOLE("  --verbose\t Request verbose output.")
 
 #if defined(WIN32) && defined(_DEBUG)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
@@ -195,34 +198,52 @@ int main(int argc, const char** argv)
     }
 #endif
 
-    const auto&                     positional_arguments = arg_parser.GetPositionalArguments();
-    std::string                     input_filename       = positional_arguments[0];
-    JsonFormat                      output_format        = GetOutputFormat(arg_parser);
-    std::string                     output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
-    std::string                     filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
-    std::string                     output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
-    std::string                     data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
-    std::vector<uint32_t>           frame_indices        = GetFrameIndices(arg_parser);
-    bool                            frame_range_option   = !arg_parser.GetArgumentValue(kFrameRange).empty();
-    bool                            dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
-    bool                            expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
-    bool                            file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
-    bool                            output_to_stdout     = output_filename == "stdout";
+    // Reinitialize logging with values retrieved from command line arguments
+    gfxrecon::util::Log::Settings log_settings;
+    GetLogSettings(arg_parser, log_settings);
+    gfxrecon::util::Log::Release();
+    gfxrecon::util::Log::Init(log_settings);
+
+    const auto& positional_arguments = arg_parser.GetPositionalArguments();
+    std::string input_filename       = positional_arguments[0];
+    JsonFormat  output_format        = GetOutputFormat(arg_parser);
+    std::string output_filename      = GetOutputFileName(arg_parser, input_filename, output_format);
+    std::string filename_stem        = gfxrecon::util::filepath::GetFilenameStem(output_filename);
+    std::string output_dir           = gfxrecon::util::filepath::GetBasedir(output_filename);
+    std::string data_dir             = gfxrecon::util::filepath::Join(output_dir, filename_stem);
+    bool        dump_binaries        = arg_parser.IsOptionSet(kIncludeBinariesOption);
+    bool        expand_flags         = arg_parser.IsOptionSet(kExpandFlagsOption);
+    bool        file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
+    bool        verbose              = arg_parser.IsOptionSet(kVerboseOption);
+    bool        output_to_stdout     = output_filename == "stdout";
+
+    std::vector<uint32_t> frame_indices      = GetFrameIndices(arg_parser);
+    bool                  frame_range_option = !arg_parser.GetArgumentValue(kFrameRange).empty();
+
+    bool   is_asset_file = false;
+    size_t last_dot_pos  = input_filename.find_last_of(".");
+    if (last_dot_pos != std::string::npos)
+    {
+        if (!input_filename.compare(last_dot_pos, 5, ".gfxa"))
+        {
+            is_asset_file = true;
+        }
+    }
+
     gfxrecon::decode::FileProcessor file_processor;
 
-#ifndef CONVERT_EXPERIMENTAL_D3D12
+#ifndef D3D12_SUPPORT
     bool detected_d3d12  = false;
     bool detected_vulkan = false;
     gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
 
-    if (detected_d3d12)
+    if (!detected_vulkan && !is_asset_file)
     {
-        GFXRECON_LOG_INFO("D3D12 support for gfxrecon-convert is currently experimental.");
-        GFXRECON_LOG_INFO("To enable it, run cmake again with switch -DCONVERT_EXPERIMENTAL_D3D12");
+        GFXRECON_LOG_INFO("Capture file does not contain Vulkan content.  D3D12 content may be present but "
+                          "gfxrecon-convert is not compiled with D3D12 support.");
         goto exit;
     }
 #endif
-
     if (file_per_frame && output_to_stdout)
     {
         GFXRECON_LOG_WARNING("Outputting a file per frame is not consistent with outputting to stdout.");
@@ -282,6 +303,7 @@ int main(int argc, const char** argv)
             json_options.format        = output_format;
             json_options.dump_binaries = dump_binaries;
             json_options.expand_flags  = expand_flags;
+            json_options.verbose       = verbose;
 
             gfxrecon::decode::JsonWriter json_writer{ json_options, GFXRECON_PROJECT_VERSION_STRING, input_filename };
             file_processor.SetAnnotationProcessor(&json_writer);
@@ -304,18 +326,15 @@ int main(int argc, const char** argv)
                 }
                 if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
                 {
-                    // TODO: Reimplement this!
-                    // json_consumer.SetFile(out_file_handle);
+                    out_stream.Reset(out_file_handle);
                     frame_indices.pop_back();
                 }
                 else
                 {
-                    // TODO: Reimplement this!
-                    // json_consumer.SetFile(tmp_file_handle);
+                    out_stream.Reset(tmp_file_handle);
                 }
             }
-            // If CONVERT_EXPERIMENTAL_D3D12 was set, then add DX12 consumer/decoder
-#ifdef CONVERT_EXPERIMENTAL_D3D12
+#ifdef D3D12_SUPPORT
             Dx12JsonConsumer              dx12_json_consumer;
             gfxrecon::decode::Dx12Decoder dx12_decoder;
 
@@ -338,16 +357,14 @@ int main(int argc, const char** argv)
 
                     if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
                     {
-                        // TODO: Reimplement this!
-                        // json_consumer.SetFile(out_file_handle);
+                        out_stream.Reset(out_file_handle);
                         json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
                             output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
                         frame_indices.pop_back();
                     }
                     else
                     {
-                        // TODO: Reimplement this!
-                        // json_consumer.SetFile(tmp_file_handle);
+                        out_stream.Reset(tmp_file_handle);
                         continue;
                     }
                 }
@@ -378,7 +395,7 @@ int main(int argc, const char** argv)
             }
             json_consumer.Destroy();
             // If CONVERT_EXPERIMENTAL_D3D12 was set, then cleanup DX12 consumer
-#ifdef CONVERT_EXPERIMENTAL_D3D12
+#ifdef D3D12_SUPPORT
             dx12_json_consumer.Destroy();
 #endif
             if (tmp_file_handle != nullptr)

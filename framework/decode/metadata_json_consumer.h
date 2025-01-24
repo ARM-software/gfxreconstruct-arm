@@ -68,7 +68,8 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override
     {
         const util::JsonOptions& json_options = GetOptions();
         auto&                    jdata        = WriteMetaCommandStart("FillMemoryCommand");
@@ -86,12 +87,35 @@ class MetadataJsonConsumer : public Base
         const JsonOptions& json_options = GetOptions();
         auto&              jdata        = WriteMetaCommandStart("FixDeviceAddressCommand");
         HandleToJson(jdata["relation_id"], header.relation_id, json_options);
-        for (int i = 0; i < header.num_of_locations; i++)
+        if (json_options.verbose)
         {
-            HandleToJson(jdata["location"][i]["buffer_id"], infos[i].id, json_options);
-            FieldToJson(jdata["location"][i]["original_address"], infos[i].original_address, json_options);
-            FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
-            FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            for (int i = 0; i < header.num_of_locations; i++)
+            {
+                HandleToJson(jdata["location"][i]["object_id"], infos[i].id, json_options);
+                FieldToJson(jdata["location"][i]["original_address"], infos[i].original_address, json_options);
+                FieldToJson(jdata["location"][i]["adjusted_address"], infos[i].adjusted_address, json_options);
+                FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            }
+        }
+        WriteBlockEnd();
+    }
+
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos) override
+    {
+        using namespace util;
+        const JsonOptions& json_options = GetOptions();
+        auto&              jdata        = WriteMetaCommandStart("FixShaderGroupHandleCommand");
+        HandleToJson(jdata["relation_id"], header.relation_id, json_options);
+        if (json_options.verbose)
+        {
+            for (int i = 0; i < header.num_of_locations; i++)
+            {
+                HandleToJson(jdata["location"][i]["pipeline_id"], infos[i].id, json_options);
+                FieldToJson(jdata["location"][i]["group"], infos[i].group, json_options);
+                FieldToJson(jdata["location"][i]["group_size"], infos[i].group_size, json_options);
+                FieldToJson(jdata["location"][i]["offset_in_memory"], infos[i].offset_in_memory, json_options);
+            }
         }
         WriteBlockEnd();
     }
@@ -188,17 +212,6 @@ class MetadataJsonConsumer : public Base
         FieldToJson(
             jdata["pipeline_cache_uuid"], util::uuid_to_string(format::kUuidSize, pipeline_cache_uuid), json_options);
         FieldToJson(jdata["device_name"], device_name, json_options);
-        WriteBlockEnd();
-    }
-
-    virtual void
-    ProcessSetDeviceMemoryPropertiesCommand(format::HandleId                             physical_device_id,
-                                            const std::vector<format::DeviceMemoryType>& memory_types,
-                                            const std::vector<format::DeviceMemoryHeap>& memory_heaps) override
-    {
-        const util::JsonOptions& json_options = GetJsonOptions();
-        auto&                    jdata        = WriteMetaCommandStart("SetDeviceMemoryPropertiesCommand");
-        HandleToJson(jdata["physical_device_id"], physical_device_id, json_options);
         WriteBlockEnd();
     }
 
@@ -308,6 +321,32 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                    const std::vector<format::HandleId>& children)
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("MicromapCompactionDependencyCommand");
+        HandleToJson(jdata["Parent"], parent, json_options);
+        for (const auto& child : children)
+        {
+            jdata["Children"].push_back(child);
+        }
+        WriteBlockEnd();
+    }
+
+    void ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                                 const std::vector<format::HandleId>& children)
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("AccelerationStructureCompactionDependencyCommand");
+        HandleToJson(jdata["Parent"], parent, json_options);
+        for (const auto& child : children)
+        {
+            jdata["Children"].push_back(child);
+        }
+        WriteBlockEnd();
+    }
+
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
         uint32_t                                                                   info_count,
@@ -345,6 +384,37 @@ class MetadataJsonConsumer : public Base
         HandleToJson(jdata["device"], device_id, json_options);
         FieldToJson(jdata["query_type"], query_type, json_options);
         FieldToJson(jdata["acceleration_structure"], acceleration_structure_id, json_options);
+        WriteBlockEnd();
+    }
+
+    virtual void ProcessSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
+                                                       const char*                             env_string) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              json_data    = WriteMetaCommandStart("SetEnvironmentVariablesCommand");
+
+        std::vector<std::string> env_vars =
+            util::strings::SplitString(std::string_view(env_string), format::kEnvironmentStringDelimeter);
+        for (std::string& e : env_vars)
+        {
+            std::vector<std::string> var_plus_val = util::strings::SplitString(e, '=');
+            if (var_plus_val.size() == 2)
+            {
+                const char* var = var_plus_val[0].c_str();
+                const char* val = var_plus_val[1].c_str();
+                json_data[var]  = val;
+            }
+        }
+        WriteBlockEnd();
+    }
+
+    virtual void ProcessExecuteBlocksFromFile(uint32_t n_blocks, int64_t offset, const std::string& filename) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("ExecuteBlocksFromFile");
+        FieldToJson(jdata["n_blocks"], n_blocks, json_options);
+        FieldToJson(jdata["offset"], offset, json_options);
+        FieldToJson(jdata["filename"], filename, json_options);
         WriteBlockEnd();
     }
 

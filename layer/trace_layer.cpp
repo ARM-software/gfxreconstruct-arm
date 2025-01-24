@@ -328,9 +328,36 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance instance
     return result;
 }
 
+#ifdef ARM_INTERNAL
+VKAPI_ATTR void VKAPI_CALL SetPacketId(uint64_t id)
+{
+    encode::VulkanCaptureManager::Get()->SetPacketId(id);
+}
+
+VKAPI_ATTR void VKAPI_CALL
+SetCommandBufferReplacer(std::function<void(VkCommandBuffer, VkCommandBuffer)> replace_command_buffer)
+{
+    encode::VulkanCaptureManager::Get()->SetReplaceCommandBuffer(replace_command_buffer);
+}
+#endif
+
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice device, const char* pName)
 {
     PFN_vkVoidFunction result = nullptr;
+
+#ifdef ARM_INTERNAL
+    if (encode::VulkanCaptureManager::Get()->RenderPassSliceEnabled())
+    {
+        if (strcmp(pName, "vkSetPacketIdEXT") == 0)
+        {
+            return reinterpret_cast<PFN_vkVoidFunction>(SetPacketId);
+        }
+        if (strcmp(pName, "vkSetCommandBufferReplacerEXT") == 0)
+        {
+            return reinterpret_cast<PFN_vkVoidFunction>(SetCommandBufferReplacer);
+        }
+    }
+#endif
 
     if (device != VK_NULL_HANDLE)
     {

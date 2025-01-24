@@ -46,6 +46,14 @@ class ApiCaptureManager
     virtual void CreateStateTracker()                                                               = 0;
     virtual void DestroyStateTracker()                                                              = 0;
     virtual void WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id) = 0;
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                format::ThreadId        thread_id,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name)                 = 0;
+    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
+                             const std::string*      asset_file_name,
+                             format::ThreadId        thread_id)                                            = 0;
+
     virtual CaptureSettings::TraceSettings GetDefaultTraceSettings();
 
     format::ApiFamilyId GetApiFamily() const { return api_family_; }
@@ -95,28 +103,37 @@ class ApiCaptureManager
 
     void WriteFrameMarker(format::MarkerType marker_type) { common_manager_->WriteFrameMarker(marker_type); }
 
-    virtual void EndFrame() { common_manager_->EndFrame(api_family_); }
+    virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->EndFrame(api_family_, current_lock);
+    }
 
     // Pre/PostQueueSubmit to be called immediately before and after work is submitted to the GPU by vkQueueSubmit for
     // Vulkan or by ID3D12CommandQueue::ExecuteCommandLists for DX12.
-    void PreQueueSubmit() { common_manager_->PreQueueSubmit(api_family_); }
-    void PostQueueSubmit() { common_manager_->PostQueueSubmit(api_family_); }
+    void PreQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->PreQueueSubmit(api_family_, current_lock);
+    }
+    void PostQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    {
+        common_manager_->PostQueueSubmit(api_family_, current_lock);
+    }
 
     bool ShouldTriggerScreenshot() { return common_manager_->ShouldTriggerScreenshot(); }
 
-    void CheckContinueCaptureForWriteMode(uint32_t current_boundary_count)
+    void CheckContinueCaptureForWriteMode(uint32_t                                               current_boundary_count,
+                                          std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
     {
-        common_manager_->CheckContinueCaptureForWriteMode(api_family_, current_boundary_count);
+        common_manager_->CheckContinueCaptureForWriteMode(api_family_, current_boundary_count, current_lock);
     }
 
-    void CheckStartCaptureForTrackMode(uint32_t current_boundary_count)
+    void CheckStartCaptureForTrackMode(uint32_t                                               current_boundary_count,
+                                       std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
     {
-        common_manager_->CheckStartCaptureForTrackMode(api_family_, current_boundary_count);
+        common_manager_->CheckStartCaptureForTrackMode(api_family_, current_boundary_count, current_lock);
     }
 
     bool IsTrimHotkeyPressed() { return common_manager_->IsTrimHotkeyPressed(); }
-
-    CaptureSettings::RuntimeTriggerState GetRuntimeTriggerState() { return common_manager_->GetRuntimeTriggerState(); }
 
     bool RuntimeTriggerEnabled() { return common_manager_->RuntimeTriggerEnabled(); }
 
@@ -153,6 +170,7 @@ class ApiCaptureManager
     uint16_t GetDescriptorMask() const { return common_manager_->GetDescriptorMask(); }
     uint64_t GetShaderIDMask() const { return common_manager_->GetShaderIDMask(); }
     uint64_t GetBlockIndex() const { return common_manager_->GetBlockIndex(); }
+    void     SetWriteAssets() const { return common_manager_->SetWriteAssets(); }
 
     bool                                GetForceFileFlush() const { return common_manager_->GetForceFileFlush(); }
     CaptureSettings::MemoryTrackingMode GetMemoryTrackingMode() const
@@ -169,6 +187,7 @@ class ApiCaptureManager
     bool                              IsTrimEnabled() const { return common_manager_->IsTrimEnabled(); }
     uint32_t                          GetCurrentFrame() const { return common_manager_->GetCurrentFrame(); }
     CommonCaptureManager::CaptureMode GetCaptureMode() const { return common_manager_->GetCaptureMode(); }
+    void SetCaptureMode(CommonCaptureManager::CaptureMode mode) { common_manager_->SetCaptureMode(mode); }
     bool                              GetDebugLayerSetting() const { return common_manager_->GetDebugLayerSetting(); }
     bool GetDebugDeviceLostSetting() const { return common_manager_->GetDebugDeviceLostSetting(); }
     bool GetDisableDxrSetting() const { return common_manager_->GetDisableDxrSetting(); }
@@ -200,6 +219,18 @@ class ApiCaptureManager
     util::Keyboard&                   GetKeyboard() { return common_manager_->GetKeyboard(); }
     const std::string&                GetScreenshotPrefix() const { return common_manager_->GetScreenshotPrefix(); }
     util::ScreenshotFormat            GetScreenshotFormat() { return common_manager_->GetScreenshotFormat(); }
+    auto                              GetTrimBoundary() const { return common_manager_->GetTrimBoundary(); }
+    auto                              GetTrimDrawCalls() const { return common_manager_->GetTrimDrawCalls(); }
+#ifdef ARM_INTERNAL
+    bool IsTrimRenderPassBegin() const
+    {
+        return (common_manager_->render_pass_slice_enabled_) &&
+               (packet_id_ == common_manager_->render_pass_slice_range_[0].first);
+    }
+
+  protected:
+    uint64_t packet_id_{};
+#endif
 
   protected:
     const format::ApiFamilyId api_family_;

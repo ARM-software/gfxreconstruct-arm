@@ -26,6 +26,7 @@
 
 #include "util/defines.h"
 #include "format/format.h"
+#include "generated/generated_vulkan_struct_decoders.h"
 
 #include "decode/struct_pointer_decoder.h"
 
@@ -39,9 +40,13 @@ class MetadataConsumerBase
   public:
     virtual void Process_ExeFileInfo(util::filepath::FileInfo& info_record) {}
     virtual void ProcessDisplayMessageCommand(const std::string& message) {}
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) {}
+    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) {}
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                const format::AddressLocationInfo*           infos){};
+                                                const format::AddressLocationInfo*           infos)
+    {}
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos)
+    {}
     virtual void
     ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                           const uint8_t*                                      data)
@@ -108,6 +113,9 @@ class MetadataConsumerBase
     virtual void ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                const uint8_t*                              data)
     {}
+    virtual void ProcessExecuteBlocksFromFile(uint32_t n_blocks, int64_t offset, const std::string& filename) {}
+
+    virtual void SetCurrentBlockIndex(uint64_t block_index) {}
 
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
@@ -116,16 +124,17 @@ class MetadataConsumerBase
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
     {}
+
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos)
     {}
+
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
     {}
-    virtual void SetCurrentBlockIndex(uint64_t block_index) {}
 
   protected:
-    uint64_t block_index_;
+    uint64_t block_index_ = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,7 @@
 
 #include <d3d12.h>
 #include <dxgi.h>
+#include <dxgi1_5.h>
 
 #include <array>
 #include <unordered_set>
@@ -45,6 +46,7 @@ struct IUnknown_Wrapper;
 class ID3D12Resource_Wrapper;
 class ID3D12Device_Wrapper;
 class ID3D12Heap_Wrapper;
+class IDXGISwapChain_Wrapper;
 
 struct GUID_Hash
 {
@@ -190,6 +192,7 @@ struct DxAccelerationStructureBuildInfo
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> inputs_geometry_descs;
 
     uint64_t                             input_data_size{ 0 };
+    uint64_t                             input_data_header_size{ 0 };
     graphics::dx12::ID3D12ResourceComPtr input_data_resource{ nullptr };
 
     // Copy state.
@@ -199,6 +202,8 @@ struct DxAccelerationStructureBuildInfo
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE
     copy_mode{};                   ///< Copy mode used to create this acceleration structure
     bool was_copy_source{ false }; ///< Was this acceleration structure copied to another?
+
+    bool is_tlas_with_array_of_pointers{ false };
 };
 
 struct IDXGIKeyedMutexInfo : public DxgiWrapperInfo
@@ -239,6 +244,14 @@ struct IDXGISwapChainInfo : public DxgiWrapperInfo
     uint32_t                         last_presented_image{ std::numeric_limits<uint32_t>::max() };
     std::vector<DxImageAcquiredInfo> image_acquired_info;
     DxResizeBuffersInfo              resize_info;
+
+    // HDR state
+    bool                   set_color_space{ false };
+    bool                   set_hdr_metadata{ false };
+    DXGI_COLOR_SPACE_TYPE  color_space_type{};
+    DXGI_HDR_METADATA_TYPE hdr_metadata_type{};
+    UINT                   hdr_metadata_size{ 0 };
+    void*                  hdr_metadata{ nullptr };
 };
 
 struct IDXGIDeviceInfo : public DxgiWrapperInfo
@@ -290,12 +303,35 @@ struct ID3D12QueryHeapInfo : public DxWrapperInfo
 struct ID3D12CommandSignatureInfo : public DxWrapperInfo
 {};
 
+struct AccelerationStructureBuildTrackingObjects
+{
+    AccelerationStructureBuildTrackingObjects(
+        graphics::dx12::ID3D12ResourceComPtr             _resource,
+        graphics::dx12::ID3D12CommandAllocatorComPtr     _post_build_copy_cmd_allocator,
+        graphics::dx12::ID3D12GraphicsCommandList4ComPtr _post_build_copy_cmd_list) :
+        resource(_resource),
+        post_build_copy_cmd_allocator(_post_build_copy_cmd_allocator),
+        post_build_copy_cmd_list(_post_build_copy_cmd_list)
+    {}
+
+    // Target resource for build inputs.
+    graphics::dx12::ID3D12ResourceComPtr resource = nullptr;
+
+    // Objects used to copy inputs for TLAS builds that use D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS for DescLayout.
+    graphics::dx12::ID3D12CommandAllocatorComPtr     post_build_copy_cmd_allocator = nullptr;
+    graphics::dx12::ID3D12GraphicsCommandList4ComPtr post_build_copy_cmd_list      = nullptr;
+};
+
 struct ID3D12CommandQueueInfo : public DxWrapperInfo
 {
     //// Begin state tracking members
 
-    graphics::dx12::ID3D12FenceComPtr                        acceleration_structure_build_fence;
-    std::map<uint64_t, graphics::dx12::ID3D12ResourceComPtr> pending_acceleration_structure_build_resources;
+    // Fence that is signalled on the queue after AS builds.
+    graphics::dx12::ID3D12FenceComPtr acceleration_structure_build_tracking_fence;
+
+    // Objects that need to be kept alive until the associated AS build has completed on the GPU. Key of the map is the
+    // fence signal value to indicate the AS build is complete.
+    std::map<uint64_t, AccelerationStructureBuildTrackingObjects> acceleration_structure_build_tracking_objects;
 };
 
 struct ID3D12PipelineLibraryInfo : public DxWrapperInfo
@@ -388,14 +424,16 @@ struct ID3D12ResourceInfo : public DxWrapperInfo
 
     ID3D12Heap_Wrapper* heap_wrapper{ nullptr };
     uint64_t            heap_offset;
+
+    IDXGISwapChain_Wrapper* swapchain_wrapper{ nullptr };
 };
 
 struct ID3D12HeapInfo : public DxWrapperInfo
 {
-    bool                    has_write_watch{ false };
-    D3D12_HEAP_TYPE         heap_type{};
-    D3D12_CPU_PAGE_PROPERTY page_property{};
-    D3D12_MEMORY_POOL       memory_pool{};
+    bool                      has_write_watch{ false };
+    D3D12_HEAP_TYPE           heap_type{};
+    D3D12_CPU_PAGE_PROPERTY   page_property{};
+    D3D12_MEMORY_POOL         memory_pool{};
     uint64_t                  heap_size{ 0 };
     D3D12_GPU_VIRTUAL_ADDRESS gpu_va{ 0 };
 
@@ -439,6 +477,8 @@ struct ID3D12CommandListInfo : public DxWrapperInfo
     D3D12_COMMAND_LIST_TYPE          command_list_type{};
 
     // Track command list dependencies.
+    format::HandleId                                  create_command_allocator_id{ format::kNullHandleId };
+    std::shared_ptr<const ID3D12CommandAllocatorInfo> create_command_allocator_info;
     std::unordered_set<format::HandleId>          command_objects[D3D12GraphicsCommandObjectType::NumObjectTypes];
     std::unordered_set<SIZE_T>                    command_cpu_descriptor_handles;
     std::unordered_set<D3D12_GPU_VIRTUAL_ADDRESS> command_gpu_virtual_addresses;
@@ -449,6 +489,14 @@ struct ID3D12CommandListInfo : public DxWrapperInfo
     // Track acceleration structure builds that are recorded to this command list.
     std::vector<DxAccelerationStructureBuildInfo> acceleration_structure_builds;
     std::vector<DxAccelerationStructureCopyInfo>  acceleration_structure_copies;
+
+    uint32_t draw_call_count{ 0 }; // DrawInstanced, DrawIndexedInstanced, Dispatch, ExecuteIndirect, ExecuteBundle
+
+    // GFXRECON_CAPTURE_DRAW_CALLS
+    std::array<graphics::dx12::CommandSet, 3>    split_command_sets;
+    bool                                         is_split_commandlist{ false };
+    uint32_t                                     find_target_draw_call_count{ 0 };
+    std::shared_ptr<const ID3D12CommandListInfo> target_bundle_commandlist_info{ false };
 };
 
 struct ID3D10BlobInfo : public DxWrapperInfo

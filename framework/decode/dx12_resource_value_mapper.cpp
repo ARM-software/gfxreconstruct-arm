@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2022 LunarG, Inc.
+** Copyright (c) 2022-2024 LunarG, Inc.
 ** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
@@ -26,6 +26,13 @@
 #include "decode/custom_dx12_struct_decoders.h"
 #include "decode/dx12_experimental_resource_value_tracker.h"
 #include "decode/dx12_object_mapping_util.h"
+
+#if defined(GFXRECON_DXC_SUPPORT)
+#include <d3d12shader.h>
+#include <dxcapi.h>
+#endif
+
+#include <codecvt>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -139,6 +146,30 @@ void CopyMappedResourceValuesFromSrcToDst(std::map<uint64_t, T>&                
         auto dst_offset = (src_iter->first - copy_info.src_offset) + copy_info.dst_offset;
         dst[dst_offset] = src_iter->second;
     }
+}
+
+std::string DemangleDxilExportName(const std::string& mangled_name)
+{
+    size_t demangled_name_start = mangled_name.find_first_of("?");
+    size_t demangled_name_end   = mangled_name.find_first_of("@");
+
+    std::string demangled_name = "";
+    if (demangled_name_start != std::string::npos && demangled_name_end != std::string::npos)
+    {
+        // The char after '?' is the first char of the unmangled name so increment start pos.
+        ++demangled_name_start;
+        demangled_name = mangled_name.substr(demangled_name_start, demangled_name_end - demangled_name_start);
+    }
+
+    if (!demangled_name.empty())
+    {
+        GFXRECON_LOG_DEBUG("Found demangled DXIL export name '%s'.", demangled_name.c_str());
+    }
+    else
+    {
+        GFXRECON_LOG_WARNING("Failed to demangle DXIL export name '%s'.", mangled_name.c_str());
+    }
+    return demangled_name;
 }
 
 } // namespace
@@ -477,11 +508,18 @@ void Dx12ResourceValueMapper::PostProcessBuildRaytracingAccelerationStructure(
 
         format::HandleId resource_id = format::kNullHandleId;
         bool             found       = false;
-        reverse_gpu_va_map_.Map(build_desc->Inputs.InstanceDescs,
-                                &resource_id,
-                                &found,
-                                build_desc->Inputs.InstanceDescs +
-                                    build_desc->Inputs.NumDescs * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+
+        auto min_end_gpu_va = build_desc->Inputs.InstanceDescs;
+        if (build_desc->Inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY)
+        {
+            min_end_gpu_va += build_desc->Inputs.NumDescs * sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
+        }
+        else
+        {
+            min_end_gpu_va += build_desc->Inputs.NumDescs * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
+        }
+
+        reverse_gpu_va_map_.Map(build_desc->Inputs.InstanceDescs, &resource_id, &found, min_end_gpu_va);
 
         if (resource_id != format::kNullHandleId)
         {
@@ -514,11 +552,22 @@ void Dx12ResourceValueMapper::PostProcessBuildRaytracingAccelerationStructure(
                           { nullptr, nullptr, 0 } });
                 }
             }
+            else if (build_desc->Inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS)
+            {
+                constexpr auto instance_desc_pointer_stride = sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
+                for (UINT i = 0; i < build_desc->Inputs.NumDescs; ++i)
+                {
+                    resource_value_infos.insert({ offset_to_instance_descs_start + instance_desc_pointer_stride * i,
+                                                  ResourceValueType::kRaytracingInstanceDescPointer,
+                                                  sizeof(D3D12_GPU_VIRTUAL_ADDRESS),
+                                                  nullptr,
+                                                  { nullptr, nullptr, 0 } });
+                }
+            }
             else
             {
-                // TODO: Support D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS.
-                GFXRECON_LOG_WARNING("Application built acceleration structure with unsupported layout: "
-                                     "D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS");
+                GFXRECON_LOG_ERROR("Unknown BuildRaytracingAccelerationStructure DescsLayout: %d",
+                                   static_cast<int>(build_desc->Inputs.DescsLayout));
             }
         }
         else
@@ -1290,6 +1339,72 @@ bool Dx12ResourceValueMapper::MapValue(const ResourceValueInfo& value_info,
         }
         return false;
     }
+    else if (value_info.type == ResourceValueType::kRaytracingInstanceDescPointer)
+    {
+        GFXRECON_ASSERT(value_info.size == sizeof(D3D12_GPU_VIRTUAL_ADDRESS));
+
+        // Map the GPU_VA in the array of instance desc pointers.
+        ResourceValueInfo rvi = value_info;
+        rvi.type              = ResourceValueType::kGpuVirtualAddress;
+        MapValue(rvi, result_data, resource_id, resource_info, indirect_values_map);
+
+        // Read instance desc GPU_VA from the array of pointers.
+        D3D12_GPU_VIRTUAL_ADDRESS instance_desc_gpu_va = 0;
+        util::platform::MemoryCopy(&instance_desc_gpu_va,
+                                   sizeof(instance_desc_gpu_va),
+                                   result_data.data() + value_info.offset,
+                                   sizeof(instance_desc_gpu_va));
+
+        GFXRECON_ASSERT(value_info.offset == final_offset);
+
+        // Insert new RV infos for instance desc's AccelerationStructure, which will queue it for mapping.
+        if (instance_desc_gpu_va != 0)
+        {
+            // The spec requires that instance descs are aligned to D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT. If
+            // the instance descs are not aligned behavior may be undefined.
+            GFXRECON_ASSERT((instance_desc_gpu_va % D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT) == 0);
+
+            // Find the resource that contains the address referenced by instance_desc_gpu_va.
+            format::HandleId instance_desc_resource_id = format::kNullHandleId;
+            bool             found                     = false;
+            reverse_gpu_va_map_.Map(instance_desc_gpu_va,
+                                    &instance_desc_resource_id,
+                                    &found,
+                                    instance_desc_gpu_va + sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+
+            if (instance_desc_resource_id != format::kNullHandleId)
+            {
+                GFXRECON_ASSERT(found);
+
+                auto resource_object_info = get_object_info_func_(instance_desc_resource_id);
+                GFXRECON_ASSERT(resource_object_info != nullptr);
+                GFXRECON_ASSERT(resource_object_info->object != nullptr);
+
+                auto instance_desc_resource = static_cast<ID3D12Resource*>(resource_object_info->object);
+                GFXRECON_ASSERT(instance_desc_gpu_va >= instance_desc_resource->GetGPUVirtualAddress());
+                auto offset_to_instance_desc_start =
+                    instance_desc_gpu_va - instance_desc_resource->GetGPUVirtualAddress();
+
+                constexpr auto accel_struct_gpu_va_offset =
+                    offsetof(D3D12_RAYTRACING_INSTANCE_DESC, AccelerationStructure);
+
+                auto& resource_value_infos = indirect_values_map[resource_object_info];
+                resource_value_infos.insert({ offset_to_instance_desc_start + accel_struct_gpu_va_offset,
+                                              ResourceValueType::kGpuVirtualAddress,
+                                              sizeof(D3D12_GPU_VIRTUAL_ADDRESS),
+                                              nullptr,
+                                              { nullptr, nullptr, 0 } });
+            }
+            else
+            {
+                GFXRECON_LOG_ERROR("Failed to find the resource containing the D3D12_GPU_VIRTUAL_ADDRESS (%" PRIu64
+                                   ") of InstanceDescs in call to BuildRaytracingAccelerationStructure. GPU addresses "
+                                   "pointed to by InstanceDescs may be incorrect.",
+                                   instance_desc_gpu_va);
+            }
+        }
+        return true;
+    }
     else
     {
         GFXRECON_ASSERT(false && "Unrecognized resource value type.");
@@ -1606,7 +1721,8 @@ void Dx12ResourceValueMapper::GetStateObjectLrsAssociationInfo(
         }
         else if (subobject_type == D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY)
         {
-            // TODO: Parse local root signatures and their shader associations from the DXIL library.
+            // TODO: DXIL libraries can also contain local root signature definitions as well as subobject associations.
+            // That information should be parsed here as well to ensure correct LRS handling.
             GFXRECON_LOG_DEBUG_ONCE("A state object is being created with a DXIL library subobject. Some usages of "
                                     "DXIL library subobjects may not be fully supported by GFXR replay.");
 
@@ -1615,10 +1731,90 @@ void Dx12ResourceValueMapper::GetStateObjectLrsAssociationInfo(
             auto num_exports           = dxil_lib_desc_decoder->GetPointer()->NumExports;
             if (num_exports == 0)
             {
-                // TODO: Parse the names of all shaders exported from the DXIL library.
+#if defined(GFXRECON_DXC_SUPPORT)
+                // If D3D12_DXIL_LIBRARY_DESC::NumExports == 0, everything in the DXIL library is exported. Use
+                // reflection to get the list of exported shader names.
+                HRESULT                         hr;
+                graphics::dx12::IDxcUtilsComPtr dxc_utils = nullptr;
+                hr                                        = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxc_utils));
+                if (SUCCEEDED(hr))
+                {
+                    graphics::dx12::IDxcContainerReflectionComPtr dxc_container_reflection = nullptr;
+                    DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&dxc_container_reflection));
+                    if (SUCCEEDED(hr))
+                    {
+                        // Create a DXC blob from the DXIL library's bytes.
+                        graphics::dx12::IDxcBlobEncodingComPtr dxc_blob_encoding;
+                        hr = dxc_utils->CreateBlobFromPinned(
+                            dxil_lib_desc_decoder->GetPointer()->DXILLibrary.pShaderBytecode,
+                            dxil_lib_desc_decoder->GetPointer()->DXILLibrary.BytecodeLength,
+                            DXC_CP_ACP,
+                            &dxc_blob_encoding);
+                        if (SUCCEEDED(hr))
+                        {
+                            // Load the DXIL library blob into the container reflection object.
+                            hr = dxc_container_reflection->Load(dxc_blob_encoding);
+                            if (SUCCEEDED(hr))
+                            {
+                                // Get the DXIL library reflection object.
+                                UINT32 dxil_part;
+                                hr = dxc_container_reflection->FindFirstPartKind(DXC_PART_DXIL, &dxil_part);
+                                if (SUCCEEDED(hr))
+                                {
+                                    graphics::dx12::ID3D12LibraryReflectionComPtr library_reflection;
+                                    hr = dxc_container_reflection->GetPartReflection(dxil_part,
+                                                                                     IID_PPV_ARGS(&library_reflection));
+                                    if (SUCCEEDED(hr))
+                                    {
+                                        // Parse all exported function/shader names from the DXIL library.
+                                        D3D12_LIBRARY_DESC library_desc;
+                                        hr = library_reflection->GetDesc(&library_desc);
+                                        if (SUCCEEDED(hr))
+                                        {
+                                            for (UINT i = 0; i < library_desc.FunctionCount; i++)
+                                            {
+                                                // The pointer returned by GetFunctionByIndex is owned by the
+                                                // ID3D12LibraryReflection object and does not need to be memory managed
+                                                // in this scope.
+                                                ID3D12FunctionReflection* function_reflection =
+                                                    library_reflection->GetFunctionByIndex(i);
+
+                                                D3D12_FUNCTION_DESC function_desc;
+                                                hr = function_reflection->GetDesc(&function_desc);
+                                                if (SUCCEEDED(hr))
+                                                {
+                                                    // Export names are mangled so parse the unmangled name.
+                                                    auto function_name = DemangleDxilExportName(function_desc.Name);
+                                                    if (!function_name.empty())
+                                                    {
+                                                        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>
+                                                            converter;
+                                                        export_names.insert(converter.from_bytes(function_name));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (FAILED(hr))
+                {
+                    GFXRECON_LOG_WARNING("Failed to parse shader exports from the DXIL subobject. Shader ID to LRS "
+                                         "associations may be incorrect.");
+                }
+#else  // GFXRECON_DXC_SUPPORT
+                GFXRECON_LOG_WARNING_ONCE(
+                    "GFXReconstruct was built without DirectX Shader Compiler support and cannot parse the exports "
+                    "from DXIL_LIBRARY subobjects. This may lead to incorrect DXR behavior. To fix this, be sure that "
+                    "the DXC depedency is successfully found during CMake project configuration.");
+#endif // GFXRECON_DXC_SUPPORT
             }
             else
             {
+                // Get the shader names specified explicitly in the D3D12_DXIL_LIBRARY_DESC.
                 for (UINT j = 0; j < num_exports; ++j)
                 {
                     export_names.insert(dxil_lib_desc_decoder->GetMetaStructPointer()

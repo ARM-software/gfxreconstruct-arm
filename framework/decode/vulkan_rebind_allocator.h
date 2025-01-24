@@ -42,7 +42,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
   public:
     VulkanRebindAllocator();
 
-    virtual ~VulkanRebindAllocator() override;
+    ~VulkanRebindAllocator() override = default;
 
     virtual VkResult Initialize(uint32_t                                api_version,
                                 VkInstance                              instance,
@@ -75,6 +75,16 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual void DestroyImage(VkImage                      image,
                               const VkAllocationCallbacks* allocation_callbacks,
                               ResourceData                 allocator_data) override;
+
+    virtual VkResult CreateVideoSession(const VkVideoSessionCreateInfoKHR* create_info,
+                                        const VkAllocationCallbacks*       allocation_callbacks,
+                                        format::HandleId                   capture_id,
+                                        VkVideoSessionKHR*                 session,
+                                        std::vector<ResourceData>*         allocator_datas) override;
+
+    virtual void DestroyVideoSession(VkVideoSessionKHR            session,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     std::vector<ResourceData>    allocator_datas) override;
 
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
@@ -140,6 +150,13 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                       const MemoryData*            allocator_memory_datas,
                                       VkMemoryPropertyFlags*       bind_memory_properties) override;
 
+    virtual VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
+                                            uint32_t                               bind_info_count,
+                                            const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                            const ResourceData*                    allocator_session_datas,
+                                            const MemoryData*                      allocator_memory_datas,
+                                            VkMemoryPropertyFlags*                 bind_memory_properties) override;
+
     virtual VkResult MapMemory(VkDeviceMemory   memory,
                                VkDeviceSize     offset,
                                VkDeviceSize     size,
@@ -187,6 +204,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                                  const VkBindImageMemoryInfo* bind_infos,
                                                  const ResourceData*          allocator_resource_datas,
                                                  const MemoryData*            allocator_memory_datas) override;
+
+    virtual void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
+                                                       uint32_t                               bind_info_count,
+                                                       const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                                       const ResourceData*                    allocator_resource_datas,
+                                                       const MemoryData* allocator_memory_datas) override;
 
     // Direct allocation methods that perform memory allocation and resource creation without performing memory
     // translation.  These methods allow the replay tool to allocate staging resources through the resource allocator so
@@ -290,6 +313,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     }
 
     virtual bool SupportsOpaqueDeviceAddresses() override { return false; }
+    virtual bool SupportBindVideoSessionMemory() override { return true; }
 
     virtual bool SupportsExternalMemory() override { return false; }
 
@@ -309,6 +333,14 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         VkSubresourceLayout rebind{};
     };
 
+    enum ObjectType
+    {
+        none          = 0,
+        buffer        = 1,
+        image         = 2,
+        video_session = 3,
+    };
+
     struct ResourceAllocInfo
     {
         MemoryAllocInfo* memory_info{ nullptr };
@@ -318,7 +350,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         VkDeviceSize     original_offset{ 0 };
         VkDeviceSize     rebind_offset{ 0 };
         VkDeviceSize     size{ 0 };
-        bool             is_image{ false };
+        ObjectType       object_type{ none };
         VkFlags          usage{ 0 };
         VkImageTiling    tiling{};
         uint32_t         height{ 0 };
@@ -339,6 +371,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
         bool                                             is_mapped{ false };
         VkDeviceSize                                     mapped_offset{ 0 };
+        AHardwareBuffer*                                 ahb{ nullptr };
+        VkDeviceMemory                                   ahb_memory{ VK_NULL_HANDLE };
         std::unique_ptr<uint8_t[]>                       original_content;
         std::unordered_map<VkBuffer, ResourceAllocInfo*> original_buffers;
         std::unordered_map<VkImage, ResourceAllocInfo*>  original_images;
@@ -346,6 +380,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         std::string          debug_utils_name;
         std::vector<uint8_t> debug_utils_tag;
         uint64_t             debug_utils_tag_name;
+
+        std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*> original_sessions;
     };
 
   private:
@@ -402,6 +438,9 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                        VkMemoryPropertyFlags       capture_properties,
                                        const VkMemoryRequirements& replay_requirements);
 
+    VmaMemoryUsage GetVideoSeesionMemoryUsage(VkMemoryPropertyFlags       capture_properties,
+                                              const VkMemoryRequirements& replay_requirements);
+
     VmaMemoryUsage AdjustMemoryUsage(VmaMemoryUsage desired_usage, const VkMemoryRequirements& replay_requirements);
 
     void ReportBindIncompatibility(const ResourceData* allocator_resource_datas, uint32_t resource_count);
@@ -413,6 +452,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                               MemoryData                              allocator_memory_data,
                               VkMemoryPropertyFlags*                  bind_memory_properties,
                               const VkPhysicalDeviceMemoryProperties& device_memory_properties);
+
+    VkResult AllocateAHBMemory(MemoryAllocInfo* memory_alloc_info, const VkImage image);
 
     VkResult BindImageMemory(VkImage                                 image,
                              VkDeviceMemory                          memory,
@@ -429,17 +470,17 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                         uint64_t                 resource_handle);
 
   private:
-    VkDevice                         device_;
+    VkDevice                         device_ = VK_NULL_HANDLE;
     VmaAllocator                     allocator_;
     Functions                        functions_;
     VmaVulkanFunctions               vma_functions_;
     VkPhysicalDeviceType             capture_device_type_;
     VkPhysicalDeviceMemoryProperties capture_memory_properties_;
     VkPhysicalDeviceMemoryProperties replay_memory_properties_;
-    VkCommandBuffer                  cmd_buffer_;
-    VkCommandPool                    cmd_pool_;
-    VkQueue                          staging_queue_;
-    uint32_t                         staging_queue_family_;
+    VkCommandBuffer                  cmd_buffer_    = VK_NULL_HANDLE;
+    VkCommandPool                    cmd_pool_      = VK_NULL_HANDLE;
+    VkQueue                          staging_queue_ = VK_NULL_HANDLE;
+    uint32_t                         staging_queue_family_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)

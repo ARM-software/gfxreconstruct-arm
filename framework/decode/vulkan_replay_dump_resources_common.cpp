@@ -54,18 +54,8 @@ PipelineBindPoints VkPipelineBindPointToPipelineBindPoint(VkPipelineBindPoint bi
     }
 }
 
-bool IsFormatAstcCompressed(VkFormat format)
+static util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat format)
 {
-    return vkuFormatIsCompressed_ASTC_HDR(format) || vkuFormatIsCompressed_ASTC_LDR(format);
-}
-
-util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat format)
-{
-    if (IsFormatAstcCompressed(format))
-    {
-        return util::imagewriter::DataFormats::kFormat_ASTC;
-    }
-
     switch (format)
     {
         case VK_FORMAT_R8_UNORM:
@@ -109,36 +99,42 @@ util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat format)
     }
 }
 
-const char* ImageFileExtension(VkFormat format, util::ScreenshotFormat image_file_format)
+const char* ImageFileExtension(DumpedImageFormat image_format)
 {
-    const util::imagewriter::DataFormats output_image_format = VkFormatToImageWriterDataFormat(format);
-
-    if (output_image_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED)
+    switch (image_format)
     {
-        if (output_image_format == util::imagewriter::DataFormats::kFormat_ASTC)
-        {
-            return ".astc";
-        }
-        else
-        {
-            switch (image_file_format)
-            {
-                case util::ScreenshotFormat::kBmp:
-                    return ".bmp";
+        case kFormatBMP:
+            return ".bmp";
 
-                case util::ScreenshotFormat::kPng:
-                    return ".png";
+        case KFormatPNG:
+            return ".png";
 
-                default:
-                    assert(0);
-                    return ".bmp";
-            }
-        }
+        case KFormatRaw:
+        default:
+            return ".bin";
+    }
+}
+
+static VkFormat ChooseDestinationImageFormat(VkFormat format)
+{
+    VkFormat dst_format;
+
+    if (vkuFormatIsSRGB(format))
+    {
+        dst_format = vkuFormatHasAlpha(format) ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8_SRGB;
+    }
+    else if (vkuFormatIsDepthOrStencil(format))
+    {
+        // Converting depth format with vkCmdBlit is not allowed.
+        // We will do the conversion on the cpu.
+        dst_format = format;
     }
     else
     {
-        return ".bin";
+        dst_format = vkuFormatHasAlpha(format) ? VK_FORMAT_B8G8R8A8_UNORM : VK_FORMAT_B8G8R8_UNORM;
     }
+
+    return dst_format;
 }
 
 uint32_t GetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memory_properties,
@@ -160,10 +156,10 @@ uint32_t GetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memory_prope
     return memory_type_index;
 }
 
-VkResult CloneImage(VulkanObjectInfoTable&                  object_info_table,
+VkResult CloneImage(CommonObjectInfoTable&                  object_info_table,
                     const encode::VulkanDeviceTable*        device_table,
                     const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props,
-                    const ImageInfo*                        image_info,
+                    const VulkanImageInfo*                  image_info,
                     VkImage*                                new_image,
                     VkDeviceMemory*                         new_image_memory)
 {
@@ -184,8 +180,8 @@ VkResult CloneImage(VulkanObjectInfoTable&                  object_info_table,
     ci.pQueueFamilyIndices   = nullptr;
     ci.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(image_info->parent_id);
-    VkDevice          device      = device_info->handle;
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(image_info->parent_id);
+    VkDevice                device      = device_info->handle;
 
     assert(device_table);
     assert(new_image);
@@ -231,10 +227,10 @@ VkResult CloneImage(VulkanObjectInfoTable&                  object_info_table,
     return VK_SUCCESS;
 }
 
-VkResult CloneBuffer(VulkanObjectInfoTable&                  object_info_table,
+VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
                      const encode::VulkanDeviceTable*        device_table,
                      const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props,
-                     const BufferInfo*                       buffer_info,
+                     const VulkanBufferInfo*                 buffer_info,
                      VkBuffer*                               new_buffer,
                      VkDeviceMemory*                         new_buffer_memory,
                      VkDeviceSize                            override_size)
@@ -254,8 +250,8 @@ VkResult CloneBuffer(VulkanObjectInfoTable&                  object_info_table,
     ci.queueFamilyIndexCount = buffer_info->queue_family_index;
     ci.pQueueFamilyIndices   = nullptr;
 
-    const DeviceInfo* device_info = object_info_table.GetDeviceInfo(buffer_info->parent_id);
-    VkDevice          device      = device_info->handle;
+    const VulkanDeviceInfo* device_info = object_info_table.GetVkDeviceInfo(buffer_info->parent_id);
+    VkDevice                device      = device_info->handle;
 
     VkResult res = device_table->CreateBuffer(device, &ci, nullptr, new_buffer);
     if (res != VK_SUCCESS)
@@ -438,16 +434,18 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
     }
 }
 
-VkResult DumpImageToFile(const ImageInfo*                   image_info,
-                         const DeviceInfo*                  device_info,
+VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
+                         const VulkanDeviceInfo*            device_info,
                          const encode::VulkanDeviceTable*   device_table,
                          const encode::VulkanInstanceTable* instance_table,
-                         VulkanObjectInfoTable&             object_info_table,
+                         CommonObjectInfoTable&             object_info_table,
                          const std::vector<std::string>&    filenames,
                          float                              scale,
                          std::vector<bool>&                 scaling_supported,
                          util::ScreenshotFormat             image_file_format,
                          bool                               dump_all_subresources,
+                         bool                               dump_image_raw,
+                         bool                               dump_separate_alpha,
                          VkImageLayout                      layout,
                          const VkExtent3D*                  extent_p)
 {
@@ -457,14 +455,14 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
     assert(instance_table != nullptr);
 
     std::vector<VkImageAspectFlagBits> aspects;
-    graphics::GetFormatAspects(image_info->format, &aspects);
+    GetFormatAspects(image_info->format, aspects);
 
     const uint32_t total_files =
         dump_all_subresources ? (aspects.size() * image_info->layer_count * image_info->level_count) : aspects.size();
     assert(total_files == filenames.size());
     assert(scaling_supported.size() == total_files);
 
-    const PhysicalDeviceInfo* phys_dev_info = object_info_table.GetPhysicalDeviceInfo(device_info->parent_id);
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
     graphics::VulkanResourcesUtil resource_util(device_info->handle,
@@ -476,6 +474,8 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
     const VkExtent3D extent{ (extent_p != nullptr) ? extent_p->width : image_info->extent.width,
                              (extent_p != nullptr) ? extent_p->height : image_info->extent.height,
                              (extent_p != nullptr) ? extent_p->depth : image_info->extent.depth };
+
+    const VkFormat dst_format = ChooseDestinationImageFormat(image_info->format);
 
     uint32_t f = 0;
     for (size_t i = 0; i < aspects.size(); ++i)
@@ -504,7 +504,8 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
             subresource_sizes,
             scaled,
             false,
-            scale);
+            scale,
+            dst_format);
 
         assert(!subresource_offsets.empty());
         assert(!subresource_sizes.empty());
@@ -519,16 +520,28 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
             return res;
         }
 
-        const util::imagewriter::DataFormats output_image_format = VkFormatToImageWriterDataFormat(image_info->format);
+        const DumpedImageFormat output_image_format = GetDumpedImageFormat(device_info,
+                                                                           device_table,
+                                                                           instance_table,
+                                                                           object_info_table,
+                                                                           image_info->format,
+                                                                           image_info->tiling,
+                                                                           image_info->type,
+                                                                           image_file_format,
+                                                                           dump_image_raw);
+
+        const util::imagewriter::DataFormats image_writer_format = VkFormatToImageWriterDataFormat(dst_format);
+        assert(image_writer_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED);
 
         if ((image_info->level_count == 1 && image_info->layer_count == 1) || !dump_all_subresources)
         {
             std::string filename = filenames[f++];
 
+            // We don't support stencil output yet
             if (aspects[i] == VK_IMAGE_ASPECT_STENCIL_BIT)
                 continue;
 
-            if (output_image_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED)
+            if (output_image_format != KFormatRaw)
             {
                 VkExtent3D scaled_extent;
                 if (scale != 1.0f && scaled)
@@ -542,43 +555,56 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
                     scaled_extent = image_info->extent;
                 }
 
-                const uint32_t texel_size = vkuFormatElementSizeWithAspect(image_info->format, aspects[i]);
+                const uint32_t texel_size = vkuFormatElementSizeWithAspect(dst_format, aspects[i]);
                 const uint32_t stride     = texel_size * scaled_extent.width;
 
-                filename += ImageFileExtension(image_info->format, image_file_format);
-                if (output_image_format == util::imagewriter::DataFormats::kFormat_ASTC)
+                if (output_image_format == kFormatBMP)
                 {
-                    VKU_FORMAT_INFO format_info = vkuGetFormatInfo(image_info->format);
-
-                    util::imagewriter::WriteAstcImage(filename,
-                                                      scaled_extent.width,
-                                                      scaled_extent.width,
-                                                      1,
-                                                      format_info.block_extent.width,
-                                                      format_info.block_extent.height,
-                                                      format_info.block_extent.depth,
-                                                      data.data(),
-                                                      subresource_sizes[0]);
+                    if (dump_separate_alpha)
+                    {
+                        util::imagewriter::WriteBmpImageSeparateAlpha(filename,
+                                                                      scaled_extent.width,
+                                                                      scaled_extent.height,
+                                                                      subresource_sizes[0],
+                                                                      data.data(),
+                                                                      stride,
+                                                                      image_writer_format);
+                    }
+                    else
+                    {
+                        util::imagewriter::WriteBmpImage(filename,
+                                                         scaled_extent.width,
+                                                         scaled_extent.height,
+                                                         subresource_sizes[0],
+                                                         data.data(),
+                                                         stride,
+                                                         image_writer_format,
+                                                         vkuFormatHasAlpha(image_info->format));
+                    }
                 }
-                else if (image_file_format == util::ScreenshotFormat::kBmp)
+                else if (output_image_format == KFormatPNG)
                 {
-                    util::imagewriter::WriteBmpImage(filename,
-                                                     scaled_extent.width,
-                                                     scaled_extent.height,
-                                                     subresource_sizes[0],
-                                                     data.data(),
-                                                     stride,
-                                                     output_image_format);
-                }
-                else if (image_file_format == util::ScreenshotFormat::kPng)
-                {
-                    util::imagewriter::WritePngImage(filename,
-                                                     scaled_extent.width,
-                                                     scaled_extent.height,
-                                                     subresource_sizes[0],
-                                                     data.data(),
-                                                     stride,
-                                                     output_image_format);
+                    if (dump_separate_alpha)
+                    {
+                        util::imagewriter::WritePngImageSeparateAlpha(filename,
+                                                                      scaled_extent.width,
+                                                                      scaled_extent.height,
+                                                                      subresource_sizes[0],
+                                                                      data.data(),
+                                                                      stride,
+                                                                      image_writer_format);
+                    }
+                    else
+                    {
+                        util::imagewriter::WritePngImage(filename,
+                                                         scaled_extent.width,
+                                                         scaled_extent.height,
+                                                         subresource_sizes[0],
+                                                         data.data(),
+                                                         stride,
+                                                         image_writer_format,
+                                                         vkuFormatHasAlpha(image_info->format));
+                    }
                 }
             }
             else
@@ -587,7 +613,6 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
                     "%s format is not handled. Images with that format will be dump as a plain binary file.",
                     util::ToString<VkFormat>(image_info->format).c_str());
 
-                filename = filename + std::string(".bin");
                 util::bufferwriter::WriteBuffer(filename, data.data(), data.size());
             }
         }
@@ -606,7 +631,7 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
                     const void*    data_offset = reinterpret_cast<const void*>(
                         reinterpret_cast<const uint8_t*>(data.data()) + subresource_offsets[sub_res_idx]);
 
-                    if (output_image_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED)
+                    if (output_image_format != KFormatRaw)
                     {
                         VkExtent3D scaled_extent;
                         if (scale != 1.0f && scaled)
@@ -627,40 +652,53 @@ VkResult DumpImageToFile(const ImageInfo*                   image_info,
                         const uint32_t texel_size = vkuFormatElementSizeWithAspect(image_info->format, aspect);
                         const uint32_t stride     = texel_size * scaled_extent.width;
 
-                        filename += ImageFileExtension(image_info->format, image_file_format);
-                        if (output_image_format == util::imagewriter::DataFormats::kFormat_ASTC)
+                        if (output_image_format == kFormatBMP)
                         {
-                            VKU_FORMAT_INFO format_info = vkuGetFormatInfo(image_info->format);
-
-                            util::imagewriter::WriteAstcImage(filename,
-                                                              scaled_extent.width,
-                                                              scaled_extent.width,
-                                                              1,
-                                                              format_info.block_extent.width,
-                                                              format_info.block_extent.height,
-                                                              format_info.block_extent.depth,
-                                                              data.data(),
-                                                              subresource_sizes[sub_res_idx]);
+                            if (dump_separate_alpha)
+                            {
+                                util::imagewriter::WriteBmpImageSeparateAlpha(filename,
+                                                                              scaled_extent.width,
+                                                                              scaled_extent.height,
+                                                                              subresource_sizes[sub_res_idx],
+                                                                              data_offset,
+                                                                              stride,
+                                                                              image_writer_format);
+                            }
+                            else
+                            {
+                                util::imagewriter::WriteBmpImage(filename,
+                                                                 scaled_extent.width,
+                                                                 scaled_extent.height,
+                                                                 subresource_sizes[sub_res_idx],
+                                                                 data_offset,
+                                                                 stride,
+                                                                 image_writer_format,
+                                                                 vkuFormatHasAlpha(image_info->format));
+                            }
                         }
-                        else if (image_file_format == util::ScreenshotFormat::kBmp)
+                        else if (output_image_format == KFormatPNG)
                         {
-                            util::imagewriter::WriteBmpImage(filename,
-                                                             scaled_extent.width,
-                                                             scaled_extent.height,
-                                                             subresource_sizes[sub_res_idx],
-                                                             data_offset,
-                                                             stride,
-                                                             output_image_format);
-                        }
-                        else if (image_file_format == util::ScreenshotFormat::kPng)
-                        {
-                            util::imagewriter::WritePngImage(filename,
-                                                             scaled_extent.width,
-                                                             scaled_extent.height,
-                                                             subresource_sizes[sub_res_idx],
-                                                             data_offset,
-                                                             stride,
-                                                             output_image_format);
+                            if (dump_separate_alpha)
+                            {
+                                util::imagewriter::WritePngImageSeparateAlpha(filename,
+                                                                              scaled_extent.width,
+                                                                              scaled_extent.height,
+                                                                              subresource_sizes[sub_res_idx],
+                                                                              data_offset,
+                                                                              stride,
+                                                                              image_writer_format);
+                            }
+                            else
+                            {
+                                util::imagewriter::WritePngImage(filename,
+                                                                 scaled_extent.width,
+                                                                 scaled_extent.height,
+                                                                 subresource_sizes[sub_res_idx],
+                                                                 data_offset,
+                                                                 stride,
+                                                                 image_writer_format,
+                                                                 vkuFormatHasAlpha(image_info->format));
+                            }
                         }
                     }
                     else
@@ -834,6 +872,74 @@ VkResult CreateVkBuffer(VkDeviceSize                            size,
     }
 
     return VK_SUCCESS;
+}
+
+void GetFormatAspects(VkFormat format, std::vector<VkImageAspectFlagBits>& aspects)
+{
+    aspects.clear();
+    graphics::GetFormatAspects(format, &aspects);
+
+    for (auto it = aspects.begin(); it < aspects.end();)
+    {
+        if (*it == VK_IMAGE_ASPECT_STENCIL_BIT)
+        {
+            it = aspects.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+DumpedImageFormat GetDumpedImageFormat(const VulkanDeviceInfo*            device_info,
+                                       const encode::VulkanDeviceTable*   device_table,
+                                       const encode::VulkanInstanceTable* instance_table,
+                                       VulkanObjectInfoTable&             object_info_table,
+                                       VkFormat                           src_format,
+                                       VkImageTiling                      src_image_tiling,
+                                       VkImageType                        type,
+                                       util::ScreenshotFormat             image_file_format,
+                                       bool                               dump_raw)
+{
+    const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
+    assert(phys_dev_info);
+
+    // If there's a request for images to be dumped as raw bin files
+    if (dump_raw)
+    {
+        return KFormatRaw;
+    }
+
+    graphics::VulkanResourcesUtil resource_util(device_info->handle,
+                                                device_info->parent,
+                                                *device_table,
+                                                *instance_table,
+                                                *phys_dev_info->replay_device_info->memory_properties);
+
+    // Image cannot be converted into a format compatible for dumping in an image file
+    const VkFormat dst_format        = ChooseDestinationImageFormat(src_format);
+    bool           is_blit_supported = resource_util.IsBlitSupported(src_format, src_image_tiling, dst_format);
+    if (!vkuFormatIsDepthOrStencil(src_format) && src_format != dst_format && !is_blit_supported)
+    {
+        return KFormatRaw;
+    }
+
+    // Choose the requested preference for image file extension
+    switch (image_file_format)
+    {
+        case util::ScreenshotFormat::kBmp:
+            return kFormatBMP;
+
+        case util::ScreenshotFormat::kPng:
+            return KFormatPNG;
+
+        default:
+            assert(0);
+            return KFormatRaw;
+    }
+
+    return KFormatRaw;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

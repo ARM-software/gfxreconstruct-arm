@@ -22,7 +22,6 @@
 */
 
 #include "decode/preload_file_processor.h"
-#include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -42,16 +41,14 @@ void PreloadFileProcessor::PreloadNextFrames(size_t count)
     status_ = PreloadStatus::kReplay;
 }
 
-PreloadFileProcessor::PreloadBuffer::PreloadBuffer() : replay_offset_(0) {}
-
-void PreloadFileProcessor::PreloadBuffer::Reserve(size_t size)
+PreloadFileProcessor::PreloadBuffer::PreloadBuffer()
 {
-    container_.reserve(container_.size() + size);
+    Reset();
 }
 
 size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t destination_size)
 {
-    auto remaining_buffer_data = container_.size() - replay_offset_;
+    auto remaining_buffer_data = preloaded_size_ - replay_offset_;
     auto read_size             = destination_size > remaining_buffer_data ? remaining_buffer_data : destination_size;
     memcpy(destination, &container_[replay_offset_], read_size);
     replay_offset_ += read_size;
@@ -60,9 +57,10 @@ size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t desti
 
 void PreloadFileProcessor::PreloadBuffer::Reset()
 {
-    container_.clear();
-    container_.shrink_to_fit();
+    allocated_size_ = 0;
     replay_offset_ = 0;
+    free(container_);
+    container_ = nullptr;
 }
 
 bool PreloadFileProcessor::ProcessBlocks()
@@ -72,6 +70,7 @@ bool PreloadFileProcessor::ProcessBlocks()
 
     while (success)
     {
+        PrintBlockInfo();
         success = ContinueDecoding();
 
         if (success)
@@ -100,12 +99,7 @@ bool PreloadFileProcessor::ProcessBlocks()
                         const auto is_frame_delimiter = IsFrameDelimiter(api_call_id);
                         if (status_ == PreloadStatus::kRecord)
                         {
-                            preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                            preload_buffer_.Add(&block_header);
-                            preload_buffer_.Add(&api_call_id);
-                            size_t parameters_size  = block_header.size - sizeof(api_call_id);
-                            auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                            success                 = ReadBytes(parameter_buffer, parameters_size);
+                            success = ReadParameterBytes(block_header, api_call_id, preload_buffer_);
                             if (!success)
                             {
                                 HandleBlockReadError(kErrorReadingBlockData, "Failed to read function call block data");
@@ -142,12 +136,7 @@ bool PreloadFileProcessor::ProcessBlocks()
                         const auto is_frame_delimiter = IsFrameDelimiter(api_call_id);
                         if (status_ == PreloadStatus::kRecord)
                         {
-                            preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                            preload_buffer_.Add(&block_header);
-                            preload_buffer_.Add(&api_call_id);
-                            size_t parameters_size  = block_header.size - sizeof(api_call_id);
-                            auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                            success                 = ReadBytes(parameter_buffer, parameters_size);
+                            success = ReadParameterBytes(block_header, api_call_id, preload_buffer_);
                             if (!success)
                             {
                                 HandleBlockReadError(kErrorReadingBlockData,
@@ -177,11 +166,7 @@ bool PreloadFileProcessor::ProcessBlocks()
                 {
                     if (status_ == PreloadStatus::kRecord)
                     {
-                        preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                        preload_buffer_.Add(&block_header);
-                        size_t parameters_size  = block_header.size;
-                        auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                        success                 = ReadBytes(parameter_buffer, parameters_size);
+                        success = ReadParameterBytes(block_header, preload_buffer_);
                         if (!success)
                         {
                             HandleBlockReadError(kErrorReadingBlockData, "Failed to preload meta-data block");
@@ -216,12 +201,7 @@ bool PreloadFileProcessor::ProcessBlocks()
                         if (status_ == PreloadStatus::kRecord)
                         {
                             const auto is_frame_delimiter = IsFrameDelimiter(block_header.type, marker_type);
-                            preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                            preload_buffer_.Add(&block_header);
-                            preload_buffer_.Add(&marker_type);
-                            size_t parameters_size  = block_header.size - sizeof(marker_type);
-                            auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                            success                 = ReadBytes(parameter_buffer, parameters_size);
+                            success = ReadParameterBytes(block_header, marker_type, preload_buffer_);
                             if (!success)
                             {
                                 HandleBlockReadError(kErrorReadingBlockData, "Failed to preload frame marker block");
@@ -254,11 +234,7 @@ bool PreloadFileProcessor::ProcessBlocks()
 
                     if (status_ == PreloadStatus::kRecord)
                     {
-                        preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                        preload_buffer_.Add(&block_header);
-                        size_t parameters_size  = block_header.size;
-                        auto*  parameter_buffer = preload_buffer_.Add(parameters_size);
-                        success                 = ReadBytes(parameter_buffer, parameters_size);
+                        success = ReadParameterBytes(block_header, preload_buffer_);
                         if (!success)
                         {
                             HandleBlockReadError(kErrorReadingBlockData, "Failed to preload state marker block data");
@@ -284,10 +260,7 @@ bool PreloadFileProcessor::ProcessBlocks()
                     {
                         if (status_ == PreloadStatus::kRecord)
                         {
-                            preload_buffer_.Reserve(sizeof(block_header) + block_header.size);
-                            preload_buffer_.Add(&block_header);
-                            auto* parameter_buffer = preload_buffer_.Add(block_header.size);
-                            success                = ReadBytes(parameter_buffer, block_header.size);
+                            success = ReadParameterBytes(block_header, preload_buffer_);
                             if (!success)
                             {
                                 HandleBlockReadError(kErrorReadingBlockData, "Failed to preload annotation block data");
@@ -328,7 +301,7 @@ bool PreloadFileProcessor::ProcessBlocks()
             }
             else
             {
-                if (feof(file_descriptor_) == 0)
+                if (feof(GetFileDescriptor()) == 0)
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as
                     // it assumes that the block header has been successfully read and will print an incomplete
@@ -355,7 +328,6 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
     if (status_ == PreloadStatus::kReplay)
     {
         bytes_read = preload_buffer_.Read(buffer, buffer_size);
-        bytes_read_ += bytes_read;
         if (preload_buffer_.ReplayFinished())
         {
             status_ = PreloadStatus::kInactive;
@@ -363,9 +335,14 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
     }
     else
     {
-        bytes_read = util::platform::FileRead(buffer, 1, buffer_size, file_descriptor_);
-        bytes_read_ += bytes_read;
+        bool success = util::platform::FileRead(buffer, buffer_size, GetFileDescriptor());
+        if (success)
+        {
+            bytes_read = buffer_size;
+        }
     }
+
+    bytes_read_ += bytes_read;
     return bytes_read == buffer_size;
 }
 

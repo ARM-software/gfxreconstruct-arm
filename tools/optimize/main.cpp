@@ -25,8 +25,9 @@
 #include "file_optimizer.h"
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
-#include "decode/vulkan_micromap_modifier.h"
-#include "decode/vulkan_skia_modifier.h"
+#include "vulkan_micromap_modifier.h"
+#include "generated/generated_vulkan_skiavk_modifier.h"
+#include "vulkan_raytracing_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -45,6 +46,9 @@
 #include "util/argument_parser.h"
 #include "util/logging.h"
 #include "util/date_time.h"
+
+// TODO add vulkan_raytracing_optimizer
+// #include "vulkan_raytracing_optimizer.h"
 
 #include "vulkan/vulkan.h"
 
@@ -67,13 +71,15 @@ extern "C"
 #endif
 
 const char kOptions[]   = "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--dxr,--dxr-experimental";
-const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options";
+const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options,--remove-device-instance";
 
 const char kD3d12PsoRemoval[]             = "--d3d12-pso-removal";
 const char kDx12OptimizeDxr[]             = "--dxr";
 const char kDx12OptimizeDxrExperimental[] = "--dxr-experimental";
 const char kReplayOptions[]               = "--set-replay-options";
+const char kVulkanDevInsRemoval[]         = "--remove-device-instance";
 
+std::vector<std::string> remove_app_name;
 static void PrintUsage(const char* exe_name)
 {
     std::string app_name     = exe_name;
@@ -90,10 +96,10 @@ static void PrintUsage(const char* exe_name)
         "\t\t\tFor D3D12, the optimizer will improve DXR replay performance and remove unused PSOs (for all captures)");
     GFXRECON_WRITE_CONSOLE("");
     GFXRECON_WRITE_CONSOLE("Usage:");
-    GFXRECON_WRITE_CONSOLE(
-        "  %s [-h | --help] [--version] [--d3d12-pso-removal] [--dxr] [--gpu <index>] [--set-replay-options] "
-        "<input-file> <output-file>",
-        app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("  %s [-h | --help] [--version] [--d3d12-pso-removal] [--dxr] [--gpu <index>] "
+                           "[--set-replay-options] [--remove-device-instance] "
+                           "<input-file> <output-file>",
+                           app_name.c_str());
     GFXRECON_WRITE_CONSOLE("");
     GFXRECON_WRITE_CONSOLE("Required arguments:");
     GFXRECON_WRITE_CONSOLE("  <input-file>\t\tThe path to input GFXReconstruct capture file to be processed.");
@@ -103,6 +109,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE(
         "  --set-replay-options <options>\t\tAdd default playback options to the trace. Use quotation marks "
         "for multiple arguments. Do NOT combine this option with any other option.");
+    GFXRECON_WRITE_CONSOLE(
+        "  --remove-device-instance <options>\t\tRemove redundant instance/device and corresponding APIs. Use "
+        "comma marks for multiple arguments. the default value is \"android framework\".");
     GFXRECON_WRITE_CONSOLE("  -h\t\t\tPrint usage information and exit (same as --help).");
     GFXRECON_WRITE_CONSOLE("  --version\t\tPrint version information and exit.");
 #if defined(WIN32)
@@ -110,7 +119,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
     GFXRECON_WRITE_CONSOLE("        \t\tdisplayed when abort() is called (Windows debug only).");
 #endif
-    GFXRECON_WRITE_CONSOLE(
     GFXRECON_WRITE_CONSOLE("  --d3d12-pso-removal\tD3D12-only: Remove creation of unreferenced PSOs.");
     GFXRECON_WRITE_CONSOLE("  --dxr\t\t\tD3D12-only: Optimize for DXR and ExecuteIndirect replay.");
     GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\tUse the specified device for the optimizer replay, where index");
@@ -149,15 +157,18 @@ GetVulkanOptimizationData(const std::string& input_filename)
     {
         gfxrecon::decode::VulkanDecoder                    decoder;
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-        auto feature_tracker_consumer   = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
-        auto micromap_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
-        auto vulkan_skia_modifier_consuer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
+        auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+        auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+        auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
+        auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>();
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
-        decoder.AddConsumer(vulkan_skia_modifier_consuer.get());
+        decoder.AddConsumer(vulkan_skia_modifier_consumer.get());
+        decoder.AddConsumer(raytracing_modifier_consumer.get());
 
+        vulkan_skia_modifier_consumer.get()->SetAppName(remove_app_name);
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
 
@@ -176,9 +187,13 @@ GetVulkanOptimizationData(const std::string& input_filename)
         {
             result->modifiers.push_back(std::move(micromap_modifier_consumer));
         }
-        if (vulkan_skia_modifier_consuer->CanOptimize())
+        if (vulkan_skia_modifier_consumer->CanOptimize())
         {
-            result->modifiers.push_back(std::move(vulkan_skia_modifier_consuer));
+            result->modifiers.push_back(std::move(vulkan_skia_modifier_consumer));
+        }
+        if (raytracing_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(raytracing_modifier_consumer));
         }
     }
     return result;
@@ -203,7 +218,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 
     // Modification pass. Implement all identified optimizations in output file
     gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get());
-    if (file_optimizer.Initialize(input_filename, output_filename))
+    if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
     {
         file_optimizer.Process();
 
@@ -222,7 +237,7 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
 void SetReplayOptions(std::string input_filename, std::string output_filename, std::string replay_options)
 {
     gfxrecon::ReplayOptionsEditor file_transformer;
-    if (file_transformer.Initialize(input_filename, output_filename))
+    if (file_transformer.Initialize(input_filename, output_filename, "replay_options"))
     {
         file_transformer.SetReplayOptions(replay_options);
         file_transformer.Process();
@@ -271,11 +286,13 @@ int main(int argc, const char** argv)
     {
         std::string                     input_filename;
         std::string                     output_filename;
+        std::string                     remove_app_string;
         const std::vector<std::string>& positional_arguments = arg_parser.GetPositionalArguments();
         input_filename                                       = positional_arguments[0];
         output_filename                                      = positional_arguments[1];
 
         const bool set_replay_options = arg_parser.IsArgumentSet(kReplayOptions);
+        const bool remove_device_instance = arg_parser.IsArgumentSet(kVulkanDevInsRemoval);
 
         // Parameter checking and API detection
         gfxrecon::decode::Dx12OptimizationOptions dx12_options;
@@ -293,6 +310,16 @@ int main(int argc, const char** argv)
                 throw std::runtime_error("Option --set-replay-options cannot be used with any other option. Exiting.");
             }
         }
+
+        if (remove_device_instance)
+        {
+            remove_app_string = arg_parser.GetArgumentValue(kVulkanDevInsRemoval);
+        }
+        else
+        {
+            remove_app_string = "android framework";
+        }
+        remove_app_name = arg_parser.SplitStringByFlag(remove_app_string, ',');
 
         if (!override_gpu.empty())
         {

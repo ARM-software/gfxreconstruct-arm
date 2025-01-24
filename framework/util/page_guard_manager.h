@@ -55,6 +55,18 @@
 #endif
 #endif
 
+#if defined(__ANDROID__)
+struct SigchainAction
+{
+    bool (*sc_sigaction)(int, siginfo_t*, void*);
+    sigset_t sc_mask;
+    uint64_t sc_flags;
+};
+
+typedef void (*PFN_AddSpecialSignalHandlerFn)(int signal, SigchainAction* sa);
+typedef void (*PFN_RemoveSpecialSignalHandlerFn)(int signal, bool (*fn)(int, siginfo_t*, void*));
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
@@ -145,20 +157,6 @@ class PageGuardManager
 
     void UffdUnblockRtSignal();
 
-  protected:
-    PageGuardManager();
-
-    PageGuardManager(bool                 enable_copy_on_map,
-                     bool                 enable_separate_read,
-                     bool                 expect_read_write_same_page,
-                     bool                 unblock_SIGSEGV,
-                     bool                 enable_signal_handler_watcher,
-                     int                  signal_handler_watcher_max_restores,
-                     MemoryProtectionMode protection_mode);
-
-    ~PageGuardManager();
-
-  private:
     struct MemoryInfo
     {
         MemoryInfo(void*       mm,
@@ -210,6 +208,23 @@ class PageGuardManager
 #endif
     };
 
+    void GetDirtyMemoryRegions(uint64_t                                         memory_id,
+                               std::unordered_map<uint64_t, const MemoryInfo&>& memories_page_status);
+
+  protected:
+    PageGuardManager();
+
+    PageGuardManager(bool                 enable_copy_on_map,
+                     bool                 enable_separate_read,
+                     bool                 expect_read_write_same_page,
+                     bool                 unblock_SIGSEGV,
+                     bool                 enable_signal_handler_watcher,
+                     int                  signal_handler_watcher_max_restores,
+                     MemoryProtectionMode protection_mode);
+
+    ~PageGuardManager();
+
+  private:
     struct ShadowMemoryInfo
     {
         ShadowMemoryInfo(void* sm, size_t ss, size_t tp, size_t lss) :
@@ -295,6 +310,12 @@ class PageGuardManager
     static std::atomic<bool>     stop_uffd_handler_thread_;
     std::unique_ptr<uint8_t[]>   uffd_page_size_tmp_buff_;
     std::unordered_set<uint64_t> uffd_fault_causing_threads;
+#endif
+
+#if defined(__ANDROID__)
+    PFN_AddSpecialSignalHandlerFn    AddSpecialSignalHandlerFn    = nullptr;
+    PFN_RemoveSpecialSignalHandlerFn RemoveSpecialSignalHandlerFn = nullptr;
+    bool                             libsigchain_active_          = false;
 #endif
 
     bool     InitializeUserFaultFd();

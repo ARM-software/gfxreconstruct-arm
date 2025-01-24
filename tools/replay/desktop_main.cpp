@@ -92,9 +92,9 @@ const char kLayerEnvVar[] = "VK_INSTANCE_LAYERS";
 #if defined(D3D12_SUPPORT)
 bool BrowseFile(const std::string&                           input_filename,
                 const gfxrecon::decode::DumpResourcesTarget& dump_resources_target,
-                gfxrecon::decode::TrackDumpDrawcall&         out_track_dump_target)
+                gfxrecon::decode::TrackDumpDrawCall&         out_track_dump_target)
 {
-    gfxrecon::decode::TrackDumpDrawcall* track_dump_target = nullptr;
+    gfxrecon::decode::TrackDumpDrawCall* track_dump_target = nullptr;
 
     gfxrecon::decode::FileProcessor file_processor;
     if (file_processor.Initialize(input_filename))
@@ -180,14 +180,18 @@ int main(int argc, const char** argv)
             gfxrecon::decode::VulkanReplayOptions          vulkan_replay_options =
                 GetVulkanReplayOptions(arg_parser, filename, &tracked_object_info_table);
 
-            uint32_t measurement_start_frame = 0;
-            uint32_t measurement_end_frame   = 0;
             // Process --dump-resources arg.
             if (!gfxrecon::parse_dump_resources::parse_dump_resources_arg(vulkan_replay_options))
             {
                 GFXRECON_LOG_FATAL("There was an error while parsing dump resources indices. Terminating.");
                 return -1;
             }
+
+            uint32_t measurement_start_frame = 0;
+            uint32_t measurement_end_frame   = 0;
+
+            bool     quit_after_frame = false;
+            uint32_t quit_frame       = std::numeric_limits<uint32_t>::max();
 
             bool        quit_after_measurement_frame_range = false;
             bool        flush_measurement_frame_range      = false;
@@ -203,6 +207,13 @@ int main(int argc, const char** argv)
                 flush_measurement_frame_range      = vulkan_replay_options.flush_measurement_frame_range;
                 preload_measurement_frame_range    = vulkan_replay_options.preload_measurement_range;
                 flush_inside_measurement_range     = vulkan_replay_options.flush_inside_measurement_range;
+                preload_measurement_frame_range    = vulkan_replay_options.preload_measurement_range;
+
+                if (vulkan_replay_options.quit_after_frame)
+                {
+                    quit_after_frame = true;
+                    GetQuitAfterFrame(arg_parser, quit_frame);
+                }
             }
 
             gfxrecon::graphics::FpsInfo fps_info(static_cast<uint64_t>(measurement_start_frame),
@@ -211,7 +222,9 @@ int main(int argc, const char** argv)
                                                  flush_measurement_frame_range,
                                                  flush_inside_measurement_range,
                                                  preload_measurement_frame_range,
-                                                 measurement_file_name);
+                                                 measurement_file_name,
+                                                 quit_after_frame,
+                                                 quit_frame);
 
             gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, vulkan_replay_options);
             gfxrecon::decode::VulkanDecoder        vulkan_decoder;
@@ -236,7 +249,7 @@ int main(int argc, const char** argv)
 
             if (dx_replay_options.enable_dump_resources)
             {
-                gfxrecon::decode::TrackDumpDrawcall track_dump_target;
+                gfxrecon::decode::TrackDumpDrawCall track_dump_target;
                 BrowseFile(filename, dx_replay_options.dump_resources_target, track_dump_target);
                 dx12_replay_consumer.SetDumpTarget(track_dump_target);
             }

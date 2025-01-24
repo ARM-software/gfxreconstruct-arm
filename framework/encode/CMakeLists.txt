@@ -94,6 +94,8 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/struct_pointer_encoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_manager.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_common.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_common.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrappers.h
@@ -107,6 +109,7 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker_initializers.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_writer.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_writer.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_track_struct.h
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_struct_unwrappers.h>
@@ -138,17 +141,15 @@ target_sources(gfxrecon_encode
 )
 
 if (MSVC)
-    # Increase object size limit to handle large numbers of template function instantiations.
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_dx12_wrappers.cpp PROPERTIES COMPILE_FLAGS /bigobj)
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/framework/generated/generated_vulkan_api_call_encoders.cpp PROPERTIES COMPILE_FLAGS /bigobj)
+    # gfxrecon_encode exceeds the default number of sections during compilation, use this flag to increase the limit
+    target_compile_options(gfxrecon_encode PRIVATE /bigobj)
 endif()
 
 target_include_directories(gfxrecon_encode
                            PUBLIC
                                ${CMAKE_BINARY_DIR}
                                ${CMAKE_SOURCE_DIR}/framework
-                               $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_SOURCE_DIR}/external/AgilitySDK/inc>)
+                               $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
 target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
 

@@ -23,8 +23,8 @@
 #ifndef GFXRECON_DECODE_CUSTOM_STRUCT_HANDLE_MAPPERS_H
 #define GFXRECON_DECODE_CUSTOM_STRUCT_HANDLE_MAPPERS_H
 
+#include "decode/common_object_info_table.h"
 #include "decode/custom_vulkan_struct_decoders_forward.h"
-#include "decode/vulkan_object_info_table.h"
 #include "decode/vulkan_pnext_node.h"
 #include "util/defines.h"
 
@@ -35,15 +35,15 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 void MapStructHandles(VkDescriptorType               type,
                       Decoded_VkDescriptorImageInfo* wrapper,
-                      const VulkanObjectInfoTable&   object_info_table);
+                      const CommonObjectInfoTable&   object_info_table);
 
-void MapStructHandles(Decoded_VkWriteDescriptorSet* wrapper, const VulkanObjectInfoTable& object_info_table);
+void MapStructHandles(Decoded_VkWriteDescriptorSet* wrapper, const CommonObjectInfoTable& object_info_table);
 
 void MapStructHandles(Decoded_VkAccelerationStructureGeometryKHR* wrapper,
-                      const VulkanObjectInfoTable&                object_info_table);
+                      const CommonObjectInfoTable&                object_info_table);
 
 void MapStructHandles(Decoded_VkAccelerationStructureBuildGeometryInfoKHR* wrapper,
-                      const VulkanObjectInfoTable&                         object_info_table);
+                      const CommonObjectInfoTable&                         object_info_table);
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -50,16 +50,18 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 class Dx12StateWriter
 {
   public:
-    Dx12StateWriter(util::FileOutputStream* output_stream, util::Compressor* compressor, format::ThreadId thread_id);
+    Dx12StateWriter(util::FileOutputStream* output_stream,
+                    util::Compressor*       compressor,
+                    format::ThreadId        thread_id,
+                    util::FileOutputStream* asset_file_stream = nullptr);
 
     ~Dx12StateWriter();
-    
+
 #ifdef GFXRECON_AGS_SUPPORT
     void WriteState(const Dx12StateTable& state_table, const AgsStateTable& ags_state_table, uint64_t frame_number);
 #else
     void WriteState(const Dx12StateTable& state_table, uint64_t frame_number);
 #endif // GFXRECON_AGS_SUPPORT
-
 
   private:
     struct ResourceSnapshotInfo
@@ -148,7 +150,7 @@ class Dx12StateWriter
 
     void WriteCommandListState(const Dx12StateTable& state_table);
 
-    void WriteCommandListCreation(const ID3D12CommandList_Wrapper* list_wrapper);
+    void WriteCommandListCreation(const ID3D12CommandList_Wrapper* list_wrapper, const Dx12StateTable& state_table);
 
     void WriteCommandListCommands(const ID3D12CommandList_Wrapper* list_wrapper, const Dx12StateTable& state_table);
 
@@ -172,7 +174,8 @@ class Dx12StateWriter
 
     void WriteAccelerationStructuresState(const Dx12StateTable& state_table);
 
-    void WriteAccelerationStructuresState(std::map<uint64_t, const DxAccelerationStructureBuildInfo*> build_infos);
+    void WriteAccelerationStructuresState(std::map<uint64_t, const DxAccelerationStructureBuildInfo*> build_infos,
+                                          graphics::Dx12ResourceDataUtil* resource_data_util);
 
     void WriteStateObjectsState(const Dx12StateTable& state_table);
 

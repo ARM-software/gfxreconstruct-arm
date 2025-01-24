@@ -57,6 +57,10 @@
 #include <sys/system_properties.h>
 #endif
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 GFXRECON_BEGIN_NAMESPACE(platform)
@@ -130,6 +134,11 @@ inline std::string GetEnv(const char* name)
     return std::string("");
 }
 
+inline bool SetEnv(const char* name, const char* value)
+{
+    return SetEnvironmentVariableA(name, value);
+}
+
 inline int32_t MemoryCopy(void* destination, size_t destination_size, const void* source, size_t source_size)
 {
     return memcpy_s(destination, destination_size, source, source_size);
@@ -186,14 +195,14 @@ inline bool FileSeek(FILE* stream, int64_t offset, FileSeekOrigin origin)
     return (result == 0);
 }
 
-inline size_t FileWriteNoLock(const void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileWriteNoLock(const void* buffer, size_t bytes, FILE* stream)
 {
-    return _fwrite_nolock(buffer, element_size, element_count, stream);
+    return _fwrite_nolock(buffer, bytes, 1, stream) == 1;
 }
 
-inline size_t FileReadNoLock(void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileReadNoLock(void* buffer, size_t bytes, FILE* stream)
 {
-    return _fread_nolock(buffer, element_size, element_count, stream);
+    return _fread_nolock(buffer, bytes, 1, stream) == 1;
 }
 
 inline int32_t FileVprintf(FILE* stream, const char* format, va_list vlist)
@@ -255,6 +264,52 @@ inline int GetSystemLastErrorCode()
     return GetLastError();
 }
 
+inline std::string GetCpuAffinity()
+{
+    DWORD_PTR process_mask;
+    DWORD_PTR system_mask;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask))
+    {
+        return "";
+    }
+
+    DWORD_PTR mask = (process_mask & system_mask);
+
+    std::string affinity;
+    while (mask)
+    {
+        affinity += (mask & 1) ? "1" : "0";
+        mask >>= 1;
+    }
+
+    while (affinity.back() == '0')
+    {
+        affinity.pop_back();
+    }
+
+    return affinity;
+}
+
+inline bool SetCpuAffinity(const std::string& affinity)
+{
+    DWORD_PTR mask = 0;
+    for (unsigned i = 0; i < affinity.size(); i++)
+    {
+        if (affinity[i] == '1')
+        {
+            mask |= 1;
+        }
+        else if (affinity[i] != '0')
+        {
+            return false;
+        }
+
+        mask <<= 1;
+    }
+
+    return (SetProcessAffinityMask(GetCurrentProcess(), mask) != 0);
+}
+
 #else // !defined(WIN32)
 
 // Error value indicating string was truncated
@@ -281,7 +336,7 @@ inline uint64_t GetCurrentThreadId()
 #if !defined(__APPLE__)
 inline int SendSignalToThread(uint64_t tid, int signal)
 {
-    return syscall(SYS_tgkill, getpid(), tid, signal);
+    return static_cast<int>(syscall(SYS_tgkill, getpid(), tid, signal));
 }
 #endif
 
@@ -331,6 +386,11 @@ inline std::string GetEnv(const char* name)
 #endif
 
     return env_value;
+}
+
+inline bool SetEnv(const char* name, const char* value)
+{
+    return setenv(name, value, 1) == 0;
 }
 
 inline int32_t MemoryCopy(void* destination, size_t destination_size, const void* source, size_t source_size)
@@ -430,40 +490,36 @@ inline bool FileSeek(FILE* stream, int64_t offset, FileSeekOrigin origin)
     return (result == 0);
 }
 
-inline size_t FileWriteNoLock(const void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileWriteNoLock(const void* buffer, size_t bytes, FILE* stream)
 {
     size_t write_count = 0;
     int    err         = 0;
     do
     {
 #if defined(__APPLE__) || (defined(__ANDROID__) && (__ANDROID_API__ < 28))
-        write_count +=
-            fwrite((char*)buffer + (write_count * element_size), element_size, element_count - write_count, stream);
+        write_count = fwrite(buffer, bytes, 1, stream);
 #else
-        write_count += fwrite_unlocked(
-            (char*)buffer + (write_count * element_size), element_size, element_count - write_count, stream);
+        write_count = fwrite_unlocked(buffer, bytes, 1, stream);
 #endif
-        err = ferror(stream);
-    } while (write_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
-    return write_count;
+        err         = ferror(stream);
+    } while (write_count < 1 && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return (write_count == 1 || bytes == 0);
 }
 
-inline size_t FileReadNoLock(void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileReadNoLock(void* buffer, size_t bytes, FILE* stream)
 {
     size_t read_count = 0;
     int    err        = 0;
     do
     {
 #if defined(__APPLE__) || (defined(__ANDROID__) && (__ANDROID_API__ < 28))
-        read_count +=
-            fread((char*)buffer + (read_count * element_size), element_size, element_count - read_count, stream);
+        read_count = fread(buffer, bytes, 1, stream);
 #else
-        read_count += fread_unlocked(
-            (char*)buffer + (read_count * element_size), element_size, element_count - read_count, stream);
+        read_count  = fread_unlocked(buffer, bytes, 1, stream);
 #endif
-        err = ferror(stream);
-    } while (!feof(stream) && read_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
-    return read_count;
+        err        = ferror(stream);
+    } while (!feof(stream) && read_count < 1 && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return (read_count == 1 || bytes == 0);
 }
 
 inline int32_t FileVprintf(FILE* stream, const char* format, va_list vlist)
@@ -562,6 +618,54 @@ inline int GetSystemLastErrorCode()
     return errno;
 }
 
+inline std::string GetCpuAffinity()
+{
+    std::string affinity;
+
+#ifdef __linux__
+    cpu_set_t   mask;
+    if (sched_getaffinity(0, sizeof(mask), &mask))
+    {
+        return affinity;
+    }
+
+    for (unsigned i = 0; i < sizeof(mask) / CPU_ALLOC_SIZE(1); i++)
+    {
+        affinity += CPU_ISSET(i, &mask) ? "1" : "0";
+    }
+
+    while (affinity.back() == '0')
+    {
+        affinity.pop_back();
+    }
+#endif
+
+    return affinity;
+}
+
+static bool SetCpuAffinity(const std::string& affinity)
+{
+#ifdef __linux__
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    for (unsigned i = 0; i < affinity.size(); i++)
+    {
+        if (affinity[i] == '1')
+        {
+            CPU_SET(i, &mask);
+        }
+        else if (affinity[i] != '0')
+        {
+            return false;
+        }
+    }
+
+    return (sched_setaffinity(0, sizeof(mask), &mask) == 0);
+#else
+    return false;
+#endif
+}
+
 #endif // WIN32
 
 inline size_t GetAlignedSize(size_t size, size_t align_to)
@@ -635,35 +739,33 @@ inline int32_t FileFlush(FILE* stream)
     return fflush(stream);
 }
 
-inline size_t FileWrite(const void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileWrite(const void* buffer, size_t bytes, FILE* stream)
 {
     size_t write_count = 0;
     int    err         = 0;
     do
     {
-        write_count +=
-            fwrite((char*)buffer + (write_count * element_size), element_size, element_count - write_count, stream);
-        err = ferror(stream);
-    } while (write_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
-    return write_count;
+        write_count = fwrite(buffer, bytes, 1, stream);
+        err         = ferror(stream);
+    } while (write_count < 1 && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return (write_count == 1 || bytes == 0);
 }
 
-inline int32_t FilePuts(const char* char_string, FILE* stream)
+inline bool FilePuts(const char* char_string, FILE* stream)
 {
-    return FileWrite(char_string, strlen(char_string), 1, stream);
+    return FileWrite(char_string, strlen(char_string), stream);
 }
 
-inline size_t FileRead(void* buffer, size_t element_size, size_t element_count, FILE* stream)
+inline bool FileRead(void* buffer, size_t bytes, FILE* stream)
 {
     size_t read_count = 0;
     int    err        = 0;
     do
     {
-        read_count +=
-            fread((char*)buffer + (read_count * element_size), element_size, element_count - read_count, stream);
-        err = ferror(stream);
-    } while (!feof(stream) && read_count < element_count && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
-    return read_count;
+        read_count = fread(buffer, bytes, 1, stream);
+        err        = ferror(stream);
+    } while (!feof(stream) && read_count < 1 && (err == EWOULDBLOCK || err == EINTR || err == EAGAIN));
+    return (read_count == 1 || bytes == 0);
 }
 
 inline int32_t SetFileBufferSize(FILE* stream, size_t buffer_size)

@@ -29,9 +29,12 @@
 #include "decode/pointer_decoder.h"
 #include "decode/screenshot_handler.h"
 #include "decode/swapchain_image_tracker.h"
+#include "decode/vulkan_buffer_tracker.h"
+#include "decode/vulkan_device_address_tracker.h"
+#include "decode/vulkan_address_replacer.h"
 #include "decode/vulkan_handle_mapping_util.h"
 #include "decode/vulkan_object_info.h"
-#include "decode/vulkan_object_info_table.h"
+#include "decode/common_object_info_table.h"
 #include "decode/vulkan_replay_options.h"
 #include "decode/vulkan_resource_allocator.h"
 #include "decode/vulkan_resource_tracking_consumer.h"
@@ -46,8 +49,8 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
-#include "util/threadpool.h"
 #include "decode/vulkan_micromap_builder.h"
+#include "util/threadpool.h"
 
 #include "application/application.h"
 
@@ -84,7 +87,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
     }
 
-    void SetFatalErrorHandler(std::function<void(const char*)> handler) { fatal_error_handler_ = handler; }
+    void SetFatalErrorHandler(std::function<void(const char*)> handler);
 
     void SetFpsInfo(graphics::FpsInfo* fps_info) { fps_info_ = fps_info; }
 
@@ -96,10 +99,21 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     virtual void ProcessDisplayMessageCommand(const std::string& message) override;
 
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, uint8_t* data) override;
+    virtual void
+    ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
+
+    virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
+    virtual void
+    ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
+                                                            const std::vector<format::HandleId>& children) override;
+
+    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                    const format::ShaderHandleLocationInfo*          infos) override;
 
     virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
 
@@ -187,12 +201,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                               format::HandleId                 descriptorUpdateTemplate,
                                                               DescriptorUpdateTemplateDecoder* pData) override;
 
-    virtual void
-                 Process_vkCmdPushDescriptorSetWithTemplate2KHR(const ApiCallInfo& call_info,
-                                                                format::HandleId   commandBuffer,
-                                                                StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>*
-                                                                    pPushDescriptorSetWithTemplateInfo) override;
-    virtual void Process_vkCreateRayTracingPipelinesKHR(
+    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   commandBuffer,
+        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo) override;
+
+    void Process_vkCreateRayTracingPipelinesKHR(
         const ApiCallInfo&                                               call_info,
         VkResult                                                         returnValue,
         format::HandleId                                                 device,
@@ -203,17 +217,17 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
         HandlePointerDecoder<VkPipeline>*                                pPipelines) override;
 
-    virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
+    void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device,
         uint32_t                                                                   info_count,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppRangeInfos,
         std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;
 
-    virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
+    void ProcessCopyVulkanAccelerationStructuresMetaCommand(
         format::HandleId device, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
 
-    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+    void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
 
     template <typename T>
@@ -229,22 +243,67 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         }
     };
 
-  protected:
-    const VulkanObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
+    // Xr Support requires this minimal set of remapping information
 
-    VulkanObjectInfoTable& GetObjectInfoTable() { return object_info_table_; }
+    VkInstance MapInstance(format::HandleId capture_id)
+    {
+        return MapHandle<VulkanInstanceInfo>(capture_id, &CommonObjectInfoTable::GetVkInstanceInfo);
+    }
+    VkDevice MapDevice(format::HandleId capture_id)
+    {
+        return MapHandle<VulkanDeviceInfo>(capture_id, &CommonObjectInfoTable::GetVkDeviceInfo);
+    }
 
     const encode::VulkanInstanceTable* GetInstanceTable(const void* handle) const;
 
     const encode::VulkanDeviceTable* GetDeviceTable(const void* handle) const;
+    void AddImageHandle(format::HandleId parent_id, format::HandleId id, VkImage handle, VulkanImageInfo&& initial_info)
+    {
+        AddHandle<VulkanImageInfo>(
+            parent_id, &id, &handle, std::move(initial_info), &VulkanObjectInfoTable::AddVkImageInfo);
+    }
 
-    void* PreProcessExternalObject(uint64_t object_id, format::ApiCallId call_id, const char* call_name);
+    // Utilities for correctly setting up a vulkan create instance/device calls.  Shared with OpenXR
+    // Store for the "modified for replay" instance create info, and all referenced memory
+    struct CreateInstanceInfoState
+    {
+        std::vector<const char*> modified_layers;
+        std::vector<const char*> modified_extensions;
+        VkInstanceCreateInfo     modified_create_info;
+    };
+    // create_state passed in by reference to conserve pointers to member variable
+    // Not initialized in a CreateDeviceInfoState constructor as *many* VulkanReplayConsumerBase
+    // member functions and variables are referenced
+    void ModifyCreateInstanceInfo(const StructPointerDecoder<Decoded_VkInstanceCreateInfo>* pCreateInfo,
+                                  CreateInstanceInfoState&                                  create_state);
 
-    void PostProcessExternalObject(
-        VkResult replay_reslt, uint64_t object_id, void* object, format::ApiCallId call_id, const char* call_name);
+    void PostCreateInstanceUpdateState(VkInstance                  replay_instance,
+                                       const VkInstanceCreateInfo& modified_create_info,
+                                       VulkanInstanceInfo&         instance_info);
 
-    const VkAllocationCallbacks*
-    GetAllocationCallbacks(const StructPointerDecoder<Decoded_VkAllocationCallbacks>* original_callbacks);
+    // Store for the "modified for replay" device create info, and all referenced memory
+    struct CreateDeviceInfoState
+    {
+        VkDeviceCreateInfo                        modified_create_info;
+        std::vector<const char*>                  modified_extensions;
+        std::vector<std::string>                  trim_extensions;
+        VkDeviceGroupDeviceCreateInfo             modified_device_group_create_info;
+        std::vector<VkPhysicalDevice>             replay_device_group;
+        graphics::VulkanDeviceUtil                device_util;
+        graphics::VulkanDevicePropertyFeatureInfo property_feature_info;
+    };
+
+    // create_state passed in by reference to conserve pointers to member variable
+    // Not initialized in a CreateDeviceInfoState constructor as *many* VulkanReplayConsumerBase
+    // member functions and variables are referenced
+    void ModifyCreateDeviceInfo(VulkanPhysicalDeviceInfo*                               physical_device_info,
+                                const StructPointerDecoder<Decoded_VkDeviceCreateInfo>* pCreateInfo,
+                                CreateDeviceInfoState&                                  create_state);
+
+    VkResult PostCreateDeviceUpdateState(VulkanPhysicalDeviceInfo* physical_device_info,
+                                         VkDevice                  replay_device,
+                                         CreateDeviceInfoState&    create_state,
+                                         VulkanDeviceInfo*         device_info);
 
     void CheckResult(const char* func_name, VkResult original, VkResult replay, const decode::ApiCallInfo& call_info);
 
@@ -255,27 +314,52 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                      VkDevice                    lost_device,
                      PFN_vkGetDeviceFaultInfoEXT func);
 
+    PFN_vkGetInstanceProcAddr GetGetInstanceProcAddr()
+    {
+        if (loader_handle_ == nullptr)
+            InitializeLoader(); // Ensures GIPA is set
+        return get_instance_proc_addr_;
+    }
+
+    void SetPhysicalDeviceAlias(format::HandleId instance, VulkanPhysicalDeviceInfo& replay_physical_device);
+
+    // Need the side effects from this when creating vulkan devices from OpenXr
+    void GetMatchingDevice(VulkanPhysicalDeviceInfo* physical_device_info);
+
+  protected:
+    const CommonObjectInfoTable& GetObjectInfoTable() const { return *object_info_table_; }
+
+    CommonObjectInfoTable& GetObjectInfoTable() { return *object_info_table_; }
+
+    void* PreProcessExternalObject(uint64_t object_id, format::ApiCallId call_id, const char* call_name);
+
+    void PostProcessExternalObject(
+        VkResult replay_reslt, uint64_t object_id, void* object, format::ApiCallId call_id, const char* call_name);
+
+    const VkAllocationCallbacks*
+    GetAllocationCallbacks(const StructPointerDecoder<Decoded_VkAllocationCallbacks>* original_callbacks);
+
     template <typename T>
     typename T::HandleType MapHandle(format::HandleId id,
-                                     const T* (VulkanObjectInfoTable::*MapFunc)(format::HandleId) const) const
+                                     const T* (CommonObjectInfoTable::*MapFunc)(format::HandleId) const) const
     {
-        return handle_mapping::MapHandle(id, object_info_table_, MapFunc);
+        return handle_mapping::MapHandle(id, *object_info_table_, MapFunc);
     }
 
     uint64_t MapHandle(uint64_t object, VkObjectType object_type)
     {
-        return handle_mapping::MapHandle(object, object_type, object_info_table_);
+        return handle_mapping::MapHandle(object, object_type, *object_info_table_);
     }
 
     uint64_t MapHandle(uint64_t object, VkDebugReportObjectTypeEXT object_type)
     {
-        return handle_mapping::MapHandle(object, object_type, object_info_table_);
+        return handle_mapping::MapHandle(object, object_type, *object_info_table_);
     }
 
     template <typename T>
     typename T::HandleType* MapHandles(HandlePointerDecoder<typename T::HandleType>* handles_pointer,
                                        size_t                                        handles_len,
-                                       const T* (VulkanObjectInfoTable::*MapFunc)(format::HandleId) const) const
+                                       const T* (CommonObjectInfoTable::*MapFunc)(format::HandleId) const) const
     {
         // This parameter is only referenced by debug builds.
         GFXRECON_UNREFERENCED_PARAMETER(handles_len);
@@ -287,7 +371,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
             // The handle and ID array sizes are expected to be the same for mapping operations.
             assert(handles_len == handles_pointer->GetLength());
 
-            handles = handle_mapping::MapHandleArray(handles_pointer, object_info_table_, MapFunc);
+            handles = handle_mapping::MapHandleArray(handles_pointer, *object_info_table_, MapFunc);
         }
 
         return handles;
@@ -298,12 +382,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                    const format::HandleId*       id,
                    const typename T::HandleType* handle,
                    T&&                           initial_info,
-                   void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                   void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
         if ((id != nullptr) && (handle != nullptr))
         {
             handle_mapping::AddHandle(
-                parent_id, *id, *handle, std::forward<T>(initial_info), &object_info_table_, AddFunc);
+                parent_id, *id, *handle, std::forward<T>(initial_info), object_info_table_, AddFunc);
         }
     }
 
@@ -311,11 +395,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void AddHandle(format::HandleId              parent_id,
                    const format::HandleId*       id,
                    const typename T::HandleType* handle,
-                   void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                   void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
         if ((id != nullptr) && (handle != nullptr))
         {
-            handle_mapping::AddHandle(parent_id, *id, *handle, &object_info_table_, AddFunc);
+            handle_mapping::AddHandle(parent_id, *id, *handle, object_info_table_, AddFunc);
         }
     }
 
@@ -326,10 +410,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                     const typename T::HandleType* handles,
                     size_t                        handles_len,
                     std::vector<T>&&              initial_infos,
-                    void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                    void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
         handle_mapping::AddHandleArray(
-            parent_id, ids, ids_len, handles, handles_len, std::move(initial_infos), &object_info_table_, AddFunc);
+            parent_id, ids, ids_len, handles, handles_len, std::move(initial_infos), object_info_table_, AddFunc);
     }
 
     template <typename T>
@@ -338,16 +422,16 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                     size_t                        ids_len,
                     const typename T::HandleType* handles,
                     size_t                        handles_len,
-                    void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                    void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
-        handle_mapping::AddHandleArray(parent_id, ids, ids_len, handles, handles_len, &object_info_table_, AddFunc);
+        handle_mapping::AddHandleArray(parent_id, ids, ids_len, handles, handles_len, object_info_table_, AddFunc);
     }
 
     template <typename T>
     void AddHandlesAsync(format::HandleId        parent_id,
                          const format::HandleId* ids,
                          size_t                  ids_len,
-                         void (VulkanObjectInfoTable::*AddFunc)(T&&),
+                         void (CommonObjectInfoTable::*AddFunc)(T&&),
                          std::function<handle_create_result_t<typename T::HandleType>()> create_function)
     {
         if (create_function)
@@ -359,7 +443,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
             background_queue_.poll();
 
             handle_mapping::AddHandleArrayAsync(
-                parent_id, ids, ids_len, &object_info_table_, AddFunc, std::move(result_future));
+                parent_id, ids, ids_len, object_info_table_, AddFunc, std::move(result_future));
         }
     }
 
@@ -368,7 +452,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                          const format::HandleId* ids,
                          size_t                  ids_len,
                          std::vector<T>&&        initial_infos,
-                         void (VulkanObjectInfoTable::*AddFunc)(T&&),
+                         void (CommonObjectInfoTable::*AddFunc)(T&&),
                          std::function<handle_create_result_t<typename T::HandleType>()> create_function)
     {
         if (create_function)
@@ -382,7 +466,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
             handle_mapping::AddHandleArrayAsync(parent_id,
                                                 ids,
                                                 ids_len,
-                                                &object_info_table_,
+                                                object_info_table_,
                                                 std::move(initial_infos),
                                                 AddFunc,
                                                 std::move(result_future));
@@ -390,50 +474,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     }
 
     //! track arbitrary handles that are currently used by asynchronous operations
-    void TrackAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
-    {
-        for (const auto& handle : async_handles)
-        {
-            // check to avoid overwriting existing handle-destructors
-            if (async_inflight_handles_.count(handle) == 0)
-            {
-                async_inflight_handles_[handle] = {};
-            }
-        }
-    }
+    void TrackAsyncHandles(const std::unordered_set<format::HandleId>& async_handles,
+                           const std::function<void()>&                sync_fn);
 
     //! clear handles that are currently used by asynchronous operations,
     //! invoke stored deletion-functions
-    void ClearAsyncHandles(const std::unordered_set<format::HandleId>& async_handles)
-    {
-        for (const auto& handle : async_handles)
-        {
-            auto it = async_inflight_handles_.find(handle);
-            if (it != async_inflight_handles_.end())
-            {
-                const auto& [tracked_handle, destroy_fn] = *it;
-                if (destroy_fn)
-                {
-                    destroy_fn();
-                }
-                async_inflight_handles_.erase(it);
-            }
-        }
-    }
+    void ClearAsyncHandles(const std::unordered_set<format::HandleId>& async_handles);
 
     //! schedules deletion of already tracked handles
-    void DestroyAsyncHandle(format::HandleId handle, std::function<void()> destroy_fn)
-    {
-        auto it = async_inflight_handles_.find(handle);
-
-        if (it != async_inflight_handles_.end())
-        {
-            it->second = std::move(destroy_fn);
-        }
-    }
+    void DestroyAsyncHandle(format::HandleId handle, std::function<void()> destroy_fn);
 
     //! return true if this handle is currently being tracked (was passed to 'TrackAsyncHandles' earlier)
-    bool IsUsedByAsyncTask(uint64_t handle) const { return async_inflight_handles_.count(handle) > 0; }
+    bool IsUsedByAsyncTask(uint64_t handle) const { return async_tracked_handles_.count(handle) > 0; }
 
     //! returns true if asynchronous operations should be used at all
     bool UseAsyncOperations() { return options_.num_pipeline_creation_jobs != 0 && !options_.dumping_resources; }
@@ -449,8 +501,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                         const typename T::HandleType* handles,
                         size_t                        handles_len,
                         std::vector<T>&&              initial_infos,
-                        S* (VulkanObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
-                        void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                        S* (CommonObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
+                        void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
         handle_mapping::AddHandleArray(parent_id,
                                        pool_id,
@@ -459,7 +511,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        handles,
                                        handles_len,
                                        std::move(initial_infos),
-                                       &object_info_table_,
+                                       object_info_table_,
                                        GetPoolInfoFunc,
                                        AddFunc);
     }
@@ -471,33 +523,33 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                         size_t                        ids_len,
                         const typename T::HandleType* handles,
                         size_t                        handles_len,
-                        S* (VulkanObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
-                        void (VulkanObjectInfoTable::*AddFunc)(T&&))
+                        S* (CommonObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
+                        void (CommonObjectInfoTable::*AddFunc)(T&&))
     {
         handle_mapping::AddHandleArray(
-            parent_id, pool_id, ids, ids_len, handles, handles_len, &object_info_table_, GetPoolInfoFunc, AddFunc);
+            parent_id, pool_id, ids, ids_len, handles, handles_len, object_info_table_, GetPoolInfoFunc, AddFunc);
     }
 
-    void RemoveHandle(format::HandleId id, void (VulkanObjectInfoTable::*RemoveFunc)(format::HandleId))
+    void RemoveHandle(format::HandleId id, void (CommonObjectInfoTable::*RemoveFunc)(format::HandleId))
     {
-        handle_mapping::RemoveHandle(id, &object_info_table_, RemoveFunc);
+        handle_mapping::RemoveHandle(id, object_info_table_, RemoveFunc);
     }
 
     template <typename T>
     void RemovePoolHandle(format::HandleId id,
-                          T* (VulkanObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
-                          void (VulkanObjectInfoTable::*RemovePoolFunc)(format::HandleId),
-                          void (VulkanObjectInfoTable::*RemoveObjectFunc)(format::HandleId))
+                          T* (CommonObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
+                          void (CommonObjectInfoTable::*RemovePoolFunc)(format::HandleId),
+                          void (CommonObjectInfoTable::*RemoveObjectFunc)(format::HandleId))
     {
-        handle_mapping::RemovePoolHandle(id, &object_info_table_, GetPoolInfoFunc, RemovePoolFunc, RemoveObjectFunc);
+        handle_mapping::RemovePoolHandle(id, object_info_table_, GetPoolInfoFunc, RemovePoolFunc, RemoveObjectFunc);
     }
 
     template <typename S, typename T>
     void RemovePoolHandles(format::HandleId                                    pool_id,
                            const HandlePointerDecoder<typename T::HandleType>* handles_pointer,
                            size_t                                              handles_len,
-                           S* (VulkanObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
-                           void (VulkanObjectInfoTable::*RemoveFunc)(format::HandleId))
+                           S* (CommonObjectInfoTable::*GetPoolInfoFunc)(format::HandleId),
+                           void (CommonObjectInfoTable::*RemoveFunc)(format::HandleId))
     {
         // This parameter is only referenced by debug builds.
         GFXRECON_UNREFERENCED_PARAMETER(handles_len);
@@ -507,7 +559,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
             // The handle and ID array sizes are expected to be the same for mapping operations.
             assert(handles_len == handles_pointer->GetLength());
             handle_mapping::RemoveHandleArray<S, T>(
-                pool_id, handles_pointer, &object_info_table_, GetPoolInfoFunc, RemoveFunc);
+                pool_id, handles_pointer, object_info_table_, GetPoolInfoFunc, RemoveFunc);
         }
     }
 
@@ -515,9 +567,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void SetOutputArrayCount(format::HandleId handle_id,
                              uint32_t         index,
                              size_t           count,
-                             HandleInfoT* (VulkanObjectInfoTable::*HandleInfoFunc)(format::HandleId))
+                             HandleInfoT* (CommonObjectInfoTable::*HandleInfoFunc)(format::HandleId))
     {
-        HandleInfoT* info = (object_info_table_.*HandleInfoFunc)(handle_id);
+        HandleInfoT* info = (object_info_table_->*HandleInfoFunc)(handle_id);
         if (info != nullptr)
         {
             info->array_counts[index] = static_cast<size_t>(count);
@@ -531,7 +583,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                uint32_t                      index,
                                const PointerDecoder<CountT>* original_count,
                                const ArrayT*                 original_array,
-                               const HandleInfoT* (VulkanObjectInfoTable::*HandleInfoFunc)(format::HandleId) const)
+                               const HandleInfoT* (CommonObjectInfoTable::*HandleInfoFunc)(format::HandleId) const)
     {
         assert((original_count != nullptr) && (original_array != nullptr));
 
@@ -547,7 +599,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
             // such as VK_INCOMPLETE, continue to be generated at replay.
             if (original_result == VK_SUCCESS)
             {
-                const HandleInfoT* info = (object_info_table_.*HandleInfoFunc)(handle_id);
+                const HandleInfoT* info = (object_info_table_->*HandleInfoFunc)(handle_id);
                 if (info != nullptr)
                 {
                     auto entry = info->array_counts.find(index);
@@ -577,293 +629,315 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                     HandlePointerDecoder<VkInstance>*                          pInstance);
 
     VkResult OverrideCreateDevice(VkResult                                                   original_result,
-                                  PhysicalDeviceInfo*                                        physical_device_info,
+                                  VulkanPhysicalDeviceInfo*                                  physical_device_info,
                                   const StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
                                   const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                   HandlePointerDecoder<VkDevice>*                            pDevice);
 
     void OverrideDestroyDevice(PFN_vkDestroyDevice                                        func,
-                               const DeviceInfo*                                          device_info,
+                               const VulkanDeviceInfo*                                    device_info,
                                const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideEnumeratePhysicalDevices(PFN_vkEnumeratePhysicalDevices          func,
                                               VkResult                                original_result,
-                                              InstanceInfo*                           instance_info,
+                                              VulkanInstanceInfo*                     instance_info,
                                               PointerDecoder<uint32_t>*               pPhysicalDeviceCount,
                                               HandlePointerDecoder<VkPhysicalDevice>* pPhysicalDevices);
 
     VkResult OverrideEnumeratePhysicalDeviceGroups(
         PFN_vkEnumeratePhysicalDeviceGroups                            func,
         VkResult                                                       original_result,
-        InstanceInfo*                                                  instance_info,
+        VulkanInstanceInfo*                                            instance_info,
         PointerDecoder<uint32_t>*                                      pPhysicalDeviceGroupCount,
         StructPointerDecoder<Decoded_VkPhysicalDeviceGroupProperties>* pPhysicalDeviceGroupProperties);
 
     void OverrideGetPhysicalDeviceProperties(PFN_vkGetPhysicalDeviceProperties func,
-                                             PhysicalDeviceInfo*               physical_device_info,
+                                             VulkanPhysicalDeviceInfo*         physical_device_info,
                                              StructPointerDecoder<Decoded_VkPhysicalDeviceProperties>* pProperties);
 
     void OverrideGetPhysicalDeviceProperties2(PFN_vkGetPhysicalDeviceProperties2 func,
-                                              PhysicalDeviceInfo*                physical_device_info,
+                                              VulkanPhysicalDeviceInfo*          physical_device_info,
                                               StructPointerDecoder<Decoded_VkPhysicalDeviceProperties2>* pProperties);
 
     void OverrideGetPhysicalDeviceMemoryProperties(
         PFN_vkGetPhysicalDeviceMemoryProperties                         func,
-        PhysicalDeviceInfo*                                             physical_device_info,
+        VulkanPhysicalDeviceInfo*                                       physical_device_info,
         StructPointerDecoder<Decoded_VkPhysicalDeviceMemoryProperties>* pMemoryProperties);
 
     void OverrideGetPhysicalDeviceMemoryProperties2(
         PFN_vkGetPhysicalDeviceMemoryProperties2                         func,
-        PhysicalDeviceInfo*                                              physical_device_info,
+        VulkanPhysicalDeviceInfo*                                        physical_device_info,
         StructPointerDecoder<Decoded_VkPhysicalDeviceMemoryProperties2>* pMemoryProperties);
 
     VkResult OverrideGetPhysicalDeviceSurfaceCapabilitiesKHR(
         PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR           func,
         VkResult                                                original_result,
-        PhysicalDeviceInfo*                                     physical_device_info,
-        SurfaceKHRInfo*                                         surface_info,
+        VulkanPhysicalDeviceInfo*                               physical_device_info,
+        VulkanSurfaceKHRInfo*                                   surface_info,
         StructPointerDecoder<Decoded_VkSurfaceCapabilitiesKHR>* pSurfaceCapabilities);
 
     VkResult OverrideGetPhysicalDeviceSurfaceCapabilities2KHR(
         PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR                 func,
         VkResult                                                       original_result,
-        PhysicalDeviceInfo*                                            physical_device_info,
+        VulkanPhysicalDeviceInfo*                                      physical_device_info,
         StructPointerDecoder<Decoded_VkPhysicalDeviceSurfaceInfo2KHR>* pSurfaceInfo,
         StructPointerDecoder<Decoded_VkSurfaceCapabilities2KHR>*       pSurfaceCapabilities);
 
     VkResult OverrideGetPhysicalDeviceToolProperties(
         PFN_vkGetPhysicalDeviceToolProperties                         func,
         VkResult                                                      original_result,
-        const PhysicalDeviceInfo*                                     physical_device_info,
+        const VulkanPhysicalDeviceInfo*                               physical_device_info,
         PointerDecoder<uint32_t>*                                     pToolCount,
         StructPointerDecoder<Decoded_VkPhysicalDeviceToolProperties>* pToolProperties);
 
     void OverrideGetDeviceQueue(PFN_vkGetDeviceQueue           func,
-                                DeviceInfo*                    device_info,
+                                VulkanDeviceInfo*              device_info,
                                 uint32_t                       queueFamilyIndex,
                                 uint32_t                       queueIndex,
                                 HandlePointerDecoder<VkQueue>* pQueue);
     void OverrideGetDeviceQueue2(PFN_vkGetDeviceQueue2                             func,
-                                 DeviceInfo*                                       device_info,
+                                 VulkanDeviceInfo*                                 device_info,
                                  StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
                                  HandlePointerDecoder<VkQueue>*                    pQueue);
 
     VkResult OverrideWaitForFences(PFN_vkWaitForFences                  func,
                                    VkResult                             original_result,
-                                   const DeviceInfo*                    device_info,
+                                   const VulkanDeviceInfo*              device_info,
                                    uint32_t                             fenceCount,
                                    const HandlePointerDecoder<VkFence>* pFences,
                                    VkBool32                             waitAll,
                                    uint64_t                             timeout);
 
-    VkResult OverrideGetFenceStatus(PFN_vkGetFenceStatus func,
-                                    VkResult             original_result,
-                                    const DeviceInfo*    device_info,
-                                    const FenceInfo*     fence_info);
+    VkResult OverrideGetFenceStatus(PFN_vkGetFenceStatus    func,
+                                    VkResult                original_result,
+                                    const VulkanDeviceInfo* device_info,
+                                    const VulkanFenceInfo*  fence_info);
 
-    VkResult OverrideGetEventStatus(PFN_vkGetEventStatus func,
-                                    VkResult             original_result,
-                                    const DeviceInfo*    device_info,
-                                    const EventInfo*     event_info);
+    VkResult OverrideGetEventStatus(PFN_vkGetEventStatus    func,
+                                    VkResult                original_result,
+                                    const VulkanDeviceInfo* device_info,
+                                    const VulkanEventInfo*  event_info);
 
-    VkResult OverrideGetQueryPoolResults(PFN_vkGetQueryPoolResults func,
-                                         VkResult                  original_result,
-                                         const DeviceInfo*         device_info,
-                                         const QueryPoolInfo*      query_pool_info,
-                                         uint32_t                  firstQuery,
-                                         uint32_t                  queryCount,
-                                         size_t                    dataSize,
-                                         PointerDecoder<uint8_t>*  pData,
-                                         VkDeviceSize              stride,
-                                         VkQueryResultFlags        flags);
+    VkResult OverrideGetQueryPoolResults(PFN_vkGetQueryPoolResults  func,
+                                         VkResult                   original_result,
+                                         const VulkanDeviceInfo*    device_info,
+                                         const VulkanQueryPoolInfo* query_pool_info,
+                                         uint32_t                   firstQuery,
+                                         uint32_t                   queryCount,
+                                         size_t                     dataSize,
+                                         PointerDecoder<uint8_t>*   pData,
+                                         VkDeviceSize               stride,
+                                         VkQueryResultFlags         flags);
 
-    void OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults func,
-                                         const CommandBufferInfo*      command_buffer_info,
-                                         const QueryPoolInfo*          query_pool_info,
-                                         uint32_t                      firstQuery,
-                                         uint32_t                      queryCount,
-                                         BufferInfo*                   dst_buffer_info,
-                                         VkDeviceSize                  dstOffset,
-                                         VkDeviceSize                  stride,
-                                         VkQueryResultFlags            flags);
+    void OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults  func,
+                                         const VulkanCommandBufferInfo* command_buffer_info,
+                                         const VulkanQueryPoolInfo*     query_pool_info,
+                                         uint32_t                       firstQuery,
+                                         uint32_t                       queryCount,
+                                         VulkanBufferInfo*              dst_buffer_info,
+                                         VkDeviceSize                   dstOffset,
+                                         VkDeviceSize                   stride,
+                                         VkQueryResultFlags             flags);
 
     void OverrideCmdCopyBuffer(PFN_vkCmdCopyBuffer                         func,
-                               const CommandBufferInfo*                    command_buffer_info,
-                               const BufferInfo*                           src_buffer,
-                               const BufferInfo*                           dst_buffer,
+                               const VulkanCommandBufferInfo*              command_buffer_info,
+                               const VulkanBufferInfo*                     src_buffer,
+                               const VulkanBufferInfo*                     dst_buffer,
                                uint32_t                                    regionCount,
                                StructPointerDecoder<Decoded_VkBufferCopy>* pRegions);
 
     VkResult OverrideQueueSubmit(PFN_vkQueueSubmit                                 func,
                                  uint64_t                                          index,
                                  VkResult                                          original_result,
-                                 const QueueInfo*                                  queue_info,
+                                 const VulkanQueueInfo*                            queue_info,
                                  uint32_t                                          submitCount,
                                  const StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
-                                 const FenceInfo*                                  fence_info);
+                                 const VulkanFenceInfo*                            fence_info);
 
     VkResult OverrideQueueSubmit2(PFN_vkQueueSubmit2                                 func,
                                   VkResult                                           original_result,
-                                  const QueueInfo*                                   queue_info,
+                                  const VulkanQueueInfo*                             queue_info,
                                   uint32_t                                           submitCount,
                                   const StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
-                                  const FenceInfo*                                   fence_info);
+                                  const VulkanFenceInfo*                             fence_info);
 
     VkResult OverrideQueueBindSparse(PFN_vkQueueBindSparse                                 func,
                                      VkResult                                              original_result,
-                                     const QueueInfo*                                      queue_info,
+                                     const VulkanQueueInfo*                                queue_info,
                                      uint32_t                                              bindInfoCount,
                                      const StructPointerDecoder<Decoded_VkBindSparseInfo>* pBindInfo,
-                                     const FenceInfo*                                      fence_info);
+                                     const VulkanFenceInfo*                                fence_info);
 
     VkResult
     OverrideCreateDescriptorSetLayout(PFN_vkCreateDescriptorSetLayout                                func,
                                       VkResult                                                       original_result,
-                                      const DeviceInfo*                                              device_info,
+                                      const VulkanDeviceInfo*                                        device_info,
                                       StructPointerDecoder<Decoded_VkDescriptorSetLayoutCreateInfo>* pCreateInfo,
                                       StructPointerDecoder<Decoded_VkAllocationCallbacks>*           pAllocator,
                                       HandlePointerDecoder<VkDescriptorSetLayout>*                   pSetLayout);
 
     VkResult OverrideCreateDescriptorPool(PFN_vkCreateDescriptorPool func,
                                           VkResult                   original_result,
-                                          const DeviceInfo*          device_info,
+                                          const VulkanDeviceInfo*    device_info,
                                           const StructPointerDecoder<Decoded_VkDescriptorPoolCreateInfo>* pCreateInfo,
                                           const StructPointerDecoder<Decoded_VkAllocationCallbacks>*      pAllocator,
                                           HandlePointerDecoder<VkDescriptorPool>* pDescriptorPool);
 
     void OverrideDestroyDescriptorPool(PFN_vkDestroyDescriptorPool                                func,
-                                       const DeviceInfo*                                          device_info,
-                                       DescriptorPoolInfo*                                        descriptor_pool_info,
+                                       const VulkanDeviceInfo*                                    device_info,
+                                       VulkanDescriptorPoolInfo*                                  descriptor_pool_info,
                                        const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult
     OverrideAllocateDescriptorSets(PFN_vkAllocateDescriptorSets                                     func,
                                    VkResult                                                         original_result,
-                                   const DeviceInfo*                                                device_info,
+                                   const VulkanDeviceInfo*                                          device_info,
                                    const StructPointerDecoder<Decoded_VkDescriptorSetAllocateInfo>* pAllocateInfo,
                                    HandlePointerDecoder<VkDescriptorSet>*                           pDescriptorSets);
 
     VkResult
     OverrideAllocateCommandBuffers(PFN_vkAllocateCommandBuffers                                     func,
                                    VkResult                                                         original_result,
-                                   const DeviceInfo*                                                device_info,
+                                   const VulkanDeviceInfo*                                          device_info,
                                    const StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
                                    HandlePointerDecoder<VkCommandBuffer>*                           pCommandBuffers);
 
     void OverrideFreeCommandBuffers(PFN_vkFreeCommandBuffers               func,
-                                    const DeviceInfo*                      device_info,
-                                    CommandPoolInfo*                       command_pool_info,
+                                    const VulkanDeviceInfo*                device_info,
+                                    VulkanCommandPoolInfo*                 command_pool_info,
                                     uint32_t                               command_buffer_count,
                                     HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers);
 
     VkResult OverrideAllocateMemory(PFN_vkAllocateMemory                                       func,
                                     VkResult                                                   original_result,
-                                    const DeviceInfo*                                          device_info,
+                                    const VulkanDeviceInfo*                                    device_info,
                                     const StructPointerDecoder<Decoded_VkMemoryAllocateInfo>*  pAllocateInfo,
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                     HandlePointerDecoder<VkDeviceMemory>*                      pMemory);
 
-    VkResult OverrideMapMemory(PFN_vkMapMemory   func,
-                               VkResult          original_result,
-                               const DeviceInfo* device_info,
-                               DeviceMemoryInfo* memory_info,
-                               VkDeviceSize      offset,
-                               VkDeviceSize      size,
-                               VkMemoryMapFlags  flags,
-                               void**            ppData);
+    VkResult OverrideMapMemory(PFN_vkMapMemory         func,
+                               VkResult                original_result,
+                               const VulkanDeviceInfo* device_info,
+                               VulkanDeviceMemoryInfo* memory_info,
+                               VkDeviceSize            offset,
+                               VkDeviceSize            size,
+                               VkMemoryMapFlags        flags,
+                               void**                  ppData);
 
-    void OverrideUnmapMemory(PFN_vkUnmapMemory func, const DeviceInfo* device_info, DeviceMemoryInfo* memory_info);
+    void OverrideUnmapMemory(PFN_vkUnmapMemory       func,
+                             const VulkanDeviceInfo* device_info,
+                             VulkanDeviceMemoryInfo* memory_info);
 
     VkResult OverrideFlushMappedMemoryRanges(PFN_vkFlushMappedMemoryRanges                            func,
                                              VkResult                                                 original_result,
-                                             const DeviceInfo*                                        device_info,
+                                             const VulkanDeviceInfo*                                  device_info,
                                              uint32_t                                                 memoryRangeCount,
                                              const StructPointerDecoder<Decoded_VkMappedMemoryRange>* pMemoryRanges);
 
     VkResult
     OverrideInvalidateMappedMemoryRanges(PFN_vkInvalidateMappedMemoryRanges                       func,
                                          VkResult                                                 original_result,
-                                         const DeviceInfo*                                        device_info,
+                                         const VulkanDeviceInfo*                                  device_info,
                                          uint32_t                                                 memoryRangeCount,
                                          const StructPointerDecoder<Decoded_VkMappedMemoryRange>* pMemoryRanges);
 
     void OverrideFreeMemory(PFN_vkFreeMemory                                           func,
-                            const DeviceInfo*                                          device_info,
-                            DeviceMemoryInfo*                                          memory_info,
+                            const VulkanDeviceInfo*                                    device_info,
+                            VulkanDeviceMemoryInfo*                                    memory_info,
                             const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
-    VkResult OverrideBindBufferMemory(PFN_vkBindBufferMemory func,
-                                      VkResult               original_result,
-                                      const DeviceInfo*      device_info,
-                                      BufferInfo*            buffer_info,
-                                      DeviceMemoryInfo*      memory_info,
-                                      VkDeviceSize           memoryOffset);
+    VkResult OverrideBindBufferMemory(PFN_vkBindBufferMemory  func,
+                                      VkResult                original_result,
+                                      const VulkanDeviceInfo* device_info,
+                                      VulkanBufferInfo*       buffer_info,
+                                      VulkanDeviceMemoryInfo* memory_info,
+                                      VkDeviceSize            memoryOffset);
 
     VkResult OverrideBindBufferMemory2(PFN_vkBindBufferMemory2                                     func,
                                        VkResult                                                    original_result,
-                                       const DeviceInfo*                                           device_info,
+                                       const VulkanDeviceInfo*                                     device_info,
                                        uint32_t                                                    bindInfoCount,
                                        const StructPointerDecoder<Decoded_VkBindBufferMemoryInfo>* pBindInfos);
 
-    VkResult OverrideBindImageMemory(PFN_vkBindImageMemory func,
-                                     VkResult              original_result,
-                                     const DeviceInfo*     device_info,
-                                     ImageInfo*            image_info,
-                                     DeviceMemoryInfo*     memory_info,
-                                     VkDeviceSize          memoryOffset);
+    VkResult OverrideBindImageMemory(PFN_vkBindImageMemory   func,
+                                     VkResult                original_result,
+                                     const VulkanDeviceInfo* device_info,
+                                     VulkanImageInfo*        image_info,
+                                     VulkanDeviceMemoryInfo* memory_info,
+                                     VkDeviceSize            memoryOffset);
 
     VkResult OverrideBindImageMemory2(PFN_vkBindImageMemory2                                     func,
                                       VkResult                                                   original_result,
-                                      const DeviceInfo*                                          device_info,
+                                      const VulkanDeviceInfo*                                    device_info,
                                       uint32_t                                                   bindInfoCount,
                                       const StructPointerDecoder<Decoded_VkBindImageMemoryInfo>* pBindInfos);
 
+    VkResult OverrideBindVideoSessionMemoryKHR(
+        PFN_vkBindVideoSessionMemoryKHR                                func,
+        VkResult                                                       original_result,
+        const VulkanDeviceInfo*                                        device_info,
+        VulkanVideoSessionKHRInfo*                                     video_session_info,
+        uint32_t                                                       bindSessionMemoryInfoCount,
+        StructPointerDecoder<Decoded_VkBindVideoSessionMemoryInfoKHR>* pBindSessionMemoryInfos);
+
     VkResult OverrideCreateBuffer(PFN_vkCreateBuffer                                         func,
                                   VkResult                                                   original_result,
-                                  const DeviceInfo*                                          device_info,
+                                  const VulkanDeviceInfo*                                    device_info,
                                   const StructPointerDecoder<Decoded_VkBufferCreateInfo>*    pCreateInfo,
                                   const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                   HandlePointerDecoder<VkBuffer>*                            pBuffer);
 
     void OverrideDestroyBuffer(PFN_vkDestroyBuffer                                        func,
-                               const DeviceInfo*                                          device_info,
-                               BufferInfo*                                                buffer_info,
+                               const VulkanDeviceInfo*                                    device_info,
+                               VulkanBufferInfo*                                          buffer_info,
                                const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideCreateImage(PFN_vkCreateImage                                          func,
                                  VkResult                                                   original_result,
-                                 const DeviceInfo*                                          device_info,
+                                 const VulkanDeviceInfo*                                    device_info,
                                  const StructPointerDecoder<Decoded_VkImageCreateInfo>*     pCreateInfo,
                                  const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                  HandlePointerDecoder<VkImage>*                             pImage);
 
     void OverrideDestroyImage(PFN_vkDestroyImage                                         func,
-                              const DeviceInfo*                                          device_info,
-                              ImageInfo*                                                 image_info,
+                              const VulkanDeviceInfo*                                    device_info,
+                              VulkanImageInfo*                                           image_info,
                               const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
+    VkResult OverrideCreateVideoSessionKHR(PFN_vkCreateVideoSessionKHR func,
+                                           VkResult                    original_result,
+                                           const VulkanDeviceInfo*     device_info,
+                                           const StructPointerDecoder<Decoded_VkVideoSessionCreateInfoKHR>* pCreateInfo,
+                                           const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                           HandlePointerDecoder<VkVideoSessionKHR>* pVideoSession);
+
+    void OverrideDestroyVideoSessionKHR(PFN_vkDestroyVideoSessionKHR                               func,
+                                        const VulkanDeviceInfo*                                    device_info,
+                                        VulkanVideoSessionKHRInfo*                                 video_session_info,
+                                        const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
     void OverrideGetImageSubresourceLayout(PFN_vkGetImageSubresourceLayout                         func,
-                                           const DeviceInfo*                                       device_info,
-                                           const ImageInfo*                                        image_info,
+                                           const VulkanDeviceInfo*                                 device_info,
+                                           const VulkanImageInfo*                                  image_info,
                                            const StructPointerDecoder<Decoded_VkImageSubresource>* pSubresource,
                                            StructPointerDecoder<Decoded_VkSubresourceLayout>*      pLayout);
 
     VkResult OverrideCreateRenderPass(PFN_vkCreateRenderPass                                      func,
                                       VkResult                                                    original_result,
-                                      const DeviceInfo*                                           device_info,
+                                      const VulkanDeviceInfo*                                     device_info,
                                       const StructPointerDecoder<Decoded_VkRenderPassCreateInfo>* pCreateInfo,
                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*  pAllocator,
                                       HandlePointerDecoder<VkRenderPass>*                         pRenderPass);
 
     VkResult OverrideCreateRenderPass2(PFN_vkCreateRenderPass2                                      func,
                                        VkResult                                                     original_result,
-                                       const DeviceInfo*                                            device_info,
+                                       const VulkanDeviceInfo*                                      device_info,
                                        const StructPointerDecoder<Decoded_VkRenderPassCreateInfo2>* pCreateInfo,
                                        const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
                                        HandlePointerDecoder<VkRenderPass>*                          pRenderPass);
 
     void OverrideCmdPipelineBarrier(PFN_vkCmdPipelineBarrier                                   func,
-                                    CommandBufferInfo*                                         command_buffer_info,
+                                    VulkanCommandBufferInfo*                                   command_buffer_info,
                                     VkPipelineStageFlags                                       srcStageMask,
                                     VkPipelineStageFlags                                       dstStageMask,
                                     VkDependencyFlags                                          dependencyFlags,
@@ -875,62 +949,63 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                     const StructPointerDecoder<Decoded_VkImageMemoryBarrier>*  pImageMemoryBarriers);
 
     void OverrideCmdPipelineBarrier2(PFN_vkCmdPipelineBarrier2                       func,
-                                     CommandBufferInfo*                              command_buffer_info,
+                                     VulkanCommandBufferInfo*                        command_buffer_info,
                                      StructPointerDecoder<Decoded_VkDependencyInfo>* pDependencyInfo);
 
     void OverrideCmdPipelineBarrier2KHR(PFN_vkCmdPipelineBarrier2                       func,
-                                        CommandBufferInfo*                              command_buffer_info,
+                                        VulkanCommandBufferInfo*                        command_buffer_info,
                                         StructPointerDecoder<Decoded_VkDependencyInfo>* pDependencyInfo);
 
     VkResult OverrideCreateDescriptorUpdateTemplate(
         PFN_vkCreateDescriptorUpdateTemplate                                      func,
         VkResult                                                                  original_result,
-        const DeviceInfo*                                                         device_info,
+        const VulkanDeviceInfo*                                                   device_info,
         const StructPointerDecoder<Decoded_VkDescriptorUpdateTemplateCreateInfo>* pCreateInfo,
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkDescriptorUpdateTemplate>*                         pDescriptorUpdateTemplate);
 
-    void OverrideDestroyDescriptorUpdateTemplate(PFN_vkDestroyDescriptorUpdateTemplate func,
-                                                 const DeviceInfo*                     device_info,
-                                                 const DescriptorUpdateTemplateInfo*   descriptor_update_template_info,
-                                                 const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+    void
+    OverrideDestroyDescriptorUpdateTemplate(PFN_vkDestroyDescriptorUpdateTemplate     func,
+                                            const VulkanDeviceInfo*                   device_info,
+                                            const VulkanDescriptorUpdateTemplateInfo* descriptor_update_template_info,
+                                            const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideCreateShaderModule(PFN_vkCreateShaderModule                                      func,
                                         VkResult                                                      original_result,
-                                        const DeviceInfo*                                             device_info,
+                                        const VulkanDeviceInfo*                                       device_info,
                                         const StructPointerDecoder<Decoded_VkShaderModuleCreateInfo>* pCreateInfo,
                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                         HandlePointerDecoder<VkShaderModule>*                         pShaderModule);
 
-    VkResult OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData func,
-                                          VkResult                   original_result,
-                                          const DeviceInfo*          device_info,
-                                          const PipelineCacheInfo*   pipeline_cache_info,
-                                          PointerDecoder<size_t>*    pDataSize,
-                                          PointerDecoder<uint8_t>*   pData);
+    VkResult OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData     func,
+                                          VkResult                       original_result,
+                                          const VulkanDeviceInfo*        device_info,
+                                          const VulkanPipelineCacheInfo* pipeline_cache_info,
+                                          PointerDecoder<size_t>*        pDataSize,
+                                          PointerDecoder<uint8_t>*       pData);
 
     VkResult OverrideCreatePipelineCache(PFN_vkCreatePipelineCache                                      func,
                                          VkResult                                                       original_result,
-                                         const DeviceInfo*                                              device_info,
+                                         const VulkanDeviceInfo*                                        device_info,
                                          const StructPointerDecoder<Decoded_VkPipelineCacheCreateInfo>* pCreateInfo,
                                          const StructPointerDecoder<Decoded_VkAllocationCallbacks>*     pAllocator,
                                          HandlePointerDecoder<VkPipelineCache>*                         pPipelineCache);
 
     void OverrideDestroyPipelineCache(PFN_vkDestroyPipelineCache                                 func,
-                                      const DeviceInfo*                                          device_info,
-                                      const PipelineCacheInfo*                                   pipeline_cache_info,
+                                      const VulkanDeviceInfo*                                    device_info,
+                                      const VulkanPipelineCacheInfo*                             pipeline_cache_info,
                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideResetDescriptorPool(PFN_vkResetDescriptorPool  func,
                                          VkResult                   original_result,
-                                         const DeviceInfo*          device_info,
-                                         DescriptorPoolInfo*        pool_info,
+                                         const VulkanDeviceInfo*    device_info,
+                                         VulkanDescriptorPoolInfo*  pool_info,
                                          VkDescriptorPoolResetFlags flags);
 
     VkResult OverrideCreateDebugReportCallbackEXT(
         PFN_vkCreateDebugReportCallbackEXT                                      func,
         VkResult                                                                original_result,
-        const InstanceInfo*                                                     instance_info,
+        const VulkanInstanceInfo*                                               instance_info,
         const StructPointerDecoder<Decoded_VkDebugReportCallbackCreateInfoEXT>* pCreateInfo,
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*              pAllocator,
         HandlePointerDecoder<VkDebugReportCallbackEXT>*                         pCallback);
@@ -938,60 +1013,55 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult OverrideCreateDebugUtilsMessengerEXT(
         PFN_vkCreateDebugUtilsMessengerEXT                                      func,
         VkResult                                                                original_result,
-        const InstanceInfo*                                                     instance_info,
-        const StructPointerDecoder<Decoded_VkDebugUtilsMessengerCreateInfoEXT>* create_info,
-        const StructPointerDecoder<Decoded_VkAllocationCallbacks>*              allocator,
-        HandlePointerDecoder<VkDebugUtilsMessengerEXT>*                         messenger);
+        const VulkanInstanceInfo*                                               instance_info,
+        const StructPointerDecoder<Decoded_VkDebugUtilsMessengerCreateInfoEXT>* pCreateInfo,
+        const StructPointerDecoder<Decoded_VkAllocationCallbacks>*              pAllocator,
+        HandlePointerDecoder<VkDebugUtilsMessengerEXT>*                         pMessenger);
 
     void OverrideCmdBeginDebugUtilsLabelEXT(PFN_vkCmdBeginDebugUtilsLabelEXT func,
-                                            const CommandBufferInfo*         command_buffer_info,
+                                            const VulkanCommandBufferInfo*   command_buffer_info,
                                             const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label);
 
     void OverrideCmdEndDebugUtilsLabelEXT(PFN_vkCmdEndDebugUtilsLabelEXT func,
-                                          const CommandBufferInfo*       command_buffer_info);
-
-    void
-    OverrideCmdInsertDebugUtilsLabelEXT(PFN_vkCmdInsertDebugUtilsLabelEXT                         func,
-                                        CommandBufferInfo*                                        command_buffer_info,
-                                        const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label_info_decoder);
+                                          const VulkanCommandBufferInfo* command_buffer_info);
 
     void OverrideDestroyDebugUtilsMessengerEXT(PFN_vkDestroyDebugUtilsMessengerEXT                        func,
-                                               const InstanceInfo*                                        instance_info,
-                                               const DebugUtilsMessengerEXTInfo*                          messenger,
+                                               const VulkanInstanceInfo*                                  instance_info,
+                                               const VulkanDebugUtilsMessengerEXTInfo*                    messenger,
                                                const StructPointerDecoder<Decoded_VkAllocationCallbacks>* allocator);
 
     void OverrideQueueBeginDebugUtilsLabelEXT(PFN_vkQueueBeginDebugUtilsLabelEXT                        func,
-                                              const QueueInfo*                                          queue_info,
+                                              const VulkanQueueInfo*                                    queue_info,
                                               const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label);
 
-    void OverrideQueueEndDebugUtilsLabelEXT(PFN_vkQueueEndDebugUtilsLabelEXT func, const QueueInfo* queue_info);
+    void OverrideQueueEndDebugUtilsLabelEXT(PFN_vkQueueEndDebugUtilsLabelEXT func, const VulkanQueueInfo* queue_info);
 
     void OverrideQueueInsertDebugUtilsLabelEXT(PFN_vkQueueInsertDebugUtilsLabelEXT                       func,
-                                               const QueueInfo*                                          queue_info,
+                                               const VulkanQueueInfo*                                    queue_info,
                                                const StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label);
 
     uintptr_t GetObjectAllocatorData(VkObjectType object_type, format::HandleId handle_id);
 
     VkResult OverrideSetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT func,
                                                 const VkResult                   original_result,
-                                                const DeviceInfo*                device_info,
+                                                const VulkanDeviceInfo*          device_info,
                                                 StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info);
 
     VkResult OverrideSetDebugUtilsObjectTagEXT(PFN_vkSetDebugUtilsObjectTagEXT func,
                                                const VkResult                  original_result,
-                                               const DeviceInfo*               device_info,
+                                               const VulkanDeviceInfo*         device_info,
                                                StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* tag_info);
 
     void OverrideSubmitDebugUtilsMessageEXT(
         PFN_vkSubmitDebugUtilsMessageEXT                                          func,
-        const InstanceInfo*                                                       instance_info,
+        const VulkanInstanceInfo*                                                 instance_info,
         const VkDebugUtilsMessageSeverityFlagBitsEXT                              message_severity,
         const VkDebugUtilsMessageTypeFlagsEXT                                     message_types,
         const StructPointerDecoder<Decoded_VkDebugUtilsMessengerCallbackDataEXT>* callback_data);
 
     VkResult OverrideCreateSwapchainKHR(PFN_vkCreateSwapchainKHR                                      func,
                                         VkResult                                                      original_result,
-                                        DeviceInfo*                                                   device_info,
+                                        VulkanDeviceInfo*                                             device_info,
                                         const StructPointerDecoder<Decoded_VkSwapchainCreateInfoKHR>* pCreateInfo,
                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                         HandlePointerDecoder<VkSwapchainKHR>*                         pSwapchain);
@@ -999,78 +1069,78 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult
     OverrideCreateSharedSwapchainsKHR(PFN_vkCreateSharedSwapchainsKHR                               func,
                                       VkResult                                                      original_result,
-                                      DeviceInfo*                                                   device_info,
+                                      VulkanDeviceInfo*                                             device_info,
                                       uint32_t                                                      swapchainCount,
                                       const StructPointerDecoder<Decoded_VkSwapchainCreateInfoKHR>* pCreateInfos,
                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                       HandlePointerDecoder<VkSwapchainKHR>*                         pSwapchains);
 
     void OverrideDestroySwapchainKHR(PFN_vkDestroySwapchainKHR                                  func,
-                                     DeviceInfo*                                                device_info,
-                                     SwapchainKHRInfo*                                          swapchain_info,
+                                     VulkanDeviceInfo*                                          device_info,
+                                     VulkanSwapchainKHRInfo*                                    swapchain_info,
                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideGetSwapchainImagesKHR(PFN_vkGetSwapchainImagesKHR    func,
                                            VkResult                       original_result,
-                                           const DeviceInfo*              device_info,
-                                           SwapchainKHRInfo*              swapchain_info,
+                                           const VulkanDeviceInfo*        device_info,
+                                           VulkanSwapchainKHRInfo*        swapchain_info,
                                            PointerDecoder<uint32_t>*      pSwapchainImageCount,
                                            HandlePointerDecoder<VkImage>* pSwapchainImages);
 
     VkResult OverrideAcquireNextImageKHR(PFN_vkAcquireNextImageKHR func,
                                          VkResult                  original_result,
-                                         const DeviceInfo*         device_info,
-                                         SwapchainKHRInfo*         swapchain_info,
+                                         const VulkanDeviceInfo*   device_info,
+                                         VulkanSwapchainKHRInfo*   swapchain_info,
                                          uint64_t                  timeout,
-                                         SemaphoreInfo*            semaphore_info,
-                                         FenceInfo*                fence_info,
+                                         VulkanSemaphoreInfo*      semaphore_info,
+                                         VulkanFenceInfo*          fence_info,
                                          PointerDecoder<uint32_t>* pImageIndex);
 
     VkResult OverrideAcquireNextImage2KHR(PFN_vkAcquireNextImage2KHR func,
                                           VkResult                   original_result,
-                                          const DeviceInfo*          device_info,
+                                          const VulkanDeviceInfo*    device_info,
                                           const StructPointerDecoder<Decoded_VkAcquireNextImageInfoKHR>* pAcquireInfo,
                                           PointerDecoder<uint32_t>*                                      pImageIndex);
 
     VkResult OverrideQueuePresentKHR(PFN_vkQueuePresentKHR                                 func,
                                      VkResult                                              original_result,
-                                     const QueueInfo*                                      queue_info,
+                                     const VulkanQueueInfo*                                queue_info,
                                      const StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo);
 
     VkResult OverrideImportSemaphoreFdKHR(
         PFN_vkImportSemaphoreFdKHR                                      func,
         VkResult                                                        original_result,
-        const DeviceInfo*                                               device_info,
+        const VulkanDeviceInfo*                                         device_info,
         const StructPointerDecoder<Decoded_VkImportSemaphoreFdInfoKHR>* pImportSemaphoreFdInfo);
 
     VkResult OverrideGetSemaphoreFdKHR(PFN_vkGetSemaphoreFdKHR                                      func,
                                        VkResult                                                     original_result,
-                                       const DeviceInfo*                                            device_info,
+                                       const VulkanDeviceInfo*                                      device_info,
                                        const StructPointerDecoder<Decoded_VkSemaphoreGetFdInfoKHR>* pGetFdInfo,
                                        const PointerDecoder<int>*                                   pFd);
 
     VkResult OverrideGetSemaphoreCounterValue(PFN_vkGetSemaphoreCounterValue func,
                                               VkResult                       original_result,
-                                              const DeviceInfo*              device_info,
-                                              SemaphoreInfo*                 semaphore_info,
+                                              const VulkanDeviceInfo*        device_info,
+                                              VulkanSemaphoreInfo*           semaphore_info,
                                               PointerDecoder<uint64_t>*      pValue);
 
     VkResult OverrideImportSemaphoreWin32HandleKHR(
         PFN_vkImportSemaphoreWin32HandleKHR                                      func,
         VkResult                                                                 original_result,
-        const DeviceInfo*                                                        device_info,
+        const VulkanDeviceInfo*                                                  device_info,
         const StructPointerDecoder<Decoded_VkImportSemaphoreWin32HandleInfoKHR>* pImportSemaphoreWin32HandleInfo);
 
     VkResult OverrideGetSemaphoreWin32HandleKHR(
         PFN_vkGetSemaphoreWin32HandleKHR                                      func,
         VkResult                                                              original_result,
-        const DeviceInfo*                                                     device_info,
+        const VulkanDeviceInfo*                                               device_info,
         const StructPointerDecoder<Decoded_VkSemaphoreGetWin32HandleInfoKHR>* pGetWin32HandleInfo,
         const PointerDecoder<uint64_t, void*>*                                pHandle);
 
     VkResult OverrideGetRandROutputDisplayEXT(PFN_vkGetRandROutputDisplayEXT      func,
                                               VkResult                            original_result,
-                                              const PhysicalDeviceInfo*           physicalDevice,
+                                              const VulkanPhysicalDeviceInfo*     physicalDevice,
                                               Display*                            dpy,
                                               RROutput                            rrOutput,
                                               HandlePointerDecoder<VkDisplayKHR>* pDisplay);
@@ -1080,53 +1150,53 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult
     OverrideCreateAndroidSurfaceKHR(PFN_vkCreateAndroidSurfaceKHR                                      func,
                                     VkResult                                                           original_result,
-                                    InstanceInfo*                                                      instance_info,
+                                    VulkanInstanceInfo*                                                instance_info,
                                     const StructPointerDecoder<Decoded_VkAndroidSurfaceCreateInfoKHR>* pCreateInfo,
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*         pAllocator,
                                     HandlePointerDecoder<VkSurfaceKHR>*                                pSurface);
 
     VkResult OverrideCreateWin32SurfaceKHR(PFN_vkCreateWin32SurfaceKHR func,
                                            VkResult                    original_result,
-                                           InstanceInfo*               instance_info,
+                                           VulkanInstanceInfo*         instance_info,
                                            const StructPointerDecoder<Decoded_VkWin32SurfaceCreateInfoKHR>* pCreateInfo,
                                            const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
                                            HandlePointerDecoder<VkSurfaceKHR>*                              pSurface);
 
     VkBool32
     OverrideGetPhysicalDeviceWin32PresentationSupportKHR(PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR func,
-                                                         const PhysicalDeviceInfo* physical_device_info,
-                                                         uint32_t                  queueFamilyIndex);
+                                                         const VulkanPhysicalDeviceInfo* physical_device_info,
+                                                         uint32_t                        queueFamilyIndex);
 
     VkResult OverrideCreateXcbSurfaceKHR(PFN_vkCreateXcbSurfaceKHR                                      func,
                                          VkResult                                                       original_result,
-                                         InstanceInfo*                                                  instance_info,
+                                         VulkanInstanceInfo*                                            instance_info,
                                          const StructPointerDecoder<Decoded_VkXcbSurfaceCreateInfoKHR>* pCreateInfo,
                                          const StructPointerDecoder<Decoded_VkAllocationCallbacks>*     pAllocator,
                                          HandlePointerDecoder<VkSurfaceKHR>*                            pSurface);
 
     VkBool32 OverrideGetPhysicalDeviceXcbPresentationSupportKHR(PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR func,
-                                                                const PhysicalDeviceInfo* physical_device_info,
-                                                                uint32_t                  queueFamilyIndex,
-                                                                xcb_connection_t*         connection,
-                                                                xcb_visualid_t            visual_id);
+                                                                const VulkanPhysicalDeviceInfo* physical_device_info,
+                                                                uint32_t                        queueFamilyIndex,
+                                                                xcb_connection_t*               connection,
+                                                                xcb_visualid_t                  visual_id);
 
     VkResult OverrideCreateXlibSurfaceKHR(PFN_vkCreateXlibSurfaceKHR func,
                                           VkResult                   original_result,
-                                          InstanceInfo*              instance_info,
+                                          VulkanInstanceInfo*        instance_info,
                                           const StructPointerDecoder<Decoded_VkXlibSurfaceCreateInfoKHR>* pCreateInfo,
                                           const StructPointerDecoder<Decoded_VkAllocationCallbacks>*      pAllocator,
                                           HandlePointerDecoder<VkSurfaceKHR>*                             pSurface);
 
     VkBool32 OverrideGetPhysicalDeviceXlibPresentationSupportKHR(PFN_vkGetPhysicalDeviceXlibPresentationSupportKHR func,
-                                                                 const PhysicalDeviceInfo* physical_device_info,
-                                                                 uint32_t                  queueFamilyIndex,
-                                                                 Display*                  dpy,
-                                                                 VisualID                  visualID);
+                                                                 const VulkanPhysicalDeviceInfo* physical_device_info,
+                                                                 uint32_t                        queueFamilyIndex,
+                                                                 Display*                        dpy,
+                                                                 VisualID                        visualID);
 
     VkResult
     OverrideCreateWaylandSurfaceKHR(PFN_vkCreateWaylandSurfaceKHR                                      func,
                                     VkResult                                                           original_result,
-                                    InstanceInfo*                                                      instance_info,
+                                    VulkanInstanceInfo*                                                instance_info,
                                     const StructPointerDecoder<Decoded_VkWaylandSurfaceCreateInfoKHR>* pCreateInfo,
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*         pAllocator,
                                     HandlePointerDecoder<VkSurfaceKHR>*                                pSurface);
@@ -1134,7 +1204,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult
     OverrideCreateDisplayPlaneSurfaceKHR(PFN_vkCreateDisplayPlaneSurfaceKHR func,
                                          VkResult                           original_result,
-                                         InstanceInfo*                      instance_info,
+                                         VulkanInstanceInfo*                instance_info,
                                          const StructPointerDecoder<Decoded_VkDisplaySurfaceCreateInfoKHR>* pCreateInfo,
                                          const StructPointerDecoder<Decoded_VkAllocationCallbacks>*         pAllocator,
                                          HandlePointerDecoder<VkSurfaceKHR>*                                pSurface);
@@ -1142,109 +1212,134 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult
     OverrideCreateHeadlessSurfaceEXT(PFN_vkCreateHeadlessSurfaceEXT func,
                                      VkResult                       original_result,
-                                     InstanceInfo*                  instance_info,
+                                     VulkanInstanceInfo*            instance_info,
                                      const StructPointerDecoder<Decoded_VkHeadlessSurfaceCreateInfoEXT>* pCreateInfo,
                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>*          pAllocator,
                                      HandlePointerDecoder<VkSurfaceKHR>*                                 pSurface);
 
     VkBool32
     OverrideGetPhysicalDeviceWaylandPresentationSupportKHR(PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR func,
-                                                           const PhysicalDeviceInfo* physical_device_info,
-                                                           uint32_t                  queueFamilyIndex,
-                                                           struct wl_display*        display);
+                                                           const VulkanPhysicalDeviceInfo* physical_device_info,
+                                                           uint32_t                        queueFamilyIndex,
+                                                           struct wl_display*              display);
 
     VkResult OverrideCreateMetalSurfaceEXT(PFN_vkCreateMetalSurfaceEXT func,
                                            VkResult                    original_result,
-                                           InstanceInfo*               instance_info,
+                                           VulkanInstanceInfo*         instance_info,
                                            const StructPointerDecoder<Decoded_VkMetalSurfaceCreateInfoEXT>* pCreateInfo,
                                            const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
                                            HandlePointerDecoder<VkSurfaceKHR>*                              pSurface);
 
     void OverrideDestroySurfaceKHR(PFN_vkDestroySurfaceKHR                                    func,
-                                   InstanceInfo*                                              instance_info,
-                                   const SurfaceKHRInfo*                                      surface_info,
+                                   VulkanInstanceInfo*                                        instance_info,
+                                   const VulkanSurfaceKHRInfo*                                surface_info,
                                    const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideCreateAccelerationStructureKHR(
         PFN_vkCreateAccelerationStructureKHR                                      func,
         VkResult                                                                  original_result,
-        const DeviceInfo*                                                         device_info,
+        const VulkanDeviceInfo*                                                   device_info,
         const StructPointerDecoder<Decoded_VkAccelerationStructureCreateInfoKHR>* pCreateInfo,
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                         pAccelerationStructureKHR);
 
-    VkResult OverrideCreateMicromapEXT(PFN_vkCreateMicromapEXT                                      func,
-                                       VkResult                                                     original_result,
-                                       const DeviceInfo*                                            device_info,
-                                       const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
-                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
+    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR     func,
+                                                 const VulkanDeviceInfo*                   device_info,
+                                                 const VulkanAccelerationStructureKHRInfo* acceleration_structure_info,
+                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
-    void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
-                                          const DeviceInfo*                                          device,
-                                          VkAccelerationStructureBuildTypeKHR                        buildType,
-                                          StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
-                                          StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo);
+    void OverrideGetAccelerationStructureBuildSizesKHR(
+        PFN_vkGetAccelerationStructureBuildSizesKHR                                func,
+        const VulkanDeviceInfo*                                                    device_info,
+        VkAccelerationStructureBuildTypeKHR                                        buildType,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pBuildInfo,
+        PointerDecoder<uint32_t>*                                                  pMaxPrimitiveCounts,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>*    pSizeInfo);
 
     void OverrideCmdBuildAccelerationStructuresKHR(
         PFN_vkCmdBuildAccelerationStructuresKHR                                    func,
-        CommandBufferInfo*                                                         command_buffer_info,
+        VulkanCommandBufferInfo*                                                   command_buffer_info,
         uint32_t                                                                   infoCount,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pInfos,
         StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   ppBuildRangeInfos);
 
-    void OverrideCmdBuildMicromapsEXT(PFN_vkCmdBuildMicromapsEXT                            func,
-                                      CommandBufferInfo*                                    command_buffer_info,
-                                      uint32_t                                              infoCount,
-                                      StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
-
     void
     OverrideCmdCopyAccelerationStructureKHR(PFN_vkCmdCopyAccelerationStructureKHR func,
-                                            CommandBufferInfo*                    command_buffer_info,
+                                            VulkanCommandBufferInfo*              command_buffer_info,
                                             StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo);
 
     void OverrideCmdWriteAccelerationStructuresPropertiesKHR(
         PFN_vkCmdWriteAccelerationStructuresPropertiesKHR func,
-        CommandBufferInfo*                                command_buffer_info,
+        VulkanCommandBufferInfo*                          command_buffer_info,
         uint32_t                                          count,
         HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
         VkQueryType                                       queryType,
-        gfxrecon::decode::QueryPoolInfo*                  query_pool_info,
+        gfxrecon::decode::VulkanQueryPoolInfo*            query_pool_info,
         uint32_t                                          firstQuery);
+
+    VkResult OverrideCreateMicromapEXT(PFN_vkCreateMicromapEXT                                      func,
+                                       VkResult                                                     original_result,
+                                       const VulkanDeviceInfo*                                      device_info,
+                                       const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
+                                       const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
+
+    void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
+                                    const VulkanDeviceInfo*                              device_info,
+                                    const VulkanMicromapEXTInfo*                         micromap_info,
+                                    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
+    void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
+                                          const VulkanDeviceInfo*                                    device,
+                                          VkAccelerationStructureBuildTypeKHR                        buildType,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>*      pBuildInfo,
+                                          StructPointerDecoder<Decoded_VkMicromapBuildSizesInfoEXT>* pSizeInfo);
+
+    void OverrideCmdBuildMicromapsEXT(PFN_vkCmdBuildMicromapsEXT                            func,
+                                      VulkanCommandBufferInfo*                              command_buffer_info,
+                                      uint32_t                                              infoCount,
+                                      StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos);
+    void OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdWriteMicromapsPropertiesEXT   func,
+                                                VulkanCommandBufferInfo*               command_buffer_info,
+                                                uint32_t                               count,
+                                                HandlePointerDecoder<VkMicromapEXT>*   pMicromaps,
+                                                VkQueryType                            queryType,
+                                                gfxrecon::decode::VulkanQueryPoolInfo* query_pool_info,
+                                                uint32_t                               firstQuery);
 
     VkResult OverrideCreateRayTracingPipelinesKHR(
         PFN_vkCreateRayTracingPipelinesKHR                                     func,
         VkResult                                                               original_result,
-        const DeviceInfo*                                                      device_info,
-        DeferredOperationKHRInfo*                                              deferred_operation_info,
-        const PipelineCacheInfo*                                               pipeline_cache_info,
+        const VulkanDeviceInfo*                                                device_info,
+        VulkanDeferredOperationKHRInfo*                                        deferred_operation_info,
+        const VulkanPipelineCacheInfo*                                         pipeline_cache_info,
         uint32_t                                                               createInfoCount,
         const StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoKHR>* pCreateInfos,
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
         HandlePointerDecoder<VkPipeline>*                                      pPipelines);
 
-    VkResult OverrideDeferredOperationJoinKHR(PFN_vkDeferredOperationJoinKHR func,
-                                              VkResult                       original_result,
-                                              const DeviceInfo*              device_info,
-                                              DeferredOperationKHRInfo*      deferred_operation_info);
+    VkResult OverrideDeferredOperationJoinKHR(PFN_vkDeferredOperationJoinKHR  func,
+                                              VkResult                        original_result,
+                                              const VulkanDeviceInfo*         device_info,
+                                              VulkanDeferredOperationKHRInfo* deferred_operation_info);
 
     VkDeviceAddress
     OverrideGetBufferDeviceAddress(PFN_vkGetBufferDeviceAddress                                   func,
-                                   VkDeviceAddress                                                returnValue,
-                                   const DeviceInfo*                                              device_info,
+                                   VkDeviceAddress                                                original_result,
+                                   const VulkanDeviceInfo*                                        device_info,
                                    const StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo);
 
     void OverrideGetAccelerationStructureDeviceAddressKHR(
         PFN_vkGetAccelerationStructureDeviceAddressKHR                                   func,
         VkDeviceAddress                                                                  original_result,
-        const DeviceInfo*                                                                device_info,
+        const VulkanDeviceInfo*                                                          device_info,
         const StructPointerDecoder<Decoded_VkAccelerationStructureDeviceAddressInfoKHR>* pInfo);
 
     VkResult OverrideCreateRayTracingPipelinesNV(
         PFN_vkCreateRayTracingPipelinesNV                                     func,
         VkResult                                                              original_result,
-        const DeviceInfo*                                                     device_info,
-        const PipelineCacheInfo*                                              pipeline_cache_info,
+        const VulkanDeviceInfo*                                               device_info,
+        const VulkanPipelineCacheInfo*                                        pipeline_cache_info,
         uint32_t                                                              createInfoCount,
         const StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoNV>* pCreateInfos,
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*            pAllocator,
@@ -1252,8 +1347,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     VkResult OverrideGetRayTracingShaderGroupHandlesKHR(PFN_vkGetRayTracingShaderGroupHandlesKHR func,
                                                         VkResult                                 original_result,
-                                                        const DeviceInfo*                        device_info,
-                                                        const PipelineInfo*                      pipeline_info,
+                                                        const VulkanDeviceInfo*                  device_info,
+                                                        const VulkanPipelineInfo*                pipeline_info,
                                                         uint32_t                                 firstGroup,
                                                         uint32_t                                 groupCount,
                                                         size_t                                   dataSize,
@@ -1261,119 +1356,127 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult OverrideGetAndroidHardwareBufferPropertiesANDROID(
         PFN_vkGetAndroidHardwareBufferPropertiesANDROID                         func,
         VkResult                                                                original_result,
-        const DeviceInfo*                                                       device_info,
+        const VulkanDeviceInfo*                                                 device_info,
         const struct AHardwareBuffer*                                           hardware_buffer,
         StructPointerDecoder<Decoded_VkAndroidHardwareBufferPropertiesANDROID>* pProperties);
 
-    void ClearCommandBufferInfo(CommandBufferInfo* command_buffer_info);
+    void ClearCommandBufferInfo(VulkanCommandBufferInfo* command_buffer_info);
 
     VkResult OverrideBeginCommandBuffer(PFN_vkBeginCommandBuffer                                func,
                                         uint64_t                                                index,
                                         VkResult                                                original_result,
-                                        CommandBufferInfo*                                      command_buffer_info,
+                                        VulkanCommandBufferInfo*                                command_buffer_info,
                                         StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* begin_info_decoder);
 
     VkResult OverrideResetCommandBuffer(PFN_vkResetCommandBuffer  func,
                                         VkResult                  original_result,
-                                        CommandBufferInfo*        command_buffer_info,
+                                        VulkanCommandBufferInfo*  command_buffer_info,
                                         VkCommandBufferResetFlags flags);
 
     VkResult OverrideResetCommandPool(PFN_vkResetCommandPool  func,
                                       VkResult                original_result,
-                                      const DeviceInfo*       device_info,
-                                      CommandPoolInfo*        pool_info,
+                                      const VulkanDeviceInfo* device_info,
+                                      VulkanCommandPoolInfo*  pool_info,
                                       VkCommandPoolResetFlags flags);
 
     void OverrideDestroyCommandPool(PFN_vkDestroyCommandPool                             func,
-                                    const DeviceInfo*                                    device_info,
-                                    CommandPoolInfo*                                     pool_info,
+                                    const VulkanDeviceInfo*                              device_info,
+                                    VulkanCommandPoolInfo*                               pool_info,
                                     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideCmdDebugMarkerInsertEXT(PFN_vkCmdDebugMarkerInsertEXT                             func,
-                                         CommandBufferInfo*                                        command_buffer_info,
+                                         VulkanCommandBufferInfo*                                  command_buffer_info,
                                          StructPointerDecoder<Decoded_VkDebugMarkerMarkerInfoEXT>* marker_info_decoder);
+
+    void OverrideCmdInsertDebugUtilsLabelEXT(PFN_vkCmdInsertDebugUtilsLabelEXT                   func,
+                                             VulkanCommandBufferInfo*                            command_buffer_info,
+                                             StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* label_info_decoder);
 
     VkResult OverrideWaitSemaphores(PFN_vkWaitSemaphores                                     func,
                                     VkResult                                                 original_result,
-                                    const DeviceInfo*                                        device_info,
+                                    const VulkanDeviceInfo*                                  device_info,
                                     const StructPointerDecoder<Decoded_VkSemaphoreWaitInfo>* pInfo,
                                     uint64_t                                                 timeout);
 
     VkResult OverrideAcquireProfilingLockKHR(PFN_vkAcquireProfilingLockKHR func,
                                              VkResult                      original_result,
-                                             const DeviceInfo*             device_info,
+                                             const VulkanDeviceInfo*       device_info,
                                              const StructPointerDecoder<Decoded_VkAcquireProfilingLockInfoKHR>* pInfo);
 
     VkResult OverrideWaitForPresentKHR(PFN_vkWaitForPresentKHR func,
                                        VkResult                original_result,
-                                       const DeviceInfo*       device_info,
-                                       SwapchainKHRInfo*       swapchain_info,
+                                       const VulkanDeviceInfo* device_info,
+                                       VulkanSwapchainKHRInfo* swapchain_info,
                                        uint64_t                presentid,
                                        uint64_t                timeout);
 
+    void OverrideCmdBindPipeline(PFN_vkCmdBindPipeline    func,
+                                 VulkanCommandBufferInfo* command_buffer_info,
+                                 VkPipelineBindPoint      pipelineBindPoint,
+                                 VulkanPipelineInfo*      pipeline_info);
+
+    void OverrideCmdPushConstants(PFN_vkCmdPushConstants              func,
+                                  VulkanCommandBufferInfo*            command_buffer_info,
+                                  VulkanObjectInfo<VkPipelineLayout>* pipeline_layout_info,
+                                  VkShaderStageFlags                  stage_flags,
+                                  uint32_t                            offset,
+                                  uint32_t                            size,
+                                  PointerDecoder<uint8_t>*            data_decoder);
+
     void OverrideCmdBeginRenderPass(PFN_vkCmdBeginRenderPass                             func,
-                                    CommandBufferInfo*                                   command_buffer_info,
+                                    VulkanCommandBufferInfo*                             command_buffer_info,
                                     StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder,
                                     VkSubpassContents                                    contents);
 
     void
+    OverrideCmdTraceRaysKHR(PFN_vkCmdTraceRaysKHR                                          func,
+                            VulkanCommandBufferInfo*                                       command_buffer_info,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
+                            StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
+                            uint32_t                                                       width,
+                            uint32_t                                                       height,
+                            uint32_t                                                       depth);
+
+    void
     OverrideCmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2                            func,
-                                CommandBufferInfo*                                   command_buffer_info,
+                                VulkanCommandBufferInfo*                             command_buffer_info,
                                 StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder,
                                 StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    subpass_begin_info_decode);
 
     VkResult OverrideCreateImageView(PFN_vkCreateImageView                                func,
                                      VkResult                                             original_result,
-                                     const DeviceInfo*                                    device_info,
+                                     const VulkanDeviceInfo*                              device_info,
                                      StructPointerDecoder<Decoded_VkImageViewCreateInfo>* create_info_decoder,
                                      StructPointerDecoder<Decoded_VkAllocationCallbacks>* allocator_decoder,
                                      HandlePointerDecoder<VkImageView>*                   view_decoder);
 
     VkResult OverrideCreateFramebuffer(PFN_vkCreateFramebuffer                                func,
                                        VkResult                                               original_result,
-                                       const DeviceInfo*                                      device_info,
+                                       const VulkanDeviceInfo*                                device_info,
                                        StructPointerDecoder<Decoded_VkFramebufferCreateInfo>* create_info_decoder,
                                        StructPointerDecoder<Decoded_VkAllocationCallbacks>*   allocator_decoder,
                                        HandlePointerDecoder<VkFramebuffer>*                   frame_buffer_decoder);
 
     void OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryANDROID func,
-                                      const DeviceInfo*          device_info,
-                                      const SemaphoreInfo*       semaphore_info,
-                                      const ImageInfo*           image_info);
-
-    void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR func,
-                                                 const DeviceInfo*                     device_info,
-                                                 const AccelerationStructureKHRInfo*   acceleration_structure_info,
-                                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
-
-    void
-         OverrideCmdTraceRaysKHR(PFN_vkCmdTraceRaysKHR                                          func,
-                                 CommandBufferInfo*                                             in_commandBuffer,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
-                                 StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
-                                 uint32_t                                                       width,
-                                 uint32_t                                                       height,
-                                 uint32_t                                                       depth);
-    void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
-                                    const DeviceInfo*                                    device_info,
-                                    const MicromapEXTInfo*                               micromap_info,
-                                    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+                                      const VulkanDeviceInfo*    device_info,
+                                      const VulkanSemaphoreInfo* semaphore_info,
+                                      const VulkanImageInfo*     image_info);
 
     void OverrideUpdateDescriptorSets(PFN_vkUpdateDescriptorSets                          func,
-                                      const DeviceInfo*                                   device_info,
+                                      const VulkanDeviceInfo*                             device_info,
                                       uint32_t                                            descriptor_write_count,
                                       StructPointerDecoder<Decoded_VkWriteDescriptorSet>* p_descriptor_writes,
                                       uint32_t                                            descriptor_copy_count,
                                       StructPointerDecoder<Decoded_VkCopyDescriptorSet>*  p_pescriptor_copies);
 
     VkResult
-    OverrideCreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines func,
-                                    VkResult                      original_result,
-                                    const DeviceInfo*             device_info,
-                                    const PipelineCacheInfo*      pipeline_cache_info,
-                                    uint32_t                      create_info_count,
+    OverrideCreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines  func,
+                                    VkResult                       original_result,
+                                    const VulkanDeviceInfo*        device_info,
+                                    const VulkanPipelineCacheInfo* pipeline_cache_info,
+                                    uint32_t                       create_info_count,
                                     const StructPointerDecoder<Decoded_VkGraphicsPipelineCreateInfo>* pCreateInfos,
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*        pAllocator,
                                     HandlePointerDecoder<VkPipeline>*                                 pPipelines);
@@ -1381,56 +1484,78 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult
     OverrideCreateComputePipelines(PFN_vkCreateComputePipelines                                     func,
                                    VkResult                                                         original_result,
-                                   const DeviceInfo*                                                device_info,
-                                   const PipelineCacheInfo*                                         pipeline_cache_info,
+                                   const VulkanDeviceInfo*                                          device_info,
+                                   const VulkanPipelineCacheInfo*                                   pipeline_cache_info,
                                    uint32_t                                                         create_info_count,
                                    const StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
                                    const StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
                                    HandlePointerDecoder<VkPipeline>*                                pPipelines);
 
-    void OverrideCmdPushConstants(PFN_vkCmdPushConstants   func,
-                                  CommandBufferInfo*       in_commandBuffer,
-                                  PipelineLayoutInfo*      in_layout,
-                                  VkShaderStageFlags       stageFlags,
-                                  uint32_t                 offset,
-                                  uint32_t                 size,
-                                  PointerDecoder<uint8_t>* pValues);
-
     void OverrideCmdUpdateBuffer(PFN_vkCmdUpdateBuffer    func,
-                                 CommandBufferInfo*       in_commandBuffer,
-                                 BufferInfo*              in_buffer,
+                                 VulkanCommandBufferInfo* in_commandBuffer,
+                                 VulkanBufferInfo*        in_buffer,
                                  VkDeviceSize             dstOffset,
                                  VkDeviceSize             dataSize,
                                  PointerDecoder<uint8_t>* pData);
 
+    VkResult OverrideCreateShadersEXT(PFN_vkCreateShadersEXT                                     func,
+                                      VkResult                                                   original_result,
+                                      const VulkanDeviceInfo*                                    device_info,
+                                      uint32_t                                                   create_info_count,
+                                      const StructPointerDecoder<Decoded_VkShaderCreateInfoEXT>* pCreateInfos,
+                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                      HandlePointerDecoder<VkShaderEXT>*                         pShaders);
+
     void OverrideDestroyPipeline(PFN_vkDestroyPipeline                                      func,
-                                 const DeviceInfo*                                          device_info,
-                                 PipelineInfo*                                              pipeline_info,
+                                 const VulkanDeviceInfo*                                    device_info,
+                                 const VulkanPipelineInfo*                                  pipeline_info,
                                  const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideDestroyRenderPass(PFN_vkDestroyRenderPass                                    func,
-                                   const DeviceInfo*                                          device_info,
-                                   RenderPassInfo*                                            renderpass_info,
+                                   const VulkanDeviceInfo*                                    device_info,
+                                   VulkanRenderPassInfo*                                      renderpass_info,
                                    const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideDestroyShaderModule(PFN_vkDestroyShaderModule                                  func,
-                                     const DeviceInfo*                                          device_info,
-                                     ShaderModuleInfo*                                          shader_module_info,
+                                     const VulkanDeviceInfo*                                    device_info,
+                                     VulkanShaderModuleInfo*                                    shader_module_info,
                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     std::function<handle_create_result_t<VkPipeline>()>
-    AsyncCreateGraphicsPipelines(const ApiCallInfo&                                          call_info,
+    AsyncCreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines                               func,
                                  VkResult                                                    returnValue,
-                                 const DeviceInfo*                                           device_info,
-                                 const PipelineCacheInfo*                                    pipeline_cache_info,
+                                 const ApiCallInfo&                                          call_info,
+                                 const VulkanDeviceInfo*                                     device_info,
+                                 const VulkanPipelineCacheInfo*                              pipeline_cache_info,
                                  uint32_t                                                    createInfoCount,
                                  StructPointerDecoder<Decoded_VkGraphicsPipelineCreateInfo>* pCreateInfos,
                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>*        pAllocator,
                                  HandlePointerDecoder<VkPipeline>*                           pPipelines);
 
+    std::function<handle_create_result_t<VkPipeline>()>
+    AsyncCreateComputePipelines(PFN_vkCreateComputePipelines                               func,
+                                VkResult                                                   returnValue,
+                                const ApiCallInfo&                                         call_info,
+                                const VulkanDeviceInfo*                                    device_info,
+                                const VulkanPipelineCacheInfo*                             pipeline_cache_info,
+                                uint32_t                                                   createInfoCount,
+                                StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+                                StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                HandlePointerDecoder<VkPipeline>*                          pPipelines);
+
+    std::function<handle_create_result_t<VkShaderEXT>()>
+    AsyncCreateShadersEXT(PFN_vkCreateShadersEXT                               func,
+                          VkResult                                             returnValue,
+                          const ApiCallInfo&                                   call_info,
+                          const VulkanDeviceInfo*                              device_info,
+                          uint32_t                                             createInfoCount,
+                          StructPointerDecoder<Decoded_VkShaderCreateInfoEXT>* pCreateInfos,
+                          StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                          HandlePointerDecoder<VkShaderEXT>*                   pShaders);
+
     const VulkanReplayOptions options_;
 
-    VulkanReplayDumpResources resource_dumper;
+    VulkanReplayDumpResources* resource_dumper_;
 
   private:
     void RaiseFatalError(const char* message) const;
@@ -1445,93 +1570,98 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     PFN_vkCreateDevice GetCreateDeviceProc(VkPhysicalDevice physical_device);
 
-    void SetInstancePhysicalDeviceEntries(InstanceInfo*           instance_info,
+    void SetInstancePhysicalDeviceEntries(VulkanInstanceInfo*     instance_info,
                                           size_t                  capture_device_count,
                                           const format::HandleId* capture_devices,
                                           size_t                  replay_device_count,
                                           const VkPhysicalDevice* replay_devices);
 
-    void CheckReplayDeviceInfo(PhysicalDeviceInfo* physical_device_info);
+    void CheckReplayDeviceInfo(VulkanPhysicalDeviceInfo* physical_device_info);
 
-    void SetPhysicalDeviceInstanceInfo(InstanceInfo*       instance_info,
-                                       PhysicalDeviceInfo* physical_device_info,
-                                       VkPhysicalDevice    replay_device);
+    void SetPhysicalDeviceInstanceInfo(VulkanInstanceInfo*       instance_info,
+                                       VulkanPhysicalDeviceInfo* physical_device_info,
+                                       VkPhysicalDevice          replay_device);
 
-    void SetPhysicalDeviceProperties(PhysicalDeviceInfo*               physical_device_info,
+    void SetPhysicalDeviceProperties(VulkanPhysicalDeviceInfo*         physical_device_info,
                                      const VkPhysicalDeviceProperties* capture_properties,
                                      const VkPhysicalDeviceProperties* replay_properties);
 
-    void SetPhysicalDeviceMemoryProperties(PhysicalDeviceInfo*                     physical_device_info,
+    void SetPhysicalDeviceProperties(VulkanPhysicalDeviceInfo*          physical_device_info,
+                                     const VkPhysicalDeviceProperties2* capture_properties,
+                                     const VkPhysicalDeviceProperties2* replay_properties);
+
+    void SetPhysicalDeviceMemoryProperties(VulkanPhysicalDeviceInfo*               physical_device_info,
                                            const VkPhysicalDeviceMemoryProperties* capture_properties,
                                            const VkPhysicalDeviceMemoryProperties* replay_properties);
 
     // Can override PhysicalDeviceInfo::handle and PhysicalDeviceInfo::replay_device_info based on comparison between
     // capture and replay physical device properties or GPU override settings.
-    void SelectPhysicalDevice(PhysicalDeviceInfo* physical_device_info);
+    void SelectPhysicalDevice(VulkanPhysicalDeviceInfo* physical_device_info);
 
-    void SelectPhysicalDeviceGroup(PhysicalDeviceInfo*                  physical_device_info,
+    void SelectPhysicalDeviceGroup(VulkanPhysicalDeviceInfo*            physical_device_info,
                                    const std::vector<format::HandleId>& capture_device_group,
                                    std::vector<VkPhysicalDevice>&       replay_device_group);
 
-    bool GetOverrideDevice(InstanceInfo* instance_info, PhysicalDeviceInfo* physical_device_info);
+    bool GetOverrideDevice(VulkanInstanceInfo* instance_info, VulkanPhysicalDeviceInfo* physical_device_info);
 
-    bool GetOverrideDeviceGroup(InstanceInfo*                  instance_info,
-                                PhysicalDeviceInfo*            physical_device_info,
+    bool GetOverrideDeviceGroup(VulkanInstanceInfo*            instance_info,
+                                VulkanPhysicalDeviceInfo*      physical_device_info,
                                 std::vector<VkPhysicalDevice>& replay_device_group);
 
-    void GetMatchingDevice(InstanceInfo* instance_info, PhysicalDeviceInfo* physical_device_info);
+    void GetMatchingDevice(VulkanInstanceInfo* instance_info, VulkanPhysicalDeviceInfo* physical_device_info);
 
-    void GetMatchingDeviceGroup(InstanceInfo*                        instance_info,
-                                PhysicalDeviceInfo*                  physical_device_info,
+    void GetMatchingDeviceGroup(VulkanInstanceInfo*                  instance_info,
+                                VulkanPhysicalDeviceInfo*            physical_device_info,
                                 const std::vector<format::HandleId>& capture_device_group,
                                 std::vector<VkPhysicalDevice>&       replay_device_group);
 
-    void CheckPhysicalDeviceCompatibility(PhysicalDeviceInfo* physical_device_info);
+    void CheckPhysicalDeviceCompatibility(VulkanPhysicalDeviceInfo* physical_device_info);
 
-    void CheckPhysicalDeviceGroupCompatibility(InstanceInfo*                        instance_info,
+    void CheckPhysicalDeviceGroupCompatibility(VulkanInstanceInfo*                  instance_info,
                                                const std::vector<format::HandleId>& capture_device_group,
                                                const std::vector<VkPhysicalDevice>& replay_device_group);
 
     bool CheckTrimDeviceExtensions(VkPhysicalDevice physical_device, std::vector<std::string>* extensions);
 
-    void InitializeResourceAllocator(const PhysicalDeviceInfo*       physical_device_info,
+    void InitializeResourceAllocator(const VulkanPhysicalDeviceInfo* physical_device_info,
                                      VkDevice                        device,
                                      const std::vector<std::string>& enabled_device_extensions,
                                      VulkanResourceAllocator*        allocator);
 
-    void MapDescriptorUpdateTemplateHandles(const DescriptorUpdateTemplateInfo* update_template_info,
-                                            DescriptorUpdateTemplateDecoder*    decoder);
+    void MapDescriptorUpdateTemplateHandles(const VulkanDescriptorUpdateTemplateInfo* update_template_info,
+                                            DescriptorUpdateTemplateDecoder*          decoder);
 
     void GetImportedSemaphores(const HandlePointerDecoder<VkSemaphore>& semaphore_data,
-                               std::vector<const SemaphoreInfo*>*       imported_semaphores);
+                               std::vector<const VulkanSemaphoreInfo*>* imported_semaphores);
 
     void GetImportedSemaphores(const StructPointerDecoder<Decoded_VkSemaphoreSubmitInfo>* semaphore_info_data,
-                               std::vector<const SemaphoreInfo*>*                         imported_semaphores);
+                               std::vector<const VulkanSemaphoreInfo*>*                   imported_semaphores);
 
-    void SignalShadowSemaphore(SemaphoreInfo* semaphore_info, std::vector<const SemaphoreInfo*>* shadow_semaphores);
+    void SignalShadowSemaphore(VulkanSemaphoreInfo*                     semaphore_info,
+                               std::vector<const VulkanSemaphoreInfo*>* shadow_semaphores);
 
     void GetShadowSemaphores(const HandlePointerDecoder<VkSemaphore>& semaphore_data,
-                             std::vector<const SemaphoreInfo*>*       shadow_semaphores);
+                             std::vector<const VulkanSemaphoreInfo*>* shadow_semaphores);
 
     void GetShadowSemaphores(const StructPointerDecoder<Decoded_VkSemaphoreSubmitInfo>* semaphore_info_data,
-                             std::vector<const SemaphoreInfo*>*                         shadow_semaphores);
+                             std::vector<const VulkanSemaphoreInfo*>*                   shadow_semaphores);
 
     void TrackSemaphoreForwardProgress(const HandlePointerDecoder<VkSemaphore>& semaphore_data,
-                                       std::vector<const SemaphoreInfo*>*       removed_semaphores);
+                                       std::vector<const VulkanSemaphoreInfo*>* removed_semaphores);
 
     void TrackSemaphoreForwardProgress(const StructPointerDecoder<Decoded_VkSemaphoreSubmitInfo>* semaphore_info_data,
-                                       std::vector<const SemaphoreInfo*>*                         removed_semaphores);
+                                       std::vector<const VulkanSemaphoreInfo*>*                   removed_semaphores);
 
     void GetNonForwardProgress(const HandlePointerDecoder<VkSemaphore>& semaphore_data,
-                               std::vector<const SemaphoreInfo*>*       non_forward_progress_semaphores);
+                               std::vector<const VulkanSemaphoreInfo*>* non_forward_progress_semaphores);
 
     void GetNonForwardProgress(const StructPointerDecoder<Decoded_VkSemaphoreSubmitInfo>* semaphore_info_data,
-                               std::vector<const SemaphoreInfo*>* non_forward_progress_semaphores);
+                               std::vector<const VulkanSemaphoreInfo*>* non_forward_progress_semaphores);
 
-    VkResult CreateSwapchainImage(const DeviceInfo*        device_info,
+    VkResult CreateSwapchainImage(const VulkanDeviceInfo*  device_info,
                                   const VkImageCreateInfo* image_create_info,
                                   VkImage*                 image,
-                                  ImageInfo*               image_info);
+                                  VulkanImageInfo*         image_info);
 
     void ProcessCreateInstanceDebugCallbackInfo(const Decoded_VkInstanceCreateInfo* instance_info);
 
@@ -1543,28 +1673,43 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const;
 
-    void FillFrameBoundaryExtFromCommandBufferInfo(const CommandBufferInfo* command_buffer_info,
-                                                   VkFrameBoundaryEXT*      frame_boundary,
-                                                   std::vector<VkImage>&    frame_boundary_images);
+    void FillFrameBoundaryExtFromCommandBufferInfo(const VulkanCommandBufferInfo* command_buffer_info,
+                                                   VkFrameBoundaryEXT*            frame_boundary,
+                                                   std::vector<VkImage>&          frame_boundary_images);
     void InsertFrameBoundaryExt(void* pnext_chain, const VkFrameBoundaryEXT* frame_boundary);
 
-    bool CheckCommandBufferInfoForFrameBoundary(const CommandBufferInfo* command_buffer_info);
-    bool CheckPNextChainForFrameBoundary(const DeviceInfo* device_info, const PNextNode* pnext);
+    bool CheckCommandBufferInfoForFrameBoundary(const VulkanCommandBufferInfo* command_buffer_info);
+    bool CheckPNextChainForFrameBoundary(const VulkanDeviceInfo* device_info, const PNextNode* pnext);
 
-    void UpdateDescriptorSetInfoWithTemplate(DescriptorSetInfo*                     desc_set_info,
-                                             const DescriptorUpdateTemplateInfo*    template_info,
-                                             const DescriptorUpdateTemplateDecoder* decoder) const;
+    void UpdateDescriptorSetInfoWithTemplate(VulkanDescriptorSetInfo*                  desc_set_info,
+                                             const VulkanDescriptorUpdateTemplateInfo* template_info,
+                                             const DescriptorUpdateTemplateDecoder*    decoder) const;
+
+    decode::VulkanDeviceAddressTracker& GetDeviceAddressTracker(const decode::VulkanDeviceInfo* device_info);
+    decode::VulkanAddressReplacer&      GetDeviceAddressReplacer(const decode::VulkanDeviceInfo* device_info);
+    decode::VulkanAccelerationStructureBuilder&
+                                   GetAccelerationStructureBuilder(const decode::VulkanDeviceInfo* device_info);
+    decode::VulkanMicromapBuilder& GetMicromapBuilder(const decode::VulkanDeviceInfo* device_info);
+
+    [[nodiscard]] std::vector<std::unique_ptr<char[]>> ReplaceShaders(uint32_t                      create_info_count,
+                                                                      VkGraphicsPipelineCreateInfo* create_infos,
+                                                                      const format::HandleId*       pipelines) const;
+
+    [[nodiscard]] std::vector<std::unique_ptr<char[]>> ReplaceShaders(uint32_t                create_info_count,
+                                                                      VkShaderCreateInfoEXT*  create_infos,
+                                                                      const format::HandleId* shaders) const;
 
     void LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData);
-    void SavePipelineCache(format::HandleId id, const DeviceInfo* device_info, VkPipelineCache pipelineCache);
-    VkPipelineCache CreateNewPipelineCache(const DeviceInfo* device_info, format::HandleId id);
-    void            TrackNewPipelineCache(const DeviceInfo* device_info,
-                                          format::HandleId  id,
-                                          VkPipelineCache   pipelineCache,
-                                          VkPipeline*       pipelines,
-                                          uint32_t          pipelineCount);
+    void SavePipelineCache(format::HandleId id, const VulkanDeviceInfo* device_info, VkPipelineCache pipelineCache);
+    VkPipelineCache CreateNewPipelineCache(const VulkanDeviceInfo* device_info, format::HandleId id);
+    void            TrackNewPipelineCache(const VulkanDeviceInfo* device_info,
+                                          format::HandleId        id,
+                                          VkPipelineCache         pipelineCache,
+                                          VkPipeline*             pipelines,
+                                          uint32_t                pipelineCount);
     bool            IsExtensionBeingFaked(const char* extension);
 
+  private:
     void LogFrameDebugInfo();
 
     // Retrieve image attachments from the renderpass framebuffer
@@ -1576,9 +1721,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void ConsumeVendorBinaryDataHeader(const uint8_t*                                vendor_binary_data,
                                        VkDeviceFaultVendorBinaryHeaderVersionOneEXT& header);
 
-    void StoreDescriptorUpdateWithTemplate(gfxrecon::decode::DescriptorUpdateTemplateDecoder* pData,
-                                           gfxrecon::decode::DeviceInfo*                      device_info);
-
   private:
     util::platform::LibraryHandle                                              loader_handle_;
     PFN_vkGetInstanceProcAddr                                                  get_instance_proc_addr_;
@@ -1589,7 +1731,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<encode::VulkanDispatchKey, encode::VulkanDeviceTable>   device_tables_;
     std::function<void(const char*)>                                           fatal_error_handler_;
     std::shared_ptr<application::Application>                                  application_;
-    VulkanObjectInfoTable                                                      object_info_table_;
+    CommonObjectInfoTable*                                                     object_info_table_;
     bool                                                                       loading_trim_state_;
     bool                                                                       replaying_trimmed_capture_;
     SwapchainImageTracker                                                      swapchain_image_tracker_;
@@ -1598,9 +1740,26 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::string                                                                screenshot_file_prefix_;
     graphics::FpsInfo*                                                         fps_info_;
 
-    util::ThreadPool                                            main_thread_queue_;
-    util::ThreadPool                                            background_queue_;
-    std::unordered_map<format::HandleId, std::function<void()>> async_inflight_handles_;
+    std::unordered_map<const decode::VulkanDeviceInfo*, decode::VulkanDeviceAddressTracker> _device_address_trackers;
+    std::unordered_map<const decode::VulkanDeviceInfo*, decode::VulkanAddressReplacer>      _device_address_replacers;
+
+    util::ThreadPool main_thread_queue_;
+    util::ThreadPool background_queue_;
+
+    //! async_tracked_handle_asset_t groups assets used by tracked async-dependencies
+    struct async_tracked_handle_asset_t
+    {
+        //! function to synchronize (blocking wait) with parent asynchronous-task
+        std::function<void()> sync_fn;
+
+        //! function used to defer deletion of a tracked async-dependency
+        std::function<void()> destroy_fn;
+    };
+    //! stores handles used/referenced by currently running async tasks
+    std::unordered_map<format::HandleId, async_tracked_handle_asset_t> async_tracked_handles_;
+
+    //! decide whether to sync/wait or defer deletion of handles used by currently running async tasks
+    static constexpr bool async_defer_deletion_ = false;
 
     // Imported semaphores are semaphores that are used to track external memory.
     // During replay, the external memory is not present (we have no Fds or handles to valid
@@ -1614,29 +1773,26 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_set<VkFence>     shadow_fences_;
 
     // Used to track allocated external memory
-    std::unordered_map<format::HandleId, uint64_t>          android_hardware_buffer_ids_;
-    std::unordered_map<uint64_t, AndroidHardwareBufferInfo> android_hardware_buffers_;
-    std::unordered_map<uint64_t, HostMemoryPointerInfo>     host_memory_pointers_;
+    std::unordered_map<format::HandleId, uint64_t>                android_hardware_buffer_ids_;
+    std::unordered_map<uint64_t, VulkanAndroidHardwareBufferInfo> android_hardware_buffers_;
+    std::unordered_map<uint64_t, VulkanHostMemoryPointerInfo>     host_memory_pointers_;
 
     // Temporary data used by OverrideQueuePresentKHR
-    std::vector<VkSwapchainKHR>       valid_swapchains_;
-    std::vector<uint32_t>             modified_image_indices_;
-    std::vector<uint32_t>             modified_device_masks_;
-    std::vector<VkPresentRegionKHR>   modified_regions_;
-    std::vector<VkPresentTimeGOOGLE>  modified_times_;
-    std::vector<const SemaphoreInfo*> removed_semaphores_;
-    std::unordered_set<uint32_t>      removed_swapchain_indices_;
-    std::vector<uint32_t>             capture_image_indices_;
-    std::vector<SwapchainKHRInfo*>    swapchain_infos_;
+    std::vector<VkSwapchainKHR>             valid_swapchains_;
+    std::vector<uint32_t>                   modified_image_indices_;
+    std::vector<uint32_t>                   modified_device_masks_;
+    std::vector<VkPresentRegionKHR>         modified_regions_;
+    std::vector<VkPresentTimeGOOGLE>        modified_times_;
+    std::vector<const VulkanSemaphoreInfo*> removed_semaphores_;
+    std::unordered_set<uint32_t>            removed_swapchain_indices_;
+    std::vector<uint32_t>                   capture_image_indices_;
+    std::vector<VulkanSwapchainKHRInfo*>    swapchain_infos_;
 
-    std::unordered_map<format::HandleId, std::pair<const DeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
-    std::unordered_map<VkPipeline, format::HandleId>                                    pipeline_cache_correspondances_;
-    std::vector<const char*>                                                            faked_extensions_;
+    std::vector<const char*> faked_extensions_;
     // map acceleration structure builders for each device
-    std::unordered_map<format::HandleId, std::unique_ptr<VulkanAccelerationStructureBuilder>>
-                                                                                 acceleration_structure_builders_;
-    std::unordered_map<format::HandleId, std::unique_ptr<VulkanBufferTracker>>   buffer_tracker_;
-    std::unordered_map<format::HandleId, std::unique_ptr<VulkanMicromapBuilder>> micromap_builders_;
+    std::unordered_map<const decode::VulkanDeviceInfo*, VulkanAccelerationStructureBuilder>
+                                                                               acceleration_structure_builders_;
+    std::unordered_map<const decode::VulkanDeviceInfo*, VulkanMicromapBuilder> micromap_builders_;
 
     // Resources for use-ext-frame-boundary option used by OverrideFrameBoundaryANDROID
     std::unordered_map<VkDevice, std::pair<VkCommandPool, VkCommandBuffer>> fba_resources_;
@@ -1646,19 +1802,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 
-    struct TrackedAddress
-    {
-        enum class Type
-        {
-            AccelerationStructure,
-            Buffer
-        };
-        Type            address_type;
-        VkDeviceAddress address;
-    };
-    std::unordered_map<format::HandleId, TrackedAddress>                           tracked_addresses_;
-    std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>> locations;
-
+#ifdef ARM_INTERNAL
+    void (*pfn_set_packet_id_)(uint64_t) = nullptr;
+#endif
   protected:
     // Used by pipeline cache handling, there are the following two cases for the flag to be set:
     //
@@ -1673,13 +1819,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     // Temporary data used by pipeline cache data handling
     // The following capture time data used for calling VisitPipelineCacheInfo as input parameters
     // , replay time data used as output result.
-    uint32_t                                 capture_pipeline_cache_data_hash_ = 0;
-    uint32_t                                 capture_pipeline_cache_data_size_ = 0;
-    void*                                    capture_pipeline_cache_data_;
-    bool                                     matched_replay_cache_data_exist_ = false;
-    std::vector<uint8_t>                     matched_replay_cache_data_;
-    std::vector<format::AddressLocationInfo> device_memory_address_locations;
-    std::vector<format::AddressLocationInfo> other_address_locations;
+    uint32_t             capture_pipeline_cache_data_hash_ = 0;
+    uint32_t             capture_pipeline_cache_data_size_ = 0;
+    void*                capture_pipeline_cache_data_;
+    bool                 matched_replay_cache_data_exist_ = false;
+    std::vector<uint8_t> matched_replay_cache_data_;
+
+    std::unordered_map<format::HandleId, std::pair<const VulkanDeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
+    std::unordered_map<VkPipeline, format::HandleId> pipeline_cache_correspondances_;
+
+    std::vector<format::AddressLocationInfo>      device_memory_address_locations;
+    std::vector<format::AddressLocationInfo>      other_address_locations;
+    std::vector<format::ShaderHandleLocationInfo> shader_group_handle_locations;
 };
 
 GFXRECON_END_NAMESPACE(decode)
