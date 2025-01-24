@@ -1994,6 +1994,24 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkSetDebugUtilsObjectTag
         manager->PostProcess_vkSetDebugUtilsObjectTagEXT(result, args...);
     }
 };
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindDataGraphPipelineSessionMemoryARM>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkBindDataGraphPipelineSessionMemoryARM(result, args...);
+    }
+};
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindTensorMemoryARM>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkBindTensorMemoryARM(result, args...);
+    }
+};
 
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

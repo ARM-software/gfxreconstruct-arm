@@ -16477,5 +16477,206 @@ void VulkanCppConsumer::Process_vkCmdDrawMeshTasksIndirectEXT(
     Post_APICall(format::ApiCallId::ApiCall_vkCmdDrawMeshTasksIndirectEXT);
 }
 
+void VulkanCppConsumer::Process_vkBindDataGraphPipelineSessionMemoryARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        uint32_t                                    bindInfoCount,
+        StructPointerDecoder<Decoded_VkBindDataGraphPipelineSessionMemoryInfoARM>* pBindInfos) {}
+
+void VulkanCppConsumer::Process_vkCmdDispatchDataGraphARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        format::HandleId                            session) {}
+
+void VulkanCppConsumer::Process_vkCreateDataGraphPipelineSessionARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineSessionCreateInfoARM>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkDataGraphPipelineSessionARM>* pSession) {}
+
+void VulkanCppConsumer::Process_vkCreateDataGraphPipelinesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        format::HandleId                            deferredOperation,
+        format::HandleId                            pipelineCache,
+        uint32_t                                    createInfoCount,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineCreateInfoARM>* pCreateInfos,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkPipeline>*           pPipelines) {}
+
+    void VulkanCppConsumer::Process_vkDestroyDataGraphPipelineSessionARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            session,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
+
+    void VulkanCppConsumer::Process_vkGetDataGraphPipelinePropertiesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
+        PointerDecoder<uint32_t>*                   pPropertiesCount,
+        StructPointerDecoder<Decoded_VkDataGraphPipelinePropertyQueryResultARM>* pProperties) {}
+
+    void VulkanCppConsumer::Process_vkGetDataGraphPipelineSessionBindPointRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineSessionBindPointRequirementsInfoARM>* pInfo,
+        PointerDecoder<uint32_t>*                   pBindPointRequirementCount,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineSessionBindPointRequirementARM>* pBindPointRequirements) {}
+
+    void VulkanCppConsumer::Process_vkGetDataGraphPipelineSessionMemoryRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineSessionMemoryRequirementsInfoARM>* pInfo,
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
+
+    void VulkanCppConsumer::Process_vkGetPhysicalDeviceDataGraphInstructionSetsARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            physicalDevice,
+        PointerDecoder<uint32_t>*                   pSetCount,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceDataGraphInstructionSetARM>* pSets) {}
+
+         void VulkanCppConsumer::Process_vkCmdDispatchNeuralEngineARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        Decoded_VkOffset4DARM                       offset,
+        Decoded_VkExtent4DARM                       size,
+        uint32_t                                    iteratorOuterDimension,
+        uint32_t                                    iteratorInnerDimension,
+        uint32_t                                    taskIncrementOuter,
+        uint32_t                                    taskIncrementInner,
+        uint32_t                                    iteratorWeightArrayOffset,
+        uint32_t                                    iteratorWeightArrayBehavior,
+        uint32_t                                    iteratorTraceID0,
+        uint32_t                                    iteratorTraceID1,
+        StructPointerDecoder<Decoded_VkNeuralEnginePipelineStatisticsDispatchInfoARM>* pStatisticsDispatchInfo) {}
+
+     void VulkanCppConsumer::Process_vkCreateNeuralEnginePipelinesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        uint32_t                                    createInfoCount,
+        StructPointerDecoder<Decoded_VkNeuralEnginePipelineCreateInfoARM>* pCreateInfos,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkPipeline>*           pPipelines) {}
+
+     void VulkanCppConsumer::Process_vkCreateWeightsARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkWeightsCreateInfoARM>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkWeightsARM>*         pWeights) {}
+
+     void VulkanCppConsumer::Process_vkDestroyWeightsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            weights,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
+
+     void VulkanCppConsumer::Process_vkGetDeviceWeightsMemoryRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDeviceWeightsMemoryRequirementsARM>* pInfo,
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
+
+     void VulkanCppConsumer::Process_vkGetTensorDeviceAddressARM(
+        const ApiCallInfo&                          call_info,
+        VkDeviceAddress                             returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorDeviceAddressInfoARM>* pInfo) {}
+
+     void VulkanCppConsumer::Process_vkGetWeightsDeviceAddressARM(
+        const ApiCallInfo&                          call_info,
+        VkDeviceAddress                             returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkWeightsDeviceAddressInfoARM>* pInfo) {}
+
+     void VulkanCppConsumer::Process_vkGetWeightsMemoryRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkWeightsMemoryRequirementsInfoARM>* pInfo,
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
+
+void VulkanCppConsumer::Process_vkBindWeightsMemoryARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        uint32_t                                    bindInfoCount,
+        StructPointerDecoder<Decoded_VkBindWeightsMemoryInfoARM>* pBindInfos) {}
+
+void VulkanCppConsumer::Process_vkBindTensorMemoryARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        uint32_t                                    bindInfoCount,
+        StructPointerDecoder<Decoded_VkBindTensorMemoryInfoARM>* pBindInfos) {}
+
+    void VulkanCppConsumer::Process_vkCmdCopyTensorARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkCopyTensorInfoARM>* pCopyTensorInfo) {}
+
+    void VulkanCppConsumer::Process_vkCreateTensorARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorCreateInfoARM>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkTensorARM>*          pTensor) {}
+
+    void VulkanCppConsumer::Process_vkCreateTensorViewARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorViewCreateInfoARM>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkTensorViewARM>*      pView) {}
+
+    void VulkanCppConsumer::Process_vkDestroyTensorARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            tensor,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
+
+    void VulkanCppConsumer::Process_vkDestroyTensorViewARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            tensorView,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
+
+    void VulkanCppConsumer::Process_vkGetDeviceTensorMemoryRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDeviceTensorMemoryRequirementsARM>* pInfo,
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
+
+    void VulkanCppConsumer::Process_vkGetTensorMemoryRequirementsARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorMemoryRequirementsInfoARM>* pInfo,
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
+
+    void VulkanCppConsumer::Process_vkGetTensorOpaqueCaptureDescriptorDataARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorCaptureDescriptorDataInfoARM>* pInfo,
+        uint64_t                                    pData) {}
+
+    void VulkanCppConsumer::Process_vkGetTensorViewOpaqueCaptureDescriptorDataARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkTensorViewCaptureDescriptorDataInfoARM>* pInfo,
+        uint64_t                                    pData) {}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

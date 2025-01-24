@@ -38,6 +38,7 @@
     "VkIndirectExecutionSetInfoEXT",
     "VkIndirectExecutionSetCreateInfoEXT",
     "VkIndirectCommandsTokenDataEXT",
-    "VkIndirectCommandsLayoutTokenEXT"
+    "VkIndirectCommandsLayoutTokenEXT",
+    "VkDataGraphPipelineConstantARM"
   ]
 }

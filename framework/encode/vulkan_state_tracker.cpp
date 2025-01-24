@@ -411,6 +411,57 @@ void VulkanStateTracker::TrackBufferMemoryBinding(
     }
 }
 
+void VulkanStateTracker::TrackTensorMemoryBinding(
+    VkDevice device, VkTensorARM tensor, VkDeviceMemory memory, VkDeviceSize memoryOffset, const void* bind_info_pnext)
+{
+    assert((device != VK_NULL_HANDLE) && (tensor != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
+
+    auto wrapper            = vulkan_wrappers::GetWrapper<vulkan_wrappers::TensorARMWrapper>(tensor);
+    wrapper->bind_device    = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+    wrapper->bind_memory_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    wrapper->bind_offset    = memoryOffset;
+    wrapper->bind_pnext     = nullptr;
+
+    vulkan_wrappers::DeviceMemoryWrapper* mem_wrapper =
+        vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    assert(mem_wrapper != nullptr);
+    mem_wrapper->asset_map_lock.lock();
+    mem_wrapper->bound_assets.emplace(wrapper);
+    mem_wrapper->asset_map_lock.unlock();
+
+    if (bind_info_pnext != nullptr)
+    {
+        wrapper->bind_pnext = vulkan_trackers::TrackStruct(bind_info_pnext, wrapper->bind_pnext_memory);
+    }
+}
+
+void VulkanStateTracker::TrackDataGraphPipelineSessionMemoryBinding(VkDevice                      device,
+                                                                    VkDataGraphPipelineSessionARM session,
+                                                                    VkDeviceMemory                memory,
+                                                                    VkDeviceSize                  memoryOffset,
+                                                                    const void*                   bind_info_pnext)
+{
+    assert((device != VK_NULL_HANDLE) && (session != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
+
+    auto wrapper            = vulkan_wrappers::GetWrapper<vulkan_wrappers::DataGraphPipelineSessionARMWrapper>(session);
+    wrapper->bind_device    = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+    wrapper->bind_memory_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    wrapper->bind_offset    = memoryOffset;
+    wrapper->bind_pnext     = nullptr;
+
+    vulkan_wrappers::DeviceMemoryWrapper* mem_wrapper =
+        vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    assert(mem_wrapper != nullptr);
+    mem_wrapper->asset_map_lock.lock();
+    mem_wrapper->bound_assets.emplace(wrapper);
+    mem_wrapper->asset_map_lock.unlock();
+
+    if (bind_info_pnext != nullptr)
+    {
+        wrapper->bind_pnext = vulkan_trackers::TrackStruct(bind_info_pnext, wrapper->bind_pnext_memory);
+    }
+}
+
 void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
     VkCommandBuffer                                        command_buffer,
     uint32_t                                               info_count,
@@ -2361,6 +2412,18 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DescriptorSetWrapper* wra
 
     wrapper->bindings.clear();
 }
+
+void VulkanStateTracker::DestroyState(vulkan_wrappers::TensorARMWrapper* wrapper) {}
+
+void VulkanStateTracker::DestroyState(vulkan_wrappers::TensorViewARMWrapper* wrapper)
+{
+    if (wrapper->tensor != nullptr)
+    {
+        wrapper->tensor->tensor_views.erase(wrapper);
+    }
+}
+
+void VulkanStateTracker::DestroyState(vulkan_wrappers::DataGraphPipelineSessionARMWrapper* wrapper) {}
 
 void VulkanStateTracker::TrackTlasToBlasDependencies(uint32_t               command_buffer_count,
                                                      const VkCommandBuffer* command_buffers)

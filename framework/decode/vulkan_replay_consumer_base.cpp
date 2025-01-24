@@ -1327,6 +1327,67 @@ void VulkanReplayConsumerBase::ProcessInitBufferCommand(format::HandleId device_
     }
 }
 
+void VulkanReplayConsumerBase::ProcessInitTensorCommand(format::HandleId device_id,
+                                                        format::HandleId tensor_id,
+                                                        uint64_t         data_size,
+                                                        const uint8_t*   data)
+{
+    VulkanDeviceInfo*          device_info = object_info_table_->GetVkDeviceInfo(device_id);
+    const VulkanTensorARMInfo* tensor_info = object_info_table_->GetVkTensorARMInfo(tensor_id);
+    auto                       allocator   = device_info->allocator.get();
+
+    if ((device_info != nullptr) && (tensor_info != nullptr))
+    {
+        VkResult                   result      = VK_SUCCESS;
+        VkDevice                   device      = device_info->handle;
+        VkTensorARM                tensor      = tensor_info->handle;
+        VulkanResourceInitializer* initializer = device_info->resource_initializer.get();
+
+        assert((device != VK_NULL_HANDLE) && (tensor != VK_NULL_HANDLE));
+
+        if (initializer != nullptr)
+        {
+            if ((tensor_info->memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ==
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+            {
+                result = initializer->LoadData(data_size, data, tensor_info->allocator_data);
+
+                if (result != VK_SUCCESS)
+                {
+                    GFXRECON_LOG_WARNING("State snapshot mapped memory copy failed for VkTensor object (ID = %" PRIu64
+                                         ", handle = 0x%" PRIx64 ")",
+                                         tensor_id,
+                                         tensor);
+                }
+            }
+            else
+            {
+                GFXRECON_LOG_WARNING("NGP staging not supported");
+            }
+        }
+    }
+    else
+    {
+        if (device_info != nullptr)
+        {
+            GFXRECON_LOG_WARNING(
+                "Skipping state snapshot tensor upload for unrecognized VkTensor object (ID = %" PRIu64 ")", tensor_id);
+        }
+        else if (tensor_info != nullptr)
+        {
+            GFXRECON_LOG_WARNING(
+                "Skipping state snapshot tensor upload for unrecognized VkDevice object (ID = %" PRIu64 ")", device_id);
+        }
+        else
+        {
+            GFXRECON_LOG_WARNING("Skipping state snapshot tensor upload for unrecognized VkDevice (ID = %" PRIu64
+                                 ") and VkTensor (ID = %" PRIu64 ") objects",
+                                 device_id,
+                                 tensor_id);
+        }
+    }
+}
+
 void VulkanReplayConsumerBase::ProcessInitImageCommand(format::HandleId             device_id,
                                                        format::HandleId             image_id,
                                                        uint64_t                     data_size,
@@ -2477,6 +2538,13 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.set_debug_utils_object_name                 = instance_table->SetDebugUtilsObjectNameEXT;
     functions.set_debug_utils_object_tag                  = instance_table->SetDebugUtilsObjectTagEXT;
 
+    functions.create_tensor                           = device_table->CreateTensorARM;
+    functions.create_data_graph_pipeline_session      = device_table->CreateDataGraphPipelineSessionARM;
+    functions.destroy_tensor                          = device_table->DestroyTensorARM;
+    functions.destroy_data_graph_pipeline_session     = device_table->DestroyDataGraphPipelineSessionARM;
+    functions.bind_tensor_memory                      = device_table->BindTensorMemoryARM;
+    functions.bind_data_graph_pipeline_session_memory = device_table->BindDataGraphPipelineSessionMemoryARM;
+
     if (physical_device_info->parent_api_version >= VK_MAKE_VERSION(1, 1, 0))
     {
         functions.get_physical_device_memory_properties2 = instance_table->GetPhysicalDeviceMemoryProperties2;
@@ -3246,10 +3314,13 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
         replay_next          = replay_next->pNext;
     }
 
-    // Copy requested extensions to modified_extensions
-    for (uint32_t i = 0; i < replay_create_info->enabledExtensionCount; ++i)
+    if (replay_create_info->ppEnabledExtensionNames)
     {
-        modified_extensions.push_back(replay_create_info->ppEnabledExtensionNames[i]);
+        // Copy requested extensions to modified_extensions
+        for (uint32_t i = 0; i < replay_create_info->enabledExtensionCount; ++i)
+        {
+            modified_extensions.push_back(replay_create_info->ppEnabledExtensionNames[i]);
+        }
     }
 
     // Enable extensions used for loading resources during initial state setup for trimmed files.

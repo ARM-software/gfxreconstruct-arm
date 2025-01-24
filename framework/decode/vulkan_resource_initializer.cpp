@@ -144,6 +144,50 @@ VkResult VulkanResourceInitializer::InitializeBuffer(VkDeviceSize        data_si
     return result;
 }
 
+VkResult VulkanResourceInitializer::InitializeTensor(VkDeviceSize           data_size,
+                                                     const uint8_t*         data,
+                                                     uint32_t               queue_family_index,
+                                                     VkTensorARM            tensor,
+                                                     VkTensorUsageFlagsARM  usage,
+                                                     uint32_t               region_count,
+                                                     const VkTensorCopyARM* regions)
+{
+    // TODO: handle usage cases without TRANSFER_DST.
+    // GFXRECON_UNREFERENCED_PARAMETER(usage);
+
+    // VkQueue                               queue               = VK_NULL_HANDLE;
+    // VkCommandBuffer                       command_buffer      = VK_NULL_HANDLE;
+    // VkDeviceMemory                        staging_memory      = VK_NULL_HANDLE;
+    // VkTensorARM                           staging_tensor      = VK_NULL_HANDLE;
+    // VulkanResourceAllocator::MemoryData   staging_memory_data = 0;
+    // VulkanResourceAllocator::ResourceData staging_tensor_data = 0;
+
+    // VkResult result = GetCommandExecObjects(queue_family_index, &queue, &command_buffer);
+
+    // if (result == VK_SUCCESS)
+    // {
+    //     result = AcquireInitializedStagingTensor(
+    //         data_size, data, &staging_memory, &staging_tensor, &staging_memory_data, &staging_tensor_data);
+
+    //     if (result == VK_SUCCESS)
+    //     {
+    //         result = BeginCommandBuffer(command_buffer);
+
+    //         if (result == VK_SUCCESS)
+    //         {
+    //             device_table_->CmdCopyTensorARM(command_buffer, staging_tensor, tensor, region_count, regions);
+    //             device_table_->EndCommandBuffer(command_buffer);
+
+    //             result = ExecuteCommandBuffer(queue, command_buffer);
+    //         }
+
+    //         ReleaseStagingTensor(staging_memory, staging_tensor, staging_memory_data, staging_tensor_data);
+    //     }
+    // }
+
+    return VK_SUCCESS;
+}
+
 VkResult VulkanResourceInitializer::InitializeImage(VkDeviceSize             data_size,
                                                     const uint8_t*           data,
                                                     uint32_t                 queue_family_index,

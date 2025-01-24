@@ -1597,6 +1597,22 @@ void Process_vkCmdUpdatePipelineIndirectBufferNV(
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipeline                                  pipeline);
 
+void Process_vkCmdDispatchNeuralEngineARM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdDispatchNeuralEngineARM            func,
+    VkCommandBuffer                             commandBuffer,
+    VkOffset4DARM                               offset,
+    VkExtent4DARM                               size,
+    uint32_t                                    iteratorOuterDimension,
+    uint32_t                                    iteratorInnerDimension,
+    uint32_t                                    taskIncrementOuter,
+    uint32_t                                    taskIncrementInner,
+    uint32_t                                    iteratorWeightArrayOffset,
+    uint32_t                                    iteratorWeightArrayBehavior,
+    uint32_t                                    iteratorTraceID0,
+    uint32_t                                    iteratorTraceID1,
+    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
+
 void Process_vkCmdSetDepthClampEnableEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetDepthClampEnableEXT             func,
@@ -1795,6 +1811,12 @@ void Process_vkCmdSetCoverageReductionModeNV(
     VkCommandBuffer                             commandBuffer,
     VkCoverageReductionModeNV                   coverageReductionMode);
 
+void Process_vkCmdCopyTensorARM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdCopyTensorARM                      func,
+    VkCommandBuffer                             commandBuffer,
+    const VkCopyTensorInfoARM*                  pCopyTensorInfo);
+
 void Process_vkCmdOpticalFlowExecuteNV(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdOpticalFlowExecuteNV               func,
@@ -1816,6 +1838,12 @@ void Process_vkCmdSetDepthClampRangeEXT(
     VkCommandBuffer                             commandBuffer,
     VkDepthClampModeEXT                         depthClampMode,
     const VkDepthClampRangeEXT*                 pDepthClampRange);
+
+void Process_vkCmdDispatchDataGraphARM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdDispatchDataGraphARM               func,
+    VkCommandBuffer                             commandBuffer,
+    VkDataGraphPipelineSessionARM               session);
 
 void Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     const ApiCallInfo&                          call_info,

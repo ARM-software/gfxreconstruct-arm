@@ -159,6 +159,7 @@ enum class MetaDataType : uint16_t
     kViewRelativeLocation                   = 33,
     kExecuteBlocksFromFile                  = 34,
     kFixShaderGroupHandleCommand            = 35,
+    kInitTensorCommand                      = 36,
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -521,6 +522,15 @@ struct InitBufferCommandHeader
     format::ThreadId thread_id;
     format::HandleId device_id;
     format::HandleId buffer_id;
+    uint64_t         data_size;
+};
+
+struct InitTensorCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+    format::HandleId device_id;
+    format::HandleId tensor_id;
     uint64_t         data_size;
 };
 

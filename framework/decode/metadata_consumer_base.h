@@ -102,6 +102,13 @@ class MetadataConsumerBase
                                           uint64_t         data_size,
                                           const uint8_t*   data)
     {}
+
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data)
+    {}
+
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                          format::HandleId             image_id,
                                          uint64_t                     data_size,

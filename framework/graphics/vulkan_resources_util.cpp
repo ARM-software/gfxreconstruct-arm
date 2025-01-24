@@ -1034,6 +1034,152 @@ void VulkanResourcesUtil::DestroyStagingBuffer()
     staging_buffer_.size                  = 0;
 }
 
+VkResult VulkanResourcesUtil::CreateStagingTensor(const VkTensorDescriptionARM* desc)
+{
+    DestroyStagingTensor();
+    VkTensorCreateInfoARM info;
+    info.sType                 = VK_STRUCTURE_TYPE_TENSOR_CREATE_INFO_ARM;
+    info.pNext                 = nullptr;
+    info.pDescription          = desc;
+    info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
+    info.queueFamilyIndexCount = 0;
+    info.pQueueFamilyIndices   = nullptr;
+    VkTensorARM tensor;
+    VkResult    result = device_table_.CreateTensorARM(device_, &info, nullptr, &tensor);
+
+    VkTensorMemoryRequirementsInfoARM mem_req;
+    mem_req.sType  = VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM;
+    mem_req.pNext  = nullptr;
+    mem_req.tensor = tensor;
+    VkMemoryRequirements2 mem_req2;
+    mem_req2.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+    mem_req2.pNext = nullptr;
+    device_table_.GetTensorMemoryRequirementsARM(device_, &mem_req, &mem_req2);
+    VkMemoryRequirements* memory_requirements = &mem_req2.memoryRequirements;
+
+    if (memory_requirements->size > staging_tensor_.size)
+    {
+        DestroyStagingTensorMemory();
+        staging_tensor_.tensor     = tensor;
+        uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
+        bool     found             = FindMemoryTypeIndex(memory_properties_,
+                                         memory_requirements->memoryTypeBits,
+                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                                         &memory_type_index,
+                                         &staging_tensor_.memory_property_flags);
+        if (!found)
+        {
+            // If we are here it is likely that we lack support for HOST_CACHED, fallback to COHERENT
+            found = FindMemoryTypeIndex(memory_properties_,
+                                        memory_requirements->memoryTypeBits,
+                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                        &memory_type_index,
+                                        &staging_tensor_.memory_property_flags);
+        }
+        VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        alloc_info.pNext                = nullptr;
+        alloc_info.allocationSize       = memory_requirements->size;
+        alloc_info.memoryTypeIndex      = memory_type_index;
+
+        result               = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &staging_tensor_.memory);
+        staging_tensor_.size = memory_requirements->size;
+    }
+    if (result == VK_SUCCESS)
+    {
+        VkBindTensorMemoryInfoARM bind_info;
+        bind_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
+        bind_info.pNext        = nullptr;
+        bind_info.tensor       = staging_tensor_.tensor;
+        bind_info.memory       = staging_tensor_.memory;
+        bind_info.memoryOffset = 0;
+        device_table_.BindTensorMemoryARM(device_, 1, &bind_info);
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("Failed to allocate staging tensor memory for resource memory snapshot");
+
+        DestroyStagingTensor();
+        DestroyStagingTensorMemory();
+    }
+    return VK_SUCCESS;
+}
+
+VkResult VulkanResourcesUtil::MapStagingTensor()
+{
+    assert(staging_tensor_.tensor != VK_NULL_HANDLE);
+    assert(staging_tensor_.memory != VK_NULL_HANDLE);
+    assert(staging_tensor_.size);
+
+    VkResult result = VK_SUCCESS;
+
+    if (staging_tensor_.mapped_ptr == nullptr)
+    {
+        result =
+            device_table_.MapMemory(device_, staging_tensor_.memory, 0, VK_WHOLE_SIZE, 0, &staging_tensor_.mapped_ptr);
+
+        if (result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_ERROR("Failed mapping staging buffer");
+        }
+    }
+
+    return result;
+}
+
+void VulkanResourcesUtil::UnmapStagingTensor()
+{
+    if (staging_tensor_.mapped_ptr != nullptr)
+    {
+        assert(staging_tensor_.tensor != VK_NULL_HANDLE);
+        assert(staging_tensor_.memory != VK_NULL_HANDLE);
+        assert(staging_tensor_.size);
+
+        device_table_.UnmapMemory(device_, staging_tensor_.memory);
+        staging_tensor_.mapped_ptr = nullptr;
+    }
+}
+
+void VulkanResourcesUtil::InvalidateStagingTensor()
+{
+    assert(staging_tensor_.tensor != VK_NULL_HANDLE);
+    assert(staging_tensor_.memory != VK_NULL_HANDLE);
+    assert(staging_tensor_.size);
+
+    if (!IsMemoryCoherent(staging_tensor_.memory_property_flags))
+    {
+        assert(staging_tensor_.mapped_ptr != nullptr);
+
+        const VkMappedMemoryRange range{
+            VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, staging_tensor_.memory, 0, staging_tensor_.size
+        };
+
+        device_table_.InvalidateMappedMemoryRanges(device_, 1, &range);
+    }
+}
+
+void VulkanResourcesUtil::DestroyStagingTensor()
+{
+    UnmapStagingTensor();
+
+    if (staging_tensor_.tensor != VK_NULL_HANDLE)
+    {
+        device_table_.DestroyTensorARM(device_, staging_tensor_.tensor, nullptr);
+        staging_tensor_.tensor = VK_NULL_HANDLE;
+    }
+}
+
+void VulkanResourcesUtil::DestroyStagingTensorMemory()
+{
+    if (staging_tensor_.memory != VK_NULL_HANDLE)
+    {
+        device_table_.FreeMemory(device_, staging_tensor_.memory, nullptr);
+        staging_tensor_.memory = VK_NULL_HANDLE;
+    }
+
+    staging_tensor_.memory_property_flags = VkMemoryPropertyFlags(0);
+    staging_tensor_.size                  = 0;
+}
+
 void VulkanResourcesUtil::InvalidateMappedMemoryRange(VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size)
 {
     VkMappedMemoryRange invalidate_range = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE };
@@ -1346,6 +1492,28 @@ void VulkanResourcesUtil::CopyBuffer(VkBuffer source_buffer,
     copy_region.size      = size;
 
     device_table_.CmdCopyBuffer(command_buffer_, source_buffer, destination_buffer, 1, &copy_region);
+}
+
+void VulkanResourcesUtil::CopyTensor(VkTensorARM source, VkTensorARM destination)
+{
+    assert(source != VK_NULL_HANDLE);
+    assert(command_buffer_ != VK_NULL_HANDLE);
+
+    VkTensorCopyARM copy_region;
+    copy_region.sType          = VK_STRUCTURE_TYPE_COPY_TENSOR_INFO_ARM;
+    copy_region.pNext          = nullptr;
+    copy_region.dimensionCount = 0;
+    copy_region.pSrcOffset     = nullptr;
+    copy_region.pDstOffset     = nullptr;
+    copy_region.pExtent        = nullptr;
+    VkCopyTensorInfoARM copy_info;
+    copy_info.sType       = VK_STRUCTURE_TYPE_COPY_TENSOR_INFO_ARM;
+    copy_info.pNext       = nullptr;
+    copy_info.srcTensor   = source;
+    copy_info.dstTensor   = destination;
+    copy_info.regionCount = 1;
+    copy_info.pRegions    = &copy_region;
+    device_table_.CmdCopyTensorARM(command_buffer_, &copy_info);
 }
 
 VkQueue VulkanResourcesUtil::GetQueue(uint32_t queue_family_index, uint32_t queue_index)
@@ -1964,6 +2132,58 @@ VkResult VulkanResourcesUtil::ReadFromBufferResource(
     util::platform::MemoryCopy(data.data(), size, staging_buffer_.mapped_ptr, size);
 
     return result;
+}
+
+VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                   tensor,
+                                                     const VkTensorDescriptionARM* desc,
+                                                     uint32_t                      queue_family_index,
+                                                     std::vector<uint8_t>&         data)
+{
+    assert(tensor != VK_NULL_HANDLE);
+
+    const VkQueue queue = GetQueue(queue_family_index, 0);
+    if (queue == VK_NULL_HANDLE)
+    {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    VkResult result = CreateStagingTensor(desc);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    result = CreateCommandPool(queue_family_index);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    result = CreateCommandBuffer(queue_family_index);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    CopyTensor(tensor, staging_tensor_.tensor);
+
+    result = SubmitCommandBuffer(queue);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    result = MapStagingTensor();
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    data.resize(static_cast<size_t>(staging_tensor_.size));
+
+    InvalidateStagingTensor();
+    util::platform::MemoryCopy(data.data(), staging_tensor_.size, staging_buffer_.mapped_ptr, staging_tensor_.size);
+    return VK_SUCCESS;
 }
 
 VkResult VulkanResourcesUtil::WriteToImageResourceStaging(VkImage                      image,

@@ -48,6 +48,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void AddVkBufferViewInfo(VulkanBufferViewInfo&& info) { AddVkObjectInfo(std::move(info), &bufferView_map_); }
     void AddVkCommandBufferInfo(VulkanCommandBufferInfo&& info) { AddVkObjectInfo(std::move(info), &commandBuffer_map_); }
     void AddVkCommandPoolInfo(VulkanCommandPoolInfo&& info) { AddVkObjectInfo(std::move(info), &commandPool_map_); }
+    void AddVkDataGraphPipelineSessionARMInfo(VulkanDataGraphPipelineSessionARMInfo&& info) { AddVkObjectInfo(std::move(info), &dataGraphPipelineSessionARM_map_); }
     void AddVkDebugReportCallbackEXTInfo(VulkanDebugReportCallbackEXTInfo&& info) { AddVkObjectInfo(std::move(info), &debugReportCallbackEXT_map_); }
     void AddVkDebugUtilsMessengerEXTInfo(VulkanDebugUtilsMessengerEXTInfo&& info) { AddVkObjectInfo(std::move(info), &debugUtilsMessengerEXT_map_); }
     void AddVkDeferredOperationKHRInfo(VulkanDeferredOperationKHRInfo&& info) { AddVkObjectInfo(std::move(info), &deferredOperationKHR_map_); }
@@ -87,9 +88,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void AddVkShaderModuleInfo(VulkanShaderModuleInfo&& info) { AddVkObjectInfo(std::move(info), &shaderModule_map_); }
     void AddVkSurfaceKHRInfo(VulkanSurfaceKHRInfo&& info) { AddVkObjectInfo(std::move(info), &surfaceKHR_map_); }
     void AddVkSwapchainKHRInfo(VulkanSwapchainKHRInfo&& info) { AddVkObjectInfo(std::move(info), &swapchainKHR_map_); }
+    void AddVkTensorARMInfo(VulkanTensorARMInfo&& info) { AddVkObjectInfo(std::move(info), &tensorARM_map_); }
+    void AddVkTensorViewARMInfo(VulkanTensorViewARMInfo&& info) { AddVkObjectInfo(std::move(info), &tensorViewARM_map_); }
     void AddVkValidationCacheEXTInfo(VulkanValidationCacheEXTInfo&& info) { AddVkObjectInfo(std::move(info), &validationCacheEXT_map_); }
     void AddVkVideoSessionKHRInfo(VulkanVideoSessionKHRInfo&& info) { AddVkObjectInfo(std::move(info), &videoSessionKHR_map_); }
     void AddVkVideoSessionParametersKHRInfo(VulkanVideoSessionParametersKHRInfo&& info) { AddVkObjectInfo(std::move(info), &videoSessionParametersKHR_map_); }
+    void AddVkWeightsARMInfo(VulkanWeightsARMInfo&& info) { AddVkObjectInfo(std::move(info), &weightsARM_map_); }
 
     void RemoveVkAccelerationStructureKHRInfo(format::HandleId id) { accelerationStructureKHR_map_.erase(id); }
     void RemoveVkAccelerationStructureNVInfo(format::HandleId id) { accelerationStructureNV_map_.erase(id); }
@@ -97,6 +101,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void RemoveVkBufferViewInfo(format::HandleId id) { bufferView_map_.erase(id); }
     void RemoveVkCommandBufferInfo(format::HandleId id) { commandBuffer_map_.erase(id); }
     void RemoveVkCommandPoolInfo(format::HandleId id) { commandPool_map_.erase(id); }
+    void RemoveVkDataGraphPipelineSessionARMInfo(format::HandleId id) { dataGraphPipelineSessionARM_map_.erase(id); }
     void RemoveVkDebugReportCallbackEXTInfo(format::HandleId id) { debugReportCallbackEXT_map_.erase(id); }
     void RemoveVkDebugUtilsMessengerEXTInfo(format::HandleId id) { debugUtilsMessengerEXT_map_.erase(id); }
     void RemoveVkDeferredOperationKHRInfo(format::HandleId id) { deferredOperationKHR_map_.erase(id); }
@@ -136,9 +141,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void RemoveVkShaderModuleInfo(format::HandleId id) { shaderModule_map_.erase(id); }
     void RemoveVkSurfaceKHRInfo(format::HandleId id) { surfaceKHR_map_.erase(id); }
     void RemoveVkSwapchainKHRInfo(format::HandleId id) { swapchainKHR_map_.erase(id); }
+    void RemoveVkTensorARMInfo(format::HandleId id) { tensorARM_map_.erase(id); }
+    void RemoveVkTensorViewARMInfo(format::HandleId id) { tensorViewARM_map_.erase(id); }
     void RemoveVkValidationCacheEXTInfo(format::HandleId id) { validationCacheEXT_map_.erase(id); }
     void RemoveVkVideoSessionKHRInfo(format::HandleId id) { videoSessionKHR_map_.erase(id); }
     void RemoveVkVideoSessionParametersKHRInfo(format::HandleId id) { videoSessionParametersKHR_map_.erase(id); }
+    void RemoveVkWeightsARMInfo(format::HandleId id) { weightsARM_map_.erase(id); }
 
     const VulkanAccelerationStructureKHRInfo* GetVkAccelerationStructureKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanAccelerationStructureKHRInfo>(id, &accelerationStructureKHR_map_); }
     const VulkanAccelerationStructureNVInfo* GetVkAccelerationStructureNVInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanAccelerationStructureNVInfo>(id, &accelerationStructureNV_map_); }
@@ -146,6 +154,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     const VulkanBufferViewInfo* GetVkBufferViewInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanBufferViewInfo>(id, &bufferView_map_); }
     const VulkanCommandBufferInfo* GetVkCommandBufferInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanCommandBufferInfo>(id, &commandBuffer_map_); }
     const VulkanCommandPoolInfo* GetVkCommandPoolInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanCommandPoolInfo>(id, &commandPool_map_); }
+    const VulkanDataGraphPipelineSessionARMInfo* GetVkDataGraphPipelineSessionARMInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanDataGraphPipelineSessionARMInfo>(id, &dataGraphPipelineSessionARM_map_); }
     const VulkanDebugReportCallbackEXTInfo* GetVkDebugReportCallbackEXTInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanDebugReportCallbackEXTInfo>(id, &debugReportCallbackEXT_map_); }
     const VulkanDebugUtilsMessengerEXTInfo* GetVkDebugUtilsMessengerEXTInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanDebugUtilsMessengerEXTInfo>(id, &debugUtilsMessengerEXT_map_); }
     const VulkanDeferredOperationKHRInfo* GetVkDeferredOperationKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanDeferredOperationKHRInfo>(id, &deferredOperationKHR_map_); }
@@ -185,9 +194,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     const VulkanShaderModuleInfo* GetVkShaderModuleInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanShaderModuleInfo>(id, &shaderModule_map_); }
     const VulkanSurfaceKHRInfo* GetVkSurfaceKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanSurfaceKHRInfo>(id, &surfaceKHR_map_); }
     const VulkanSwapchainKHRInfo* GetVkSwapchainKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanSwapchainKHRInfo>(id, &swapchainKHR_map_); }
+    const VulkanTensorARMInfo* GetVkTensorARMInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanTensorARMInfo>(id, &tensorARM_map_); }
+    const VulkanTensorViewARMInfo* GetVkTensorViewARMInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanTensorViewARMInfo>(id, &tensorViewARM_map_); }
     const VulkanValidationCacheEXTInfo* GetVkValidationCacheEXTInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanValidationCacheEXTInfo>(id, &validationCacheEXT_map_); }
     const VulkanVideoSessionKHRInfo* GetVkVideoSessionKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanVideoSessionKHRInfo>(id, &videoSessionKHR_map_); }
     const VulkanVideoSessionParametersKHRInfo* GetVkVideoSessionParametersKHRInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanVideoSessionParametersKHRInfo>(id, &videoSessionParametersKHR_map_); }
+    const VulkanWeightsARMInfo* GetVkWeightsARMInfo(format::HandleId id) const { return GetVkObjectInfo<VulkanWeightsARMInfo>(id, &weightsARM_map_); }
 
     VulkanAccelerationStructureKHRInfo* GetVkAccelerationStructureKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanAccelerationStructureKHRInfo>(id, &accelerationStructureKHR_map_); }
     VulkanAccelerationStructureNVInfo* GetVkAccelerationStructureNVInfo(format::HandleId id) { return GetVkObjectInfo<VulkanAccelerationStructureNVInfo>(id, &accelerationStructureNV_map_); }
@@ -195,6 +207,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     VulkanBufferViewInfo* GetVkBufferViewInfo(format::HandleId id) { return GetVkObjectInfo<VulkanBufferViewInfo>(id, &bufferView_map_); }
     VulkanCommandBufferInfo* GetVkCommandBufferInfo(format::HandleId id) { return GetVkObjectInfo<VulkanCommandBufferInfo>(id, &commandBuffer_map_); }
     VulkanCommandPoolInfo* GetVkCommandPoolInfo(format::HandleId id) { return GetVkObjectInfo<VulkanCommandPoolInfo>(id, &commandPool_map_); }
+    VulkanDataGraphPipelineSessionARMInfo* GetVkDataGraphPipelineSessionARMInfo(format::HandleId id) { return GetVkObjectInfo<VulkanDataGraphPipelineSessionARMInfo>(id, &dataGraphPipelineSessionARM_map_); }
     VulkanDebugReportCallbackEXTInfo* GetVkDebugReportCallbackEXTInfo(format::HandleId id) { return GetVkObjectInfo<VulkanDebugReportCallbackEXTInfo>(id, &debugReportCallbackEXT_map_); }
     VulkanDebugUtilsMessengerEXTInfo* GetVkDebugUtilsMessengerEXTInfo(format::HandleId id) { return GetVkObjectInfo<VulkanDebugUtilsMessengerEXTInfo>(id, &debugUtilsMessengerEXT_map_); }
     VulkanDeferredOperationKHRInfo* GetVkDeferredOperationKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanDeferredOperationKHRInfo>(id, &deferredOperationKHR_map_); }
@@ -234,9 +247,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     VulkanShaderModuleInfo* GetVkShaderModuleInfo(format::HandleId id) { return GetVkObjectInfo<VulkanShaderModuleInfo>(id, &shaderModule_map_); }
     VulkanSurfaceKHRInfo* GetVkSurfaceKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanSurfaceKHRInfo>(id, &surfaceKHR_map_); }
     VulkanSwapchainKHRInfo* GetVkSwapchainKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanSwapchainKHRInfo>(id, &swapchainKHR_map_); }
+    VulkanTensorARMInfo* GetVkTensorARMInfo(format::HandleId id) { return GetVkObjectInfo<VulkanTensorARMInfo>(id, &tensorARM_map_); }
+    VulkanTensorViewARMInfo* GetVkTensorViewARMInfo(format::HandleId id) { return GetVkObjectInfo<VulkanTensorViewARMInfo>(id, &tensorViewARM_map_); }
     VulkanValidationCacheEXTInfo* GetVkValidationCacheEXTInfo(format::HandleId id) { return GetVkObjectInfo<VulkanValidationCacheEXTInfo>(id, &validationCacheEXT_map_); }
     VulkanVideoSessionKHRInfo* GetVkVideoSessionKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanVideoSessionKHRInfo>(id, &videoSessionKHR_map_); }
     VulkanVideoSessionParametersKHRInfo* GetVkVideoSessionParametersKHRInfo(format::HandleId id) { return GetVkObjectInfo<VulkanVideoSessionParametersKHRInfo>(id, &videoSessionParametersKHR_map_); }
+    VulkanWeightsARMInfo* GetVkWeightsARMInfo(format::HandleId id) { return GetVkObjectInfo<VulkanWeightsARMInfo>(id, &weightsARM_map_); }
 
     void VisitVkAccelerationStructureKHRInfo(std::function<void(const VulkanAccelerationStructureKHRInfo*)> visitor) const {  for (const auto& entry : accelerationStructureKHR_map_) { visitor(&entry.second); }  }
     void VisitVkAccelerationStructureNVInfo(std::function<void(const VulkanAccelerationStructureNVInfo*)> visitor) const {  for (const auto& entry : accelerationStructureNV_map_) { visitor(&entry.second); }  }
@@ -244,6 +260,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void VisitVkBufferViewInfo(std::function<void(const VulkanBufferViewInfo*)> visitor) const {  for (const auto& entry : bufferView_map_) { visitor(&entry.second); }  }
     void VisitVkCommandBufferInfo(std::function<void(const VulkanCommandBufferInfo*)> visitor) const {  for (const auto& entry : commandBuffer_map_) { visitor(&entry.second); }  }
     void VisitVkCommandPoolInfo(std::function<void(const VulkanCommandPoolInfo*)> visitor) const {  for (const auto& entry : commandPool_map_) { visitor(&entry.second); }  }
+    void VisitVkDataGraphPipelineSessionARMInfo(std::function<void(const VulkanDataGraphPipelineSessionARMInfo*)> visitor) const {  for (const auto& entry : dataGraphPipelineSessionARM_map_) { visitor(&entry.second); }  }
     void VisitVkDebugReportCallbackEXTInfo(std::function<void(const VulkanDebugReportCallbackEXTInfo*)> visitor) const {  for (const auto& entry : debugReportCallbackEXT_map_) { visitor(&entry.second); }  }
     void VisitVkDebugUtilsMessengerEXTInfo(std::function<void(const VulkanDebugUtilsMessengerEXTInfo*)> visitor) const {  for (const auto& entry : debugUtilsMessengerEXT_map_) { visitor(&entry.second); }  }
     void VisitVkDeferredOperationKHRInfo(std::function<void(const VulkanDeferredOperationKHRInfo*)> visitor) const {  for (const auto& entry : deferredOperationKHR_map_) { visitor(&entry.second); }  }
@@ -283,9 +300,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
     void VisitVkShaderModuleInfo(std::function<void(const VulkanShaderModuleInfo*)> visitor) const {  for (const auto& entry : shaderModule_map_) { visitor(&entry.second); }  }
     void VisitVkSurfaceKHRInfo(std::function<void(const VulkanSurfaceKHRInfo*)> visitor) const {  for (const auto& entry : surfaceKHR_map_) { visitor(&entry.second); }  }
     void VisitVkSwapchainKHRInfo(std::function<void(const VulkanSwapchainKHRInfo*)> visitor) const {  for (const auto& entry : swapchainKHR_map_) { visitor(&entry.second); }  }
+    void VisitVkTensorARMInfo(std::function<void(const VulkanTensorARMInfo*)> visitor) const {  for (const auto& entry : tensorARM_map_) { visitor(&entry.second); }  }
+    void VisitVkTensorViewARMInfo(std::function<void(const VulkanTensorViewARMInfo*)> visitor) const {  for (const auto& entry : tensorViewARM_map_) { visitor(&entry.second); }  }
     void VisitVkValidationCacheEXTInfo(std::function<void(const VulkanValidationCacheEXTInfo*)> visitor) const {  for (const auto& entry : validationCacheEXT_map_) { visitor(&entry.second); }  }
     void VisitVkVideoSessionKHRInfo(std::function<void(const VulkanVideoSessionKHRInfo*)> visitor) const {  for (const auto& entry : videoSessionKHR_map_) { visitor(&entry.second); }  }
     void VisitVkVideoSessionParametersKHRInfo(std::function<void(const VulkanVideoSessionParametersKHRInfo*)> visitor) const {  for (const auto& entry : videoSessionParametersKHR_map_) { visitor(&entry.second); }  }
+    void VisitVkWeightsARMInfo(std::function<void(const VulkanWeightsARMInfo*)> visitor) const {  for (const auto& entry : weightsARM_map_) { visitor(&entry.second); }  }
 
   protected:
      std::unordered_map<format::HandleId, VulkanAccelerationStructureKHRInfo> accelerationStructureKHR_map_;
@@ -294,6 +314,7 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
      std::unordered_map<format::HandleId, VulkanBufferViewInfo> bufferView_map_;
      std::unordered_map<format::HandleId, VulkanCommandBufferInfo> commandBuffer_map_;
      std::unordered_map<format::HandleId, VulkanCommandPoolInfo> commandPool_map_;
+     std::unordered_map<format::HandleId, VulkanDataGraphPipelineSessionARMInfo> dataGraphPipelineSessionARM_map_;
      std::unordered_map<format::HandleId, VulkanDebugReportCallbackEXTInfo> debugReportCallbackEXT_map_;
      std::unordered_map<format::HandleId, VulkanDebugUtilsMessengerEXTInfo> debugUtilsMessengerEXT_map_;
      std::unordered_map<format::HandleId, VulkanDeferredOperationKHRInfo> deferredOperationKHR_map_;
@@ -333,9 +354,12 @@ class VulkanObjectInfoTableBase2 : VulkanObjectInfoTableBase
      std::unordered_map<format::HandleId, VulkanShaderModuleInfo> shaderModule_map_;
      std::unordered_map<format::HandleId, VulkanSurfaceKHRInfo> surfaceKHR_map_;
      std::unordered_map<format::HandleId, VulkanSwapchainKHRInfo> swapchainKHR_map_;
+     std::unordered_map<format::HandleId, VulkanTensorARMInfo> tensorARM_map_;
+     std::unordered_map<format::HandleId, VulkanTensorViewARMInfo> tensorViewARM_map_;
      std::unordered_map<format::HandleId, VulkanValidationCacheEXTInfo> validationCacheEXT_map_;
      std::unordered_map<format::HandleId, VulkanVideoSessionKHRInfo> videoSessionKHR_map_;
      std::unordered_map<format::HandleId, VulkanVideoSessionParametersKHRInfo> videoSessionParametersKHR_map_;
+     std::unordered_map<format::HandleId, VulkanWeightsARMInfo> weightsARM_map_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

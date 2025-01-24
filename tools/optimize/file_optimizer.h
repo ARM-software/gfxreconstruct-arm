@@ -53,6 +53,8 @@ class FileOptimizer : public decode::FileTransformer
   private:
     bool FilterInitBufferMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
 
+    bool FilterInitTensorMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
+
     bool FilterInitImageMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
 
     bool FilterMethodCall(const format::BlockHeader& block_header, format::ApiCallId api_call_id, uint64_t block_index);

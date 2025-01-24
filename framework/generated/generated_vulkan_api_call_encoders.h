@@ -3128,6 +3128,61 @@ VKAPI_ATTR VkDeviceAddress VKAPI_CALL GetPipelineIndirectDeviceAddressNV(
     VkDevice                                    device,
     const VkPipelineIndirectDeviceAddressInfoNV* pInfo);
 
+VKAPI_ATTR VkResult                        VKAPI_CALL CreateNeuralEnginePipelinesARM(
+    VkDevice                                    device,
+    uint32_t                                    createInfoCount,
+    const VkNeuralEnginePipelineCreateInfoARM*  pCreateInfos,
+    const VkAllocationCallbacks*                pAllocator,
+    VkPipeline*                                 pPipelines);
+
+VKAPI_ATTR void                     VKAPI_CALL CmdDispatchNeuralEngineARM(
+    VkCommandBuffer                             commandBuffer,
+    VkOffset4DARM                               offset,
+    VkExtent4DARM                               size,
+    uint32_t                                    iteratorOuterDimension,
+    uint32_t                                    iteratorInnerDimension,
+    uint32_t                                    taskIncrementOuter,
+    uint32_t                                    taskIncrementInner,
+    uint32_t                                    iteratorWeightArrayOffset,
+    uint32_t                                    iteratorWeightArrayBehavior,
+    uint32_t                                    iteratorTraceID0,
+    uint32_t                                    iteratorTraceID1,
+    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
+
+VKAPI_ATTR VkResult VKAPI_CALL CreateWeightsARM(
+    VkDevice                                    device,
+    const VkWeightsCreateInfoARM*               pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkWeightsARM*                               pWeights);
+
+VKAPI_ATTR void VKAPI_CALL DestroyWeightsARM(
+    VkDevice                                    device,
+    VkWeightsARM                                weights,
+    const VkAllocationCallbacks*                pAllocator);
+
+VKAPI_ATTR void VKAPI_CALL GetWeightsMemoryRequirementsARM(
+    VkDevice                                    device,
+    const VkWeightsMemoryRequirementsInfoARM*   pInfo,
+    VkMemoryRequirements2*                      pMemoryRequirements);
+
+VKAPI_ATTR void VKAPI_CALL GetDeviceWeightsMemoryRequirementsARM(
+    VkDevice                                    device,
+    const VkDeviceWeightsMemoryRequirementsARM* pInfo,
+    VkMemoryRequirements2*                      pMemoryRequirements);
+
+VKAPI_ATTR VkResult VKAPI_CALL BindWeightsMemoryARM(
+    VkDevice                                    device,
+    uint32_t                                    bindInfoCount,
+    const VkBindWeightsMemoryInfoARM*           pBindInfos);
+
+VKAPI_ATTR VkDeviceAddress VKAPI_CALL GetWeightsDeviceAddressARM(
+    VkDevice                                    device,
+    const VkWeightsDeviceAddressInfoARM*        pInfo);
+
+VKAPI_ATTR VkDeviceAddress VKAPI_CALL GetTensorDeviceAddressARM(
+    VkDevice                                    device,
+    const VkTensorDeviceAddressInfoARM*         pInfo);
+
 VKAPI_ATTR void VKAPI_CALL CmdSetDepthClampEnableEXT(
     VkCommandBuffer                             commandBuffer,
     VkBool32                                    depthClampEnable);
@@ -3264,6 +3319,57 @@ VKAPI_ATTR void VKAPI_CALL CmdSetCoverageReductionModeNV(
     VkCommandBuffer                             commandBuffer,
     VkCoverageReductionModeNV                   coverageReductionMode);
 
+VKAPI_ATTR VkResult VKAPI_CALL CreateTensorARM(
+    VkDevice                                    device,
+    const VkTensorCreateInfoARM*                pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkTensorARM*                                pTensor);
+
+VKAPI_ATTR void VKAPI_CALL DestroyTensorARM(
+    VkDevice                                    device,
+    VkTensorARM                                 tensor,
+    const VkAllocationCallbacks*                pAllocator);
+
+VKAPI_ATTR VkResult VKAPI_CALL CreateTensorViewARM(
+    VkDevice                                    device,
+    const VkTensorViewCreateInfoARM*            pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkTensorViewARM*                            pView);
+
+VKAPI_ATTR void VKAPI_CALL DestroyTensorViewARM(
+    VkDevice                                    device,
+    VkTensorViewARM                             tensorView,
+    const VkAllocationCallbacks*                pAllocator);
+
+VKAPI_ATTR void VKAPI_CALL GetTensorMemoryRequirementsARM(
+    VkDevice                                    device,
+    const VkTensorMemoryRequirementsInfoARM*    pInfo,
+    VkMemoryRequirements2*                      pMemoryRequirements);
+
+VKAPI_ATTR VkResult VKAPI_CALL BindTensorMemoryARM(
+    VkDevice                                    device,
+    uint32_t                                    bindInfoCount,
+    const VkBindTensorMemoryInfoARM*            pBindInfos);
+
+VKAPI_ATTR void VKAPI_CALL GetDeviceTensorMemoryRequirementsARM(
+    VkDevice                                    device,
+    const VkDeviceTensorMemoryRequirementsARM*  pInfo,
+    VkMemoryRequirements2*                      pMemoryRequirements);
+
+VKAPI_ATTR void VKAPI_CALL CmdCopyTensorARM(
+    VkCommandBuffer                             commandBuffer,
+    const VkCopyTensorInfoARM*                  pCopyTensorInfo);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetTensorOpaqueCaptureDescriptorDataARM(
+    VkDevice                                    device,
+    const VkTensorCaptureDescriptorDataInfoARM* pInfo,
+    void*                                       pData);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetTensorViewOpaqueCaptureDescriptorDataARM(
+    VkDevice                                    device,
+    const VkTensorViewCaptureDescriptorDataInfoARM* pInfo,
+    void*                                       pData);
+
 VKAPI_ATTR void VKAPI_CALL GetShaderModuleIdentifierEXT(
     VkDevice                                    device,
     VkShaderModule                              shaderModule,
@@ -3370,6 +3476,57 @@ VKAPI_ATTR void VKAPI_CALL GetLatencyTimingsNV(
 VKAPI_ATTR void VKAPI_CALL QueueNotifyOutOfBandNV(
     VkQueue                                     queue,
     const VkOutOfBandQueueTypeInfoNV*           pQueueTypeInfo);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceDataGraphInstructionSetsARM(
+    VkPhysicalDevice                            physicalDevice,
+    uint32_t*                                   pSetCount,
+    VkPhysicalDeviceDataGraphInstructionSetARM* pSets);
+
+VKAPI_ATTR VkResult VKAPI_CALL CreateDataGraphPipelinesARM(
+    VkDevice                                    device,
+    VkDeferredOperationKHR                      deferredOperation,
+    VkPipelineCache                             pipelineCache,
+    uint32_t                                    createInfoCount,
+    const VkDataGraphPipelineCreateInfoARM*     pCreateInfos,
+    const VkAllocationCallbacks*                pAllocator,
+    VkPipeline*                                 pPipelines);
+
+VKAPI_ATTR VkResult VKAPI_CALL CreateDataGraphPipelineSessionARM(
+    VkDevice                                    device,
+    const VkDataGraphPipelineSessionCreateInfoARM* pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkDataGraphPipelineSessionARM*              pSession);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetDataGraphPipelineSessionBindPointRequirementsARM(
+    VkDevice                                    device,
+    const VkDataGraphPipelineSessionBindPointRequirementsInfoARM* pInfo,
+    uint32_t*                                   pBindPointRequirementCount,
+    VkDataGraphPipelineSessionBindPointRequirementARM* pBindPointRequirements);
+
+VKAPI_ATTR void VKAPI_CALL GetDataGraphPipelineSessionMemoryRequirementsARM(
+    VkDevice                                    device,
+    const VkDataGraphPipelineSessionMemoryRequirementsInfoARM* pInfo,
+    VkMemoryRequirements2*                      pMemoryRequirements);
+
+VKAPI_ATTR VkResult VKAPI_CALL BindDataGraphPipelineSessionMemoryARM(
+    VkDevice                                    device,
+    uint32_t                                    bindInfoCount,
+    const VkBindDataGraphPipelineSessionMemoryInfoARM* pBindInfos);
+
+VKAPI_ATTR void VKAPI_CALL DestroyDataGraphPipelineSessionARM(
+    VkDevice                                    device,
+    VkDataGraphPipelineSessionARM               session,
+    const VkAllocationCallbacks*                pAllocator);
+
+VKAPI_ATTR void VKAPI_CALL CmdDispatchDataGraphARM(
+    VkCommandBuffer                             commandBuffer,
+    VkDataGraphPipelineSessionARM               session);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetDataGraphPipelinePropertiesARM(
+    VkDevice                                    device,
+    const VkDataGraphPipelineInfoARM*           pPipelineInfo,
+    uint32_t*                                   pPropertiesCount,
+    VkDataGraphPipelinePropertyQueryResultARM*  pProperties);
 
 VKAPI_ATTR void VKAPI_CALL CmdSetAttachmentFeedbackLoopEnableEXT(
     VkCommandBuffer                             commandBuffer,

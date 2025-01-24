@@ -2225,5 +2225,54 @@ void VulkanRebindAllocator::SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo
     }
 }
 
+VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                             const VkAllocationCallbacks* allocation_callbacks,
+                                             format::HandleId             capture_id,
+                                             VkTensorARM*                 tensor,
+                                             ResourceData*                allocator_data)
+{
+    return VK_SUCCESS;
+}
+
+void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
+                                          const VkAllocationCallbacks* allocation_callbacks,
+                                          ResourceData                 allocator_data)
+{}
+
+VkResult
+VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                      const VkAllocationCallbacks*   allocation_callbacks,
+                                                      format::HandleId               capture_id,
+                                                      VkDataGraphPipelineSessionARM* session,
+                                                      ResourceData*                  allocator_data)
+{
+    return VK_SUCCESS;
+}
+
+void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
+                                                            const VkAllocationCallbacks*  allocation_callbacks,
+                                                            ResourceData                  allocator_data)
+{}
+
+VkResult VulkanRebindAllocator::BindTensorMemory(VkTensorARM            tensor,
+                                                 VkDeviceMemory         memory,
+                                                 VkDeviceSize           memory_offset,
+                                                 ResourceData           allocator_tensor_data,
+                                                 MemoryData             allocator_memory_data,
+                                                 VkMemoryPropertyFlags* bind_memory_properties)
+{
+    return VK_SUCCESS;
+}
+
+VkResult VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
+                                                                   VkDeviceMemory                memory,
+                                                                   VkDeviceSize                  memory_offset,
+                                                                   ResourceData                  allocator_session_data,
+                                                                   MemoryData                    allocator_memory_data,
+                                                                   VkMemoryPropertyFlags*        bind_memory_properties)
+{
+    return VK_SUCCESS;
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
