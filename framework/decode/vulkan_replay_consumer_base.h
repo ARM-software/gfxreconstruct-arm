@@ -29,7 +29,6 @@
 #include "decode/pointer_decoder.h"
 #include "decode/screenshot_handler.h"
 #include "decode/swapchain_image_tracker.h"
-#include "decode/vulkan_buffer_tracker.h"
 #include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_address_replacer.h"
 #include "decode/vulkan_handle_mapping_util.h"

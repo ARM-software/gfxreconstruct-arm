@@ -115,8 +115,6 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_acceleration_structure_builder.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_micromap_builder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_micromap_builder.cpp
-                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_buffer_tracker.h
-                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_buffer_tracker.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_internal_buffer_manager.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_internal_buffer_manager.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_captured_swapchain.cpp
