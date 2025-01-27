@@ -8474,7 +8474,19 @@ VkResult VulkanReplayConsumerBase::OverrideGetSemaphoreCounterValue(PFN_vkGetSem
         wait_info.semaphoreCount = 1;
         wait_info.pValues        = &captured_value;
 
-        result = GetDeviceTable(device)->WaitSemaphores(device, &wait_info, UINT64_MAX);
+        auto device_table = GetDeviceTable(device);
+        GFXRECON_ASSERT(device_table != nullptr);
+
+        // At least one of the two functions is available, because to call any of vkGetSemaphoreCounterValue{KHR} you
+        // either have instance version >= 1.2 or VK_KHR_timeline_semaphore activated
+        if (device_table->WaitSemaphores != encode::noop::WaitSemaphores)
+        {
+            result = device_table->WaitSemaphores(device, &wait_info, UINT64_MAX);
+        }
+        else
+        {
+            result = device_table->WaitSemaphoresKHR(device, &wait_info, UINT64_MAX);
+        }
     }
 
     return result;
