@@ -958,27 +958,37 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
 
         auto accel_struct_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
+        accel_struct_wrapper->device = device_wrapper;
+        accel_struct_wrapper->type   = modified_create_info->type;
 
-        VkAccelerationStructureDeviceAddressInfoKHR address_info{
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
-        };
-
-        // save address to use as pCreateInfo->deviceAddress during replay
-        VkDeviceAddress address =
-            device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
-
-        accel_struct_wrapper->device  = device_wrapper;
-        accel_struct_wrapper->address = address;
-        accel_struct_wrapper->type    = modified_create_info->type;
-
-        if (IsCaptureModeTrack())
+        auto storage_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pCreateInfo->buffer);
+        if (storage_buffer_wrapper->bind_memory_id != format::kNullHandleId)
         {
-            state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
+            VkAccelerationStructureDeviceAddressInfoKHR address_info{
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
+            };
+
+            // save address to use as pCreateInfo->deviceAddress during replay
+            VkDeviceAddress address =
+                device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
+            accel_struct_wrapper->address = address;
+
+            if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
+            {
+                // save address to use as pCreateInfo->deviceAddress during replay
+                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
+            }
+
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
+            }
         }
-
-        if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
+        else
         {
-            WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
+            GFXRECON_LOG_WARNING("Could not get device address for acceleration structure %" PRIu64
+                                 ", storage buffer was not bound",
+                                 accel_struct_wrapper->handle_id);
         }
     }
     return result;
@@ -1015,24 +1025,34 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
 
         auto micromap_wrapper = GetWrapper<MicromapEXTWrapper>(*pMicromap);
 
-        VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-                                                  nullptr,
-                                                  pCreateInfo->buffer };
-        VkDeviceAddress           address =
-            device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+        auto storage_buffer_wrapper = GetWrapper<BufferWrapper>(pCreateInfo->buffer);
 
-        micromap_wrapper->device = device_wrapper;
-        micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
-
-        if (IsCaptureModeTrack())
+        if (storage_buffer_wrapper->bind_memory_id != format::kNullHandleId)
         {
-            state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+            VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                      nullptr,
+                                                      pCreateInfo->buffer };
+            VkDeviceAddress           address =
+                device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+
+            micromap_wrapper->device = device_wrapper;
+            micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
+
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+            }
+
+            if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+            {
+                // save address to use as pCreateInfo->deviceAddress during replay
+                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+            }
         }
-
-        if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+        else
         {
-            // save address to use as pCreateInfo->deviceAddress during replay
-            WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+            GFXRECON_LOG_WARNING("Could not get device address for micromap %" PRIu64 ", storage buffer was not bound",
+                                 micromap_wrapper->handle_id);
         }
     }
     return result;
