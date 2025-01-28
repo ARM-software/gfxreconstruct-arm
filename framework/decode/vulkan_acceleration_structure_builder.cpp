@@ -250,7 +250,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
         acceleration_structure_data.new_storage = nullptr;
     }
 
-    VkResult result = functions_.create_acceleration_structure(device_info->handle, create_info, pAllocator, handle);
+    VkResult result = functions_.create_acceleration_structure(device_info->handle, info, pAllocator, handle);
     assert(result == VK_SUCCESS);
 
     acceleration_structure_data.new_build_sizes = build_sizes;
