@@ -5574,12 +5574,12 @@ void VulkanReplayConsumer::Process_vkWaitSemaphoresKHR(
     StructPointerDecoder<Decoded_VkSemaphoreWaitInfo>* pWaitInfo,
     uint64_t                                    timeout)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkSemaphoreWaitInfo* in_pWaitInfo = pWaitInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pWaitInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->WaitSemaphoresKHR(in_device, in_pWaitInfo, timeout);
-    CheckResult("vkWaitSemaphoresKHR", returnValue, replay_result, call_info, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    VkResult replay_result = OverrideWaitSemaphores(GetDeviceTable(in_device->handle)->WaitSemaphoresKHR, returnValue, in_device, pWaitInfo, timeout);
+    CheckResult("vkWaitSemaphoresKHR", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkSignalSemaphoreKHR(

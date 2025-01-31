@@ -113,6 +113,7 @@
     "vkAcquireProfilingLockKHR": "OverrideAcquireProfilingLockKHR",
     "vkWaitForPresentKHR": "OverrideWaitForPresentKHR",
     "vkWaitSemaphores": "OverrideWaitSemaphores",
+    "vkWaitSemaphoresKHR": "OverrideWaitSemaphores",
     "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID",
     "vkCmdBeginDebugUtilsLabelEXT": "OverrideCmdBeginDebugUtilsLabelEXT",
     "vkCmdEndDebugUtilsLabelEXT": "OverrideCmdEndDebugUtilsLabelEXT",
@@ -148,9 +149,9 @@
     "vkCreateAccelerationStructureKHR": "OverrideCreateAccelerationStructureKHR",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",
-    "vkCmdCopyAccelerationStructureKHR" : "OverrideCmdCopyAccelerationStructureKHR",
-    "vkCmdWriteAccelerationStructuresPropertiesKHR" : "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
-    "vkCmdBindPipeline" : "OverrideCmdBindPipeline",
-    "vkCmdPushConstants" : "OverrideCmdPushConstants"
+    "vkCmdCopyAccelerationStructureKHR": "OverrideCmdCopyAccelerationStructureKHR",
+    "vkCmdWriteAccelerationStructuresPropertiesKHR": "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
+    "vkCmdBindPipeline": "OverrideCmdBindPipeline",
+    "vkCmdPushConstants": "OverrideCmdPushConstants"
   }
 }
