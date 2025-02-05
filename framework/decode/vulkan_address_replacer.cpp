@@ -22,27 +22,11 @@
 
 #include "decode/vulkan_address_replacer.h"
 #include "decode/vulkan_address_replacer_shaders.h"
-#include "decode/mark_injected_commands.h"
+#include "util/marking_layers.h"
 #include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-//! RAII helper to mark injected commands in scope
-struct mark_injected_commands_helper_t
-{
-    mark_injected_commands_helper_t()
-    {
-        // mark injected commands
-        decode::BeginInjectedCommands();
-    }
-
-    ~mark_injected_commands_helper_t()
-    {
-        // mark end of injected commands
-        decode::EndInjectedCommands();
-    }
-};
 
 inline uint32_t aligned_size(uint32_t size, uint32_t alignment)
 {
@@ -108,13 +92,13 @@ decode::VulkanAddressReplacer::buffer_context_t::~buffer_context_t()
 VulkanAddressReplacer::VulkanAddressReplacer(const VulkanDeviceInfo*              device_info,
                                              const encode::VulkanDeviceTable*     device_table,
                                              const decode::CommonObjectInfoTable& object_table) :
-    device_table_(device_table)
+    device_table_(device_table),
+    device_info_(device_info)
 {
     GFXRECON_ASSERT(device_info != nullptr && device_table != nullptr)
 
-    const VulkanPhysicalDeviceInfo* physical_device_info = object_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
-    device_                                              = device_info->handle;
-    resource_allocator_                                  = device_info->allocator.get();
+    const VulkanPhysicalDeviceInfo* physical_device_info =
+        object_table.GetVkPhysicalDeviceInfo(device_info_->parent_id);
     get_device_address_fn_ = physical_device_info->parent_api_version >= VK_API_VERSION_1_2
                                  ? device_table->GetBufferDeviceAddress
                                  : device_table->GetBufferDeviceAddressKHR;
@@ -145,24 +129,29 @@ VulkanAddressReplacer::VulkanAddressReplacer(VulkanAddressReplacer&& other) noex
 
 VulkanAddressReplacer::~VulkanAddressReplacer()
 {
-    mark_injected_commands_helper_t mark_injected_commands_helper;
+    if (device_info_ != nullptr)
+    {
+        util::MarkingLayersUtil::instance().BeginInjected(device_info_);
 
-    // explicitly free resources here, in order to mark destruction API-calls as injected
-    pipeline_context_sbt_ = {};
-    pipeline_context_bda_ = {};
-    shadow_sbt_map_       = {};
+        // explicitly free resources here, in order to mark destruction API-calls as injected
+        pipeline_context_sbt_ = {};
+        pipeline_context_bda_ = {};
+        shadow_sbt_map_       = {};
 
-    if (pipeline_bda_ != VK_NULL_HANDLE)
-    {
-        device_table_->DestroyPipeline(device_, pipeline_bda_, nullptr);
-    }
-    if (pipeline_sbt_ != VK_NULL_HANDLE)
-    {
-        device_table_->DestroyPipeline(device_, pipeline_sbt_, nullptr);
-    }
-    if (pipeline_layout_ != VK_NULL_HANDLE)
-    {
-        device_table_->DestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+        if (pipeline_bda_ != VK_NULL_HANDLE)
+        {
+            device_table_->DestroyPipeline(device_info_->handle, pipeline_bda_, nullptr);
+        }
+        if (pipeline_sbt_ != VK_NULL_HANDLE)
+        {
+            device_table_->DestroyPipeline(device_info_->handle, pipeline_sbt_, nullptr);
+        }
+        if (pipeline_layout_ != VK_NULL_HANDLE)
+        {
+            device_table_->DestroyPipelineLayout(device_info_->handle, pipeline_layout_, nullptr);
+        }
+
+        util::MarkingLayersUtil::instance().EndInjected(device_info_);
     }
 }
 
@@ -609,7 +598,8 @@ bool VulkanAddressReplacer::init_pipeline()
     pipeline_layout_info.pushConstantRangeCount     = 1;
     pipeline_layout_info.pPushConstantRanges        = &push_constant_range;
 
-    VkResult result = device_table_->CreatePipelineLayout(device_, &pipeline_layout_info, nullptr, &pipeline_layout_);
+    VkResult result =
+        device_table_->CreatePipelineLayout(device_info_->handle, &pipeline_layout_info, nullptr, &pipeline_layout_);
 
     if (result != VK_SUCCESS)
     {
@@ -625,8 +615,8 @@ bool VulkanAddressReplacer::init_pipeline()
         shader_module_create_info.codeSize                 = spirv.size();
         shader_module_create_info.pCode                    = reinterpret_cast<const uint32_t*>(spirv.data());
 
-        VkResult result =
-            device_table_->CreateShaderModule(device_, &shader_module_create_info, nullptr, &compute_module);
+        VkResult result = device_table_->CreateShaderModule(
+            device_info_->handle, &shader_module_create_info, nullptr, &compute_module);
 
         if (result != VK_SUCCESS)
         {
@@ -648,7 +638,7 @@ bool VulkanAddressReplacer::init_pipeline()
         pipeline_create_info.stage                       = stage_info;
 
         result = device_table_->CreateComputePipelines(
-            device_, VK_NULL_HANDLE, 1, &pipeline_create_info, VK_NULL_HANDLE, &out_pipeline);
+            device_info_->handle, VK_NULL_HANDLE, 1, &pipeline_create_info, VK_NULL_HANDLE, &out_pipeline);
 
         if (result != VK_SUCCESS)
         {
@@ -657,7 +647,7 @@ bool VulkanAddressReplacer::init_pipeline()
 
         if (compute_module != VK_NULL_HANDLE)
         {
-            device_table_->DestroyShaderModule(device_, compute_module, nullptr);
+            device_table_->DestroyShaderModule(device_info_->handle, compute_module, nullptr);
         }
         return result;
     };
@@ -688,7 +678,7 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
 
     // free previous resources
     buffer_context                    = {};
-    buffer_context.resource_allocator = resource_allocator_;
+    buffer_context.resource_allocator = device_info_->allocator.get();
     buffer_context.num_bytes          = num_bytes;
 
     VkBufferCreateInfo buffer_create_info = {};
@@ -699,7 +689,7 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     buffer_create_info.queueFamilyIndexCount = 0;
     buffer_create_info.size                  = num_bytes;
 
-    VkResult result = resource_allocator_->CreateBufferDirect(
+    VkResult result = buffer_context.resource_allocator->CreateBufferDirect(
         &buffer_create_info, nullptr, &buffer_context.buffer, &buffer_context.allocator_data);
     if (result != VK_SUCCESS)
     {
@@ -707,7 +697,7 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     }
 
     VkMemoryRequirements memory_requirements;
-    device_table_->GetBufferMemoryRequirements(device_, buffer_context.buffer, &memory_requirements);
+    device_table_->GetBufferMemoryRequirements(device_info_->handle, buffer_context.buffer, &memory_requirements);
 
     uint32_t memory_type_index =
         get_memory_type_index(memory_properties_,
@@ -735,7 +725,7 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     alloc_flags_info.flags                     = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
     alloc_info.pNext                           = &alloc_flags_info;
 
-    result = resource_allocator_->AllocateMemoryDirect(
+    result = buffer_context.resource_allocator->AllocateMemoryDirect(
         &alloc_info, nullptr, &buffer_context.device_memory, &buffer_context.memory_data);
 
     if (result != VK_SUCCESS)
@@ -744,12 +734,12 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     }
 
     VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    result                             = resource_allocator_->BindBufferMemory(buffer_context.buffer,
-                                                   buffer_context.device_memory,
-                                                   0,
-                                                   buffer_context.allocator_data,
-                                                   buffer_context.memory_data,
-                                                   &memory_flags);
+    result                             = buffer_context.resource_allocator->BindBufferMemory(buffer_context.buffer,
+                                                                 buffer_context.device_memory,
+                                                                 0,
+                                                                 buffer_context.allocator_data,
+                                                                 buffer_context.memory_data,
+                                                                 &memory_flags);
     if (result != VK_SUCCESS)
     {
         return false;
@@ -759,10 +749,10 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     VkBufferDeviceAddressInfo address_info = {};
     address_info.sType                     = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     address_info.buffer                    = buffer_context.buffer;
-    buffer_context.device_address          = get_device_address_fn_(device_, &address_info);
+    buffer_context.device_address          = get_device_address_fn_(device_info_->handle, &address_info);
 
     // map buffer
-    result = resource_allocator_->MapResourceMemoryDirect(
+    result = buffer_context.resource_allocator->MapResourceMemoryDirect(
         VK_WHOLE_SIZE, 0, &buffer_context.mapped_data, buffer_context.allocator_data);
     return result == VK_SUCCESS;
 }
@@ -794,9 +784,8 @@ void swap(VulkanAddressReplacer& lhs, VulkanAddressReplacer& rhs) noexcept
     std::swap(lhs.capture_ray_properties_, rhs.capture_ray_properties_);
     std::swap(lhs.replay_ray_properties_, rhs.replay_ray_properties_);
     std::swap(lhs.valid_sbt_alignment_, rhs.valid_sbt_alignment_);
-    std::swap(lhs.device_, rhs.device_);
+    std::swap(lhs.device_info_, rhs.device_info_);
     std::swap(lhs.get_device_address_fn_, rhs.get_device_address_fn_);
-    std::swap(lhs.resource_allocator_, rhs.resource_allocator_);
     std::swap(lhs.pipeline_layout_, rhs.pipeline_layout_);
     std::swap(lhs.pipeline_sbt_, rhs.pipeline_sbt_);
     std::swap(lhs.pipeline_bda_, rhs.pipeline_bda_);

@@ -56,7 +56,6 @@
 
 #include "spirv_reflect.h"
 #include "util/linear_hashmap.h"
-#include "decode/mark_injected_commands.h"
 
 #include "spirv_reflect.h"
 

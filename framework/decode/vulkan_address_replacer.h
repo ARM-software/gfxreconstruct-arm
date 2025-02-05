@@ -142,9 +142,8 @@ class VulkanAddressReplacer
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR capture_ray_properties_{}, replay_ray_properties_{};
     bool                                            valid_sbt_alignment_ = true;
 
-    VkDevice                         device_                = VK_NULL_HANDLE;
-    PFN_vkGetBufferDeviceAddress     get_device_address_fn_ = nullptr;
-    decode::VulkanResourceAllocator* resource_allocator_    = nullptr;
+    const VulkanDeviceInfo*      device_info_           = nullptr;
+    PFN_vkGetBufferDeviceAddress get_device_address_fn_ = nullptr;
 
     // common layout used for all pipelines
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
