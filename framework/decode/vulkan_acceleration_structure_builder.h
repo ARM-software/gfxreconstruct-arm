@@ -100,8 +100,12 @@ class VulkanAccelerationStructureBuilder
     ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(VkQueryType                query_type,
                                                                   VkAccelerationStructureKHR acceleration_structure);
 
-    // Execute actions post queue present
-    void PostQueuePresent();
+    void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+    void OnQueueSubmit2(uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
+    void OnWaitForFences(VkResult result, uint32_t fenceCount, const VkFence* pFences);
+
+    void OnGetFenceStatus(VkResult result, VkFence fence);
 
     // called before command gets executed
     // the query pool results contain the AS compacted sizes
@@ -143,6 +147,7 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCreateQueryPool                             create_query_pool{ nullptr };
         PFN_vkCmdResetQueryPool                           cmd_reset_query_pool{ nullptr };
         PFN_vkDestroyQueryPool                            destroy_query_pool{ nullptr };
+        PFN_vkGetFenceStatus                              get_fence_status{ nullptr };
     };
 
     // This objects are internal and responsible for executing the state recreation meta commands
@@ -179,15 +184,11 @@ class VulkanAccelerationStructureBuilder
 
     VulkanDeviceAddressTracker& device_address_tracker_;
     VulkanInternalBufferManager internal_buffer_manager_;
-    struct DoubleBufferScratch
-    {
-        std::unordered_map<format::HandleId,
-                           std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
-            scratches_previous;
-        std::unordered_map<format::HandleId,
-                           std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
-            scratches_current;
-    } scratch_double_buffer_;
+
+    std::unordered_map<VkFence, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
+        submitted_scratches;
+    std::unordered_map<VkCommandBuffer, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
+        recorded_scratches;
 
     struct PreProcessingCompactionInfo
     {
@@ -240,7 +241,8 @@ class VulkanAccelerationStructureBuilder
     void BeginCommandBuffer();
     void ExecuteCommandBuffer();
 
-    void UpdateScratchDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
+    void UpdateScratchDeviceAddress(VkCommandBuffer                              command_buffer,
+                                    VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
                                     VkDeviceSize                                 scratch_size);
 };
 

@@ -3997,6 +3997,11 @@ VkResult VulkanReplayConsumerBase::OverrideWaitForFences(PFN_vkWaitForFences    
         }
     }
 
+    if (use_acceleration_structure_builder_)
+    {
+        GetAccelerationStructureBuilder(device_info).OnWaitForFences(result, fenceCount, modified_fences);
+    }
+
     return result;
 }
 
@@ -4046,6 +4051,11 @@ VkResult VulkanReplayConsumerBase::OverrideGetFenceStatus(PFN_vkGetFenceStatus  
         GFXRECON_ASSERT(device_table != nullptr);
 
         result = device_table->WaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    }
+
+    if (use_acceleration_structure_builder_)
+    {
+        GetAccelerationStructureBuilder(device_info).OnGetFenceStatus(result, fence);
     }
 
     return result;
@@ -4350,6 +4360,12 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit      fu
         }
     }
 
+    if (use_acceleration_structure_builder_)
+    {
+        const VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(queue_info->parent_id);
+        GetAccelerationStructureBuilder(device_info).OnQueueSubmit(submitCount, submit_infos, fence);
+    }
+
     return result;
 }
 
@@ -4538,6 +4554,12 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2     f
                 }
             }
         }
+    }
+
+    if (use_acceleration_structure_builder_)
+    {
+        const VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(queue_info->parent_id);
+        GetAccelerationStructureBuilder(device_info).OnQueueSubmit2(submitCount, submit_infos, fence);
     }
 
     return result;
@@ -8453,11 +8475,6 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
     {
         screenshot_handler_->EndFrame();
     }
-
-    auto device_info = GetObjectInfoTable().GetVkDeviceInfo(queue_info->parent_id);
-    GFXRECON_ASSERT(device_info != nullptr);
-    auto allocator = device_info->allocator.get();
-    GFXRECON_ASSERT(allocator != nullptr);
 
     LogFrameDebugInfo();
 
