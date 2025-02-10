@@ -23,6 +23,7 @@
 #ifndef GFXRECON_DECODE_VULKAN_REBIND_ALLOCATOR_H
 #define GFXRECON_DECODE_VULKAN_REBIND_ALLOCATOR_H
 
+#include "decode/vulkan_object_info.h"
 #include "decode/vulkan_resource_allocator.h"
 #include "util/defines.h"
 
@@ -346,6 +347,10 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                replay_memory_properties_);
     }
 
+    virtual void BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
+                                                VkImage     image,
+                                                void*       ahardwarebuffer_info) override;
+
     virtual VkResult MapResourceMemoryDirect(VkDeviceSize     size,
                                              VkMemoryMapFlags flags,
                                              void**           data,
@@ -370,7 +375,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual bool SupportsOpaqueDeviceAddresses() override { return false; }
     virtual bool SupportBindVideoSessionMemory() override { return true; }
 
-    virtual bool SupportsExternalMemory() override { return false; }
+    virtual bool SupportsExternalMemory() override { return true; }
 
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) override
     {
@@ -421,6 +426,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         // Image layouts for performing mapped memory writes to linear images with different capture/replay memory
         // alignments.
         std::vector<SubresourceLayouts> layouts;
+        bool                            use_ahb{ false };
     };
 
     struct MemoryAllocInfo
@@ -442,6 +448,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint64_t             debug_utils_tag_name;
 
         std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*> original_sessions;
+        std::unordered_map<VkImage, VulkanAndroidHardwareBufferInfo*> original_ahardwarebuffers;
     };
 
   private:

@@ -384,6 +384,7 @@ struct VulkanAndroidHardwareBufferInfo : public VulkanExternalMemoryInfo
     format::HandleId memory_id{ format::kNullHandleId };
     AHardwareBuffer* hardware_buffer{ nullptr };
     uint8_t*         data{ nullptr };
+    uint32_t         width{ 0 };
 
     std::vector<VulkanAndroidHardwareBufferPlaneInfo> plane_info{};
 };

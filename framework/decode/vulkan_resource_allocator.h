@@ -353,6 +353,9 @@ class VulkanResourceAllocator
                                            MemoryData             allocator_memory_data,
                                            VkMemoryPropertyFlags* bind_memory_properties) = 0;
 
+    virtual void
+    BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data, VkImage image, void* ahardwarebuffer_info) = 0;
+
     // Map the memory that the buffer was bound to.  The returned pointer references the start of the buffer memory (it
     // is the start of the memory the resource was bound to plus the resource bind offset).
     virtual VkResult
