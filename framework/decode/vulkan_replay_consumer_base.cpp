@@ -9105,12 +9105,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
     }
     else
     {
-        // TODO: Investigate here why opaque dev addr is not available for micromap
-        VkBufferDeviceAddressInfo buffer_info;
-        buffer_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        buffer_info.pNext  = nullptr;
-        buffer_info.buffer = replay_create_info->buffer;
-        device_address     = device_table->GetBufferDeviceAddressKHR(device, &buffer_info) + replay_create_info->offset;
         GFXRECON_LOG_DEBUG(
             "Opaque device address is not available for VkMicromapCreateInfoEXT object (ID = %" PRIu64 ")", capture_id);
     }
