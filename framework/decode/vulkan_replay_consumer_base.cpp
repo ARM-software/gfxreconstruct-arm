@@ -599,6 +599,17 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
         {
             location_info->new_address = address + offset;
         }
+        else
+        {
+            if (memory_info)
+            {
+                device_memory_address_locations.pop_back();
+            }
+            else
+            {
+                other_address_locations.pop_back();
+            }
+        }
     }
 }
 
@@ -672,6 +683,7 @@ void VulkanReplayConsumerBase::ProcessFixShaderGroupHandleCommand(
 
         if (result == shader_group_handle_map.end())
         {
+            shader_group_handle_locations.pop_back();
             GFXRECON_LOG_WARNING(
                 "Did not find shader group handle traced data in ShaderHandleLocationInfo[%" PRIu64 "]", i);
         }
