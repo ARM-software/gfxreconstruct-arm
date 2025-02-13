@@ -1033,7 +1033,7 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
                                                       nullptr,
                                                       pCreateInfo->buffer };
             VkDeviceAddress           address =
-                device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+                device_table->GetBufferDeviceAddress(device_unwrapped, &buffer_info) + pCreateInfo->offset;
 
             micromap_wrapper->device = device_wrapper;
             micromap_wrapper->type_  = pCreateInfo_unwrapped->type;

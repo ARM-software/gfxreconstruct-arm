@@ -195,9 +195,8 @@ void VulkanAddressReplacer::ProcessCmdTraceRays(
         if (address_region->size > 0)
         {
             auto buffer_info = address_tracker.GetBufferByCaptureDeviceAddress(address_region->deviceAddress);
-            GFXRECON_ASSERT(buffer_info != nullptr);
 
-            if (buffer_info->replay_address != 0)
+            if (buffer_info != nullptr && buffer_info->replay_address != 0)
             {
                 // keep track of used handles
                 buffer_set.insert(buffer_info->handle);

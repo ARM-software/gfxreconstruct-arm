@@ -692,8 +692,13 @@ void VulkanReplayConsumerBase::ProcessFixShaderGroupHandleCommand(
 
     for (uint64_t i = 0; i < header.num_of_locations; i++)
     {
-        const auto& shader_group_handle_map =
-            GetObjectInfoTable().GetVkPipelineInfo(infos[i].id)->shader_group_handle_map;
+        VulkanPipelineInfo* ray_tracing_pipeline_info = GetObjectInfoTable().GetVkPipelineInfo(infos[i].id);
+        if (ray_tracing_pipeline_info == nullptr)
+        {
+            continue;
+        }
+
+        const auto& shader_group_handle_map = ray_tracing_pipeline_info->shader_group_handle_map;
         if (shader_group_handle_map.empty())
         {
             continue;
@@ -3410,12 +3415,6 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
     std::vector<std::string> enabled_extensions(create_state.modified_create_info.ppEnabledExtensionNames,
                                                 create_state.modified_create_info.ppEnabledExtensionNames +
                                                     create_state.modified_create_info.enabledExtensionCount);
-
-    if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
-    {
-        enabled_extensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-    }
-
     InitializeResourceAllocator(physical_device_info, replay_device, enabled_extensions, allocator);
 
     device_info->allocator = std::unique_ptr<VulkanResourceAllocator>(allocator);
@@ -9403,7 +9402,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
 
     // NOTE: this is almost never true, even on newest desktop-drivers
     // TODO: consider removing all of the feature_rayTracingPipelineShaderGroupHandleCaptureReplay logic here
-    if (device_info->property_feature_info.feature_rayTracingPipelineShaderGroupHandleCaptureReplay)
+    if (device_info->property_feature_info.feature_rayTracingPipelineShaderGroupHandleCaptureReplay &&
+        device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
         // Modify pipeline create infos with capture replay flag and data.
         std::vector<VkRayTracingPipelineCreateInfoKHR>                 modified_create_infos;
@@ -9808,9 +9808,18 @@ VulkanReplayConsumerBase::OverrideGetRayTracingShaderGroupHandlesKHR(PFN_vkGetRa
         auto physical_device_info = GetObjectInfoTable().GetVkPhysicalDeviceInfo(device_info->parent_id);
 
         // in practice: always 32 bytes
-        uint32_t capture_handle_size = physical_device_info->capture_raytracing_properties->shaderGroupHandleSize;
-        uint32_t replay_handle_size =
-            physical_device_info->replay_device_info->raytracing_properties->shaderGroupHandleSize;
+        uint32_t capture_handle_size = 0;
+        uint32_t replay_handle_size  = 0;
+
+        if (physical_device_info != nullptr && physical_device_info->capture_raytracing_properties)
+        {
+            capture_handle_size = physical_device_info->capture_raytracing_properties->shaderGroupHandleSize;
+        }
+        if (physical_device_info != nullptr && physical_device_info->replay_device_info->raytracing_properties)
+        {
+            replay_handle_size = physical_device_info->replay_device_info->raytracing_properties->shaderGroupHandleSize;
+        }
+
         if (groupCount && dataSize)
         {
             uint32_t group_size = dataSize / groupCount;

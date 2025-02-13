@@ -1506,9 +1506,14 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
     WriteFunctionCall(format::ApiCall_vkBindBufferMemory, &parameter_stream_);
     parameter_stream_.Clear();
 
-    VkBufferDeviceAddressInfoKHR pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR, nullptr, buffer.handle };
+    VkBufferDeviceAddressInfo pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, buffer.handle };
     mock_address_counter_ -= buffer.memory_requirements.size;
     buffer.actual_address = mock_address_counter_;
+
+    auto physical_device_wrapper = buffer.bind_device->physical_device;
+    auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)
+                                       ? format::ApiCall_vkGetBufferDeviceAddress
+                                       : format::ApiCall_vkGetBufferDeviceAddressKHR;
 
     // Manual encoding because tmp objects are not in the state table
     encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
@@ -1517,7 +1522,7 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
     EncodePNextStruct(&encoder_, pInfo.pNext);
     encoder_.EncodeHandleIdValue(buffer.handle_id);
     encoder_.EncodeVkDeviceAddressValue(buffer.actual_address);
-    WriteFunctionCall(format::ApiCall_vkGetBufferDeviceAddressKHR, &parameter_stream_);
+    WriteFunctionCall(call_id, &parameter_stream_);
     parameter_stream_.Clear();
 }
 
@@ -2381,13 +2386,20 @@ void VulkanStateWriter::WriteBufferDeviceAddressCalls(const VulkanStateTable& st
 
     for (const BufferWrapper* wrapper : buffers_to_query)
     {
+        VkBufferDeviceAddressInfo info{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, wrapper->handle };
+        VkDeviceAddress           address =
+            GetDeviceTable(wrapper->bind_device->handle)->GetBufferDeviceAddress(wrapper->bind_device->handle, &info);
+
+        auto physical_device_wrapper = wrapper->bind_device->physical_device;
+        auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)
+                                           ? format::ApiCall_vkGetBufferDeviceAddress
+                                           : format::ApiCall_vkGetBufferDeviceAddressKHR;
+
         parameter_stream_.Clear();
         encoder_.EncodeHandleIdValue(wrapper->bind_device->handle_id);
-        VkBufferDeviceAddressInfoKHR info{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR, nullptr, wrapper->handle };
         EncodeStructPtr(&encoder_, &info);
-        encoder_.EncodeVkDeviceAddressValue(GetDeviceTable(wrapper->bind_device->handle)
-                                                ->GetBufferDeviceAddressKHR(wrapper->bind_device->handle, &info));
-        WriteFunctionCall(format::ApiCall_vkGetBufferDeviceAddressKHR, &parameter_stream_);
+        encoder_.EncodeVkDeviceAddressValue(address);
+        WriteFunctionCall(call_id, &parameter_stream_);
         parameter_stream_.Clear();
     }
 }
