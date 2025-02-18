@@ -5940,12 +5940,11 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
             GetAccelerationStructureBuilder(device_info).OnDestroyBuffer(buffer_info);
             GetMicromapBuilder(device_info).OnDestroyBuffer(buffer_info);
         }
+        // remove from device-address tracking
+        GetDeviceAddressTracker(device_info).RemoveBuffer(buffer_info);
     }
     buffer_info = nullptr;
     allocator->DestroyBuffer(buffer, GetAllocationCallbacks(pAllocator), allocator_data);
-
-    // remove from device-address tracking
-    GetDeviceAddressTracker(device_info).RemoveBuffer(buffer_info);
 }
 
 VkResult
