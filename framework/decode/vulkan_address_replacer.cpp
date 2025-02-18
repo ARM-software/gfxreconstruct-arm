@@ -462,6 +462,8 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
                 case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 {
                     auto& instances = geometry->geometry.instances;
+                    // TODO: Support array of pointers
+                    GFXRECON_ASSERT(instances.arrayOfPointers == false);
                     address_remap(instances.data.deviceAddress);
 
                     // replace VkAccelerationStructureInstanceKHR::accelerationStructureReference inside buffer

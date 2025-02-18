@@ -94,7 +94,8 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                     saved_create_info.size == acceleration_structure_data.create_info.size &&
                     saved_create_info.offset == acceleration_structure_data.create_info.offset)
                 {
-                    info->size   = allocator->GetBufferSize(buffer_wrapper->info_.allocator_data);
+                    info->size =
+                        acceleration_structures_[acceleration_structure].new_build_sizes.accelerationStructureSize;
                     info->buffer = buffer_wrapper->info_.handle;
                     info->offset = 0;
                     is_recreated = false;
@@ -172,7 +173,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                   memory_property_flags);
 
-        info->size                              = allocator->GetBufferSize(bufferInfoWrapper->info_.allocator_data);
+        info->size                              = build_sizes.accelerationStructureSize;
         info->buffer                            = bufferInfoWrapper->info_.handle;
         info->offset                            = 0;
         acceleration_structure_data.new_storage = std::move(bufferInfoWrapper);
