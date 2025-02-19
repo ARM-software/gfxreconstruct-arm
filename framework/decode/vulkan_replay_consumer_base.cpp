@@ -4403,7 +4403,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit      fu
         }
     }
 
-    if (use_acceleration_structure_builder_)
+    if ((use_acceleration_structure_builder_) && (fence != VK_NULL_HANDLE))
     {
         const VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(queue_info->parent_id);
         GetAccelerationStructureBuilder(device_info).OnQueueSubmit(submitCount, submit_infos, fence);
@@ -4599,7 +4599,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2     f
         }
     }
 
-    if (use_acceleration_structure_builder_)
+    if ((use_acceleration_structure_builder_) && (fence != VK_NULL_HANDLE))
     {
         const VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(queue_info->parent_id);
         GetAccelerationStructureBuilder(device_info).OnQueueSubmit2(submitCount, submit_infos, fence);
