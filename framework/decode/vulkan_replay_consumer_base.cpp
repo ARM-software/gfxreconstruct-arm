@@ -5600,6 +5600,32 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
         allocator->ReportBindBufferIncompatibility(
             buffer_info->handle, buffer_info->allocator_data, memory_info->allocator_data);
     }
+
+    if ((result == VK_SUCCESS) && (!allocator->SupportsOpaqueDeviceAddresses()) &&
+        ((buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+    {
+        auto device_table = GetDeviceTable(device_info->handle);
+
+        // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
+        // Fill out this data based on original memory device address and binding offset
+        auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
+        if (entry != device_info->opaque_addresses.end())
+        {
+            auto                      memory_device_address  = entry->second;
+            auto                      buffer_capture_address = memory_device_address + memoryOffset;
+            VkBufferDeviceAddressInfo info                   = {};
+            info.sType                                       = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            info.pNext                                       = nullptr;
+            info.buffer                                      = buffer_info->handle;
+
+            buffer_info->capture_address = buffer_capture_address;
+            buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
+            buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
+
+            // track buffer-addresses
+            GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
+        }
+    }
     return result;
 }
 
@@ -5678,6 +5704,39 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
         allocator->ReportBindBuffer2Incompatibility(
             bindInfoCount, replay_bind_infos, allocator_buffer_datas.data(), allocator_memory_datas.data());
     }
+
+    for (uint32_t i = 0; i < bindInfoCount; ++i)
+    {
+        auto buffer_info  = buffer_infos[i];
+        auto memory_info  = memory_infos[i];
+        auto memoryOffset = memory_offsets[i];
+
+        if ((result == VK_SUCCESS) && (!allocator->SupportsOpaqueDeviceAddresses()) &&
+            ((buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) ==
+             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+        {
+            // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
+            // Fill out this data based on original memory device address and binding offset
+            auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
+            if (entry != device_info->opaque_addresses.end())
+            {
+                auto                      memory_device_address  = entry->second;
+                auto                      buffer_capture_address = memory_device_address + memoryOffset;
+                VkBufferDeviceAddressInfo info                   = {};
+                info.sType                                       = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                info.pNext                                       = nullptr;
+                info.buffer                                      = buffer_info->handle;
+
+                buffer_info->capture_address = buffer_capture_address;
+                buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
+                buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
+
+                // track buffer-addresses
+                GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
+            }
+        }
+    }
+
     return result;
 }
 
@@ -11595,60 +11654,15 @@ void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaComma
     VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos = pInfos->GetPointer();
     VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos    = ppRangeInfos->GetPointer();
 
-    auto& address_tracker = GetDeviceAddressTracker(device_info);
-    auto  address_remap   = [&address_tracker](VkDeviceAddress& capture_address) {
-        auto buffer_info = address_tracker.GetBufferByCaptureDeviceAddress(capture_address);
-        // TODO: we 'should' find that buffer here, check what's missing
-        if (buffer_info != nullptr && buffer_info->replay_address != 0)
-        {
-            uint64_t offset = capture_address - buffer_info->capture_address;
-            // in-place address-remap via const-cast
-            capture_address = buffer_info->replay_address + offset;
-        }
-    };
+    auto& address_tracker  = GetDeviceAddressTracker(device_info);
+    auto& address_replacer = GetDeviceAddressReplacer(device_info);
 
-    for (uint32_t i = 0; i < info_count; ++i)
-    {
-        auto& build_geometry_info = build_geometry_infos[i];
-        for (uint32_t j = 0; j < build_geometry_info.geometryCount; ++j)
-        {
-            auto geometry = const_cast<VkAccelerationStructureGeometryKHR*>(build_geometry_info.pGeometries != nullptr
-                                                                                ? build_geometry_info.pGeometries + j
-                                                                                : build_geometry_info.ppGeometries[j]);
-            switch (geometry->geometryType)
-            {
-                case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
-                {
-                    auto& triangles = geometry->geometry.triangles;
-                    address_remap(triangles.vertexData.deviceAddress);
-                    address_remap(triangles.indexData.deviceAddress);
-                    address_remap(triangles.transformData.deviceAddress);
-                    break;
-                }
-                case VK_GEOMETRY_TYPE_AABBS_KHR:
-                {
-                    auto& aabbs = geometry->geometry.aabbs;
-                    address_remap(aabbs.data.deviceAddress);
-                    break;
-                }
-                case VK_GEOMETRY_TYPE_INSTANCES_KHR:
-                {
-                    auto& instances = geometry->geometry.instances;
-                    address_remap(instances.data.deviceAddress);
-                    break;
-                }
-                default:
-                    GFXRECON_LOG_ERROR(
-                        "OverrideCmdBuildAccelerationStructuresKHR: unhandled case in switch-statement: %d",
-                        geometry->geometryType);
-                    break;
-            }
-        }
-    }
+    address_replacer.ProcessCmdBuildAccelerationStructuresKHR(
+        nullptr, info_count, build_geometry_infos, build_range_infos, address_tracker);
 
     GetAccelerationStructureBuilder(device_info)
         .ProcessBuildVulkanAccelerationStructuresMetaCommand(
-            info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), instance_buffers_data);
+            info_count, build_geometry_infos, build_range_infos, instance_buffers_data);
 }
 
 void VulkanReplayConsumerBase::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
