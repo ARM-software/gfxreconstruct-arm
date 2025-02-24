@@ -136,7 +136,7 @@ static std::vector<uint32_t> GetFrameIndices(const gfxrecon::util::ArgumentParse
     const std::string& input_ranges = arg_parser.GetArgumentValue(kFrameRange);
 
     std::vector<gfxrecon::util::UintRange> frame_ranges =
-        gfxrecon::util::GetUintRanges(input_ranges.c_str(), "frames to be converted", true);
+        gfxrecon::util::GetUintRanges(input_ranges.c_str(), "frames to be converted", true, true);
 
     std::vector<uint32_t> frame_indices;
 
@@ -324,10 +324,15 @@ int main(int argc, const char** argv)
                     success  = false;
                     GFXRECON_LOG_ERROR("Failed to create temp file");
                 }
+                if (frame_indices.empty())
+                {
+                    ret_code = 1;
+                    success  = false;
+                    GFXRECON_LOG_ERROR("Early exit as a result of invalid/empty frame range");
+                }
                 if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
                 {
                     out_stream.Reset(out_file_handle);
-                    frame_indices.pop_back();
                 }
                 else
                 {
@@ -346,21 +351,25 @@ int main(int argc, const char** argv)
 #endif
             while (success)
             {
+                // Note: GetCurrentFrameNumber() is potentially equal to 1 in 2 iterations of this loop because of
+                // capture_uses_frame_markers_, therefore while using "file-per-frame" option, frame 1 will potentially
+                // not have the EndMarker (as a result of 'w' instead of 'a' fopen mode)
+
                 success = file_processor.ProcessNextFrame();
 
                 if (success && frame_range_option)
                 {
-                    if (frame_indices.empty())
+                    if (frame_indices.front() < file_processor.GetCurrentFrameNumber())
                     {
                         break;
                     }
 
-                    if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
+                    if (std::find(frame_indices.begin(), frame_indices.end(), file_processor.GetCurrentFrameNumber()) !=
+                        frame_indices.end())
                     {
                         out_stream.Reset(out_file_handle);
                         json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
-                            output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
-                        frame_indices.pop_back();
+                            output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
                     }
                     else
                     {
