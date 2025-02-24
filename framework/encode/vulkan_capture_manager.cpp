@@ -926,6 +926,25 @@ VkResult VulkanCaptureManager::OverrideCreateImage(VkDevice                     
     return result;
 }
 
+template <typename WrapperType>
+void SetObjectName(VkDevice device, typename WrapperType::HandleType handle)
+{
+    VkObjectType  object_type               = GetObjectType<WrapperType>();
+    uint64_t      wrappedId                 = GetWrappedId<WrapperType>(handle);
+    std::string   object_type_str           = util::ToString<VkObjectType>(object_type);
+    constexpr int vk_object_type_prefix_len = 15;
+    object_type_str.erase(0, vk_object_type_prefix_len);
+    object_type_str.append(" ");
+    object_type_str.append(std::to_string(wrappedId));
+    VkDebugUtilsObjectNameInfoEXT name_info;
+    name_info.pNext        = nullptr;
+    name_info.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    name_info.objectHandle = (uint64_t)handle;
+    name_info.pObjectName  = object_type_str.c_str();
+    name_info.objectType   = object_type;
+    encode::SetDebugUtilsObjectNameEXT(device, &name_info);
+}
+
 VkResult
 VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice                                    device,
                                                              const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
@@ -955,7 +974,10 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
                                              vulkan_wrappers::NoParentWrapper,
                                              vulkan_wrappers::AccelerationStructureKHRWrapper>(
             device, vulkan_wrappers::NoParentWrapper::kHandleValue, pAccelerationStructureKHR, GetUniqueId);
-
+        if (common_manager_->debug_set_objects_name_)
+        {
+            SetObjectName<AccelerationStructureKHRWrapper>(device, *pAccelerationStructureKHR);
+        }
         auto accel_struct_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
         accel_struct_wrapper->device = device_wrapper;
@@ -3252,25 +3274,6 @@ void VulkanCaptureManager::PreProcess_vkBindImageMemory2(VkDevice               
                                       "Page Guard Align Buffer Sizes env variable to true.");
         }
     }
-}
-
-template <typename WrapperType>
-void SetObjectName(VkDevice device, typename WrapperType::HandleType handle)
-{
-    VkObjectType  object_type               = GetObjectType<WrapperType>();
-    uint64_t      wrappedId                 = GetWrappedId<WrapperType>(handle);
-    std::string   object_type_str           = util::ToString<VkObjectType>(object_type);
-    constexpr int vk_object_type_prefix_len = 15;
-    object_type_str.erase(0, vk_object_type_prefix_len);
-    object_type_str.append(" ");
-    object_type_str.append(std::to_string(wrappedId));
-    VkDebugUtilsObjectNameInfoEXT name_info;
-    name_info.pNext        = nullptr;
-    name_info.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-    name_info.objectHandle = (uint64_t)handle;
-    name_info.pObjectName  = object_type_str.c_str();
-    name_info.objectType   = object_type;
-    encode::SetDebugUtilsObjectNameEXT(device, &name_info);
 }
 
 void VulkanCaptureManager::PostProcess_vkCreateDevice(VkPhysicalDevice             physicalDevice,
