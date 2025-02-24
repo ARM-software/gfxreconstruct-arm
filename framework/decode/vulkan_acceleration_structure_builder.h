@@ -205,6 +205,9 @@ class VulkanAccelerationStructureBuilder
 
     std::unordered_map<format::HandleId, VkAccelerationStructureKHR> compaction_child_to_parent_dependency_;
 
+    std::unordered_map<VkBuffer, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
+        storage_buffers_to_be_destroyed_;
+
     struct AccelerationStructureData
     {
         VkAccelerationStructureCreateInfoKHR                            create_info;

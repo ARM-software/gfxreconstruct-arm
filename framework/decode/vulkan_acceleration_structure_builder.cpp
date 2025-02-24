@@ -197,8 +197,15 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
 void VulkanAccelerationStructureBuilder::OnDestroyAccelerationStructure(
     const VulkanAccelerationStructureKHRInfo* acceleration_structure_info)
 {
-    if (acceleration_structures_.find(acceleration_structure_info->handle) != acceleration_structures_.end())
+    auto it = acceleration_structures_.find(acceleration_structure_info->handle);
+    if (it != acceleration_structures_.end())
     {
+        if (it->second.new_storage != nullptr)
+        {
+            // TODO: handle the case of VkDestroyBuffer before VkDestroyAccelerationStructure
+            storage_buffers_to_be_destroyed_[it->second.create_info.buffer].emplace_back(
+                std::move(it->second.new_storage));
+        }
         acceleration_structures_.erase(acceleration_structure_info->handle);
     }
 }
@@ -250,7 +257,14 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanAccelerationStructuresWrit
     OnGetQueryPoolResults(&device_info, &query_pool_info);
 }
 
-void VulkanAccelerationStructureBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info) {}
+void VulkanAccelerationStructureBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
+{
+    auto it = storage_buffers_to_be_destroyed_.find(buffer_info->handle);
+    if (it != storage_buffers_to_be_destroyed_.end())
+    {
+        storage_buffers_to_be_destroyed_.erase(it);
+    }
+}
 
 void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
 {
