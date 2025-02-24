@@ -1375,9 +1375,9 @@ void VulkanStateWriter::WriteDeviceMemoryState(const VulkanStateTable& state_tab
     state_table.VisitWrappers([&](const vulkan_wrappers::DeviceMemoryWrapper* wrapper) {
         assert(wrapper != nullptr);
 
-        if (wrapper->device_id != format::kNullHandleId)
+        if (wrapper->parent_device->handle_id != format::kNullHandleId)
         {
-            WriteSetOpaqueAddressCommand(wrapper->device_id, wrapper->handle_id, wrapper->address);
+            WriteSetOpaqueAddressCommand(wrapper->parent_device->handle_id, wrapper->handle_id, wrapper->address);
         }
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());

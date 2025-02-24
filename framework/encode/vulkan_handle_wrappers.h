@@ -263,8 +263,7 @@ struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
     format::HandleId hardware_buffer_memory_id{ format::kNullHandleId };
 
     // State tracking info for memory with device addresses.
-    format::HandleId device_id{ format::kNullHandleId };
-    VkDeviceAddress  address{ 0 };
+    VkDeviceAddress address{ 0 };
 
     std::unordered_set<AssetWrapperBase*> bound_assets;
     std::mutex                            asset_map_lock;
