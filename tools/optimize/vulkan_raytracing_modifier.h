@@ -387,6 +387,15 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         uint64_t                  destruction_index;
     };
 
+    struct InitBufferObject
+    {
+        format::HandleId                              buffer_id;
+        format::HandleId                              device_id;
+        std::vector<format::ShaderHandleLocationInfo> shader_handle_locations;
+        std::vector<format::AddressLocationInfo>      device_address_locations;
+        std::vector<uint8_t>                          init_buffer_data;
+    };
+
   private:
     // -----buffer handle-----BufferObject
     std::unordered_map<format::HandleId, BufferObject> buffer_entries_;
@@ -432,8 +441,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     std::unordered_map<uint64_t, format::HandleId> per_submit_fill_memory_index_;
     std::unordered_map<uint64_t, format::HandleId> fill_memory_find_address_entries_;
 
-    std::unordered_map<format::HandleId, std::vector<format::ShaderHandleLocationInfo>> init_buffer_shader_handles_;
-    std::unordered_map<format::HandleId, std::vector<format::AddressLocationInfo>>      init_buffer_device_addresses_;
+    // -----init buffer handle-----InitBufferObject
+    std::unordered_map<format::HandleId, InitBufferObject> init_buffer_entries_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

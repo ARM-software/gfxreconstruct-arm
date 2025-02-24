@@ -140,7 +140,7 @@ class VulkanMicromapBuilder
 
     std::unordered_map<format::HandleId, VkMicromapEXT> compaction_child_to_parent_dependency_;
 
-    VkMicromapBuildSizesInfoEXT                     last_build_sizes_;
+    VkMicromapBuildSizesInfoEXT                     last_build_sizes_{};
     std::unordered_map<VkMicromapEXT, MicromapData> micromaps_;
 
     struct DoubleBufferScratch

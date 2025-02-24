@@ -237,6 +237,10 @@ bool CompressionConverter::ProcessMetaData(const format::BlockHeader& block_head
     {
         return WriteFillMemoryResourceValueMetaData(block_header, meta_data_id);
     }
+    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
+    {
+        return WriteInitTensorMetaData(block_header, meta_data_id);
+    }
     else
     {
         // The current block should not be compressed.  If it is compressed, it is most likely a new block type that is
@@ -497,6 +501,76 @@ bool CompressionConverter::WriteInitBufferMetaData(const format::BlockHeader& bl
     bool success = ReadBytes(&init_cmd.thread_id, sizeof(init_cmd.thread_id));
     success      = success && ReadBytes(&init_cmd.device_id, sizeof(init_cmd.device_id));
     success      = success && ReadBytes(&init_cmd.buffer_id, sizeof(init_cmd.buffer_id));
+    success      = success && ReadBytes(&init_cmd.data_size, sizeof(init_cmd.data_size));
+
+    if (success)
+    {
+        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, init_cmd.data_size);
+
+        size_t data_size = static_cast<size_t>(init_cmd.data_size);
+
+        if (format::IsBlockCompressed(block_header.type))
+        {
+            size_t uncompressed_size = 0;
+            size_t compressed_size =
+                static_cast<size_t>(block_header.size - format::GetMetaDataBlockBaseSize(init_cmd));
+
+            if (!ReadCompressedParameterBuffer(compressed_size, data_size, &uncompressed_size))
+            {
+                HandleBlockReadError(kErrorReadingCompressedBlockData, "Failed to read init buffer meta-data block");
+                return false;
+            }
+
+            assert(uncompressed_size == data_size);
+        }
+        else
+        {
+            if (!ReadParameterBuffer(data_size))
+            {
+                HandleBlockReadError(kErrorReadingBlockData, "Failed to read init buffer meta-data block");
+                return false;
+            }
+        }
+
+        const auto&    buffer       = GetParameterBuffer();
+        const uint8_t* data_address = buffer.data();
+
+        PrepMetadataBlock(init_cmd.meta_header, meta_data_id, data_address, data_size);
+
+        // Calculate size of packet with compressed or uncompressed data size.
+        init_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(init_cmd) + data_size;
+
+        if (!WriteBytes(&init_cmd, sizeof(init_cmd)))
+        {
+            HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write init buffer meta-data block header");
+            return false;
+        }
+
+        if (!WriteBytes(data_address, data_size))
+        {
+            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write init buffer meta-data block");
+            return false;
+        }
+    }
+    else
+    {
+        HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer meta-data block header");
+        return false;
+    }
+
+    return true;
+}
+
+bool CompressionConverter::WriteInitTensorMetaData(const format::BlockHeader& block_header,
+                                                   format::MetaDataId         meta_data_id)
+{
+    assert(format::GetMetaDataType(meta_data_id) == format::MetaDataType::kInitTensorCommand);
+
+    format::InitTensorCommandHeader init_cmd;
+
+    bool success = ReadBytes(&init_cmd.thread_id, sizeof(init_cmd.thread_id));
+    success      = success && ReadBytes(&init_cmd.device_id, sizeof(init_cmd.device_id));
+    success      = success && ReadBytes(&init_cmd.tensor_id, sizeof(init_cmd.tensor_id));
     success      = success && ReadBytes(&init_cmd.data_size, sizeof(init_cmd.data_size));
 
     if (success)

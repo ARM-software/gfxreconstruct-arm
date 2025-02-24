@@ -263,6 +263,21 @@ bool FileTransformer::ProcessNextBlock()
                 HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read meta-data block header");
             }
         }
+        else if (block_header.type == format::BlockType::kFrameMarkerBlock)
+        {
+            format::MarkerType marker_type = format::MarkerType::kUnknownMarker;
+
+            success = ReadBytes(&marker_type, sizeof(marker_type));
+
+            if (success)
+            {
+                success = ProcessFrameMarker(block_header, marker_type);
+            }
+            else
+            {
+                HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read frame marker header");
+            }
+        }
         else if (block_header.type == format::BlockType::kStateMarkerBlock)
         {
             format::MarkerType marker_type  = format::MarkerType::kUnknownMarker;
@@ -614,6 +629,33 @@ bool FileTransformer::ProcessMetaData(const format::BlockHeader& block_header, f
     if (!CopyBytes(block_header.size - sizeof(meta_data_id)))
     {
         HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+
+bool FileTransformer::ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+{
+    // Copy marker data from old file to new file.
+    uint64_t frame_number = 0;
+
+    if (ReadBytes(&frame_number, sizeof(frame_number)))
+    {
+        format::Marker marker;
+        marker.header       = block_header;
+        marker.marker_type  = marker_type;
+        marker.frame_number = frame_number;
+
+        if (!WriteBytes(&marker, sizeof(marker)))
+        {
+            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write frame marker data");
+            return false;
+        }
+    }
+    else
+    {
+        HandleBlockWriteError(kErrorReadingBlockData, "Failed to read frame marker data");
         return false;
     }
 

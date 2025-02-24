@@ -90,6 +90,10 @@ def BitsEnumToFlagsTypedef(enum):
     if flags != enum:
         flags = flags + 's2KHR'
         return flags
+    flags = remove_suffix(enum, 'BitsARM')
+    if flags != enum:
+        flags = flags + 'sARM'
+        return flags
     return flags
 
 class ApiData():

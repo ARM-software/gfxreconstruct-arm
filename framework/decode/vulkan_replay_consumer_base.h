@@ -29,7 +29,6 @@
 #include "decode/pointer_decoder.h"
 #include "decode/screenshot_handler.h"
 #include "decode/swapchain_image_tracker.h"
-#include "decode/vulkan_buffer_tracker.h"
 #include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_address_replacer.h"
 #include "decode/vulkan_handle_mapping_util.h"
@@ -171,6 +170,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     virtual void ProcessInitBufferCommand(format::HandleId device_id,
                                           format::HandleId buffer_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data) override;
+
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
                                           uint64_t         data_size,
                                           const uint8_t*   data) override;
 
@@ -916,11 +920,39 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                         VulkanVideoSessionKHRInfo*                                 video_session_info,
                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
+    void OverrideGetBufferMemoryRequirements(PFN_vkGetBufferMemoryRequirements                   func,
+                                             const VulkanDeviceInfo*                             device_info,
+                                             const VulkanBufferInfo*                             buffer_info,
+                                             StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements);
+
+    void OverrideGetBufferMemoryRequirements2(PFN_vkGetBufferMemoryRequirements2 func,
+                                              const VulkanDeviceInfo*            device_info,
+                                              StructPointerDecoder<Decoded_VkBufferMemoryRequirementsInfo2>* pInfo,
+                                              StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements);
+
     void OverrideGetImageSubresourceLayout(PFN_vkGetImageSubresourceLayout                         func,
                                            const VulkanDeviceInfo*                                 device_info,
                                            const VulkanImageInfo*                                  image_info,
                                            const StructPointerDecoder<Decoded_VkImageSubresource>* pSubresource,
                                            StructPointerDecoder<Decoded_VkSubresourceLayout>*      pLayout);
+
+    void OverrideGetImageMemoryRequirements(PFN_vkGetImageMemoryRequirements                    func,
+                                            const VulkanDeviceInfo*                             device_info,
+                                            const VulkanImageInfo*                              image_info,
+                                            StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements);
+
+    void OverrideGetImageMemoryRequirements2(PFN_vkGetImageMemoryRequirements2                             func,
+                                             const VulkanDeviceInfo*                                       device_info,
+                                             StructPointerDecoder<Decoded_VkImageMemoryRequirementsInfo2>* pInfo,
+                                             StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements);
+
+    VkResult OverrideGetVideoSessionMemoryRequirementsKHR(
+        PFN_vkGetVideoSessionMemoryRequirementsKHR                         func,
+        VkResult                                                           original_result,
+        const VulkanDeviceInfo*                                            device_info,
+        const VulkanVideoSessionKHRInfo*                                   video_session_info,
+        PointerDecoder<uint32_t>*                                          pMemoryRequirementsCount,
+        StructPointerDecoder<Decoded_VkVideoSessionMemoryRequirementsKHR>* pMemoryRequirements);
 
     VkResult OverrideCreateRenderPass(PFN_vkCreateRenderPass                                      func,
                                       VkResult                                                    original_result,
@@ -1802,9 +1834,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
 
-#ifdef ARM_INTERNAL
-    void (*pfn_set_packet_id_)(uint64_t) = nullptr;
-#endif
   protected:
     // Used by pipeline cache handling, there are the following two cases for the flag to be set:
     //

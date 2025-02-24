@@ -24,6 +24,19 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 std::vector<std::string> VulkanSkiaModifier::app_name_array = {};
 
+void VulkanSkiaModifier::ProcessFrameEndMarker(uint64_t frame_number)
+{
+    if (IsModificationPass())
+        return;
+    // If the previous call(the one that triggers the frame marker at capture time) has been deleted, then the frame
+    // marker no longer makes sense, therefore needs to be deleted
+    if (skiavkindex2remove.count(block_index_ - 1))
+    {
+        SetDeleteCurrentCall();
+        frames_to_be_removed.push_back(frame_number);
+    }
+}
+
 bool VulkanSkiaModifier::CanOptimize()
 {
     bool skivkOptimize = true;
@@ -34,6 +47,18 @@ bool VulkanSkiaModifier::CanOptimize()
     GFXRECON_WRITE_CONSOLE("skiavk optimization is %s, remove block count: %u",
                            skivkOptimize ? "true" : "false",
                            skiavkindex2remove.size());
+    if (frames_to_be_removed.size() != 0)
+    {
+        std::string frames{};
+        for (uint64_t i = 0; i < frames_to_be_removed.size(); i++)
+        {
+            frames += std::to_string(frames_to_be_removed[i]) + ',';
+        }
+        frames.pop_back();
+        GFXRECON_WRITE_CONSOLE(
+            "The following %llu frames will be removed %s", frames_to_be_removed.size(), frames.c_str());
+    }
+
     return skivkOptimize;
 }
 

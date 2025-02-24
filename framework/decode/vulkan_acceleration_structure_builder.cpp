@@ -50,74 +50,6 @@ VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
 {
 }
 
-void VulkanAccelerationStructureBuilder::OnInitBufferDataUpdateAddress(
-    const VulkanDeviceInfo*                   device_info,
-    const VulkanBufferInfo*                   buffer_info,
-    std::vector<format::AddressLocationInfo>& address_locations)
-{
-    auto allocator = device_info->allocator.get();
-    assert(allocator != nullptr);
-    assert(buffer_info != nullptr);
-
-    uint8_t* mapped_data;
-    uint32_t size = buffer_info->size;
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    VkResult mapping_result =
-        allocator->MapResourceMemoryDirect(size, 0, (void**)&mapped_data, buffer_info->allocator_data);
-    if (mapping_result == VK_SUCCESS)
-    {
-        if (!allocator->SupportsOpaqueDeviceAddresses())
-        {
-            for (format::AddressLocationInfo& location : address_locations)
-            {
-                uint64_t* old_value_ptr = reinterpret_cast<uint64_t*>(mapped_data + location.offset_in_memory);
-                if (*old_value_ptr == location.adjusted_address)
-                {
-                    *old_value_ptr = location.new_address;
-                }
-            }
-        }
-        allocator->UnmapResourceMemoryDirect(buffer_info->allocator_data);
-    }
-    address_locations.clear();
-
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
-}
-
-void VulkanAccelerationStructureBuilder::OnInitBufferDataUpdateShaderGroupHandle(
-    const VulkanDeviceInfo*                        device_info,
-    const VulkanBufferInfo*                        buffer_info,
-    std::vector<format::ShaderHandleLocationInfo>& shader_locations)
-{
-    auto allocator = device_info->allocator.get();
-    assert(allocator != nullptr);
-    assert(buffer_info != nullptr);
-
-    uint8_t* mapped_data;
-    uint32_t size = buffer_info->size;
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    VkResult mapping_result =
-        allocator->MapResourceMemoryDirect(size, 0, (void**)&mapped_data, buffer_info->allocator_data);
-    if (mapping_result == VK_SUCCESS)
-    {
-        if (!allocator->SupportsOpaqueDeviceAddresses())
-        {
-            for (format::ShaderHandleLocationInfo& location : shader_locations)
-            {
-                auto old_value_ptr = (uint8_t*)(mapped_data + location.offset_in_memory);
-                if (0 == std::memcmp(location.original_handles, old_value_ptr, location.group_size))
-                {
-                    std::memcpy(old_value_ptr, location.new_handles, location.group_size);
-                }
-            }
-            shader_locations.clear();
-        }
-
-        allocator->UnmapResourceMemoryDirect(buffer_info->allocator_data);
-    }
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
-}
-
 VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     const VulkanDeviceInfo*                     device_info,
     const VkAccelerationStructureCreateInfoKHR* create_info,
@@ -162,7 +94,8 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                     saved_create_info.size == acceleration_structure_data.create_info.size &&
                     saved_create_info.offset == acceleration_structure_data.create_info.offset)
                 {
-                    info->size   = allocator->GetBufferSize(buffer_wrapper->info_.allocator_data);
+                    info->size =
+                        acceleration_structures_[acceleration_structure].new_build_sizes.accelerationStructureSize;
                     info->buffer = buffer_wrapper->info_.handle;
                     info->offset = 0;
                     is_recreated = false;
@@ -240,7 +173,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                   memory_property_flags);
 
-        info->size                              = allocator->GetBufferSize(bufferInfoWrapper->info_.allocator_data);
+        info->size                              = build_sizes.accelerationStructureSize;
         info->buffer                            = bufferInfoWrapper->info_.handle;
         info->offset                            = 0;
         acceleration_structure_data.new_storage = std::move(bufferInfoWrapper);
@@ -250,7 +183,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
         acceleration_structure_data.new_storage = nullptr;
     }
 
-    VkResult result = functions_.create_acceleration_structure(device_info->handle, create_info, pAllocator, handle);
+    VkResult result = functions_.create_acceleration_structure(device_info->handle, info, pAllocator, handle);
     assert(result == VK_SUCCESS);
 
     acceleration_structure_data.new_build_sizes = build_sizes;
@@ -301,35 +234,23 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanAccelerationStructuresWrit
 {
     BeginCommandBuffer();
 
-    VkQueryPool query_pool;
-
-    VkQueryPoolCreateInfo pool_info{};
-    pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    pool_info.flags              = 0;
-    pool_info.queryType          = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
-    pool_info.queryCount         = 1;
-    pool_info.pipelineStatistics = 0;
-    pool_info.pNext              = nullptr;
-
-    functions_.create_query_pool(cmd_execute_obj_.device_, &pool_info, nullptr, &query_pool);
+    functions_.cmd_reset_query_pool(cmd_execute_obj_.command_buffer_, cmd_execute_obj_.query_pool_, 0, 1);
 
     OnCmdWriteAccelerationStructuresProperties(
-        cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, query_pool, 0);
+        cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, cmd_execute_obj_.query_pool_, 0);
 
     ExecuteCommandBuffer();
 
     VulkanDeviceInfo device_info;
     device_info.handle = cmd_execute_obj_.device_;
+
     VulkanQueryPoolInfo query_pool_info;
-    query_pool_info.handle = query_pool;
+    query_pool_info.handle = cmd_execute_obj_.query_pool_;
+
     OnGetQueryPoolResults(&device_info, &query_pool_info);
 }
 
-void VulkanAccelerationStructureBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
-{
-    scratch_double_buffer_.scratches_previous.erase(buffer_info->capture_id);
-    scratch_double_buffer_.scratches_current.erase(buffer_info->capture_id);
-}
+void VulkanAccelerationStructureBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info) {}
 
 void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
 {
@@ -355,6 +276,9 @@ void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode
     functions_.cmd_copy_query_pool_results                  = device_table->CmdCopyQueryPoolResults;
     functions_.cmd_pipeline_barrier                         = device_table->CmdPipelineBarrier;
     functions_.create_query_pool                            = device_table->CreateQueryPool;
+    functions_.cmd_reset_query_pool                         = device_table->CmdResetQueryPool;
+    functions_.destroy_query_pool                           = device_table->DestroyQueryPool;
+    functions_.get_fence_status                             = device_table->GetFenceStatus;
 }
 
 void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
@@ -364,6 +288,7 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
     cmd_execute_obj_.device_               = device_;
     cmd_execute_obj_.free_command_buffers_ = functions_.free_command_buffers;
     cmd_execute_obj_.destroy_command_pool_ = functions_.destroy_command_pool;
+    cmd_execute_obj_.destroy_query_pool_   = functions_.destroy_query_pool;
 
     VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr };
     create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -379,6 +304,17 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
     alloc_info.commandBufferCount          = 1;
 
     result = functions_.allocate_command_buffers(device_, &alloc_info, &cmd_execute_obj_.command_buffer_);
+    GFXRECON_ASSERT(result == VK_SUCCESS);
+
+    VkQueryPoolCreateInfo pool_info{};
+    pool_info.sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    pool_info.flags              = 0;
+    pool_info.queryType          = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+    pool_info.queryCount         = 1;
+    pool_info.pipelineStatistics = 0;
+    pool_info.pNext              = nullptr;
+
+    result = functions_.create_query_pool(device_, &pool_info, nullptr, &cmd_execute_obj_.query_pool_);
     GFXRECON_ASSERT(result == VK_SUCCESS);
 
     functions_.get_device_queue(device_, 0, 0, &cmd_execute_obj_.queue_);
@@ -448,45 +384,54 @@ void VulkanAccelerationStructureBuilder::OnCmdBuildAccelerationStructures(
 {
     for (uint32_t i = 0; i < info_count; ++i)
     {
-        const auto& mode = geometry_infos[i].mode;
-        if (acceleration_structures_.count(geometry_infos[i].dstAccelerationStructure) == 0)
+        const auto& mode                  = geometry_infos[i].mode;
+        auto acceleration_structure_entry = acceleration_structures_.find(geometry_infos[i].dstAccelerationStructure);
+        if (acceleration_structure_entry == acceleration_structures_.end())
         {
             GFXRECON_LOG_FATAL("Handle %ul for vkCmdBuildAccelerationStructuresKHR not found",
                                geometry_infos[i].dstAccelerationStructure);
             GFXRECON_ASSERT(false);
         }
 
-        VkDeviceSize scratch_size =
-            acceleration_structures_[geometry_infos[i].dstAccelerationStructure].new_build_sizes.buildScratchSize;
+        VkDeviceSize scratch_size = acceleration_structure_entry->second.new_build_sizes.buildScratchSize;
         if (mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
         {
-            scratch_size =
-                acceleration_structures_[geometry_infos[i].dstAccelerationStructure].new_build_sizes.updateScratchSize;
+            scratch_size = acceleration_structure_entry->second.new_build_sizes.updateScratchSize;
         }
 
-        UpdateScratchDeviceAddress(geometry_infos[i], scratch_size);
+        UpdateScratchDeviceAddress(command_buffer, geometry_infos[i], scratch_size);
     }
 
     VulkanMicromapBuilder::OnCmdBuildAccStrHandling(device_address_tracker_, info_count, geometry_infos);
 }
 
 void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
-    VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos, VkDeviceSize scratch_size)
-{ // Check whether the scratch with this original device address is already allocated and fits the size
+    VkCommandBuffer                              command_buffer,
+    VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
+    VkDeviceSize                                 scratch_size)
+{
+    // Check whether the scratch with this original device address is already allocated and fits the size
     VkDeviceAddress capture_scratch_address = geometry_infos.scratchData.deviceAddress;
 
-    format::HandleId capture_id = format::kNullHandleId;
+    format::HandleId      capture_id            = format::kNullHandleId;
+    VkMemoryPropertyFlags memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     // When fastforwarding, the scratch buffers could be destroyed and not be recreated in state recreation
     const VulkanBufferInfo* original_scratch_entry =
         device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_scratch_address);
     if (original_scratch_entry)
     {
-        capture_id = original_scratch_entry->capture_id;
+        capture_id            = original_scratch_entry->capture_id;
+        memory_property_flags = original_scratch_entry->memory_property_flags;
     }
 
-    auto scratch_entries = scratch_double_buffer_.scratches_current.find(capture_id);
+    if ((memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    {
+        memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
 
-    if (scratch_entries != scratch_double_buffer_.scratches_current.end())
+    auto scratch_entries = recorded_scratches.find(command_buffer);
+
+    if (scratch_entries != recorded_scratches.end())
     {
         auto scratch_entry =
             std::find_if(scratch_entries->second.begin(),
@@ -503,18 +448,22 @@ void VulkanAccelerationStructureBuilder::UpdateScratchDeviceAddress(
         else
         {
             const auto& new_scratch = scratch_entries->second.emplace_back(internal_buffer_manager_.CreateBuffer(
-                scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+                scratch_size,
+                (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+                memory_property_flags));
             new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
             geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
         }
     }
     else
     {
-        auto [it, inserted] = scratch_double_buffer_.scratches_current.emplace(
-            capture_id, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
+        auto [it, inserted] = recorded_scratches.emplace(
+            command_buffer, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>());
 
         auto& new_scratch                        = it->second.emplace_back(internal_buffer_manager_.CreateBuffer(
-            scratch_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+            scratch_size,
+            (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+            memory_property_flags));
         new_scratch->info_.capture_address       = geometry_infos.scratchData.deviceAddress;
         geometry_infos.scratchData.deviceAddress = new_scratch->info_.replay_address;
     }
@@ -689,10 +638,64 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const VulkanDevic
     compacted_sizes_unprocessed_.erase(query_pool_info->handle);
 }
 
-void VulkanAccelerationStructureBuilder::PostQueuePresent()
+void VulkanAccelerationStructureBuilder::OnQueueSubmit(uint32_t            submit_count,
+                                                       const VkSubmitInfo* pSubmits,
+                                                       VkFence             fence)
 {
-    scratch_double_buffer_.scratches_previous.clear();
-    std::swap(scratch_double_buffer_.scratches_previous, scratch_double_buffer_.scratches_current);
+    for (uint32_t submit = 0; submit < submit_count; ++submit)
+    {
+        const VkSubmitInfo& info = pSubmits[submit];
+        for (uint32_t command_buffer = 0; command_buffer < info.commandBufferCount; ++command_buffer)
+        {
+            auto recorded_scratches_entry = recorded_scratches.find(info.pCommandBuffers[command_buffer]);
+            if (recorded_scratches_entry == recorded_scratches.end())
+            {
+                continue;
+            }
+            auto [iterator, inserted] = submitted_scratches.emplace(fence, std::move(recorded_scratches_entry->second));
+            recorded_scratches.erase(recorded_scratches_entry);
+        }
+    }
+}
+void VulkanAccelerationStructureBuilder::OnQueueSubmit2(uint32_t             submit_count,
+                                                        const VkSubmitInfo2* pSubmits,
+                                                        VkFence              fence)
+{
+    for (uint32_t submit = 0; submit < submit_count; ++submit)
+    {
+        const VkSubmitInfo2& info = pSubmits[submit];
+        for (uint32_t command_buffer = 0; command_buffer < info.commandBufferInfoCount; ++command_buffer)
+        {
+            auto recorded_scratches_entry =
+                recorded_scratches.find(info.pCommandBufferInfos[command_buffer].commandBuffer);
+            if (recorded_scratches_entry == recorded_scratches.end())
+            {
+                continue;
+            }
+            auto [iterator, inserted] = submitted_scratches.emplace(fence, std::move(recorded_scratches_entry->second));
+            recorded_scratches.erase(recorded_scratches_entry);
+        }
+    }
+}
+
+void VulkanAccelerationStructureBuilder::OnWaitForFences(VkResult result, uint32_t fenceCount, const VkFence* pFences)
+{
+    for (uint32_t fence = 0; fence < fenceCount; ++fence)
+    {
+        VkResult get_status_result = functions_.get_fence_status(device_, pFences[fence]);
+        if (get_status_result == VK_SUCCESS)
+        {
+            submitted_scratches.erase(pFences[fence]);
+        }
+    }
+}
+
+void VulkanAccelerationStructureBuilder::OnGetFenceStatus(VkResult result, VkFence fence)
+{
+    if (result == VK_SUCCESS)
+    {
+        submitted_scratches.erase(fence);
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

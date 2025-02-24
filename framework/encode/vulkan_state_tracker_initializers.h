@@ -615,6 +615,42 @@ inline void InitializeState<VkDevice, vulkan_wrappers::BufferWrapper, VkBufferCr
     }
 }
 
+template <>
+inline void InitializeState<VkDevice, vulkan_wrappers::TensorARMWrapper, VkTensorCreateInfoARM>(
+    VkDevice                            parent_handle,
+    vulkan_wrappers::TensorARMWrapper*  wrapper,
+    const VkTensorCreateInfoARM*        create_info,
+    format::ApiCallId                   create_call_id,
+    vulkan_state_info::CreateParameters create_parameters)
+{
+    assert(wrapper != nullptr);
+    assert(create_info != nullptr);
+    assert(create_parameters != nullptr);
+
+    GFXRECON_UNREFERENCED_PARAMETER(parent_handle);
+
+    wrapper->create_call_id            = create_call_id;
+    wrapper->create_parameters         = std::move(create_parameters);
+    const VkTensorDescriptionARM* desc = create_info->pDescription;
+    wrapper->tiling                    = desc->tiling;
+    wrapper->format                    = desc->format;
+    wrapper->dimensionCount            = desc->dimensionCount;
+    wrapper->usage                     = desc->usage;
+    wrapper->pDimensions.reserve(desc->dimensionCount);
+    wrapper->pStrides.reserve(desc->dimensionCount);
+    for (int i = 0; i < desc->dimensionCount; i++)
+    {
+        wrapper->pDimensions.push_back(desc->pDimensions[i]);
+        wrapper->pStrides.push_back(desc->pStrides[i]);
+    }
+
+    // TODO: Do we need to track the queue family that the tensor is actually used with?
+    if ((create_info->queueFamilyIndexCount > 0) && (create_info->pQueueFamilyIndices != nullptr))
+    {
+        wrapper->queue_family_index = create_info->pQueueFamilyIndices[0];
+    }
+}
+
 // Images created with vkCreateImage.
 template <>
 inline void InitializeState<VkDevice, vulkan_wrappers::ImageWrapper, VkImageCreateInfo>(

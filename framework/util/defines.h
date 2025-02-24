@@ -73,6 +73,4 @@ static constexpr uint64_t GFXRECON_PTR_TO_UINT64(T ptr)
 #define GFXRECON_DEBUG_BUILD 1
 #endif
 
-#define ARM_INTERNAL 1
-
 #endif // GFXRECON_UTIL_DEFINES_H

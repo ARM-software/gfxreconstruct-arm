@@ -82,11 +82,32 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
                                      const VkAllocationCallbacks* allocation_callbacks,
                                      std::vector<ResourceData>    allocator_datas) override;
 
+    virtual void GetBufferMemoryRequirements(VkBuffer              buffer,
+                                             VkMemoryRequirements* memory_requirements,
+                                             ResourceData          allocator_data) override;
+
+    virtual void GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
+                                              VkMemoryRequirements2*                 memory_requirements,
+                                              ResourceData                           allocator_data) override;
+
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
                                            VkSubresourceLayout*       layout,
                                            const VkSubresourceLayout* original_layout,
                                            ResourceData               allocator_data) override;
+
+    virtual void GetImageMemoryRequirements(VkImage               image,
+                                            VkMemoryRequirements* memory_requirements,
+                                            ResourceData          allocator_data) override;
+
+    virtual void GetImageMemoryRequirements2(const VkImageMemoryRequirementsInfo2* info,
+                                             VkMemoryRequirements2*                memory_requirements,
+                                             ResourceData                          allocator_data) override;
+
+    virtual VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR video_session,
+                                                          uint32_t*         memory_requirements_count,
+                                                          VkVideoSessionMemoryRequirementsKHR* memory_requirements,
+                                                          std::vector<ResourceData> allocator_datas) override;
 
     virtual VkResult AllocateMemory(const VkMemoryAllocateInfo*  allocate_info,
                                     const VkAllocationCallbacks* allocation_callbacks,
@@ -290,7 +311,51 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
         return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->size;
     }
 
-    virtual bool SupportBindVideoSessionMemory() override { return false; }
+    virtual bool     SupportBindVideoSessionMemory() override { return false; }
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data)
+    {
+        return VK_SUCCESS;
+    };
+
+    virtual void
+    DestroyTensor(VkTensorARM tensor, const VkAllocationCallbacks* allocation_callbacks, ResourceData allocator_data){};
+
+    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                    const VkAllocationCallbacks*                   allocation_callbacks,
+                                                    format::HandleId                               capture_id,
+                                                    VkDataGraphPipelineSessionARM*                 session,
+                                                    ResourceData*                                  allocator_data)
+    {
+        return VK_SUCCESS;
+    };
+
+    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
+                                                 const VkAllocationCallbacks*  allocation_callbacks,
+                                                 ResourceData                  allocator_data){};
+
+    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
+                                      VkDeviceMemory         memory,
+                                      VkDeviceSize           memory_offset,
+                                      ResourceData           allocator_tensor_data,
+                                      MemoryData             allocator_memory_data,
+                                      VkMemoryPropertyFlags* bind_memory_properties)
+    {
+        return VK_SUCCESS;
+    };
+
+    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
+                                                        VkDeviceMemory                memory,
+                                                        VkDeviceSize                  memory_offset,
+                                                        ResourceData                  allocator_session_data,
+                                                        MemoryData                    allocator_memory_data,
+                                                        VkMemoryPropertyFlags*        bind_memory_properties)
+    {
+        return VK_SUCCESS;
+    };
 
   protected:
     struct ResourceAllocInfo

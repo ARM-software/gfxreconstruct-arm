@@ -388,6 +388,72 @@ bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_heade
             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
+    {
+        format::InitTensorCommandHeader header;
+        header.meta_header.block_header.size = block_header.size;
+        header.meta_header.block_header.type = block_header.type;
+        header.meta_header.meta_data_id      = meta_data_id;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+        success = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
+        success = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+        if (success)
+        {
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size =
+                    static_cast<size_t>(block_header.size) - (sizeof(header) - sizeof(header.meta_header.block_header));
+                parameter_buffer_size = compressed_size;
+                success               = ReadCompressedParameterBuffer(
+                    compressed_size, static_cast<size_t>(header.data_size), &uncompressed_size);
+            }
+            else
+            {
+                parameter_buffer_size = header.data_size;
+                success               = ReadParameterBuffer(static_cast<size_t>(header.data_size));
+            }
+
+            if (success)
+            {
+                meta_data_header.resize(sizeof(header));
+                memcpy(meta_data_header.data(), &header, sizeof(header));
+                for (auto& modifier : optimization_data_->modifiers)
+                {
+                    modifier->SetParameterBuffer(&buffer);
+                    process_meta_data = true;
+                    decoder.AddConsumer(modifier.get());
+                    decoder.DispatchInitTensorCommand(header.thread_id,
+                                                      header.device_id,
+                                                      header.tensor_id,
+                                                      header.data_size,
+                                                      GetParameterBuffer().data());
+                    decoder.RemoveConsumer(modifier.get());
+                    modifier->AppendPreCalls(new_pre_calls);
+                    modifier->AppendPostCalls(new_post_calls);
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read init tensor data meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData, "Failed to read init tensor data meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init tensor data meta-data block header");
+        }
+    }
     else if (meta_data_type == format::MetaDataType::kVulkanBuildAccelerationStructuresCommand)
     {
         format::VulkanMetaBuildAccelerationStructuresHeader header;
@@ -555,6 +621,96 @@ bool VulkanFileOptimizer::ProcessMetaData(const format::BlockHeader& block_heade
     }
 
     return true;
+}
+
+bool VulkanFileOptimizer::ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+{
+    if (marker_type != format::kEndMarker)
+    {
+        GFXRECON_LOG_ERROR("Skipping unrecognized frame marker with type %u", marker_type);
+        return FileTransformer::ProcessFrameMarker(block_header, marker_type);
+    }
+
+    uint64_t frame_number = 0;
+    bool     success      = ReadBytes(&frame_number, sizeof(frame_number));
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetCurrentBlockIndex(GetCurrentBlockIndex());
+    }
+
+    bool delete_current_call = false;
+
+    if (!success)
+    {
+        return false;
+    }
+
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        decoder.AddConsumer(modifier.get());
+        decode::DecodeAllocator::Begin();
+        decoder.DispatchFrameEndMarker(frame_number);
+        decode::DecodeAllocator::End();
+        decoder.RemoveConsumer(modifier.get());
+        delete_current_call |= modifier->GetDeleteCurrentCall();
+        modifier->AppendPreCalls(new_pre_calls);
+        modifier->AppendPostCalls(new_post_calls);
+    }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (!delete_current_call)
+    {
+        format::Marker marker;
+        marker.header       = block_header;
+        marker.marker_type  = marker_type;
+        marker.frame_number = frame_number - frames_removed;
+        if (!WriteBytes(&marker, sizeof(marker)))
+        {
+            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write frame marker data");
+            return false;
+        }
+    }
+    else
+    {
+        frames_removed++;
+    }
+
+    for (auto& new_call : new_post_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unrecognized PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    return success;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

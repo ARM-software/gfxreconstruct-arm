@@ -74,8 +74,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/json_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/decode_json_util.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.h
-                    ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.cpp
+                    # ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.h
+                    # ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/portability.h
@@ -212,8 +212,6 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_builder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_builder.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_buffer_tracker.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_buffer_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/window.h

@@ -5153,6 +5153,46 @@ std::string GenerateExtension(std::ostream& out, const void* struct_info, void* 
 
                 break;
             }
+            case VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_NEURAL_STATISTICS_CREATE_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkDataGraphPipelineNeuralStatisticsCreateInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkDataGraphPipelineNeuralStatisticsCreateInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkDataGraphPipelineNeuralStatisticsCreateInfoARM(out,
+                                                                 casted_struct,
+                                                                 decoded_struct,
+                                                                 consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_NEURAL_STATISTICS_CREATE_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkDataGraphPipelineSessionNeuralStatisticsCreateInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkDataGraphPipelineSessionNeuralStatisticsCreateInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkDataGraphPipelineSessionNeuralStatisticsCreateInfoARM(out,
+                                                                        casted_struct,
+                                                                        decoded_struct,
+                                                                        consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NEURAL_ENGINE_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceNeuralEnginePropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceNeuralEnginePropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceNeuralEnginePropertiesARM(out,
+                                                          casted_struct,
+                                                          decoded_struct,
+                                                          consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_WEIGHTS_ARM: {
+                auto casted_struct = reinterpret_cast<const VkWriteDescriptorSetWeightsARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkWriteDescriptorSetWeightsARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkWriteDescriptorSetWeightsARM(out,
+                                               casted_struct,
+                                               decoded_struct,
+                                               consumer);
+
+                break;
+            }
             case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT: {
                 auto casted_struct = reinterpret_cast<const VkExternalMemoryAcquireUnmodifiedEXT*>(struct_info);
                 auto decoded_struct = reinterpret_cast<Decoded_VkExternalMemoryAcquireUnmodifiedEXT*>(pnext_meta_data->GetMetaStructPointer());
@@ -5230,6 +5270,116 @@ std::string GenerateExtension(std::ostream& out, const void* struct_info, void* 
                                                 casted_struct,
                                                 decoded_struct,
                                                 consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_FRAME_BOUNDARY_TENSORS_ARM: {
+                auto casted_struct = reinterpret_cast<const VkFrameBoundaryTensorsARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkFrameBoundaryTensorsARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkFrameBoundaryTensorsARM(out,
+                                          casted_struct,
+                                          decoded_struct,
+                                          consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_TENSOR_ARM: {
+                auto casted_struct = reinterpret_cast<const VkMemoryDedicatedAllocateInfoTensorARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkMemoryDedicatedAllocateInfoTensorARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkMemoryDedicatedAllocateInfoTensorARM(out,
+                                                       casted_struct,
+                                                       decoded_struct,
+                                                       consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_TENSOR_FEATURES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceDescriptorBufferTensorFeaturesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceDescriptorBufferTensorFeaturesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceDescriptorBufferTensorFeaturesARM(out,
+                                                                  casted_struct,
+                                                                  decoded_struct,
+                                                                  consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_TENSOR_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceDescriptorBufferTensorPropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceDescriptorBufferTensorPropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceDescriptorBufferTensorPropertiesARM(out,
+                                                                    casted_struct,
+                                                                    decoded_struct,
+                                                                    consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceTensorFeaturesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceTensorFeaturesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceTensorFeaturesARM(out,
+                                                  casted_struct,
+                                                  decoded_struct,
+                                                  consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceTensorPropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceTensorPropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceTensorPropertiesARM(out,
+                                                    casted_struct,
+                                                    decoded_struct,
+                                                    consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_DEPENDENCY_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorDependencyInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorDependencyInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorDependencyInfoARM(out,
+                                          casted_struct,
+                                          decoded_struct,
+                                          consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorDescriptionARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorDescriptionARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorDescriptionARM(out,
+                                       casted_struct,
+                                       decoded_struct,
+                                       consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_FORMAT_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorFormatPropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorFormatPropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorFormatPropertiesARM(out,
+                                            casted_struct,
+                                            decoded_struct,
+                                            consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_MEMORY_BARRIER_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorMemoryBarrierARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorMemoryBarrierARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorMemoryBarrierARM(out,
+                                         casted_struct,
+                                         decoded_struct,
+                                         consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkWriteDescriptorSetTensorInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkWriteDescriptorSetTensorInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkWriteDescriptorSetTensorInfoARM(out,
+                                                  casted_struct,
+                                                  decoded_struct,
+                                                  consumer);
 
                 break;
             }
@@ -5553,6 +5703,56 @@ std::string GenerateExtension(std::ostream& out, const void* struct_info, void* 
 
                 break;
             }
+            case VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_COMPILER_CONTROL_CREATE_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkDataGraphPipelineCompilerControlCreateInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkDataGraphPipelineCompilerControlCreateInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkDataGraphPipelineCompilerControlCreateInfoARM(out,
+                                                                casted_struct,
+                                                                decoded_struct,
+                                                                consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CONSTANT_TENSOR_SEMI_STRUCTURED_SPARSITY_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkDataGraphPipelineConstantTensorSemiStructuredSparsityInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkDataGraphPipelineConstantTensorSemiStructuredSparsityInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkDataGraphPipelineConstantTensorSemiStructuredSparsityInfoARM(out,
+                                                                               casted_struct,
+                                                                               decoded_struct,
+                                                                               consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SHADER_MODULE_CREATE_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkDataGraphPipelineShaderModuleCreateInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkDataGraphPipelineShaderModuleCreateInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkDataGraphPipelineShaderModuleCreateInfoARM(out,
+                                                             casted_struct,
+                                                             decoded_struct,
+                                                             consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DATA_GRAPH_FEATURES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceDataGraphFeaturesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceDataGraphFeaturesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceDataGraphFeaturesARM(out,
+                                                     casted_struct,
+                                                     decoded_struct,
+                                                     consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPH_INSTRUCTION_SET_TOSA_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkPhysicalDeviceGraphInstructionSetTOSAPropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkPhysicalDeviceGraphInstructionSetTOSAPropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkPhysicalDeviceGraphInstructionSetTOSAPropertiesARM(out,
+                                                                     casted_struct,
+                                                                     decoded_struct,
+                                                                     consumer);
+
+                break;
+            }
             case VK_STRUCTURE_TYPE_MULTIVIEW_PER_VIEW_RENDER_AREAS_RENDER_PASS_BEGIN_INFO_QCOM: {
                 auto casted_struct = reinterpret_cast<const VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM*>(struct_info);
                 auto decoded_struct = reinterpret_cast<Decoded_VkMultiviewPerViewRenderAreasRenderPassBeginInfoQCOM*>(pnext_meta_data->GetMetaStructPointer());
@@ -5760,6 +5960,26 @@ std::string GenerateExtension(std::ostream& out, const void* struct_info, void* 
                                                                       casted_struct,
                                                                       decoded_struct,
                                                                       consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_EXPLICIT_TILING_FORMAT_PROPERTIES_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorExplicitTilingFormatPropertiesARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorExplicitTilingFormatPropertiesARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorExplicitTilingFormatPropertiesARM(out,
+                                                          casted_struct,
+                                                          decoded_struct,
+                                                          consumer);
+
+                break;
+            }
+            case VK_STRUCTURE_TYPE_TENSOR_ROLLING_BACKING_CREATE_INFO_ARM: {
+                auto casted_struct = reinterpret_cast<const VkTensorRollingBackingCreateInfoARM*>(struct_info);
+                auto decoded_struct = reinterpret_cast<Decoded_VkTensorRollingBackingCreateInfoARM*>(pnext_meta_data->GetMetaStructPointer());
+                next_var_name = "&" +  GenerateStruct_VkTensorRollingBackingCreateInfoARM(out,
+                                                    casted_struct,
+                                                    decoded_struct,
+                                                    consumer);
 
                 break;
             }

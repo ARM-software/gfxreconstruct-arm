@@ -513,58 +513,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindImageMemory2KHR>
     }
 };
 
-#ifdef ARM_INTERNAL
-template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdDispatch>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PreProcess_vkCmdDispatch(args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBeginCommandBuffer>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PostProcess_vkBeginCommandBuffer(args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdPushConstants>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PostProcess_VkCmdPushConstants(args...);
-    }
-};
-
-template <>
-struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdBeginRenderPass>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PreProcess_vkCmdBeginRenderPass(args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkEndCommandBuffer>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, Args... args)
-    {
-        manager->PostProcess_vkEndCommandBuffer(args...);
-    }
-};
-#endif
-
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBeginRenderPass>
 {
@@ -2044,6 +1992,24 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkSetDebugUtilsObjectTag
     static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
     {
         manager->PostProcess_vkSetDebugUtilsObjectTagEXT(result, args...);
+    }
+};
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindDataGraphPipelineSessionMemoryARM>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkBindDataGraphPipelineSessionMemoryARM(result, args...);
+    }
+};
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindTensorMemoryARM>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkBindTensorMemoryARM(result, args...);
     }
 };
 

@@ -289,6 +289,20 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("InitTensorCommand");
+        HandleToJson(jdata["device_id"], device_id, json_options);
+        HandleToJson(jdata["tensor_id"], tensor_id, json_options);
+        FieldToJson(jdata["data_size"], data_size, json_options);
+        RepresentBinaryFile(*(this->writer_), jdata[format::kNameData], "init_tensor.bin", data_size, data);
+        WriteBlockEnd();
+    }
+
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                          format::HandleId             image_id,
                                          uint64_t                     data_size,

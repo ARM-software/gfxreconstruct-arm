@@ -153,6 +153,8 @@ void EncodeStruct(ParameterEncoder* encoder, const VkWriteDescriptorSet& value)
         case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
             // Handles are encoded in the VkWriteDescriptorSetAccelerationStructureKHR structure in the pNext chain
             break;
+        case VK_DESCRIPTOR_TYPE_STORAGE_TENSOR_ARM:
+            break;
         default:
             GFXRECON_LOG_WARNING("Attempting to track descriptor state for unrecognized descriptor type");
             break;
@@ -208,6 +210,59 @@ void EncodeStruct(ParameterEncoder* encoder, const VkAccelerationStructureGeomet
             break;
     }
     encoder->EncodeFlagsValue(value.flags);
+}
+
+void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantARM& value)
+{
+    encoder->EncodeEnumValue(value.sType);
+    EncodePNextStruct(encoder, value.pNext);
+    encoder->EncodeUInt32Value(value.id);
+    if (value.pNext)
+    {
+        const VkBaseInStructure* base = reinterpret_cast<const VkBaseInStructure*>(value.pNext);
+        if (base->sType == VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM)
+        {
+            const VkTensorDescriptionARM* description  = (const VkTensorDescriptionARM*)base->pNext;
+            uint64_t                      size         = 0;
+            uint64_t                      element_size = 0;
+            switch (description->format)
+            {
+                case VK_FORMAT_R8_BOOL_ARM:
+                case VK_FORMAT_R8_UNORM:
+                case VK_FORMAT_R8_SNORM:
+                case VK_FORMAT_R8_USCALED:
+                case VK_FORMAT_R8_SSCALED:
+                case VK_FORMAT_R8_UINT:
+                case VK_FORMAT_R8_SINT:
+                    element_size = 1;
+                    break;
+                case VK_FORMAT_R16_UNORM:
+                case VK_FORMAT_R16_SNORM:
+                case VK_FORMAT_R16_USCALED:
+                case VK_FORMAT_R16_SSCALED:
+                case VK_FORMAT_R16_UINT:
+                case VK_FORMAT_R16_SINT:
+                case VK_FORMAT_R16_SFLOAT:
+                    element_size = 2;
+                    break;
+                case VK_FORMAT_R32_UINT:
+                case VK_FORMAT_R32_SINT:
+                case VK_FORMAT_R32_SFLOAT:
+                    element_size = 4;
+                    break;
+                case VK_FORMAT_R64_UINT:
+                case VK_FORMAT_R64_SINT:
+                case VK_FORMAT_R64_SFLOAT:
+                    element_size = 8;
+                    break;
+            }
+            for (int i = 0; i < description->dimensionCount; i++)
+            {
+                size += description->pDimensions[i] * element_size;
+            }
+            encoder->EncodeUInt8Array(value.pConstantData, size);
+        }
+    }
 }
 
 // The WIN32 SID structure has a variable size, so will be encoded as an array of bytes instead of a struct.

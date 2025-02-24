@@ -184,6 +184,8 @@ struct FenceWrapper : public HandleWrapper<VkFence>
     // to the fence have been called. So if query_delay is not zero but the fence is validated by Vulkan,
     // vkGetFenceStatus will still return VK_NOT_READY.
     uint32_t query_delay{ 0 };
+    // Limits the number of times a validated vkGetFenceStatus can return VK_NOT_READY
+    uint32_t query_delay_limit{ UINT32_MAX };
 };
 
 struct EventWrapper : public HandleWrapper<VkEvent>
@@ -684,6 +686,28 @@ struct PipelineCacheWrapper : public HandleWrapper<VkPipelineCache>
     DeviceWrapper*            device{ nullptr };
     VkPipelineCacheCreateInfo create_info;
     std::vector<uint8_t>      cache_data;
+};
+struct WeightsARMWrapper : public HandleWrapper<VkWeightsARM>
+{};
+struct TensorViewARMWrapper;
+struct TensorARMWrapper : public HandleWrapper<VkTensorARM>, AssetWrapperBase
+{
+    std::set<TensorViewARMWrapper*> tensor_views;
+    VkTensorTilingARM               tiling{};
+    VkFormat                        format{};
+    uint32_t                        dimensionCount{};
+    VkTensorUsageFlagsARM           usage{};
+    std::vector<uint64_t>           pDimensions{};
+    std::vector<int64_t>            pStrides{};
+};
+struct TensorViewARMWrapper : public HandleWrapper<VkTensorViewARM>
+{
+    TensorARMWrapper* tensor;
+};
+struct DataGraphPipelineSessionARMWrapper : public HandleWrapper<VkDataGraphPipelineSessionARM>, AssetWrapperBase
+{
+    VkDataGraphPipelineSessionBindPointARM bindPoint;
+    uint32_t                               objectIndex;
 };
 
 // Handle alias types for extension handle types that have been promoted to core types.

@@ -76,14 +76,6 @@ class VulkanAccelerationStructureBuilder
                                               const uint32_t*                                    max_primitive_counts,
                                               VkAccelerationStructureBuildSizesInfoKHR*          size_info);
 
-    void OnInitBufferDataUpdateAddress(const VulkanDeviceInfo*                   device_info,
-                                       const VulkanBufferInfo*                   buffer_info,
-                                       std::vector<format::AddressLocationInfo>& address_locations);
-
-    void OnInitBufferDataUpdateShaderGroupHandle(const VulkanDeviceInfo*                        device_info,
-                                                 const VulkanBufferInfo*                        buffer_info,
-                                                 std::vector<format::ShaderHandleLocationInfo>& shader_locations);
-
     VkResult OnCreateAccelerationStructure(const VulkanDeviceInfo*                     device_info,
                                            const VkAccelerationStructureCreateInfoKHR* create_info,
                                            const VkAllocationCallbacks*                pAllocator,
@@ -108,8 +100,12 @@ class VulkanAccelerationStructureBuilder
     ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(VkQueryType                query_type,
                                                                   VkAccelerationStructureKHR acceleration_structure);
 
-    // Execute actions post queue present
-    void PostQueuePresent();
+    void OnQueueSubmit(uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+    void OnQueueSubmit2(uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
+    void OnWaitForFences(VkResult result, uint32_t fenceCount, const VkFence* pFences);
+
+    void OnGetFenceStatus(VkResult result, VkFence fence);
 
     // called before command gets executed
     // the query pool results contain the AS compacted sizes
@@ -149,6 +145,9 @@ class VulkanAccelerationStructureBuilder
         PFN_vkCmdCopyQueryPoolResults                     cmd_copy_query_pool_results{ nullptr };
         PFN_vkCmdPipelineBarrier                          cmd_pipeline_barrier{ nullptr };
         PFN_vkCreateQueryPool                             create_query_pool{ nullptr };
+        PFN_vkCmdResetQueryPool                           cmd_reset_query_pool{ nullptr };
+        PFN_vkDestroyQueryPool                            destroy_query_pool{ nullptr };
+        PFN_vkGetFenceStatus                              get_fence_status{ nullptr };
     };
 
     // This objects are internal and responsible for executing the state recreation meta commands
@@ -161,15 +160,18 @@ class VulkanAccelerationStructureBuilder
             {
                 free_command_buffers_(device_, pool_, 1, &command_buffer_);
                 destroy_command_pool_(device_, pool_, nullptr);
+                destroy_query_pool_(device_, query_pool_, nullptr);
             }
         }
         PFN_vkFreeCommandBuffers free_command_buffers_{ nullptr };
         PFN_vkDestroyCommandPool destroy_command_pool_{ nullptr };
+        PFN_vkDestroyQueryPool   destroy_query_pool_{ nullptr };
 
         VkDevice        device_{ VK_NULL_HANDLE };
         VkCommandPool   pool_{ VK_NULL_HANDLE };
         VkCommandBuffer command_buffer_{ VK_NULL_HANDLE };
         VkQueue         queue_{ VK_NULL_HANDLE };
+        VkQueryPool     query_pool_{ VK_NULL_HANDLE };
         bool            initialized_{ false };
     };
 
@@ -182,15 +184,11 @@ class VulkanAccelerationStructureBuilder
 
     VulkanDeviceAddressTracker& device_address_tracker_;
     VulkanInternalBufferManager internal_buffer_manager_;
-    struct DoubleBufferScratch
-    {
-        std::unordered_map<format::HandleId,
-                           std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
-            scratches_previous;
-        std::unordered_map<format::HandleId,
-                           std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
-            scratches_current;
-    } scratch_double_buffer_;
+
+    std::unordered_map<VkFence, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
+        submitted_scratches;
+    std::unordered_map<VkCommandBuffer, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
+        recorded_scratches;
 
     struct PreProcessingCompactionInfo
     {
@@ -225,7 +223,7 @@ class VulkanAccelerationStructureBuilder
         }
     };
 
-    VkAccelerationStructureBuildSizesInfoKHR                                  last_build_sizes_;
+    VkAccelerationStructureBuildSizesInfoKHR                                  last_build_sizes_{};
     std::unordered_map<VkAccelerationStructureKHR, AccelerationStructureData> acceleration_structures_;
     std::unordered_map<VkBuffer, std::vector<VkAccelerationStructureKHR>>     buffer_binding_acceleration_structures_;
 
@@ -243,7 +241,8 @@ class VulkanAccelerationStructureBuilder
     void BeginCommandBuffer();
     void ExecuteCommandBuffer();
 
-    void UpdateScratchDeviceAddress(VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
+    void UpdateScratchDeviceAddress(VkCommandBuffer                              command_buffer,
+                                    VkAccelerationStructureBuildGeometryInfoKHR& geometry_infos,
                                     VkDeviceSize                                 scratch_size);
 };
 

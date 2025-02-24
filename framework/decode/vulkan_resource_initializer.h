@@ -59,6 +59,14 @@ class VulkanResourceInitializer
                               uint32_t            region_count,
                               const VkBufferCopy* regions);
 
+    VkResult InitializeTensor(VkDeviceSize           data_size,
+                              const uint8_t*         data,
+                              uint32_t               queue_family_index,
+                              VkTensorARM            buffer,
+                              VkTensorUsageFlagsARM  usage,
+                              uint32_t               region_count,
+                              const VkTensorCopyARM* regions);
+
     VkResult InitializeImage(VkDeviceSize             data_size,
                              const uint8_t*           data,
                              uint32_t                 queue_family_index,

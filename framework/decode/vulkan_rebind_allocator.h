@@ -66,6 +66,40 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                const VkAllocationCallbacks* allocation_callbacks,
                                ResourceData                 allocator_data) override;
 
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data) override;
+
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override;
+
+    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                    const VkAllocationCallbacks*                   allocation_callbacks,
+                                                    format::HandleId                               capture_id,
+                                                    VkDataGraphPipelineSessionARM*                 session,
+                                                    ResourceData* allocator_data) override;
+
+    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
+                                                 const VkAllocationCallbacks*  allocation_callbacks,
+                                                 ResourceData                  allocator_data) override;
+
+    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
+                                      VkDeviceMemory         memory,
+                                      VkDeviceSize           memory_offset,
+                                      ResourceData           allocator_tensor_data,
+                                      MemoryData             allocator_memory_data,
+                                      VkMemoryPropertyFlags* bind_memory_properties) override;
+
+    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
+                                                        VkDeviceMemory                memory,
+                                                        VkDeviceSize                  memory_offset,
+                                                        ResourceData                  allocator_session_data,
+                                                        MemoryData                    allocator_memory_data,
+                                                        VkMemoryPropertyFlags*        bind_memory_properties) override;
+
     virtual VkResult CreateImage(const VkImageCreateInfo*     create_info,
                                  const VkAllocationCallbacks* allocation_callbacks,
                                  format::HandleId             capture_id,
@@ -86,11 +120,32 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                      const VkAllocationCallbacks* allocation_callbacks,
                                      std::vector<ResourceData>    allocator_datas) override;
 
+    virtual void GetBufferMemoryRequirements(VkBuffer              buffer,
+                                             VkMemoryRequirements* memory_requirements,
+                                             ResourceData          allocator_data) override;
+
+    virtual void GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
+                                              VkMemoryRequirements2*                 memory_requirements,
+                                              ResourceData                           allocator_data) override;
+
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
                                            VkSubresourceLayout*       layout,
                                            const VkSubresourceLayout* original_layout,
                                            ResourceData               allocator_data) override;
+
+    virtual void GetImageMemoryRequirements(VkImage               image,
+                                            VkMemoryRequirements* memory_requirements,
+                                            ResourceData          allocator_data) override;
+
+    virtual void GetImageMemoryRequirements2(const VkImageMemoryRequirementsInfo2* info,
+                                             VkMemoryRequirements2*                memory_requirements,
+                                             ResourceData                          allocator_data) override;
+
+    virtual VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR video_session,
+                                                          uint32_t*         memory_requirements_count,
+                                                          VkVideoSessionMemoryRequirementsKHR* memory_requirements,
+                                                          std::vector<ResourceData> allocator_datas) override;
 
     virtual VkResult AllocateMemory(const VkMemoryAllocateInfo*  allocate_info,
                                     const VkAllocationCallbacks* allocation_callbacks,
@@ -320,7 +375,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) override
     {
         GFXRECON_ASSERT(alloc_data != 0);
-        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->size;
+        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->rebind_size;
     }
 
   private:
@@ -339,6 +394,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         buffer        = 1,
         image         = 2,
         video_session = 3,
+        ngp_tensor    = 4,
+        ngp_session   = 5,
     };
 
     struct ResourceAllocInfo
@@ -349,7 +406,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         void*            mapped_pointer{ nullptr };
         VkDeviceSize     original_offset{ 0 };
         VkDeviceSize     rebind_offset{ 0 };
-        VkDeviceSize     size{ 0 };
+        VkDeviceSize     original_size{ 0 };
+        VkDeviceSize     rebind_size{ 0 };
         ObjectType       object_type{ none };
         VkFlags          usage{ 0 };
         VkImageTiling    tiling{};
@@ -367,15 +425,17 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     struct MemoryAllocInfo
     {
-        VkDeviceSize                                     allocation_size{ 0 };
-        uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
-        bool                                             is_mapped{ false };
-        VkDeviceSize                                     mapped_offset{ 0 };
-        AHardwareBuffer*                                 ahb{ nullptr };
-        VkDeviceMemory                                   ahb_memory{ VK_NULL_HANDLE };
-        std::unique_ptr<uint8_t[]>                       original_content;
-        std::unordered_map<VkBuffer, ResourceAllocInfo*> original_buffers;
-        std::unordered_map<VkImage, ResourceAllocInfo*>  original_images;
+        VkDeviceSize                                        allocation_size{ 0 };
+        uint32_t                                            original_index{ std::numeric_limits<uint32_t>::max() };
+        bool                                                is_mapped{ false };
+        VkDeviceSize                                        mapped_offset{ 0 };
+        AHardwareBuffer*                                    ahb{ nullptr };
+        VkDeviceMemory                                      ahb_memory{ VK_NULL_HANDLE };
+        std::unique_ptr<uint8_t[]>                          original_content;
+        std::unordered_map<VkBuffer, ResourceAllocInfo*>    original_buffers;
+        std::unordered_map<VkImage, ResourceAllocInfo*>     original_images;
+        std::unordered_map<VkTensorARM, ResourceAllocInfo*> original_ngp_tensors;
+        std::unordered_map<VkDataGraphPipelineSessionARM, ResourceAllocInfo*> original_ngp_sessions;
 
         std::string          debug_utils_name;
         std::vector<uint8_t> debug_utils_tag;

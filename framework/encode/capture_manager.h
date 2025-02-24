@@ -236,6 +236,10 @@ class CommonCaptureManager
     {
         return fence_query_delay_timeout_threshold_;
     }
+    uint32_t GetFenceQueryDelayLimit() const
+    {
+        return fence_query_delay_limit_;
+    }
 
   public:
     static int32_t GetPidFromPackageName(const char* progress_name);
@@ -543,41 +547,37 @@ class CommonCaptureManager
     CaptureSettings::TrimBoundary           trim_boundary_;
     std::vector<util::UintRange>            trim_ranges_;
     CaptureSettings::TrimDrawCalls          trim_draw_calls_;
-#ifdef ARM_INTERNAL
-    std::vector<util::UintRange> render_pass_slice_range_;
-    uint32_t                     render_pass_slice_command_buffer_begin_;
-    bool                         render_pass_slice_enabled_{ false };
-#endif
-    std::string                          trim_key_;
-    uint32_t                             trim_key_frames_;
-    uint32_t                             trim_key_first_frame_;
-    size_t                               trim_current_range_;
-    uint32_t                             current_frame_;
-    uint32_t                             queue_submit_count_;
-    CaptureMode                          capture_mode_;
-    bool                                 previous_hotkey_state_;
-    CaptureSettings::RuntimeTriggerState previous_runtime_trigger_state_;
-    bool                                 debug_layer_;
-    bool                                 debug_device_lost_;
-    bool                                 screenshots_enabled_;
-    std::vector<uint32_t>                screenshot_indices_;
-    bool                                 disable_dxr_;
-    uint32_t                             accel_struct_padding_;
-    bool                                 iunknown_wrapping_;
-    bool                                 force_command_serialization_;
-    bool                                 queue_zero_only_;
-    bool                                 allow_pipeline_compile_required_;
-    bool                                 quit_after_frame_ranges_;
-    static std::function<void()>         delete_instance_func_;
-    uint32_t                             fence_query_delay_;
-    CaptureSettings::FenceQueryDelayUnit fence_query_delay_unit_;
-    uint64_t                             fence_query_delay_timeout_threshold_;
-    std::vector<uint64_t>                buffer_usages_to_ignore_;
-    bool                                 force_fifo_present_mode_;
-    bool                                 use_asset_file_;
-    bool                                 write_assets_;
-    bool                                 previous_write_assets_;
-    bool                                 write_state_files_;
+    std::string                             trim_key_;
+    uint32_t                                trim_key_frames_;
+    uint32_t                                trim_key_first_frame_;
+    size_t                                  trim_current_range_;
+    uint32_t                                current_frame_;
+    uint32_t                                queue_submit_count_;
+    CaptureMode                             capture_mode_;
+    bool                                    previous_hotkey_state_;
+    CaptureSettings::RuntimeTriggerState    previous_runtime_trigger_state_;
+    bool                                    debug_layer_;
+    bool                                    debug_device_lost_;
+    bool                                    screenshots_enabled_;
+    std::vector<uint32_t>                   screenshot_indices_;
+    bool                                    disable_dxr_;
+    uint32_t                                accel_struct_padding_;
+    bool                                    iunknown_wrapping_;
+    bool                                    force_command_serialization_;
+    bool                                    queue_zero_only_;
+    bool                                    allow_pipeline_compile_required_;
+    bool                                    quit_after_frame_ranges_;
+    static std::function<void()>            delete_instance_func_;
+    uint32_t                                fence_query_delay_;
+    CaptureSettings::FenceQueryDelayUnit    fence_query_delay_unit_;
+    uint64_t                                fence_query_delay_timeout_threshold_;
+    uint32_t                                fence_query_delay_limit_;
+    std::vector<uint64_t>                   buffer_usages_to_ignore_;
+    bool                                    force_fifo_present_mode_;
+    bool                                    use_asset_file_;
+    bool                                    write_assets_;
+    bool                                    previous_write_assets_;
+    bool                                    write_state_files_;
 
     struct
     {

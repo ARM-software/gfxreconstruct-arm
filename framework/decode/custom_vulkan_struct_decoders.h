@@ -176,6 +176,16 @@ struct Decoded_VkPushDescriptorSetWithTemplateInfo
     DescriptorUpdateTemplateDecoder pData;
 };
 
+struct Decoded_VkDataGraphPipelineConstantARM
+{
+    using struct_type = VkDataGraphPipelineConstantARM;
+
+    VkDataGraphPipelineConstantARM* decoded_value{ nullptr };
+
+    PNextNode* pNext{ nullptr };
+    void*      pConstantData{ nullptr };
+};
+
 // Decoded struct wrappers for SECURITY_ATTRIBUTES and related WIN32 structures.
 struct Decoded_ACL
 {

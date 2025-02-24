@@ -85,6 +85,7 @@ enum PhysicalDeviceArrayIndices : uint32_t
     kVideoSessionKHRArrayGetVideoSessionMemoryRequirementsKHR                            = 20,
     kShaderEXTArrayGetShaderBinaryDataEXT                                                = 21,
     kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV = 22,
+    kPhysicalDeviceArrayGetPhysicalDeviceDataGraphInstructionSetsARM                     = 23,
 
     // Aliases for extensions functions that were promoted to core.
     kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties2KHR =
@@ -105,6 +106,8 @@ enum DeviceArrayIndices : uint32_t
     kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixPropertiesKHR = 6,
     kPhysicalDeviceArrayGetPhysicalDeviceCalibrateableTimeDomainsKHR    = 7,
     kDeviceArrayGetPipelineBinaryDataKHR                                = 8,
+    kDeviceArrayGetDataGraphPipelineSessionBindPointRequirementsARM     = 9,
+    kDeviceArrayGetDataGraphPipelinePropertiesARM                       = 10,
 
     // Aliases for extensions functions that were promoted to core.
     kDeviceArrayGetImageSparseMemoryRequirements2KHR      = kDeviceArrayGetImageSparseMemoryRequirements2,
@@ -751,6 +754,31 @@ struct VulkanAccelerationStructureKHRInfo : public VulkanObjectInfo<VkAccelerati
     VkDeviceAddress capture_address = 0;
     VkDeviceAddress replay_address  = 0;
 };
+
+struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>
+{
+    // The following values are only used for memory portability.
+    VulkanResourceAllocator::ResourceData allocator_data{ 0 };
+
+    // This is only used when loading the initial state for trimmed files.
+    VkMemoryPropertyFlags memory_property_flags{ 0 };
+    VkTensorTilingARM     tiling{};
+    VkFormat              format{};
+    uint32_t              dimensionCount{};
+    VkTensorUsageFlagsARM usage{};
+    std::vector<uint64_t> pDimensions{};
+    std::vector<int64_t>  pStrides{};
+
+    VkDeviceSize size{ 0 };
+    uint32_t     queue_family_index{ 0 };
+};
+
+struct VulkanTensorViewARMInfo : public VulkanObjectInfo<VkTensorViewARM>
+{};
+struct VulkanWeightsARMInfo : public VulkanObjectInfo<VkWeightsARM>
+{};
+struct VulkanDataGraphPipelineSessionARMInfo : public VulkanObjectInfo<VkDataGraphPipelineSessionARM>
+{};
 
 //
 // Handle alias types for extension handle types that have been promoted to core types.

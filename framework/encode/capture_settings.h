@@ -116,10 +116,6 @@ class CaptureSettings
         TrimBoundary                 trim_boundary{ TrimBoundary::kUnknown };
         std::vector<util::UintRange> trim_ranges;
         TrimDrawCalls                trim_draw_calls;
-#ifdef ARM_INTERNAL
-        std::vector<util::UintRange> render_pass_slice_range;
-        uint32_t                     render_pass_slice_command_buffer_begin{};
-#endif
         std::string                  trim_key;
         uint32_t                     trim_key_frames{ 0 };
         RuntimeTriggerState          runtime_capture_trigger{ kNotUsed };
@@ -142,6 +138,7 @@ class CaptureSettings
         uint32_t                     fence_query_delay{ 0 };
         FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
         uint64_t                     fence_query_delay_timeout_threshold{ 0 };
+        uint32_t                     fence_query_delay_limit{ UINT32_MAX };
         bool                         queue_zero_only{ false };
         bool                         allow_pipeline_compile_required{ false };
         bool                         quit_after_frame_ranges{ false };

@@ -958,27 +958,37 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
 
         auto accel_struct_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(*pAccelerationStructureKHR);
+        accel_struct_wrapper->device = device_wrapper;
+        accel_struct_wrapper->type   = modified_create_info->type;
 
-        VkAccelerationStructureDeviceAddressInfoKHR address_info{
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
-        };
-
-        // save address to use as pCreateInfo->deviceAddress during replay
-        VkDeviceAddress address =
-            device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
-
-        accel_struct_wrapper->device  = device_wrapper;
-        accel_struct_wrapper->address = address;
-        accel_struct_wrapper->type    = modified_create_info->type;
-
-        if (IsCaptureModeTrack())
+        auto storage_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pCreateInfo->buffer);
+        if (storage_buffer_wrapper->bind_memory_id != format::kNullHandleId)
         {
-            state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
+            VkAccelerationStructureDeviceAddressInfoKHR address_info{
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr, accel_struct_wrapper->handle
+            };
+
+            // save address to use as pCreateInfo->deviceAddress during replay
+            VkDeviceAddress address =
+                device_table->GetAccelerationStructureDeviceAddressKHR(device_unwrapped, &address_info);
+            accel_struct_wrapper->address = address;
+
+            if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
+            {
+                // save address to use as pCreateInfo->deviceAddress during replay
+                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
+            }
+
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackAccelerationStructureKHRDeviceAddress(device, *pAccelerationStructureKHR, address);
+            }
         }
-
-        if (device_wrapper->property_feature_info.feature_accelerationStructureCaptureReplay)
+        else
         {
-            WriteSetOpaqueAddressCommand(device_wrapper->handle_id, accel_struct_wrapper->handle_id, address);
+            GFXRECON_LOG_WARNING("Could not get device address for acceleration structure %" PRIu64
+                                 ", storage buffer was not bound",
+                                 accel_struct_wrapper->handle_id);
         }
     }
     return result;
@@ -1015,24 +1025,34 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
 
         auto micromap_wrapper = GetWrapper<MicromapEXTWrapper>(*pMicromap);
 
-        VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-                                                  nullptr,
-                                                  pCreateInfo->buffer };
-        VkDeviceAddress           address =
-            device_table->GetBufferDeviceAddressKHR(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+        auto storage_buffer_wrapper = GetWrapper<BufferWrapper>(pCreateInfo->buffer);
 
-        micromap_wrapper->device = device_wrapper;
-        micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
-
-        if (IsCaptureModeTrack())
+        if (storage_buffer_wrapper->bind_memory_id != format::kNullHandleId)
         {
-            state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+            VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                      nullptr,
+                                                      pCreateInfo->buffer };
+            VkDeviceAddress           address =
+                device_table->GetBufferDeviceAddress(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+
+            micromap_wrapper->device = device_wrapper;
+            micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
+
+            if (IsCaptureModeTrack())
+            {
+                state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+            }
+
+            if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+            {
+                // save address to use as pCreateInfo->deviceAddress during replay
+                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+            }
         }
-
-        if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+        else
         {
-            // save address to use as pCreateInfo->deviceAddress during replay
-            WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+            GFXRECON_LOG_WARNING("Could not get device address for micromap %" PRIu64 ", storage buffer was not bound",
+                                 micromap_wrapper->handle_id);
         }
     }
     return result;
@@ -1853,11 +1873,21 @@ VkResult VulkanCaptureManager::OverrideGetFenceStatus(VkDevice device, VkFence f
     {
         FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
         assert(wrapper != nullptr);
-        if (wrapper->query_delay != 0)
+        if (wrapper->query_delay != 0 && wrapper->query_delay_limit != 0)
         {
             if (common_manager_->GetFenceQueryDelayUnit() == CaptureSettings::FenceQueryDelayUnit::kCalls)
             {
                 --wrapper->query_delay;
+            }
+
+            wrapper->query_delay_limit--;
+
+            if (wrapper->query_delay_limit == 0)
+            {
+                GFXRECON_LOG_WARNING("Fence %" PRIu64 " hit the GetFenceStatus limit of %d in frame %d",
+                                     wrapper->handle_id,
+                                     common_manager_->GetFenceQueryDelayLimit(),
+                                     common_manager_->GetCurrentFrame());
             }
 
             result = VK_NOT_READY;
@@ -2804,14 +2834,7 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptu
     QueueSubmitWriteFillMemoryCmd();
 
     PreQueueSubmit(current_lock);
-#ifdef ARM_INTERNAL
-    if (common_manager_->render_pass_slice_enabled_ && IsCaptureModeWrite())
-    {
-        auto cmd_buffer_wrapper =
-            vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(pSubmits[0].pCommandBuffers[0]);
-        InsertQueuePresent(queue, cmd_buffer_wrapper->parent_pool->device->handle);
-    }
-#endif
+
     if (IsCaptureModeTrack())
     {
         if (pSubmits)
@@ -2876,7 +2899,8 @@ void VulkanCaptureManager::ProcessFenceSubmit(VkFence fence)
     {
         FenceWrapper* wrapper = GetWrapper<FenceWrapper>(fence);
         assert(wrapper != nullptr);
-        wrapper->query_delay = common_manager_->GetFenceQueryDelay();
+        wrapper->query_delay       = common_manager_->GetFenceQueryDelay();
+        wrapper->query_delay_limit = common_manager_->GetFenceQueryDelayLimit();
     }
 }
 
@@ -3393,14 +3417,6 @@ void VulkanCaptureManager::PostProcess_vkCmdBindPipeline(VkCommandBuffer     com
                                                          VkPipelineBindPoint pipelineBindPoint,
                                                          VkPipeline          pipeline)
 {
-    if (commandBuffer == orig_cmd_buf_)
-    {
-        CmdBindPipeline(target_cmd_buf_, pipelineBindPoint, pipeline);
-    }
-    if (commandBuffer == target_cmd_buf_)
-    {
-        CmdBindPipeline(tail_cmd_buf_, pipelineBindPoint, pipeline);
-    }
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
@@ -3624,8 +3640,6 @@ void VulkanCaptureManager::PostProcess_vkCmdDispatch(VkCommandBuffer commandBuff
                                                      uint32_t        groupCountY,
                                                      uint32_t        groupCountZ)
 {
-    SecondReplace(commandBuffer);
-
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
@@ -3768,29 +3782,6 @@ void VulkanCaptureManager::PostProcess_vkCmdBindDescriptorSets(VkCommandBuffer  
                                                                uint32_t               dynamicOffsetCount,
                                                                const uint32_t*        pDynamicOffsets)
 {
-    if (commandBuffer == orig_cmd_buf_)
-    {
-        CmdBindDescriptorSets(target_cmd_buf_,
-                              pipelineBindPoint,
-                              layout,
-                              firstSet,
-                              descriptorSetCount,
-                              pDescriptorSets,
-                              dynamicOffsetCount,
-                              pDynamicOffsets);
-    }
-    if (commandBuffer == target_cmd_buf_)
-    {
-        CmdBindDescriptorSets(tail_cmd_buf_,
-                              pipelineBindPoint,
-                              layout,
-                              firstSet,
-                              descriptorSetCount,
-                              pDescriptorSets,
-                              dynamicOffsetCount,
-                              pDynamicOffsets);
-    }
-
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackCmdBindDescriptorSets(commandBuffer,
@@ -4288,154 +4279,6 @@ void VulkanCaptureManager::PostProcess_vkDestroyAccelerationStructureKHR(
         return;
     }
 }
-
-#ifdef ARM_INTERNAL
-void VulkanCaptureManager::FirstReplace(VkCommandBuffer commandBuffer)
-{
-    if (common_manager_->render_pass_slice_enabled_ && packet_id_ == common_manager_->render_pass_slice_range_[0].first)
-    {
-        EndCommandBuffer(commandBuffer);
-        replace_command_buffer_(commandBuffer, target_cmd_buf_);
-    }
-}
-void VulkanCaptureManager::SecondReplace(VkCommandBuffer commandBuffer)
-{
-    if (common_manager_->render_pass_slice_enabled_ && packet_id_ == common_manager_->render_pass_slice_range_[0].last)
-    {
-        EndCommandBuffer(commandBuffer);
-        replace_command_buffer_(commandBuffer, tail_cmd_buf_);
-    }
-}
-void VulkanCaptureManager::PostProcess_vkBeginCommandBuffer(VkResult,
-                                                            VkCommandBuffer                 commandBuffer,
-                                                            const VkCommandBufferBeginInfo* pBeginInfo)
-{
-    if (!common_manager_->render_pass_slice_enabled_ ||
-        packet_id_ != common_manager_->render_pass_slice_command_buffer_begin_ || orig_cmd_buf_ != VK_NULL_HANDLE)
-    {
-        return;
-    }
-    orig_cmd_buf_ = commandBuffer;
-
-    auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
-
-    auto cmd_pool_wrapper = cmd_buffer_wrapper->parent_pool;
-    auto device_wrapper   = cmd_pool_wrapper->device;
-
-    VkCommandBufferAllocateInfo allocate_info;
-    allocate_info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocate_info.pNext              = NULL;
-    allocate_info.commandPool        = cmd_pool_wrapper->handle;
-    allocate_info.commandBufferCount = 2;
-    allocate_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-    VkCommandBuffer cmd_buffers[2]{};
-
-    VkResult result;
-    result = AllocateCommandBuffers(device_wrapper->handle, &allocate_info, cmd_buffers);
-    GFXRECON_ASSERT(result == VK_SUCCESS);
-
-    result = BeginCommandBuffer(cmd_buffers[0], pBeginInfo);
-    GFXRECON_ASSERT(result == VK_SUCCESS);
-    target_cmd_buf_ = cmd_buffers[0];
-
-    result = BeginCommandBuffer(cmd_buffers[1], pBeginInfo);
-    GFXRECON_ASSERT(result == VK_SUCCESS);
-    tail_cmd_buf_ = cmd_buffers[1];
-}
-
-void VulkanCaptureManager::PostProcess_VkCmdPushConstants(VkCommandBuffer    commandBuffer,
-                                                          VkPipelineLayout   layout,
-                                                          VkShaderStageFlags stageFlags,
-                                                          uint32_t           offset,
-                                                          uint32_t           size,
-                                                          const void*        pValues)
-{
-    if (commandBuffer == orig_cmd_buf_)
-    {
-        CmdPushConstants(target_cmd_buf_, layout, stageFlags, offset, size, pValues);
-    }
-    if (commandBuffer == target_cmd_buf_)
-    {
-        CmdPushConstants(tail_cmd_buf_, layout, stageFlags, offset, size, pValues);
-    }
-}
-
-void VulkanCaptureManager::InsertQueuePresent(VkQueue queue, VkDevice device)
-{
-    auto queue_wrapper  = vulkan_wrappers::GetWrapper<vulkan_wrappers::QueueWrapper>(queue);
-    auto device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
-
-    bool                                                       presented = false;
-    std::function<void(vulkan_wrappers::SwapchainKHRWrapper*)> visitor =
-        [&presented, device, queue, this](vulkan_wrappers::SwapchainKHRWrapper* swapchain_wrapper) {
-            if (presented)
-                return;
-            swapchain_wrapper->queue_family_index = 0;
-
-            if (swapchain_wrapper->device->handle == device)
-            {
-                uint32_t image_index = 0;
-                auto     encoder     = BeginApiCallCapture(format::ApiCallId::ApiCall_vkAcquireNextImageKHR);
-                if (nullptr != encoder)
-                {
-                    encoder->EncodeVulkanHandleValue<vulkan_wrappers::DeviceWrapper>(device);
-                    encoder->EncodeVulkanHandleValue<vulkan_wrappers::SwapchainKHRWrapper>(swapchain_wrapper->handle);
-                    encoder->EncodeUInt64Value(UINT64_MAX);
-                    encoder->EncodeVulkanHandleValue<vulkan_wrappers::SemaphoreWrapper>(VK_NULL_HANDLE);
-                    encoder->EncodeVulkanHandleValue<vulkan_wrappers::FenceWrapper>(VK_NULL_HANDLE);
-                    encoder->EncodeUInt32Ptr(&image_index, true);
-                    encoder->EncodeEnumValue(VK_SUCCESS);
-                    EndApiCallCapture();
-                }
-
-                VkPresentInfoKHR present_info = {};
-                present_info.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                present_info.swapchainCount   = 1;
-                present_info.pSwapchains      = &swapchain_wrapper->handle;
-                present_info.pImageIndices    = &image_index;
-
-                encoder = BeginApiCallCapture(format::ApiCallId::ApiCall_vkQueuePresentKHR);
-                if (nullptr != encoder)
-                {
-                    encoder->EncodeVulkanHandleValue<vulkan_wrappers::QueueWrapper>(queue);
-                    EncodeStructPtr(encoder, &present_info);
-                    encoder->EncodeEnumValue(VK_SUCCESS);
-                    EndApiCallCapture();
-                }
-
-                presented = true;
-            }
-        };
-    VisitWrappers<SwapchainKHRWrapper>(visitor);
-}
-
-void VulkanCaptureManager::SubmitTargetCommandBuffer(
-    std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock, VkQueue queue)
-{
-    current_lock.unlock();
-    vulkan_wrappers::GetDeviceTable(queue)->QueueWaitIdle(queue);
-
-    VkSubmitInfo submit_info{};
-    submit_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers    = &target_cmd_buf_;
-    QueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
-    vulkan_wrappers::GetDeviceTable(queue)->QueueWaitIdle(queue);
-    auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(target_cmd_buf_);
-
-    submit_info.pCommandBuffers = &tail_cmd_buf_;
-    QueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
-    VkResult result = vulkan_wrappers::GetDeviceTable(queue)->QueueWaitIdle(queue);
-
-    VkCommandBuffer free_list[2] = { target_cmd_buf_, tail_cmd_buf_ };
-    FreeCommandBuffers(
-        cmd_buffer_wrapper->parent_pool->device->handle, cmd_buffer_wrapper->parent_pool->handle, 2, free_list);
-    orig_cmd_buf_   = VK_NULL_HANDLE;
-    target_cmd_buf_ = VK_NULL_HANDLE;
-    tail_cmd_buf_   = VK_NULL_HANDLE;
-}
-#endif
 
 void VulkanCaptureManager::EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
 {

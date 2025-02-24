@@ -648,6 +648,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdSetEvent2(
     if (!pDependencyInfo->IsNull() && (pDependencyInfo->HasData()))
     {
         auto pDependencyInfo_ptr = pDependencyInfo->GetMetaStructPointer();
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+
+                if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                {
+                    auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                }
+            }
+        }
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+            }
+        }
+
         if (!pDependencyInfo_ptr->pBufferMemoryBarriers->IsNull() && (pDependencyInfo_ptr->pBufferMemoryBarriers->HasData()))
         {
             auto pBufferMemoryBarriers_ptr = pDependencyInfo_ptr->pBufferMemoryBarriers->GetMetaStructPointer();
@@ -688,6 +706,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdWaitEvents2(
         size_t pDependencyInfos_count = pDependencyInfos->GetLength();
         for (size_t pDependencyInfos_index = 0; pDependencyInfos_index < pDependencyInfos_count; ++pDependencyInfos_index)
         {
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfos_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+
+                    if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                    {
+                        auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                    }
+                }
+            }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfos_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
+
             if (!pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->IsNull() && (pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->HasData()))
             {
                 auto pBufferMemoryBarriers_ptr = pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->GetMetaStructPointer();
@@ -721,6 +757,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPipelineBarrier2(
     if (!pDependencyInfo->IsNull() && (pDependencyInfo->HasData()))
     {
         auto pDependencyInfo_ptr = pDependencyInfo->GetMetaStructPointer();
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+
+                if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                {
+                    auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                }
+            }
+        }
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+            }
+        }
+
         if (!pDependencyInfo_ptr->pBufferMemoryBarriers->IsNull() && (pDependencyInfo_ptr->pBufferMemoryBarriers->HasData()))
         {
             auto pBufferMemoryBarriers_ptr = pDependencyInfo_ptr->pBufferMemoryBarriers->GetMetaStructPointer();
@@ -1009,6 +1063,18 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSet(
                 {
                 }
             }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetTensorInfoARM>(pDescriptorWrites_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetWeightsARM>(pDescriptorWrites_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
             GetTable().AddContainerToUser(commandBuffer, pDescriptorWrites_ptr[pDescriptorWrites_index].dstSet);
 
             if (!pDescriptorWrites_ptr[pDescriptorWrites_index].pImageInfo->IsNull() && (pDescriptorWrites_ptr[pDescriptorWrites_index].pImageInfo->HasData()))
@@ -1165,6 +1231,18 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSet2(
                 }
                 {
                     const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetInlineUniformBlock>(pDescriptorWrites_ptr->pNext);
+                    if (ext_struct_info != nullptr)
+                    {
+                    }
+                }
+                {
+                    const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetTensorInfoARM>(pDescriptorWrites_ptr->pNext);
+                    if (ext_struct_info != nullptr)
+                    {
+                    }
+                }
+                {
+                    const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetWeightsARM>(pDescriptorWrites_ptr->pNext);
                     if (ext_struct_info != nullptr)
                     {
                     }
@@ -1426,6 +1504,18 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSetKHR(
                 {
                 }
             }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetTensorInfoARM>(pDescriptorWrites_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetWeightsARM>(pDescriptorWrites_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
             GetTable().AddContainerToUser(commandBuffer, pDescriptorWrites_ptr[pDescriptorWrites_index].dstSet);
 
             if (!pDescriptorWrites_ptr[pDescriptorWrites_index].pImageInfo->IsNull() && (pDescriptorWrites_ptr[pDescriptorWrites_index].pImageInfo->HasData()))
@@ -1671,6 +1761,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdSetEvent2KHR(
     if (!pDependencyInfo->IsNull() && (pDependencyInfo->HasData()))
     {
         auto pDependencyInfo_ptr = pDependencyInfo->GetMetaStructPointer();
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+
+                if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                {
+                    auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                }
+            }
+        }
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+            }
+        }
+
         if (!pDependencyInfo_ptr->pBufferMemoryBarriers->IsNull() && (pDependencyInfo_ptr->pBufferMemoryBarriers->HasData()))
         {
             auto pBufferMemoryBarriers_ptr = pDependencyInfo_ptr->pBufferMemoryBarriers->GetMetaStructPointer();
@@ -1711,6 +1819,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdWaitEvents2KHR(
         size_t pDependencyInfos_count = pDependencyInfos->GetLength();
         for (size_t pDependencyInfos_index = 0; pDependencyInfos_index < pDependencyInfos_count; ++pDependencyInfos_index)
         {
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfos_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+
+                    if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                    {
+                        auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                    }
+                }
+            }
+            {
+                const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfos_ptr->pNext);
+                if (ext_struct_info != nullptr)
+                {
+                }
+            }
+
             if (!pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->IsNull() && (pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->HasData()))
             {
                 auto pBufferMemoryBarriers_ptr = pDependencyInfos_ptr[pDependencyInfos_index].pBufferMemoryBarriers->GetMetaStructPointer();
@@ -1744,6 +1870,24 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPipelineBarrier2KHR(
     if (!pDependencyInfo->IsNull() && (pDependencyInfo->HasData()))
     {
         auto pDependencyInfo_ptr = pDependencyInfo->GetMetaStructPointer();
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorDependencyInfoARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+
+                if (!ext_struct_info->pTensorMemoryBarriers->IsNull() && (ext_struct_info->pTensorMemoryBarriers->HasData()))
+                {
+                    auto pTensorMemoryBarriers_ptr = ext_struct_info->pTensorMemoryBarriers->GetMetaStructPointer();
+                }
+            }
+        }
+        {
+            const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkTensorMemoryBarrierARM>(pDependencyInfo_ptr->pNext);
+            if (ext_struct_info != nullptr)
+            {
+            }
+        }
+
         if (!pDependencyInfo_ptr->pBufferMemoryBarriers->IsNull() && (pDependencyInfo_ptr->pBufferMemoryBarriers->HasData()))
         {
             auto pBufferMemoryBarriers_ptr = pDependencyInfo_ptr->pBufferMemoryBarriers->GetMetaStructPointer();
@@ -1966,6 +2110,18 @@ void VulkanReferencedResourceConsumer::Process_vkCmdPushDescriptorSet2KHR(
                 }
                 {
                     const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetInlineUniformBlock>(pDescriptorWrites_ptr->pNext);
+                    if (ext_struct_info != nullptr)
+                    {
+                    }
+                }
+                {
+                    const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetTensorInfoARM>(pDescriptorWrites_ptr->pNext);
+                    if (ext_struct_info != nullptr)
+                    {
+                    }
+                }
+                {
+                    const auto* ext_struct_info = GetPNextMetaStruct<Decoded_VkWriteDescriptorSetWeightsARM>(pDescriptorWrites_ptr->pNext);
                     if (ext_struct_info != nullptr)
                     {
                     }

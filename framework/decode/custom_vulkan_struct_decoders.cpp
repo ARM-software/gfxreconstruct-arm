@@ -293,6 +293,70 @@ size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkPushDes
     return bytes_read;
 }
 
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDataGraphPipelineConstantARM* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t                          bytes_read = 0;
+    VkDataGraphPipelineConstantARM* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->pNext));
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->id));
+    value->pConstantData = nullptr;
+    if (value->pNext)
+    {
+        const VkBaseInStructure* base = reinterpret_cast<const VkBaseInStructure*>(value->pNext);
+        if (base->sType == VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM)
+        {
+            const VkTensorDescriptionARM* description  = (const VkTensorDescriptionARM*)base->pNext;
+            uint64_t                      size         = 0;
+            uint64_t                      element_size = 0;
+            switch (description->format)
+            {
+                case VK_FORMAT_R8_BOOL_ARM:
+                case VK_FORMAT_R8_UNORM:
+                case VK_FORMAT_R8_SNORM:
+                case VK_FORMAT_R8_USCALED:
+                case VK_FORMAT_R8_SSCALED:
+                case VK_FORMAT_R8_UINT:
+                case VK_FORMAT_R8_SINT:
+                    element_size = 1;
+                    break;
+                case VK_FORMAT_R16_UNORM:
+                case VK_FORMAT_R16_SNORM:
+                case VK_FORMAT_R16_USCALED:
+                case VK_FORMAT_R16_SSCALED:
+                case VK_FORMAT_R16_UINT:
+                case VK_FORMAT_R16_SINT:
+                case VK_FORMAT_R16_SFLOAT:
+                    element_size = 2;
+                    break;
+                case VK_FORMAT_R32_UINT:
+                case VK_FORMAT_R32_SINT:
+                case VK_FORMAT_R32_SFLOAT:
+                    element_size = 4;
+                    break;
+                case VK_FORMAT_R64_UINT:
+                case VK_FORMAT_R64_SINT:
+                case VK_FORMAT_R64_SFLOAT:
+                    element_size = 8;
+                    break;
+            }
+            for (int i = 0; i < description->dimensionCount; i++)
+            {
+                size += description->pDimensions[i] * element_size;
+            }
+            wrapper->pConstantData = (void*)DecodeAllocator::Allocate<uint8_t>(size);
+            bytes_read += ValueDecoder::DecodeUInt8Array(
+                (buffer + bytes_read), (buffer_size - bytes_read), wrapper->pConstantData, size);
+        }
+    }
+
+    return bytes_read;
+}
+
 // The WIN32 SID structure has a variable size, so was encoded as an array of bytes instead of a struct.
 static uint8_t* unpack_sid_struct(const PointerDecoder<uint8_t>& packed_value)
 {

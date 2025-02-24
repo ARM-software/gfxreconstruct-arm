@@ -47,6 +47,7 @@ class VulkanFileOptimizer : public FileOptimizer
   private:
     virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id) override;
     virtual bool ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id) override;
+    virtual bool ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type) override;
 
     void WriteFunctionCall(format::ApiCallId               call_id,
                            format::ThreadId                thread_id,
@@ -55,6 +56,7 @@ class VulkanFileOptimizer : public FileOptimizer
 
     VulkanOptimizationData* optimization_data_;
     decode::VulkanDecoder   decoder;
+    uint64_t                frames_removed = 0;
 };
 
 GFXRECON_END_NAMESPACE(gfxrecon)

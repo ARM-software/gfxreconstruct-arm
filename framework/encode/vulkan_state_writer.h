@@ -89,6 +89,14 @@ class VulkanStateWriter
         std::vector<uint64_t>                       level_sizes;        // Combined size of all layers in a mip level.
     };
 
+    struct TensorSnapshotInfo
+    {
+        vulkan_wrappers::TensorARMWrapper*          tensor_wrapper{ nullptr };
+        const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper{ nullptr };
+        VkMemoryPropertyFlags                       memory_properties{};
+        bool                                        need_staging_copy{ false };
+    };
+
     struct ResourceSnapshotInfo
     {
         std::vector<BufferSnapshotInfo> buffers;
@@ -204,6 +212,10 @@ class VulkanStateWriter
     void ProcessImageMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper* device_wrapper,
                                          const std::vector<ImageSnapshotInfo>& image_snapshot_info,
                                          graphics::VulkanResourcesUtil&        resource_util);
+
+    void ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
+                             const std::vector<TensorSnapshotInfo>& tensor_snapshot_info,
+                             graphics::VulkanResourcesUtil&         resource_util);
 
     void WriteBufferMemoryState(const VulkanStateTable& state_table,
                                 DeviceResourceTables*   resources,
@@ -443,6 +455,7 @@ class VulkanStateWriter
     void WriteExecuteFromFile(const std::string& filename, uint32_t n_blocks, int64_t offset);
 
     void WriteDebugUtilsState(const VulkanStateTable& state_table);
+    void WriteNGPMemoryState(const VulkanStateTable& state_table);
 
   private:
     util::FileOutputStream*  output_stream_;
