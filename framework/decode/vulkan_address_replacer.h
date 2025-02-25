@@ -101,7 +101,8 @@ class VulkanAddressReplacer
                                                   uint32_t                                     info_count,
                                                   VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos,
                                                   VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos,
-                                                  const decode::VulkanDeviceAddressTracker&    address_tracker);
+                                                  const decode::VulkanDeviceAddressTracker&    address_tracker,
+                                                  bool                                         process_scratch_buffers);
 
     friend void swap(VulkanAddressReplacer& lhs, VulkanAddressReplacer& rhs) noexcept;
 

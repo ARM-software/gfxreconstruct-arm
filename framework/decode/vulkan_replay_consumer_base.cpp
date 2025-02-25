@@ -9361,15 +9361,21 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
         auto& address_tracker  = GetDeviceAddressTracker(device_info);
         auto& address_replacer = GetDeviceAddressReplacer(device_info);
 
-        address_replacer.ProcessCmdBuildAccelerationStructuresKHR(
-            command_buffer_info, infoCount, build_geometry_infos, build_range_infos, address_tracker);
-    }
+        // Address replacer should not replace scratch buffer addresess when loading trim state is done/not used
+        // AccelerationStructureBuilder should take over scratch management
+        address_replacer.ProcessCmdBuildAccelerationStructuresKHR(command_buffer_info,
+                                                                  infoCount,
+                                                                  build_geometry_infos,
+                                                                  build_range_infos,
+                                                                  address_tracker,
+                                                                  loading_trim_state_);
 
-    // Use the builder when the rebind allocator is selected and the trimming is done / not used
-    if (!loading_trim_state_ && use_acceleration_structure_builder_)
-    {
-        GetAccelerationStructureBuilder(device_info)
-            .OnCmdBuildAccelerationStructures(command_buffer, infoCount, build_geometry_infos, build_range_infos);
+        // Use the builder when the rebind allocator is selected and the trimm state loading is done / not used
+        if (!loading_trim_state_)
+        {
+            GetAccelerationStructureBuilder(device_info)
+                .OnCmdBuildAccelerationStructures(command_buffer, infoCount, build_geometry_infos, build_range_infos);
+        }
     }
 
     func(command_buffer, infoCount, build_geometry_infos, build_range_infos);
@@ -11658,7 +11664,7 @@ void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaComma
     auto& address_replacer = GetDeviceAddressReplacer(device_info);
 
     address_replacer.ProcessCmdBuildAccelerationStructuresKHR(
-        nullptr, info_count, build_geometry_infos, build_range_infos, address_tracker);
+        nullptr, info_count, build_geometry_infos, build_range_infos, address_tracker, false);
 
     GetAccelerationStructureBuilder(device_info)
         .ProcessBuildVulkanAccelerationStructuresMetaCommand(
