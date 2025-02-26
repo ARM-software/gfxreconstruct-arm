@@ -395,7 +395,8 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
     uint32_t                                     info_count,
     VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos,
     VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos,
-    const VulkanDeviceAddressTracker&            address_tracker)
+    const VulkanDeviceAddressTracker&            address_tracker,
+    bool                                         process_scratch_buffers)
 {
     GFXRECON_ASSERT(device_table_ != nullptr);
 
@@ -435,7 +436,10 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
         auto  range_info          = build_range_infos[i];
 
         // check/correct scratch-address
-        address_remap(build_geometry_info.scratchData.deviceAddress);
+        if (process_scratch_buffers)
+        {
+            address_remap(build_geometry_info.scratchData.deviceAddress);
+        }
 
         for (uint32_t j = 0; j < build_geometry_info.geometryCount; ++j)
         {

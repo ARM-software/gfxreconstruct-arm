@@ -180,9 +180,21 @@ decode::Window* AndroidWindowFactory::Create(
 
 void AndroidWindowFactory::Destroy(decode::Window* window)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(window);
-    int32_t windowidx = created_window_.at(window) - 1;
-    android_context_->destroyNativeWindow(windowidx);
+    if (window)
+    {
+        ANativeWindow* native_window = nullptr;
+        if (window->GetNativeHandle(decode::Window::kAndroidNativeWindow, reinterpret_cast<void**>(&native_window)))
+        {
+            ANativeWindow_release(native_window);
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Couldn't release Android native window %p from window %p", native_window, window)
+        }
+
+        int32_t window_index = created_window_.at(window) - 1;
+        android_context_->destroyNativeWindow(window_index);
+    }
 }
 
 VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const encode::VulkanInstanceTable* table,
