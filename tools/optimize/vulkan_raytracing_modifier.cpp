@@ -98,10 +98,9 @@ void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKH
     acceleration_structure_device_addresses_[returnValue] = as_id;
     if (acceleration_structure_entries_.find(as_id) != acceleration_structure_entries_.end())
     {
-        VkDeviceAddress address = returnValue - acceleration_structure_entries_[as_id].offset;
-        if (buffer_device_addresses_.find(address) != buffer_device_addresses_.end())
+        if (buffer_device_addresses_.find(returnValue) != buffer_device_addresses_.end())
         {
-            buffer_device_addresses_.erase(address);
+            buffer_device_addresses_.erase(returnValue);
         }
     }
 }
