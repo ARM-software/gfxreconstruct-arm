@@ -47,10 +47,9 @@ void AnnotationEditor::SetAnnotation(format::AnnotationType type, std::string la
     annotations_to_set_[label] = { type, data };
 }
 
-bool AnnotationEditor::ProcessAnnotation(const format::BlockHeader& block_header,
-                                         format::AnnotationType     annotation_type,
-                                         std::string                label,
-                                         std::string                data)
+bool AnnotationEditor::ProcessAnnotation(const format::AnnotationHeader& header,
+                                         const std::string&              label,
+                                         const std::string&              data)
 {
     bool        success                 = true;
     const auto& annotation_modification = annotations_to_set_.find(label);
@@ -61,26 +60,28 @@ bool AnnotationEditor::ProcessAnnotation(const format::BlockHeader& block_header
         if (!data.empty())
         {
             // replace existing annotation data
-            success = FileTransformer::ProcessAnnotation(
-                block_header, annotation_type, label, annotation_modification->second.second);
+            success = FileTransformer::ProcessAnnotation(header, label, annotation_modification->second.second);
         }
         annotations_to_set_.erase(annotation_modification);
     }
     else
     {
         // keep exsiting annotation
-        success = FileTransformer::ProcessAnnotation(block_header, annotation_type, label, data);
+        success = FileTransformer::ProcessAnnotation(header, label, data);
     }
     return success;
 }
 
 bool AnnotationEditor::WriteAnnotation(format::AnnotationType annotation_type, std::string label, std::string data)
 {
-    gfxrecon::format::BlockHeader block_header;
-    block_header.type = format::BlockType::kAnnotation;
-    block_header.size = format::GetAnnotationBlockBaseSize() + label.length() + data.length();
+    format::AnnotationHeader header;
+    header.block_header.type = format::BlockType::kAnnotation;
+    header.block_header.size = format::GetAnnotationBlockBaseSize() + label.size() + data.size();
+    header.annotation_type   = annotation_type;
+    header.label_length      = label.size();
+    header.data_length       = data.size();
 
-    return FileTransformer::ProcessAnnotation(block_header, annotation_type, label, data);
+    return FileTransformer::ProcessAnnotation(header, label, data);
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

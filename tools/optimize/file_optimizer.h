@@ -44,20 +44,10 @@ class FileOptimizer : public decode::FileTransformer
     uint64_t GetUnreferencedBlocksSize();
 
   protected:
-    virtual bool ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id) override;
-
-    virtual bool ProcessMethodCall(const format::BlockHeader& block_header,
-                                   format::ApiCallId          call_id,
-                                   uint64_t                   block_index = 0) override;
-
-  private:
-    bool FilterInitBufferMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool FilterInitTensorMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool FilterInitImageMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool FilterMethodCall(const format::BlockHeader& block_header, format::ApiCallId api_call_id, uint64_t block_index);
+    virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
+    virtual bool ProcessInitBufferCommand(const format::InitBufferCommandHeader& header) override;
+    virtual bool ProcessInitImageCommand(const format::InitImageCommandHeader& header) override;
+    virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
 
   protected:
     std::unordered_set<format::HandleId> unreferenced_ids_;

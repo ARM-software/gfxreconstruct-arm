@@ -44,8 +44,7 @@ void Dx12FileOptimizer::SetFillCommandResourceValues(
     }
 }
 
-bool Dx12FileOptimizer::AddFillMemoryResourceValueCommand(const format::BlockHeader& block_header,
-                                                          format::MetaDataId         meta_data_id)
+bool Dx12FileOptimizer::AddFillMemoryResourceValueCommand()
 {
     bool success = true;
 
@@ -125,9 +124,9 @@ bool Dx12FileOptimizer::AddFillMemoryResourceValueCommand(const format::BlockHea
     return success;
 }
 
-bool Dx12FileOptimizer::ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
+bool Dx12FileOptimizer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 {
-    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_data_id);
+    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
 
     // If needed, add a FillMemoryResourceValueCommand before the fill memory command.
     if ((meta_data_type == format::MetaDataType::kFillMemoryCommand) ||
@@ -138,7 +137,7 @@ bool Dx12FileOptimizer::ProcessMetaData(const format::BlockHeader& block_header,
             if ((resource_values_iter_ != fill_command_resource_values_->end()) &&
                 (resource_values_iter_->first == GetCurrentBlockIndex()))
             {
-                if (!AddFillMemoryResourceValueCommand(block_header, meta_data_id))
+                if (!AddFillMemoryResourceValueCommand())
                 {
                     GFXRECON_LOG_ERROR("Failed to write the FillMemoryResourceValueCommand needed for DXR or EI "
                                        "optimization. Optimized file may be invalid.");
@@ -155,7 +154,7 @@ bool Dx12FileOptimizer::ProcessMetaData(const format::BlockHeader& block_header,
             fill_command_resource_values_ = &rvm;
             resource_values_iter_         = fill_command_resource_values_->begin();
 
-            if (!AddFillMemoryResourceValueCommand(block_header, meta_data_id))
+            if (!AddFillMemoryResourceValueCommand())
             {
                 GFXRECON_LOG_ERROR("Failed to write the FillMemoryResourceValueCommand needed for DXR/EI optimization. "
                                    "Optimized file may be invalid.");
@@ -166,7 +165,7 @@ bool Dx12FileOptimizer::ProcessMetaData(const format::BlockHeader& block_header,
         }
     }
 
-    return FileOptimizer::ProcessMetaData(block_header, meta_data_id);
+    return FileOptimizer::ProcessMetaData(meta_header);
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -50,304 +50,166 @@ uint64_t FileOptimizer::GetUnreferencedBlocksSize()
     return unreferenced_blocks_.size();
 }
 
-bool FileOptimizer::ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
+bool FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index)
 {
-    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_data_id);
-    if (meta_data_type == format::MetaDataType::kInitBufferCommand)
+    if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateGraphicsPipelineState ||
+        header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateComputePipelineState ||
+        header.api_call_id == format::ApiCallId::ApiCall_ID3D12PipelineLibrary_StorePipeline)
     {
-        return FilterInitBufferMetaData(block_header, meta_data_id);
-    }
-    else if (meta_data_type == format::MetaDataType::kInitImageCommand)
-    {
-        return FilterInitImageMetaData(block_header, meta_data_id);
-    }
-    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
-    {
-        return FilterInitTensorMetaData(block_header, meta_data_id);
-    }
-    else
-    {
-        // Copy the meta data block, if it was not filtered.
-        return FileTransformer::ProcessMetaData(block_header, meta_data_id);
-    }
-}
-
-bool FileOptimizer::ProcessMethodCall(const format::BlockHeader& block_header,
-                                      format::ApiCallId          api_call_id,
-                                      uint64_t                   block_index)
-{
-    if (api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateGraphicsPipelineState ||
-        api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateComputePipelineState ||
-        api_call_id == format::ApiCallId::ApiCall_ID3D12PipelineLibrary_StorePipeline)
-    {
-        return FilterMethodCall(block_header, api_call_id, block_index);
-    }
-    else
-    {
-        // Copy the method call block, if it was not filtered.
-        return FileTransformer::ProcessMethodCall(block_header, api_call_id);
-    }
-}
-
-bool FileOptimizer::FilterInitBufferMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
-{
-    GFXRECON_ASSERT(format::GetMetaDataType(meta_data_id) == format::MetaDataType::kInitBufferCommand);
-
-    format::InitBufferCommandHeader header;
-
-    bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
-    success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
-    success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
-    success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
-
-    if (success)
-    {
-        // Total number of bytes remaining to be read for the current block.
-        uint64_t unread_bytes = block_header.size - (sizeof(header) - sizeof(block_header));
-
-        // If the buffer is in the unused list, omit its initialization data from the file.
-        if (unreferenced_ids_.find(header.buffer_id) != unreferenced_ids_.end())
+        // If the buffer is in the unused list, omit the call block from the file.
+        if (unreferenced_blocks_.find(block_index) != unreferenced_blocks_.end())
         {
-            // In its place insert a dummy annotation meta command. This should keep the block index when
-            // replaying an optimized trimmed capture in in alignment with the block index calculated
-            // at capture time
-            const char*       label = format::kAnnotationLabelRemovedResource;
-            const std::string data  = "Removed buffer " + std::to_string(header.buffer_id);
+            unreferenced_blocks_.erase(block_index);
 
-            const size_t label_length = util::platform::StringLength(label);
-            const size_t data_length  = data.length();
-
-            format::AnnotationHeader annotation;
-            annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
-            annotation.block_header.type = format::BlockType::kAnnotation;
-            annotation.annotation_type   = format::kText;
-            annotation.label_length      = static_cast<uint32_t>(label_length);
-            annotation.data_length       = static_cast<uint64_t>(data.length());
-
-            if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
-                !WriteBytes(data.c_str(), data_length))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
-                return false;
-            }
+            // Total number of bytes remaining to be read for the current block.
+            const uint64_t unread_bytes = header.block_header.size - sizeof(header) + sizeof(header.block_header);
 
             if (!SkipBytes(unread_bytes))
             {
-                HandleBlockReadError(kErrorSeekingFile, "Failed to skip init buffer data meta-data block data");
-                return false;
-            }
-        }
-        else
-        {
-            // Copy the block from the input file to the output file.
-            header.meta_header.block_header = block_header;
-            header.meta_header.meta_data_id = meta_data_id;
-
-            if (!WriteBytes(&header, sizeof(header)))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader,
-                                      "Failed to write init buffer data meta-data block header");
+                HandleBlockReadError(kErrorSeekingFile, "Failed to skip method call block data");
                 return false;
             }
 
-            if (!CopyBytes(unread_bytes))
-            {
-                HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy init buffer data meta-data block data");
-                return false;
-            }
+            return true;
         }
     }
-    else
-    {
-        HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
-        return false;
-    }
 
-    return true;
+    return FileTransformer::ProcessMethodCall(header, block_index);
 }
 
-bool FileOptimizer::FilterInitTensorMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
+bool FileOptimizer::ProcessInitBufferCommand(const format::InitBufferCommandHeader& header)
 {
-    GFXRECON_ASSERT(format::GetMetaDataType(meta_data_id) == format::MetaDataType::kInitTensorCommand);
-
-    format::InitTensorCommandHeader header;
-
-    bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
-    success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
-    success      = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
-    success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
-
-    if (success)
+    // If the buffer is in the unused list, omit its initialization data from the file.
+    if (unreferenced_ids_.find(header.buffer_id) != unreferenced_ids_.end())
     {
+        // In its place insert a dummy annotation meta command. This should keep the block index when
+        // replaying an optimized trimmed capture in in alignment with the block index calculated
+        // at capture time
+        const char*       label = format::kAnnotationLabelRemovedResource;
+        const std::string data  = "Removed buffer " + std::to_string(header.buffer_id);
+
+        const size_t label_length = util::platform::StringLength(label);
+        const size_t data_length  = data.length();
+
+        format::AnnotationHeader annotation;
+        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+        annotation.block_header.type = format::BlockType::kAnnotation;
+        annotation.annotation_type   = format::kText;
+        annotation.label_length      = static_cast<uint32_t>(label_length);
+        annotation.data_length       = static_cast<uint64_t>(data.length());
+
+        if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
+            !WriteBytes(data.c_str(), data_length))
+        {
+            HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
+            return false;
+        }
+
         // Total number of bytes remaining to be read for the current block.
-        uint64_t unread_bytes = block_header.size - (sizeof(header) - sizeof(block_header));
+        const uint64_t unread_bytes =
+            header.meta_header.block_header.size - (sizeof(header) - sizeof(header.meta_header.block_header));
 
-        // If the tensor is in the unused list, omit its initialization data from the file.
-        if (unreferenced_ids_.find(header.tensor_id) != unreferenced_ids_.end())
-        {
-            // In its place insert a dummy annotation meta command. This should keep the block index when
-            // replaying an optimized trimmed capture in in alignment with the block index calculated
-            // at capture time
-            const char*       label = format::kAnnotationLabelRemovedResource;
-            const std::string data  = "Removed tensor " + std::to_string(header.tensor_id);
-
-            const size_t label_length = util::platform::StringLength(label);
-            const size_t data_length  = data.length();
-
-            format::AnnotationHeader annotation;
-            annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
-            annotation.block_header.type = format::BlockType::kAnnotation;
-            annotation.annotation_type   = format::kText;
-            annotation.label_length      = static_cast<uint32_t>(label_length);
-            annotation.data_length       = static_cast<uint64_t>(data.length());
-
-            if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
-                !WriteBytes(data.c_str(), data_length))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
-                return false;
-            }
-
-            if (!SkipBytes(unread_bytes))
-            {
-                HandleBlockReadError(kErrorSeekingFile, "Failed to skip init tensor data meta-data block data");
-                return false;
-            }
-        }
-        else
-        {
-            // Copy the block from the input file to the output file.
-            header.meta_header.block_header = block_header;
-            header.meta_header.meta_data_id = meta_data_id;
-
-            if (!WriteBytes(&header, sizeof(header)))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader,
-                                      "Failed to write init tensor data meta-data block header");
-                return false;
-            }
-
-            if (!CopyBytes(unread_bytes))
-            {
-                HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy init tensor data meta-data block data");
-                return false;
-            }
-        }
-    }
-    else
-    {
-        HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init tensor data meta-data block header");
-        return false;
-    }
-
-    return true;
-}
-
-bool FileOptimizer::FilterInitImageMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
-{
-    GFXRECON_ASSERT(format::GetMetaDataType(meta_data_id) == format::MetaDataType::kInitImageCommand);
-
-    format::InitImageCommandHeader header;
-    std::vector<uint64_t>          level_sizes;
-
-    bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
-    success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
-    success      = success && ReadBytes(&header.image_id, sizeof(header.image_id));
-    success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
-    success      = success && ReadBytes(&header.aspect, sizeof(header.aspect));
-    success      = success && ReadBytes(&header.layout, sizeof(header.layout));
-    success      = success && ReadBytes(&header.level_count, sizeof(header.level_count));
-
-    if (success)
-    {
-        // Total number of bytes remaining to be read for the current block.
-        uint64_t unread_bytes = block_header.size - (sizeof(header) - sizeof(block_header));
-
-        // If the image is in the unused list, omit its initialization data from the file.
-        if (unreferenced_ids_.find(header.image_id) != unreferenced_ids_.end())
-        {
-            // In its place insert a dummy annotation meta command. This should keep the block index when
-            // replaying an optimized trimmed capture in in alignment with the block index calculated
-            // at capture time
-            const char*       label = format::kAnnotationLabelRemovedResource;
-            const std::string data  = "Removed subresource from image " + std::to_string(header.image_id);
-
-            const size_t label_length = util::platform::StringLength(label);
-            const size_t data_length  = data.length();
-
-            format::AnnotationHeader annotation;
-            annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
-            annotation.block_header.type = format::BlockType::kAnnotation;
-            annotation.annotation_type   = format::kText;
-            annotation.label_length      = static_cast<uint32_t>(label_length);
-            annotation.data_length       = static_cast<uint64_t>(data.length());
-
-            if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
-                !WriteBytes(data.c_str(), data_length))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
-                return false;
-            }
-
-            if (!SkipBytes(unread_bytes))
-            {
-                HandleBlockReadError(kErrorSeekingFile, "Failed to skip init image data meta-data block data");
-                return false;
-            }
-        }
-        else
-        {
-            // Copy the block from the input file to the output file.
-            header.meta_header.block_header = block_header;
-            header.meta_header.meta_data_id = meta_data_id;
-
-            if (!WriteBytes(&header, sizeof(header)))
-            {
-                HandleBlockWriteError(kErrorReadingBlockHeader,
-                                      "Failed to write init image data meta-data block header");
-                return false;
-            }
-
-            if (!CopyBytes(unread_bytes))
-            {
-                HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy init image data meta-data block data");
-                return false;
-            }
-        }
-    }
-    else
-    {
-        HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init image data meta-data block header");
-        return false;
-    }
-
-    return true;
-}
-
-bool FileOptimizer::FilterMethodCall(const format::BlockHeader& block_header,
-                                     format::ApiCallId          api_call_id,
-                                     uint64_t                   block_index)
-{
-    GFXRECON_ASSERT(api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateGraphicsPipelineState ||
-                    api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateComputePipelineState ||
-                    api_call_id == format::ApiCallId::ApiCall_ID3D12PipelineLibrary_StorePipeline);
-
-    // Total number of bytes remaining to be read for the current block.
-    uint64_t unread_bytes = block_header.size - sizeof(format::ApiCallId);
-
-    // If the buffer is in the unused list, omit the call block from the file.
-    if (unreferenced_blocks_.find(block_index) != unreferenced_blocks_.end())
-    {
-        unreferenced_blocks_.erase(block_index);
         if (!SkipBytes(unread_bytes))
         {
-            HandleBlockReadError(kErrorSeekingFile, "Failed to skip method call block data");
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init buffer data meta-data block data");
             return false;
         }
     }
     else
     {
-        return FileTransformer::ProcessMethodCall(block_header, api_call_id);
+        return FileTransformer::ProcessInitBufferCommand(header);
+    }
+
+    return true;
+}
+
+bool FileOptimizer::ProcessInitImageCommand(const format::InitImageCommandHeader& header)
+{
+    // If the image is in the unused list, omit its initialization data from the file.
+    if (unreferenced_ids_.find(header.image_id) != unreferenced_ids_.end())
+    {
+        // In its place insert a dummy annotation meta command. This should keep the block index when
+        // replaying an optimized trimmed capture in in alignment with the block index calculated
+        // at capture time
+        const char*       label = format::kAnnotationLabelRemovedResource;
+        const std::string data  = "Removed subresource from image " + std::to_string(header.image_id);
+
+        const size_t label_length = util::platform::StringLength(label);
+        const size_t data_length  = data.length();
+
+        format::AnnotationHeader annotation;
+        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+        annotation.block_header.type = format::BlockType::kAnnotation;
+        annotation.annotation_type   = format::kText;
+        annotation.label_length      = static_cast<uint32_t>(label_length);
+        annotation.data_length       = static_cast<uint64_t>(data.length());
+
+        if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
+            !WriteBytes(data.c_str(), data_length))
+        {
+            HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
+            return false;
+        }
+
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes =
+            header.meta_header.block_header.size - (sizeof(header) - sizeof(header.meta_header.block_header));
+
+        if (!SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init image data meta-data block data");
+            return false;
+        }
+    }
+    else
+    {
+        return FileTransformer::ProcessInitImageCommand(header);
+    }
+
+    return true;
+}
+
+bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    // If the tensor is in the unused list, omit its initialization data from the file.
+    if (unreferenced_ids_.find(header.tensor_id) != unreferenced_ids_.end())
+    {
+        // In its place insert a dummy annotation meta command. This should keep the block index when
+        // replaying an optimized trimmed capture in in alignment with the block index calculated
+        // at capture time
+        const char*       label = format::kAnnotationLabelRemovedResource;
+        const std::string data  = "Removed tensor " + std::to_string(header.tensor_id);
+
+        const size_t label_length = util::platform::StringLength(label);
+        const size_t data_length  = data.length();
+
+        format::AnnotationHeader annotation;
+        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+        annotation.block_header.type = format::BlockType::kAnnotation;
+        annotation.annotation_type   = format::kText;
+        annotation.label_length      = static_cast<uint32_t>(label_length);
+        annotation.data_length       = static_cast<uint64_t>(data.length());
+
+        if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
+            !WriteBytes(data.c_str(), data_length))
+        {
+            HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
+            return false;
+        }
+
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes =
+            header.meta_header.block_header.size - (sizeof(header) - sizeof(header.meta_header.block_header));
+
+        if (!SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init tensor data meta-data block data");
+            return false;
+        }
+    }
+    else
+    {
+        return FileTransformer::ProcessInitTensorCommand(header);
     }
 
     return true;
