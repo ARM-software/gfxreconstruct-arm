@@ -45,13 +45,41 @@ void FileOptimizer::SetUnreferencedBlocks(const std::unordered_set<uint64_t>& un
     unreferenced_blocks_ = unreferenced_blocks;
 }
 
+void FileOptimizer::SetRemovedThreads(const std::unordered_set<format::ThreadId>& removed_threads_ids)
+{
+    removed_threads_ids_ = removed_threads_ids;
+}
+
 uint64_t FileOptimizer::GetUnreferencedBlocksSize()
 {
     return unreferenced_blocks_.size();
 }
 
+bool FileOptimizer::ProcessFunctionCall(const format::FunctionCallHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) == removed_threads_ids_.end())
+    {
+        return FileTransformer::ProcessFunctionCall(header);
+    }
+    else
+    {
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes = header.block_header.size - (sizeof(header) - sizeof(header.block_header));
+
+        if (!SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip function call block data");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index)
 {
+    bool ignore_call = (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end());
+
     if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateGraphicsPipelineState ||
         header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateComputePipelineState ||
         header.api_call_id == format::ApiCallId::ApiCall_ID3D12PipelineLibrary_StorePipeline)
@@ -60,21 +88,81 @@ bool FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, ui
         if (unreferenced_blocks_.find(block_index) != unreferenced_blocks_.end())
         {
             unreferenced_blocks_.erase(block_index);
-
-            // Total number of bytes remaining to be read for the current block.
-            const uint64_t unread_bytes = header.block_header.size - sizeof(header) + sizeof(header.block_header);
-
-            if (!SkipBytes(unread_bytes))
-            {
-                HandleBlockReadError(kErrorSeekingFile, "Failed to skip method call block data");
-                return false;
-            }
-
-            return true;
+            ignore_call = true;
         }
     }
 
-    return FileTransformer::ProcessMethodCall(header, block_index);
+    if (ignore_call)
+    {
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes = header.block_header.size - sizeof(header) + sizeof(header.block_header);
+
+        if (!SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip method call block data");
+            return false;
+        }
+
+        return true;
+    }
+    else
+    {
+        return FileTransformer::ProcessMethodCall(header, block_index);
+    }
+}
+
+bool FileOptimizer::ProcessDisplayMessageCommand(const format::DisplayMessageCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessDisplayMessageCommand(header);
+}
+
+bool FileOptimizer::ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessFillMemoryCommand(header);
+}
+
+bool FileOptimizer::ProcessResizeWindowCommand(const format::ResizeWindowCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessResizeWindowCommand(header);
+}
+
+bool FileOptimizer::ProcessSetSwapchainImageStateCommand(const format::SetSwapchainImageStateCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetSwapchainImageStateCommand(header);
+}
+
+bool FileOptimizer::ProcessBeginResourceInitCommand(const format::BeginResourceInitCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessBeginResourceInitCommand(header);
+}
+
+bool FileOptimizer::ProcessEndResourceInitCommand(const format::EndResourceInitCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessEndResourceInitCommand(header);
 }
 
 bool FileOptimizer::ProcessInitBufferCommand(const format::InitBufferCommandHeader& header)
@@ -111,9 +199,13 @@ bool FileOptimizer::ProcessInitBufferCommand(const format::InitBufferCommandHead
 
         if (!SkipBytes(unread_bytes))
         {
-            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init buffer data meta-data block data");
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init bimage data meta-data block data");
             return false;
         }
+    }
+    else if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
     }
     else
     {
@@ -157,9 +249,13 @@ bool FileOptimizer::ProcessInitImageCommand(const format::InitImageCommandHeader
 
         if (!SkipBytes(unread_bytes))
         {
-            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init image data meta-data block data");
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init bimage data meta-data block data");
             return false;
         }
+    }
+    else if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
     }
     else
     {
@@ -167,6 +263,170 @@ bool FileOptimizer::ProcessInitImageCommand(const format::InitImageCommandHeader
     }
 
     return true;
+}
+
+bool FileOptimizer::ProcessDestroyHardwareBufferCommand(const format::DestroyHardwareBufferCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessDestroyHardwareBufferCommand(header);
+}
+
+bool FileOptimizer::ProcessSetDevicePropertiesCommand(const format::SetDevicePropertiesCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetDevicePropertiesCommand(header);
+}
+
+bool FileOptimizer::ProcessSetDeviceMemoryPropertiesCommand(const format::SetDeviceMemoryPropertiesCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetDeviceMemoryPropertiesCommand(header);
+}
+
+bool FileOptimizer::ProcessResizeWindowCommand2(const format::ResizeWindowCommand2& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessResizeWindowCommand2(header);
+}
+
+bool FileOptimizer::ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetOpaqueAddressCommand(header);
+}
+
+bool FileOptimizer::ProcessSetRayTracingShaderGroupHandlesCommand(
+    const format::SetRayTracingShaderGroupHandlesCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetRayTracingShaderGroupHandlesCommand(header);
+}
+
+bool FileOptimizer::ProcessCreateHeapAllocationCommand(const format::CreateHeapAllocationCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessCreateHeapAllocationCommand(header);
+}
+
+bool FileOptimizer::ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessInitSubresourceCommand(header);
+}
+
+bool FileOptimizer::ProcessExeFileInfoCommand(const format::ExeFileInfoBlock& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessExeFileInfoCommand(header);
+}
+
+bool FileOptimizer::ProcessInitDx12AccelerationStructureCommand(
+    const format::InitDx12AccelerationStructureCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessInitDx12AccelerationStructureCommand(header);
+}
+
+bool FileOptimizer::ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessFillMemoryResourceValueCommand(header);
+}
+
+bool FileOptimizer::ProcessDxgiAdapterInfoCommand(const format::DxgiAdapterInfoCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessDxgiAdapterInfoCommand(header);
+}
+
+bool FileOptimizer::ProcessDriverInfoCommand(const format::DriverInfoBlock& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessDriverInfoCommand(header);
+}
+
+bool FileOptimizer::ProcessCreateHardwareBufferCommand(const format::CreateHardwareBufferCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessCreateHardwareBufferCommand(header);
+}
+
+bool FileOptimizer::ProcessDx12RuntimeInfoCommand(const format::Dx12RuntimeInfoCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessDx12RuntimeInfoCommand(header);
+}
+
+bool FileOptimizer::ProcessParentToChildDependency(const format::ParentToChildDependencyHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessParentToChildDependency(header);
+}
+
+bool FileOptimizer::ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessSetEnvironmentVariablesCommand(header);
+}
+
+bool FileOptimizer::ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessExecuteBlocksFromFile(header);
 }
 
 bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
@@ -203,13 +463,30 @@ bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHead
 
         if (!SkipBytes(unread_bytes))
         {
-            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init tensor data meta-data block data");
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init bimage data meta-data block data");
             return false;
         }
+    }
+    else if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
     }
     else
     {
         return FileTransformer::ProcessInitTensorCommand(header);
+    }
+
+    return true;
+}
+
+bool FileOptimizer::RemoveThreadBlock(const format::BlockHeader& header, size_t size_read)
+{
+    const uint64_t unread_bytes = header.size - (size_read - sizeof(header));
+
+    if (!SkipBytes(unread_bytes))
+    {
+        HandleBlockReadError(kErrorSeekingFile, "Failed to skip thread-removed block");
+        return false;
     }
 
     return true;

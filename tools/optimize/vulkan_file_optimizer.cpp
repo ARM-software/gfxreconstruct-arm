@@ -29,6 +29,11 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
 bool VulkanFileOptimizer::ProcessFunctionCall(const format::FunctionCallHeader& header)
 {
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return FileOptimizer::ProcessFunctionCall(header);
+    }
+
     size_t parameter_buffer_size =
         static_cast<size_t>(header.block_header.size) - (sizeof(header) - sizeof(header.block_header));
     uint64_t            uncompressed_size = 0;
@@ -225,6 +230,11 @@ void VulkanFileOptimizer::WriteFunctionCall(format::ApiCallId               call
 
 bool VulkanFileOptimizer::ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header)
 {
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return FileOptimizer::ProcessFillMemoryCommand(header);
+    }
+
     uint64_t                index                 = GetCurrentBlockIndex();
     uint64_t                parameter_buffer_size = 0;
     encode::ParameterBuffer buffer;
@@ -338,6 +348,11 @@ bool VulkanFileOptimizer::ProcessFillMemoryCommand(const format::FillMemoryComma
 
 bool VulkanFileOptimizer::ProcessInitBufferCommand(const format::InitBufferCommandHeader& header)
 {
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return FileOptimizer::ProcessInitBufferCommand(header);
+    }
+
     uint64_t                index                 = GetCurrentBlockIndex();
     uint64_t                parameter_buffer_size = 0;
     encode::ParameterBuffer buffer;
@@ -448,6 +463,11 @@ bool VulkanFileOptimizer::ProcessInitBufferCommand(const format::InitBufferComma
 
 bool VulkanFileOptimizer::ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header)
 {
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return FileOptimizer::ProcessSetOpaqueAddressCommand(header);
+    }
+
     // This command does not support compression.
     GFXRECON_ASSERT(header.meta_header.block_header.type != format::BlockType::kCompressedMetaDataBlock);
 
@@ -707,6 +727,11 @@ bool VulkanFileOptimizer::ProcessVulkanCopyAccelerationStructuresCommand(
 
 bool VulkanFileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
 {
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return FileOptimizer::ProcessInitTensorCommand(header);
+    }
+
     uint64_t                index                 = GetCurrentBlockIndex();
     uint64_t                parameter_buffer_size = 0;
     encode::ParameterBuffer buffer;
