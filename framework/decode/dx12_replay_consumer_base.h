@@ -30,6 +30,7 @@
 #include "decode/dx12_object_info.h"
 #include "decode/dx12_object_mapping_util.h"
 #include "decode/dx12_resource_value_mapper.h"
+#include "decode/dx12_resource_allocator.h"
 #include "decode/dx12_dump_resources.h"
 #include "decode/window.h"
 #include "format/format.h"
@@ -1045,6 +1046,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     IUnknown* GetCreateDeviceAdapter(DxObjectInfo* adapter_info);
 
     void InitializeD3D12Device(HandlePointerDecoder<void*>* device);
+
+    void InitializeResourceAllocator(const IUnknown* adapter, const void* device, HandlePointerDecoder<void*>* decoder);
 
     void DetectAdapters();
 

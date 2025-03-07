@@ -31,6 +31,7 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/dx12_descriptor_map.h"
+#include "decode/dx12_resource_allocator.h"
 
 #include <d3d12.h>
 
@@ -277,8 +278,9 @@ struct D3D12DeviceInfo : DxObjectExtraInfo
     IDXGIAdapter3* adapter3{ nullptr };
     uint32_t       adapter_node_index{ 0 };
 
-    std::shared_ptr<DescriptorIncrements> capture_increments{ std::make_shared<DescriptorIncrements>() };
-    std::shared_ptr<DescriptorIncrements> replay_increments{ std::make_shared<DescriptorIncrements>() };
+    std::unique_ptr<Dx12ResourceAllocator> allocator;
+    std::shared_ptr<DescriptorIncrements>  capture_increments{ std::make_shared<DescriptorIncrements>() };
+    std::shared_ptr<DescriptorIncrements>  replay_increments{ std::make_shared<DescriptorIncrements>() };
 
     // Cache features of the device to avoid repeated queries
     bool is_uma{ false };
