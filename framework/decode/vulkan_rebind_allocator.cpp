@@ -689,11 +689,14 @@ VkResult VulkanRebindAllocator::BindBufferMemory(VkBuffer                       
                 {
                     // Memory has been mapped and written prior to bind.  Copy the original content to the new
                     // allocation to ensure it contains the correct data.
-                    WriteBoundResource(resource_alloc_info,
-                                       memory_offset,
-                                       0,
-                                       allocation_info.size,
-                                       memory_alloc_info->original_content.get());
+
+                    // If the buffer is bigger at replay time than at capture time, you don't want to read
+                    // memory_alloc_info->original_content out of bounds
+                    VkDeviceSize copy_size =
+                        std::min(allocation_info.size, memory_alloc_info->allocation_size - memory_offset);
+
+                    WriteBoundResource(
+                        resource_alloc_info, memory_offset, 0, copy_size, memory_alloc_info->original_content.get());
                 }
 
                 (*bind_memory_properties) = property_flags;
@@ -779,10 +782,16 @@ VkResult VulkanRebindAllocator::BindBufferMemory2(uint32_t                      
                         {
                             // Memory has been mapped and written prior to bind.  Copy the original content to the new
                             // allocation to ensure it contains the correct data.
+
+                            // If the buffer is bigger at replay time than at capture time, you don't want to read
+                            // memory_alloc_info->original_content out of bounds
+                            VkDeviceSize copy_size = std::min(
+                                allocation_info.size, memory_alloc_info->allocation_size - bind_info->memoryOffset);
+
                             WriteBoundResource(resource_alloc_info,
                                                bind_info->memoryOffset,
                                                0,
-                                               allocation_info.size,
+                                               copy_size,
                                                memory_alloc_info->original_content.get());
                         }
 
@@ -940,10 +949,16 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
                         }
                         // Memory has been mapped and written prior to bind.  Copy the original content to the new
                         // allocation to ensure it contains the correct data.
+
+                        // If the image is bigger at replay time than at capture time, you don't want to read
+                        // memory_alloc_info->original_content out of bounds
+                        VkDeviceSize copy_size =
+                            std::min(allocation_info.size, memory_alloc_info->allocation_size - memory_offset);
+
                         WriteBoundResource(resource_alloc_info,
                                            memory_offset,
                                            0,
-                                           allocation_info.size,
+                                           copy_size,
                                            memory_alloc_info->original_content.get());
                     }
 
@@ -1078,12 +1093,19 @@ VkResult VulkanRebindAllocator::BindImageMemory2(uint32_t                     bi
                                         }
                                     }
                                 }
+
                                 // Memory has been mapped and written prior to bind.  Copy the original content to the
                                 // new allocation to ensure it contains the correct data.
+
+                                // If the image is bigger at replay time than at capture time, you don't want to read
+                                // memory_alloc_info->original_content out of bounds
+                                VkDeviceSize copy_size = std::min(
+                                    allocation_info.size, memory_alloc_info->allocation_size - bind_info->memoryOffset);
+
                                 WriteBoundResource(resource_alloc_info,
                                                    bind_info->memoryOffset,
                                                    0,
-                                                   allocation_info.size,
+                                                   copy_size,
                                                    memory_alloc_info->original_content.get());
                             }
 
@@ -1246,12 +1268,18 @@ VkResult VulkanRebindAllocator::BindVideoSessionMemory(VkVideoSessionKHR        
 
                         if (memory_alloc_info->original_content != nullptr)
                         {
-                            // Memory has been mapped and written prior to bind.  Copy the original content to the new
+                            // Memory has been mapped and written prior to bind. Copy the original content to the new
                             // allocation to ensure it contains the correct data.
+
+                            // If the session is bigger at replay time than at capture time, you don't want to read
+                            // memory_alloc_info->original_content out of bounds
+                            VkDeviceSize copy_size =
+                                std::min(allocation_info.size, memory_alloc_info->allocation_size - src_offset);
+
                             WriteBoundResource(resource_alloc_info,
                                                src_offset,
                                                0,
-                                               allocation_info.size,
+                                               copy_size,
                                                memory_alloc_info->original_content.get());
                         }
 
