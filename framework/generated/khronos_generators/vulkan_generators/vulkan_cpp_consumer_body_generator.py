@@ -1014,6 +1014,8 @@ class VulkanCppConsumerBodyGenerator(BaseGenerator):
 
                 callArgs.append(f'{varName}.c_str()')
                 callTempl.append('&%s')
+            elif self.is_struct(arg.base_type):
+                print(f'Argument {arg.name} in function {name} ignored because {arg.base_type} is not supported yet.')
             else:
                 # simple input argument (float, etc..)
                 valueSuffix = valueSuffixDict.get(arg.base_type, '')
