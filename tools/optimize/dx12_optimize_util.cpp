@@ -30,6 +30,7 @@
 #include "generated/generated_dx12_replay_consumer.h"
 #include "decode/dx12_resource_value_tracker.h"
 #include "decode/file_processor.h"
+#include "../tool_settings.h"
 
 #ifdef GFXRECON_AGS_SUPPORT
 #include "decode/custom_ags_consumer_base.h"
@@ -38,6 +39,8 @@
 #endif // GFXRECON_AGS_SUPPORT
 
 #include <map>
+
+void PrintUsage(const char*) {}
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
@@ -74,6 +77,9 @@ void CreateResourceValueTrackingConsumer(
     // Use default replay options, except gpu index.
     decode::DxReplayOptions dx_replay_options;
     dx_replay_options.override_gpu_index = options.override_gpu_index;
+
+    decode::CreateDx12ResourceAllocator func    = CreateDxDefaultAllocator;
+    dx_replay_options.create_resource_allocator = func;
 
     // Create the replay consumer.
     dx12_replay_consumer = std::make_unique<decode::Dx12ResourceValueTrackingConsumer>(

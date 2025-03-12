@@ -81,6 +81,8 @@ Dx12ReplayConsumerBase::Dx12ReplayConsumerBase(std::shared_ptr<application::Appl
     set_breadcrumb_context_enablement_(false), set_page_fault_enablement_(false), loading_trim_state_(false),
     fps_info_(nullptr), frame_end_marker_count_(0)
 {
+    assert(options_.create_resource_allocator != nullptr);
+
     if (options_.enable_validation_layer)
     {
         gfxrecon::graphics::dx12::ID3D12DebugComPtr dx12_debug = nullptr;

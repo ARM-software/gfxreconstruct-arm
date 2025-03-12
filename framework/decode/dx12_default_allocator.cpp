@@ -59,7 +59,7 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DE
     {
         alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
 
-        if (alloc_info.Alignment != pResourceDesc->Alignment)
+        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
             GFXRECON_LOG_WARNING("The captured resource may be incompatible with the replayed device!");
 
@@ -83,7 +83,7 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_D
 
         alloc_info = device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
 
-        if (alloc_info.Alignment != pResourceDesc->Alignment)
+        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
             GFXRECON_LOG_WARNING("The captured resource may be incompatible with the replayed device!");
 
