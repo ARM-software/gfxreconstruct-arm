@@ -54,7 +54,8 @@ void SetExtraInfo(HandlePointerDecoder<T>* decoder, std::unique_ptr<U>&& extra_i
     object_info->extra_info = std::move(extra_info);
 }
 
-void InitialResourceExtraInfo(HandlePointerDecoder<void*>* resource_decoder,
+void InitialResourceExtraInfo(format::HandleId             device_id,
+                              HandlePointerDecoder<void*>* resource_decoder,
                               D3D12_RESOURCE_STATES        initial_state,
                               bool                         is_reserved_resource)
 {
@@ -69,6 +70,7 @@ void InitialResourceExtraInfo(HandlePointerDecoder<void*>* resource_decoder,
         info.barrier_flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     }
     extra_info->is_reserved_resource = is_reserved_resource;
+    extra_info->parent_id            = device_id;
 
     SetExtraInfo(resource_decoder, std::move(extra_info));
 }
@@ -828,20 +830,21 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
     --(replay_object_info->ref_count);
     if ((replay_object_info->ref_count == 0) && (replay_object_info->extra_ref == 0))
     {
-        RemoveObject(replay_object_info);
-    }
-
-    if (replay_object_info->ref_count == 0)
-    {
-        auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
-        if (device_info != nullptr)
+        if ((replay_object_info->extra_info != nullptr) &&
+            (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12ResourceInfo) &&
+            (replay_object_info->extra_info->parent_id != format::kNullHandleId))
         {
+            auto device_object = GetObjectInfo(replay_object_info->extra_info->parent_id);
+            assert(device_object != nullptr);
+            auto device_info = GetExtraInfo<D3D12DeviceInfo>(device_object);
+            assert(device_info != nullptr);
             auto allocator = device_info->allocator.get();
-            if (device_info != nullptr)
-            {
-                allocator->Release(object);
-            }
+            assert(allocator != nullptr);
+
+            allocator->Release(object);
         }
+
+        RemoveObject(replay_object_info);
     }
 
     return object->Release();
@@ -1511,7 +1514,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource(
     }
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, InitialResourceState, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, resource, InitialResourceState, false);
     }
     return replay_result;
 }
@@ -1546,7 +1549,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(ppvResource, InitialState, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, ppvResource, InitialState, false);
     }
     return replay_result;
 }
@@ -1717,7 +1720,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource1(
     }
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, InitialResourceState, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, resource, InitialResourceState, false);
     }
     return replay_result;
 }
@@ -1752,7 +1755,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource1(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(ppvResource, InitialState, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, ppvResource, InitialState, false);
     }
     return replay_result;
 }
@@ -1828,7 +1831,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource2(
     }
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, InitialResourceState, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, resource, InitialResourceState, false);
     }
     return replay_result;
 }
@@ -1867,7 +1870,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource2(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(ppvResource, D3D12_RESOURCE_STATE_COMMON, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, ppvResource, D3D12_RESOURCE_STATE_COMMON, false);
     }
     return replay_result;
 }
@@ -1950,7 +1953,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource3(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, D3D12_RESOURCE_STATE_COMMON, false);
+        InitialResourceExtraInfo(replay_object_info->capture_id, resource, D3D12_RESOURCE_STATE_COMMON, false);
     }
     return replay_result;
 }
@@ -2623,7 +2626,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
             if (swapchain_info->image_ids[buffer] == format::kNullHandleId)
             {
                 auto object_info = static_cast<DxObjectInfo*>(surface->GetConsumerData(0));
-                InitialResourceExtraInfo(surface, D3D12_RESOURCE_STATE_PRESENT, false);
+                InitialResourceExtraInfo(replay_object_info->capture_id, surface, D3D12_RESOURCE_STATE_PRESENT, false);
 
                 // Ensure that the retrieved buffer is a D3D12 resource prior to casting to ID3D12Resource.
                 const auto& buffer_iid = *riid.decoded_value;
@@ -2631,7 +2634,8 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
                     IsEqualIID(buffer_iid, __uuidof(ID3D12Resource1)) ||
                     IsEqualIID(buffer_iid, __uuidof(ID3D12Resource2)))
                 {
-                    InitialResourceExtraInfo(surface, D3D12_RESOURCE_STATE_PRESENT, false);
+                    InitialResourceExtraInfo(
+                        replay_object_info->capture_id, surface, D3D12_RESOURCE_STATE_PRESENT, false);
 
                     auto res_info           = GetExtraInfo<D3D12ResourceInfo>(object_info);
                     res_info->swap_chain_id = replay_object_info->capture_id;
@@ -3571,7 +3575,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateReservedResource(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, initial_state, true);
+        InitialResourceExtraInfo(device_object_info->capture_id, resource, initial_state, true);
     }
 
     return replay_result;
@@ -3608,7 +3612,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateReservedResource1(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, initial_state, true);
+        InitialResourceExtraInfo(device_object_info->capture_id, resource, initial_state, true);
     }
 
     return replay_result;
@@ -3649,7 +3653,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateReservedResource2(
 
     if (SUCCEEDED(replay_result))
     {
-        InitialResourceExtraInfo(resource, D3D12_RESOURCE_STATE_COMMON, true);
+        InitialResourceExtraInfo(device_object_info->capture_id, resource, D3D12_RESOURCE_STATE_COMMON, true);
     }
 
     return replay_result;

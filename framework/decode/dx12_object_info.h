@@ -208,6 +208,7 @@ struct DxObjectExtraInfo
     virtual ~DxObjectExtraInfo() {}
 
     const DxObjectInfoType extra_info_type;
+    format::HandleId       parent_id{ format::kNullHandleId };
 };
 
 struct DxObjectInfo
