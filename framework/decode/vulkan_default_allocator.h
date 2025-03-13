@@ -280,6 +280,13 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
             image, memory, memory_offset, allocator_image_data, allocator_memory_data, bind_memory_properties);
     }
 
+    virtual void BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
+                                                VkImage     image,
+                                                void*       ahardwahardwarebuffer_infoarebuffer_id) override
+    {
+        return;
+    }
+
     virtual VkResult MapResourceMemoryDirect(VkDeviceSize     size,
                                              VkMemoryMapFlags flags,
                                              void**           data,

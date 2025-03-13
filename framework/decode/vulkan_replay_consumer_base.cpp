@@ -914,6 +914,7 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
     ahb_info.memory_id                        = memory_id;
     ahb_info.hardware_buffer                  = nullptr;
     ahb_info.data                             = nullptr;
+    ahb_info.width                            = width;
     ahb_info.plane_info                       = {};
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -1004,10 +1005,14 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
     {
         uint32_t bpp = GetHardwareBufferFormatBpp(format);
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
         if (!IsHardwareBufferWriteOnly(usage))
         {
             ahb_info.data = new uint8_t[height * width * bpp];
         }
+#else
+        ahb_info.data = new uint8_t[height * width * bpp];
+#endif
 
         VulkanAndroidHardwareBufferPlaneInfo& info = ahb_info.plane_info.emplace_back();
 
@@ -5170,6 +5175,7 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         bool uses_android_hardware_buffer = false;
 
         uint64_t external_buffer_id = 0;
+        VkImage  dedicated_image    = VK_NULL_HANDLE;
 
         VkMemoryAllocateInfo modified_allocate_info = (*pAllocateInfo->GetPointer());
 
@@ -5289,6 +5295,14 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                                          "extension structure provided to vkAllocateMemory")
                 }
             }
+            else if (current_struct->sType == VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO)
+            {
+                VkMemoryDedicatedAllocateInfo* import_struct =
+                    reinterpret_cast<VkMemoryDedicatedAllocateInfo*>(current_struct);
+                const Decoded_VkMemoryDedicatedAllocateInfo* import_node =
+                    reinterpret_cast<const Decoded_VkMemoryDedicatedAllocateInfo*>(current_node);
+                dedicated_image = import_struct->image;
+            }
 
             prev_struct = current_struct;
             prev_node   = current_node;
@@ -5363,8 +5377,11 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
 
                         if (result == VK_SUCCESS && data != nullptr)
                         {
-                            util::platform::MemoryCopy(
-                                data, size, ahb_info.data + ahb_info.plane_info[0].replay_offset, size);
+                            result =
+                                allocator->WriteMappedMemoryRange(allocator_data,
+                                                                  ahb_info.plane_info[0].replay_offset,
+                                                                  size,
+                                                                  ahb_info.data + ahb_info.plane_info[0].replay_offset);
 
                             VkMappedMemoryRange memory_range;
                             memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -5380,6 +5397,11 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                         {
                             GFXRECON_LOG_ERROR("Could not map AHardwareBuffer related VkDeviceMemory for "
                                                "initialization. Data corruption may occur.");
+                        }
+
+                        if (result == VK_SUCCESS && data != nullptr)
+                        {
+                            allocator->BindMemoryImageAHardwareBuffer(&allocator_data, dedicated_image, &ahb_info);
                         }
                     }
                     else
