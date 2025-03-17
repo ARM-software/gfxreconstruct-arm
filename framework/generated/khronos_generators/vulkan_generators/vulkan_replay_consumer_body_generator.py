@@ -288,7 +288,7 @@ class VulkanReplayConsumerBodyGenerator(
         )
         arglist = ', '.join(args)
 
-        dispatchfunc = ''
+        dispatchfunc = 'GetDeviceTable'
         if name not in ['vkCreateInstance', 'vkCreateDevice']:
             object_name = args[0]
             dispatch_func_is_set = False
