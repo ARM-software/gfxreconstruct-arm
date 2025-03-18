@@ -63,7 +63,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     assert(buffer_info != nullptr);
 
     VkAccelerationStructureBuildSizesInfoKHR build_sizes = last_build_sizes_;
-    last_build_sizes_                                    = {};
+    last_build_sizes_ = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0 };
 
     AccelerationStructureData             acceleration_structure_data;
     VkAccelerationStructureCreateInfoKHR* info = const_cast<VkAccelerationStructureCreateInfoKHR*>(create_info);

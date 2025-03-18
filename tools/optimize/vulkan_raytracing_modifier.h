@@ -6,7 +6,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <vulkan/vulkan_core.h>
 
+#include "decode/api_decoder.h"
 #include "decode/referenced_resource_table.h"
 #include "generated/generated_vulkan_consumer.h"
 #include "util/defines.h"
@@ -143,6 +145,14 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         StructPointerDecoder<Decoded_VkAccelerationStructureCreateInfoKHR>* pCreateInfo,
         StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                   pAccelerationStructure) override;
+
+    virtual void Process_vkGetAccelerationStructureBuildSizesKHR(
+        const ApiCallInfo&                                                         call_info,
+        format::HandleId                                                           device,
+        VkAccelerationStructureBuildTypeKHR                                        buildType,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pBuildInfo,
+        PointerDecoder<uint32_t>*                                                  pMaxPrimitiveCounts,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>*    pSizeInfo) override;
 
     virtual void
     Process_vkDestroyAccelerationStructureKHR(const ApiCallInfo& call_info,
@@ -286,11 +296,6 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
                                            StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
                                            format::HandleId                             fence) override;
 
-    bool GetDeleteCurrentCall()
-    {
-        return (delete_device_address_meta_command.find(block_index_) != delete_device_address_meta_command.end());
-    }
-
   private:
     std::vector<format::ShaderHandleLocationInfo> GetShaderGroupHandlesInFillMemory(const void* data, size_t size);
 
@@ -418,9 +423,6 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // -----pipeline handle-----group index-----SGH location info
     std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
         shader_group_handle_entries_;
-
-    // -----block index-----isDelete
-    std::unordered_map<uint64_t, bool> delete_device_address_meta_command;
 
     // -----compute pipeline handle-----PipelineObject
     std::unordered_map<format::HandleId, PipelineObject> compute_pipeline_entries_;

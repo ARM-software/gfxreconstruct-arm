@@ -226,7 +226,9 @@ class VulkanAccelerationStructureBuilder
         }
     };
 
-    VkAccelerationStructureBuildSizesInfoKHR                                  last_build_sizes_{};
+    VkAccelerationStructureBuildSizesInfoKHR last_build_sizes_{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0
+    };
     std::unordered_map<VkAccelerationStructureKHR, AccelerationStructureData> acceleration_structures_;
     std::unordered_map<VkBuffer, std::vector<VkAccelerationStructureKHR>>     buffer_binding_acceleration_structures_;
 

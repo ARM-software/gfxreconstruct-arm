@@ -81,7 +81,7 @@ void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKH
         {
             // delete the compacted AS function,
             // it will be inserted new AS function before ProcessCopyVulkanAccelerationStructuresMetaCommand
-            delete_device_address_meta_command[call_info.index] = true;
+            SetDeleteCurrentCall();
 
             gfxrecon::encode::ParameterEncoder encoder(
                 &acceleration_structure_build_infos_[as_id].get_address_parameter_buffer);
@@ -497,7 +497,7 @@ void VulkanRayTracingModifier::ProcessInitBufferCommand(format::HandleId device_
 
         init_buffer_entries_.emplace(std::make_pair(buffer_id, init_buffer_object));
 
-        delete_device_address_meta_command[block_index_] = true;
+        SetDeleteCurrentCall();
     }
 }
 
@@ -506,11 +506,10 @@ void VulkanRayTracingModifier::ProcessFixDeviceAddressCommand(const format::FixD
 {
     if (IsModificationPass())
     {
+        // delete the old fixed meta command, it will be inserted new fixed meta command
+        SetDeleteCurrentCall();
         return;
     }
-
-    // delete the old fixed meta command, it will be inserted new fixed meta command
-    delete_device_address_meta_command[block_index_] = true;
 }
 
 void VulkanRayTracingModifier::ProcessFixShaderGroupHandleCommand(
@@ -518,11 +517,10 @@ void VulkanRayTracingModifier::ProcessFixShaderGroupHandleCommand(
 {
     if (IsModificationPass())
     {
+        // delete the old fixed meta command, it will be inserted new fixed meta command
+        SetDeleteCurrentCall();
         return;
     }
-
-    // delete the old fixed meta command, it will be inserted new fixed meta command
-    delete_device_address_meta_command[block_index_] = true;
 }
 
 void VulkanRayTracingModifier::ProcessAccelerationStructureCompactionDependencyCommand(
@@ -530,11 +528,10 @@ void VulkanRayTracingModifier::ProcessAccelerationStructureCompactionDependencyC
 {
     if (IsModificationPass())
     {
+        // delete the old compaction dependency meta command, it will be inserted new fixed meta command
+        SetDeleteCurrentCall();
         return;
     }
-
-    // delete the old compaction dependency meta command, it will be inserted new fixed meta command
-    delete_device_address_meta_command[block_index_] = true;
 }
 
 void VulkanRayTracingModifier::ProcessSetOpaqueAddressCommand(format::HandleId device_id,
@@ -549,7 +546,7 @@ void VulkanRayTracingModifier::ProcessSetOpaqueAddressCommand(format::HandleId d
         {
             assert(acceleration_structure_entries_.count(object_id) > 0);
             acceleration_structure_entries_[object_id].device_address = address;
-            delete_device_address_meta_command[block_index_]          = true;
+            SetDeleteCurrentCall();
         }
         return;
     }
@@ -784,7 +781,7 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
     {
         // delete the compacted AS function,
         // it will be inserted new AS function before ProcessCopyVulkanAccelerationStructuresMetaCommand
-        delete_device_address_meta_command[call_info.index] = true;
+        SetDeleteCurrentCall();
 
         gfxrecon::encode::ParameterEncoder encoder(
             &acceleration_structure_build_infos_[handle].create_parameter_buffer);
@@ -859,6 +856,20 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
         new_call->call_id = gfxrecon::format::ApiCallId::ApiCall_Unknown;
         new_call->parameter_buffer.Write(&header, sizeof(header));
         new_call->parameter_buffer.Write(&handle, sizeof(format::HandleId));
+    }
+}
+
+void VulkanRayTracingModifier::Process_vkGetAccelerationStructureBuildSizesKHR(
+    const ApiCallInfo&                                                         call_info,
+    format::HandleId                                                           device,
+    VkAccelerationStructureBuildTypeKHR                                        buildType,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pBuildInfo,
+    PointerDecoder<uint32_t>*                                                  pMaxPrimitiveCounts,
+    StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>*    pSizeInfo)
+{
+    if (IsModificationPass())
+    {
+        SetDeleteCurrentCall();
     }
 }
 
