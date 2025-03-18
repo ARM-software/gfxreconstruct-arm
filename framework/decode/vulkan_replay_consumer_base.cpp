@@ -7585,7 +7585,7 @@ uintptr_t VulkanReplayConsumerBase::GetObjectAllocatorData(VkObjectType object_t
 
 VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
     PFN_vkSetDebugUtilsObjectNameEXT                             func,
-    const VkResult                                               original_result,
+    VkResult                                                     original_result,
     const VulkanDeviceInfo*                                      device_info,
     StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info)
 {
@@ -7603,8 +7603,14 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
         VkDebugUtilsObjectNameInfoEXT* info = meta_info->decoded_value;
         GFXRECON_ASSERT(info != nullptr);
 
-        return allocator->SetDebugUtilsObjectNameEXT(
-            device_info->handle, info, GetObjectAllocatorData(info->objectType, meta_info->objectHandle));
+        uintptr_t allocator_data = GetObjectAllocatorData(info->objectType, meta_info->objectHandle);
+
+        if (allocator_data != 0)
+        {
+            // depending on which allocator is used, the call might get deferred until resources are actually bound
+            return allocator->SetDebugUtilsObjectNameEXT(device_info->handle, info, allocator_data);
+        }
+        return func(device_info->handle, info);
     }
 
     return original_result;
@@ -7612,7 +7618,7 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
 
 VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectTagEXT(
     PFN_vkSetDebugUtilsObjectTagEXT                             func,
-    const VkResult                                              original_result,
+    VkResult                                                    original_result,
     const VulkanDeviceInfo*                                     device_info,
     StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* tag_info)
 {
@@ -7630,8 +7636,14 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectTagEXT(
         VkDebugUtilsObjectTagInfoEXT* info = meta_info->decoded_value;
         GFXRECON_ASSERT(info != nullptr);
 
-        return allocator->SetDebugUtilsObjectTagEXT(
-            device_info->handle, info, GetObjectAllocatorData(info->objectType, meta_info->objectHandle));
+        uintptr_t allocator_data = GetObjectAllocatorData(info->objectType, meta_info->objectHandle);
+
+        if (allocator_data != 0)
+        {
+            // depending on which allocator is used, the call might get deferred until resources are actually bound
+            return allocator->SetDebugUtilsObjectTagEXT(device_info->handle, info, allocator_data);
+        }
+        return func(device_info->handle, info);
     }
 
     return original_result;
