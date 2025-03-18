@@ -1182,6 +1182,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     bool                                                  set_breadcrumb_context_enablement_;
     bool                                                  set_page_fault_enablement_;
     bool                                                  loading_trim_state_;
+    bool                                                  support_memory_allocator_{ false };
     graphics::FpsInfo*                                    fps_info_;
     std::unique_ptr<Dx12ResourceValueMapper>              resource_value_mapper_;
     std::unique_ptr<Dx12AccelerationStructureBuilder>     accel_struct_builder_;

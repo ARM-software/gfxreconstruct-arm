@@ -23,6 +23,7 @@
 #ifndef GFXRECON_DECODE_DX12_REBIND_ALLOCATOR_H
 #define GFXRECON_DECODE_DX12_REBIND_ALLOCATOR_H
 
+#include "util/platform.h"
 #include "decode/dx12_resource_allocator.h"
 #include "D3D12MemAlloc.h"
 
@@ -150,6 +151,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
                                     _In_reads_opt_(NumRanges) const UINT*                   pHeapRangeStartOffsets,
                                     _In_reads_opt_(NumRanges) const UINT*                   pRangeTileCounts,
                                     D3D12_TILE_MAPPING_FLAGS                                Flags) override;
+
+    virtual bool SupportD3D12MemoryAllocator() override { return true; }
 
     virtual void Release(IUnknown* object) override;
 

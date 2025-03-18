@@ -30,6 +30,8 @@
 
 #include <d3d12.h>
 #include <vector>
+#include <unordered_map>
+#include <algorithm>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -45,6 +47,16 @@ class Dx12AccelerationStructureBuilder
                const format::InitDx12AccelerationStructureCommandHeader&             command_header,
                const std::vector<format::InitDx12AccelerationStructureGeometryDesc>& init_geometry_descs,
                const uint8_t*                                                        build_inputs_data);
+
+    void PrebuildInfo(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* pInfo) { prebuild_info_ = *pInfo; }
+
+    const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO GetLastPrebuildInfo() { return prebuild_info_; }
+
+    void PreBuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* pDesc);
+
+    void PostGetGpuVirtualAddress(const format::HandleId resource_id, const D3D12_GPU_VIRTUAL_ADDRESS address);
+
+    void PostRemoveGpuVirtualAddress(const format::HandleId resource_id);
 
   private:
     void SetupBuild(const graphics::Dx12GpuVaMap&                                         gpu_va_map,
@@ -77,6 +89,10 @@ class Dx12AccelerationStructureBuilder
 
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> temp_geometry_descs_;
     std::vector<uint8_t>                        temp_instance_desc_input_data_;
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO                               prebuild_info_{};
+    std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, graphics::dx12::ID3D12ResourceComPtr> address_to_scratch_buffer_;
+    std::unordered_map<format::HandleId, D3D12_GPU_VIRTUAL_ADDRESS>                     resource_to_address_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

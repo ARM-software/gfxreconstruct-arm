@@ -40,6 +40,12 @@ void UpdateBufferSize(ID3D12Device*                         device,
                       D3D12_RESOURCE_FLAGS                  flags)
 {
     // Create an upload resource of the required size.
+    if ((buffer != nullptr) && (buffer_size < required_size))
+    {
+        buffer->Release();
+        buffer = nullptr;
+    }
+
     if (!buffer || (buffer_size < required_size))
     {
         buffer = graphics::dx12::CreateBufferResource(device, required_size, heap_type, initial_state, flags);
@@ -351,6 +357,51 @@ void Dx12AccelerationStructureBuilder::ExecuteCopy(D3D12_GPU_VIRTUAL_ADDRESS    
     command_queue_->ExecuteCommandLists(1, cmd_lists);
     hr = graphics::dx12::WaitForQueue(command_queue_, fence_, ++fence_value_);
     GFXRECON_ASSERT(SUCCEEDED(hr));
+}
+
+void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* pDesc)
+{
+    const auto& inputs_desc = pDesc->Inputs;
+
+    // Get required sizes for scratch buffer.
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info;
+    device5_->GetRaytracingAccelerationStructurePrebuildInfo(&inputs_desc, &prebuild_info);
+    graphics::dx12::ID3D12ResourceComPtr scratch_buffer;
+    uint64_t                             scratch_buffer_size = 0;
+    UpdateBufferSize(device5_,
+                     scratch_buffer,
+                     scratch_buffer_size,
+                     prebuild_info.ScratchDataSizeInBytes,
+                     D3D12_HEAP_TYPE_DEFAULT,
+                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                     D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+    // Update scratch buffer.
+    D3D12_GPU_VIRTUAL_ADDRESS scratch_address = scratch_buffer->GetGPUVirtualAddress();
+    address_to_scratch_buffer_.try_emplace(pDesc->ScratchAccelerationStructureData, scratch_buffer);
+    const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
+        scratch_address;
+}
+
+void Dx12AccelerationStructureBuilder::PostGetGpuVirtualAddress(const format::HandleId          resource_id,
+                                                                const D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+    resource_to_address_.try_emplace(resource_id, address);
+}
+
+void Dx12AccelerationStructureBuilder::PostRemoveGpuVirtualAddress(const format::HandleId resource_id)
+{
+    if (resource_to_address_.find(resource_id) != resource_to_address_.end())
+    {
+        const D3D12_GPU_VIRTUAL_ADDRESS& address = resource_to_address_[resource_id];
+        if (address_to_scratch_buffer_.find(address) != address_to_scratch_buffer_.end())
+        {
+            address_to_scratch_buffer_[address]->Release();
+            address_to_scratch_buffer_.erase(address);
+        }
+        resource_to_address_.erase(resource_id);
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

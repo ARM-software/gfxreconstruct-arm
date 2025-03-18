@@ -150,6 +150,8 @@ class Dx12ResourceAllocator
                                     _In_reads_opt_(NumRanges) const UINT*                   pRangeTileCounts,
                                     D3D12_TILE_MAPPING_FLAGS                                Flags) = 0;
 
+    virtual bool SupportD3D12MemoryAllocator() = 0;
+
     virtual void Release(IUnknown* object) = 0;
 
     virtual void PostCreateHeap(format::HandleId            capture_id,
