@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import subprocess
 import sys
 
@@ -14,11 +15,22 @@ def is_auto_mergeable(commit: str) -> bool:
 
 def main() -> int:
 
-    if is_auto_mergeable('upstream/dev'):
-        subprocess.run(['git', 'merge', '--no-edit', 'upstream/dev'], capture_output=True)
-        print('Successfully merged all commits from upstream/dev')
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument(
+        '-b', '--branch',
+        default='internal/upstream/dev',
+        required=False,
+        dest='branch'
+    )
 
-    upstream_commits = subprocess.run(['git', 'rev-list', 'upstream/dev'], capture_output=True).stdout.decode().strip().split('\n')
+    args = arg_parser.parse_args()
+
+    if is_auto_mergeable(args.branch):
+        subprocess.run(['git', 'merge', '--no-edit', args.branch], capture_output=True)
+        print('Successfully merged all commits from', args.branch)
+        return 0
+
+    upstream_commits = subprocess.run(['git', 'rev-list', args.branch], capture_output=True).stdout.decode().strip().split('\n')
     current_merge_commits = subprocess.run(['git', 'rev-list', '--merges', 'HEAD'], capture_output=True).stdout.decode().strip().split('\n')
 
     last_common_commit = str()
@@ -28,9 +40,8 @@ def main() -> int:
             last_common_commit = parent_commits[1]
             break
     
-    commits_to_merge = subprocess.run(['git', 'rev-list', f'{last_common_commit}..upstream/dev'], capture_output=True).stdout.decode().strip().split('\n')
+    commits_to_merge = subprocess.run(['git', 'rev-list', last_common_commit + '..' + args.branch], capture_output=True).stdout.decode().strip().split('\n')
     commits_to_merge.reverse()
-
 
     if not is_auto_mergeable(commits_to_merge[0]):
         print(f'Cannot merge any commit automatically. Next commit needs to be merged manually: {commits_to_merge[0]}')
