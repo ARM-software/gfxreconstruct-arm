@@ -143,8 +143,6 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                         allocator_->UnmapResourceMemoryDirect(buffer->info_.allocator_data);
                         util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
-                        GFXRECON_ASSERT(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
-
                         // add results to compacted_sizes_processed map
                         for (uint64_t j = 0; j < vector_of_acc_str.size(); j++)
                         {
@@ -154,10 +152,22 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                 }
             }
 
-            assert(compacted_sizes_processed_.count(parent) != 0);
-            assert(compacted_sizes_processed_[parent] != 0);
-            build_sizes.accelerationStructureSize = compacted_sizes_processed_[parent];
-            is_recreated                          = true;
+            GFXRECON_ASSERT(compacted_sizes_processed_.count(parent) != 0);
+
+            // Compacted size data may be invalid - fallback to the uncompressed size of parent object
+            if (compacted_sizes_processed_[parent] == 0)
+            {
+                GFXRECON_LOG_WARNING_ONCE(
+                    "Driver did not provide valid size data for acceleration structure compaction "
+                    "process. Replayer will use non-compacted sizes.");
+                build_sizes.accelerationStructureSize =
+                    acceleration_structures_[parent].new_build_sizes.accelerationStructureSize;
+            }
+            else
+            {
+                build_sizes.accelerationStructureSize = compacted_sizes_processed_[parent];
+            }
+            is_recreated = true;
         }
         else
         {
@@ -663,8 +673,6 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const VulkanDevic
                                           8,
                                           VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
         util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
-
-        GFXRECON_ASSERT(vector_of_acc_str_sizes != std::vector<uint64_t>(vector_of_acc_str.size(), 0));
 
         // add results to compacted_sizes_processed map
         for (uint64_t j = 0; j < vector_of_acc_str.size(); j++)
