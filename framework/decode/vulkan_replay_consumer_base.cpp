@@ -7705,15 +7705,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
                      window_size.height != modified_create_info.imageExtent.height) &&
                     !(window_size.width == 0 && window_size.height == 0))
                 {
-                    GFXRECON_LOG_WARNING("Could not resize window to (%u, %u). Instead, window was resized to (%u, "
-                                         "%u). Swapchain will "
-                                         "be resized accordingly, but bugs might occur. Using virtual swapchain "
-                                         "should mitigate those "
-                                         "bugs.",
-                                         modified_create_info.imageExtent.width,
-                                         modified_create_info.imageExtent.height,
-                                         window_size.width,
-                                         window_size.height);
+                    GFXRECON_LOG_WARNING(
+                        "Could not resize window to (%u, %u). Instead, window was resized to (%u, %u). Swapchain will "
+                        "be resized accordingly, but bugs might occur. Using virtual swapchain should mitigate those "
+                        "bugs.",
+                        modified_create_info.imageExtent.width,
+                        modified_create_info.imageExtent.height,
+                        window_size.width,
+                        window_size.height);
 
                     modified_create_info.imageExtent = window_size;
                 }
@@ -7722,7 +7721,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
 
         ProcessSwapchainFullScreenExclusiveInfo(pCreateInfo->GetMetaStructPointer());
 
-        // Screenshots are active, so ensure that swapchain images can be used as a transfer source.
         if (screenshot_handler_ != nullptr || options_.dumping_resources)
         {
             // Screenshots and/or dump resources are active, so ensure that swapchain images can be used as a
