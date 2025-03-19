@@ -46,9 +46,7 @@ VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
     InitializeInternalExecObjects();
 }
 
-VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder()
-{
-}
+VulkanAccelerationStructureBuilder::~VulkanAccelerationStructureBuilder() {}
 
 VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     const VulkanDeviceInfo*                     device_info,
@@ -74,6 +72,14 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     auto buffer_size                           = allocator->GetBufferSize(buffer_info->allocator_data);
     auto memory_property_flags                 = buffer_info->memory_property_flags;
 
+    if (build_sizes.accelerationStructureSize)
+    {
+        info->size = build_sizes.accelerationStructureSize;
+    }
+
+    // Points to storage that will be used in the creation call
+    VulkanBufferInfo* target_storage_buffer = const_cast<VulkanBufferInfo*>(buffer_info);
+
     if ((memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
         memory_property_flags = (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
@@ -96,9 +102,9 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                 {
                     info->size =
                         acceleration_structures_[acceleration_structure].new_build_sizes.accelerationStructureSize;
-                    info->buffer = buffer_wrapper->info_.handle;
-                    info->offset = 0;
-                    is_recreated = false;
+                    target_storage_buffer = &buffer_wrapper->info_;
+                    info->offset          = 0;
+                    is_recreated          = false;
                 }
             }
         }
@@ -167,22 +173,39 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
 
     if (is_recreated)
     {
-        std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> bufferInfoWrapper =
-            internal_buffer_manager_.CreateBuffer(build_sizes.accelerationStructureSize,
+        // New storage size needs to be bigger than the size of acceleration structure
+        // Exact extra size is implementation depedent - some won't need any, some will require extra padding, specs
+        // don't state how much.
+        // Therefore an arbitrary padding value is added for safety, can be increased if needed
+        const VkDeviceSize kAccelerationStructureStorageSafetyPadding = 256;
+        VkDeviceSize       new_storage_size =
+            build_sizes.accelerationStructureSize + kAccelerationStructureStorageSafetyPadding;
+        std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> new_storage_buffer =
+            internal_buffer_manager_.CreateBuffer(new_storage_size,
                                                   VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                   memory_property_flags);
 
         info->size                              = build_sizes.accelerationStructureSize;
-        info->buffer                            = bufferInfoWrapper->info_.handle;
+        target_storage_buffer                   = &new_storage_buffer->info_;
         info->offset                            = 0;
-        acceleration_structure_data.new_storage = std::move(bufferInfoWrapper);
+        acceleration_structure_data.new_storage = std::move(new_storage_buffer);
     }
     else
     {
         acceleration_structure_data.new_storage = nullptr;
     }
 
+    // Last minute validation: storage buffer should be bigger than the acceleration structure size + offset
+    // Note: We operate on 2 kinds of sizes - the size provided as an input in Create* calls and the actual size
+    // retrieved from allocator/GetASBuildSizes query. Assume all these sizes should satisfy the above condition.
+    auto target_storage_buffer_allocated_size = allocator->GetBufferSize(target_storage_buffer->allocator_data);
+    GFXRECON_ASSERT(target_storage_buffer_allocated_size > info->size + info->offset);
+    GFXRECON_ASSERT(target_storage_buffer->size > info->size + info->offset);
+    GFXRECON_ASSERT(target_storage_buffer_allocated_size > build_sizes.accelerationStructureSize + info->offset);
+    GFXRECON_ASSERT(target_storage_buffer->size > build_sizes.accelerationStructureSize + info->offset);
+
+    info->buffer    = target_storage_buffer->handle;
     VkResult result = functions_.create_acceleration_structure(device_info->handle, info, pAllocator, handle);
     assert(result == VK_SUCCESS);
 
