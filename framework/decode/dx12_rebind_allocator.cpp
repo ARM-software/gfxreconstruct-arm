@@ -109,7 +109,13 @@ void Dx12RebindAllocator::Release(IUnknown* object)
     }
 }
 
-void Dx12RebindAllocator::PostCreateHeap(_In_ const D3D12_HEAP_DESC* pDesc,
+HRESULT Dx12RebindAllocator::CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap)
+{
+    return S_OK;
+}
+
+void Dx12RebindAllocator::PostCreateHeap(format::HandleId            capture_id,
+                                         _In_ const D3D12_HEAP_DESC* pDesc,
                                          REFIID                      riid,
                                          _COM_Outptr_opt_ void**     ppvHeap)
 {
@@ -117,6 +123,11 @@ void Dx12RebindAllocator::PostCreateHeap(_In_ const D3D12_HEAP_DESC* pDesc,
     {
         ID3D12Heap* pHeap = reinterpret_cast<ID3D12Heap*>(*ppvHeap);
         heap_desc_.emplace(pHeap, *pDesc);
+    }
+
+    if (pDesc)
+    {
+        heap_id_desc_.emplace(capture_id, *pDesc);
     }
 }
 
@@ -419,6 +430,67 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PROP
         }
     }
     return result;
+}
+
+void Dx12RebindAllocator::GetResourceTiling(_In_ ID3D12Resource*             pTiledResource,
+                                            _Out_opt_ UINT*                  pNumTilesForEntireResource,
+                                            _Out_opt_ D3D12_PACKED_MIP_INFO* pPackedMipDesc,
+                                            _Out_opt_ D3D12_TILE_SHAPE*      pStandardTileShapeForNonPackedMips,
+                                            _Inout_opt_ UINT*                pNumSubresourceTilings,
+                                            _In_ UINT                        FirstSubresourceTilingToGet,
+                                            _Out_ D3D12_SUBRESOURCE_TILING*  pSubresourceTilingsForNonPackedMips)
+{
+    if (device_)
+    {
+        device_->GetResourceTiling(pTiledResource,
+                                   pNumTilesForEntireResource,
+                                   pPackedMipDesc,
+                                   pStandardTileShapeForNonPackedMips,
+                                   pNumSubresourceTilings,
+                                   FirstSubresourceTilingToGet,
+                                   pSubresourceTilingsForNonPackedMips);
+    }
+}
+
+void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                    pQueue,
+                                             format::HandleId                       heap_capture_id,
+                                             ID3D12Resource*                        pResource,
+                                             UINT                                   NumResourceRegions,
+                                             const D3D12_TILED_RESOURCE_COORDINATE* pResourceRegionStartCoordinates,
+                                             const D3D12_TILE_REGION_SIZE*          pResourceRegionSizes,
+                                             ID3D12Heap*                            pHeap,
+                                             UINT                                   NumRanges,
+                                             const D3D12_TILE_RANGE_FLAGS*          pRangeFlags,
+                                             const UINT*                            pHeapRangeStartOffsets,
+                                             const UINT*                            pRangeTileCounts,
+                                             D3D12_TILE_MAPPING_FLAGS               Flags)
+{
+    if (device_)
+    {
+        // creat heap
+        ID3D12Heap* pNewHeap = nullptr;
+        if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+        {
+            HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&pNewHeap));
+            if (hr == S_OK)
+            {
+                pQueue->UpdateTileMappings(pResource,
+                                           NumResourceRegions,
+                                           pResourceRegionStartCoordinates,
+                                           pResourceRegionSizes,
+                                           pNewHeap,
+                                           NumRanges,
+                                           pRangeFlags,
+                                           pHeapRangeStartOffsets,
+                                           pRangeTileCounts,
+                                           Flags);
+            }
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Heap desc for UpdateTileMappings not found in rebind allocator");
+        }
+    }
 }
 
 void Dx12RebindAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc)

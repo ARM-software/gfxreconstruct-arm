@@ -428,7 +428,9 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void ProcessDxgiAdapterInfo(const format::DxgiAdapterInfoCommandHeader& adapter_info_header);
 
-    void InitCommandQueueExtraInfo(ID3D12Device* device, HandlePointerDecoder<void*>* command_queue_decoder);
+    void InitCommandQueueExtraInfo(ID3D12Device*                device,
+                                   HandlePointerDecoder<void*>* command_queue_decoder,
+                                   Dx12ResourceAllocator*       allocator);
 
     HRESULT OverrideCreateCommandQueue(DxObjectInfo*                                           replay_object_info,
                                        HRESULT                                                 original_result,
@@ -672,6 +674,19 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                      DxObjectInfo* fence_info,
                                      UINT64        value);
 
+    void OverrideUpdateTileMappings(
+        DxObjectInfo*                                                  replay_object_info,
+        format::HandleId                                               in_pResource,
+        UINT                                                           NumResourceRegions,
+        StructPointerDecoder<Decoded_D3D12_TILED_RESOURCE_COORDINATE>* pResourceRegionStartCoordinates,
+        StructPointerDecoder<Decoded_D3D12_TILE_REGION_SIZE>*          pResourceRegionSizes,
+        format::HandleId                                               in_pHeap,
+        UINT                                                           NumRanges,
+        PointerDecoder<D3D12_TILE_RANGE_FLAGS>*                        pRangeFlags,
+        PointerDecoder<UINT>*                                          pHeapRangeStartOffsets,
+        PointerDecoder<UINT>*                                          pRangeTileCounts,
+        D3D12_TILE_MAPPING_FLAGS                                       Flags);
+
     UINT64 OverrideGetCompletedValue(DxObjectInfo* replay_object_info, UINT64 original_result);
 
     HRESULT OverrideSetEventOnCompletion(DxObjectInfo* replay_object_info,
@@ -780,6 +795,15 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                             PointerDecoder<DXGI_FORMAT>* castable_formats,
                                             Decoded_GUID                 riid,
                                             HandlePointerDecoder<void*>* resource);
+    void    OverrideGetResourceTiling(
+           DxObjectInfo*                                           device_object_info,
+           DxObjectInfo*                                           in_pTiledResource,
+           PointerDecoder<UINT>*                                   pNumTilesForEntireResource,
+           StructPointerDecoder<Decoded_D3D12_PACKED_MIP_INFO>*    pPackedMipDesc,
+           StructPointerDecoder<Decoded_D3D12_TILE_SHAPE>*         pStandardTileShapeForNonPackedMips,
+           PointerDecoder<UINT>*                                   pNumSubresourceTilings,
+           UINT                                                    FirstSubresourceTilingToGet,
+           StructPointerDecoder<Decoded_D3D12_SUBRESOURCE_TILING>* pSubresourceTilingsForNonPackedMips);
 
     HRESULT OverrideCreateGraphicsPipelineState(DxObjectInfo* device_object_info,
                                                 HRESULT       original_result,

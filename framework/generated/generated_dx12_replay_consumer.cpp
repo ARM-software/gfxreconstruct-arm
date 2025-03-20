@@ -8481,18 +8481,19 @@ void Dx12ReplayConsumer::Process_ID3D12CommandQueue_UpdateTileMappings(
             pHeapRangeStartOffsets,
             pRangeTileCounts,
             Flags);
-        auto in_pResource = MapObject<ID3D12Resource>(pResource);
-        auto in_pHeap = MapObject<ID3D12Heap>(pHeap);
-        reinterpret_cast<ID3D12CommandQueue*>(replay_object->object)->UpdateTileMappings(in_pResource,
-                                                                                         NumResourceRegions,
-                                                                                         pResourceRegionStartCoordinates->GetPointer(),
-                                                                                         pResourceRegionSizes->GetPointer(),
-                                                                                         in_pHeap,
-                                                                                         NumRanges,
-                                                                                         pRangeFlags->GetPointer(),
-                                                                                         pHeapRangeStartOffsets->GetPointer(),
-                                                                                         pRangeTileCounts->GetPointer(),
-                                                                                         Flags);
+        auto in_pResource = pResource;
+        auto in_pHeap = pHeap;
+        OverrideUpdateTileMappings(replay_object,
+                                   in_pResource,
+                                   NumResourceRegions,
+                                   pResourceRegionStartCoordinates,
+                                   pResourceRegionSizes,
+                                   in_pHeap,
+                                   NumRanges,
+                                   pRangeFlags,
+                                   pHeapRangeStartOffsets,
+                                   pRangeTileCounts,
+                                   Flags);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12CommandQueue_UpdateTileMappings>::Dispatch(
             this,
             call_info,
@@ -10211,7 +10212,7 @@ void Dx12ReplayConsumer::Process_ID3D12Device_GetResourceTiling(
             pNumSubresourceTilings,
             FirstSubresourceTilingToGet,
             pSubresourceTilingsForNonPackedMips);
-        auto in_pTiledResource = MapObject<ID3D12Resource>(pTiledResource);
+        auto in_pTiledResource = GetObjectInfo(pTiledResource);
         if(!pNumTilesForEntireResource->IsNull())
         {
             pNumTilesForEntireResource->AllocateOutputData(1);
@@ -10232,13 +10233,14 @@ void Dx12ReplayConsumer::Process_ID3D12Device_GetResourceTiling(
         {
             pSubresourceTilingsForNonPackedMips->AllocateOutputData(!pNumSubresourceTilings->IsNull() ? *pNumSubresourceTilings->GetPointer() : 0);
         }
-        reinterpret_cast<ID3D12Device*>(replay_object->object)->GetResourceTiling(in_pTiledResource,
-                                                                                  pNumTilesForEntireResource->GetOutputPointer(),
-                                                                                  pPackedMipDesc->GetOutputPointer(),
-                                                                                  pStandardTileShapeForNonPackedMips->GetOutputPointer(),
-                                                                                  pNumSubresourceTilings->GetOutputPointer(),
-                                                                                  FirstSubresourceTilingToGet,
-                                                                                  pSubresourceTilingsForNonPackedMips->GetOutputPointer());
+        OverrideGetResourceTiling(replay_object,
+                                  in_pTiledResource,
+                                  pNumTilesForEntireResource,
+                                  pPackedMipDesc,
+                                  pStandardTileShapeForNonPackedMips,
+                                  pNumSubresourceTilings,
+                                  FirstSubresourceTilingToGet,
+                                  pSubresourceTilingsForNonPackedMips);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_GetResourceTiling>::Dispatch(
             this,
             call_info,

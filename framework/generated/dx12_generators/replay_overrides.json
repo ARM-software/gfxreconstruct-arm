@@ -34,7 +34,8 @@
       "CreateComputePipelineState": "OverrideCreateComputePipelineState",
       "CreateCommandSignature": "OverrideCreateCommandSignature",
       "CreateCommandList": "OverrideCreateCommandList",
-      "CreateRootSignature": "OverrideCreateRootSignature"
+      "CreateRootSignature": "OverrideCreateRootSignature",
+      "GetResourceTiling": "OverrideGetResourceTiling"
     },
     "ID3D12Device1": {
       "CreatePipelineLibrary": "OverrideCreatePipelineLibrary"
@@ -84,7 +85,8 @@
     "ID3D12CommandQueue": {
       "ExecuteCommandLists": "OverrideExecuteCommandLists",
       "Signal": "OverrideCommandQueueSignal",
-      "Wait": "OverrideCommandQueueWait"
+      "Wait": "OverrideCommandQueueWait",
+      "UpdateTileMappings": "OverrideUpdateTileMappings"
     },
     "ID3D12Fence": {
       "GetCompletedValue": "OverrideGetCompletedValue",

@@ -259,6 +259,8 @@ struct D3D12CommandQueueInfo : DxObjectExtraInfo
     uint64_t                          resource_value_map_fence_value{ 0 };
     DxObjectInfo                      resource_value_map_fence_info;
     HANDLE                            resource_value_map_event{ nullptr };
+
+    Dx12ResourceAllocator* allocator;
 };
 
 struct D3D12DeviceInfo : DxObjectExtraInfo

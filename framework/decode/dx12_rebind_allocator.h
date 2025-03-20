@@ -40,6 +40,9 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     virtual void Destroy() override;
 
+    virtual HRESULT
+    CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap) override;
+
     virtual HRESULT CreateCommittedResource(_In_ const D3D12_HEAP_PROPERTIES* pHeapProperties,
                                             D3D12_HEAP_FLAGS                  HeapFlags,
                                             _In_ const D3D12_RESOURCE_DESC*   pDesc,
@@ -125,10 +128,35 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
                                              REFIID                                                riidResource,
                                              _COM_Outptr_opt_ void** ppvResource) override;
 
+    virtual void GetResourceTiling(_In_ ID3D12Resource*             pTiledResource,
+                                   _Out_opt_ UINT*                  pNumTilesForEntireResource,
+                                   _Out_opt_ D3D12_PACKED_MIP_INFO* pPackedMipDesc,
+                                   _Out_opt_ D3D12_TILE_SHAPE*      pStandardTileShapeForNonPackedMips,
+                                   _Inout_opt_ UINT*                pNumSubresourceTilings,
+                                   _In_ UINT                        FirstSubresourceTilingToGet,
+                                   _Out_ D3D12_SUBRESOURCE_TILING*  pSubresourceTilingsForNonPackedMips) override;
+
+    virtual void UpdateTileMappings(ID3D12CommandQueue*  pQueue,
+                                    format::HandleId     heap_capture_id,
+                                    _In_ ID3D12Resource* pResource,
+                                    UINT                 NumResourceRegions,
+                                    _In_reads_opt_(NumResourceRegions)
+                                        const D3D12_TILED_RESOURCE_COORDINATE* pResourceRegionStartCoordinates,
+                                    _In_reads_opt_(NumResourceRegions)
+                                        const D3D12_TILE_REGION_SIZE*                       pResourceRegionSizes,
+                                    _In_opt_ ID3D12Heap*                                    pHeap,
+                                    UINT                                                    NumRanges,
+                                    _In_reads_opt_(NumRanges) const D3D12_TILE_RANGE_FLAGS* pRangeFlags,
+                                    _In_reads_opt_(NumRanges) const UINT*                   pHeapRangeStartOffsets,
+                                    _In_reads_opt_(NumRanges) const UINT*                   pRangeTileCounts,
+                                    D3D12_TILE_MAPPING_FLAGS                                Flags) override;
+
     virtual void Release(IUnknown* object) override;
 
-    virtual void
-    PostCreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap) override;
+    virtual void PostCreateHeap(format::HandleId            capture_id,
+                                _In_ const D3D12_HEAP_DESC* pDesc,
+                                REFIID                      riid,
+                                _COM_Outptr_opt_ void**     ppvHeap) override;
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) override;
 
@@ -146,6 +174,7 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     std::unordered_map<ID3D12Resource*, D3D12MA::Allocation*> resource_allocation_;
     std::unordered_map<ID3D12Heap*, D3D12_HEAP_DESC>          heap_desc_;
+    std::unordered_map<format::HandleId, D3D12_HEAP_DESC>     heap_id_desc_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

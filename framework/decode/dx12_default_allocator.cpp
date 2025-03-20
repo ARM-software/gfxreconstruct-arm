@@ -95,6 +95,14 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_D
     }
 }
 
+HRESULT
+Dx12DefaultAllocator::CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap)
+{
+    HRESULT result = S_FALSE;
+    result         = device_->CreateHeap(pDesc, riid, ppvHeap);
+    return result;
+}
+
 HRESULT Dx12DefaultAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROPERTIES* pHeapProperties,
                                                       D3D12_HEAP_FLAGS                  HeapFlags,
                                                       _In_ const D3D12_RESOURCE_DESC*   pDesc,
@@ -310,6 +318,48 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PRO
                                                 ppvResource);
 
     return result;
+}
+
+void Dx12DefaultAllocator::GetResourceTiling(_In_ ID3D12Resource*             pTiledResource,
+                                             _Out_opt_ UINT*                  pNumTilesForEntireResource,
+                                             _Out_opt_ D3D12_PACKED_MIP_INFO* pPackedMipDesc,
+                                             _Out_opt_ D3D12_TILE_SHAPE*      pStandardTileShapeForNonPackedMips,
+                                             _Inout_opt_ UINT*                pNumSubresourceTilings,
+                                             _In_ UINT                        FirstSubresourceTilingToGet,
+                                             _Out_ D3D12_SUBRESOURCE_TILING*  pSubresourceTilingsForNonPackedMips)
+{
+    device_->GetResourceTiling(pTiledResource,
+                               pNumTilesForEntireResource,
+                               pPackedMipDesc,
+                               pStandardTileShapeForNonPackedMips,
+                               pNumSubresourceTilings,
+                               FirstSubresourceTilingToGet,
+                               pSubresourceTilingsForNonPackedMips);
+}
+
+void Dx12DefaultAllocator::UpdateTileMappings(ID3D12CommandQueue*                    pQueue,
+                                              format::HandleId                       heap_capture_id,
+                                              ID3D12Resource*                        pResource,
+                                              UINT                                   NumResourceRegions,
+                                              const D3D12_TILED_RESOURCE_COORDINATE* pResourceRegionStartCoordinates,
+                                              const D3D12_TILE_REGION_SIZE*          pResourceRegionSizes,
+                                              ID3D12Heap*                            pHeap,
+                                              UINT                                   NumRanges,
+                                              const D3D12_TILE_RANGE_FLAGS*          pRangeFlags,
+                                              const UINT*                            pHeapRangeStartOffsets,
+                                              const UINT*                            pRangeTileCounts,
+                                              D3D12_TILE_MAPPING_FLAGS               Flags)
+{
+    pQueue->UpdateTileMappings(pResource,
+                               NumResourceRegions,
+                               pResourceRegionStartCoordinates,
+                               pResourceRegionSizes,
+                               pHeap,
+                               NumRanges,
+                               pRangeFlags,
+                               pHeapRangeStartOffsets,
+                               pRangeTileCounts,
+                               Flags);
 }
 
 GFXRECON_END_NAMESPACE(decode)
