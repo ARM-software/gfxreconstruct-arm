@@ -2283,16 +2283,6 @@ void TrackCmdUpdatePipelineIndirectBufferNVHandles(vulkan_wrappers::CommandBuffe
     if(pipeline != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::PipelineHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::PipelineWrapper>(pipeline));
 }
 
-void TrackCmdDispatchNeuralEngineARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo)
-{
-    assert(wrapper != nullptr);
-
-    if (pStatisticsDispatchInfo != nullptr)
-    {
-        if(pStatisticsDispatchInfo->memory != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::DeviceMemoryHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(pStatisticsDispatchInfo->memory));
-    }
-}
-
 void TrackCmdCopyTensorARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkCopyTensorInfoARM* pCopyTensorInfo)
 {
     assert(wrapper != nullptr);

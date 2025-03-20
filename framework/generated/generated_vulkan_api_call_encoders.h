@@ -3135,20 +3135,6 @@ VKAPI_ATTR VkResult                        VKAPI_CALL CreateNeuralEnginePipeline
     const VkAllocationCallbacks*                pAllocator,
     VkPipeline*                                 pPipelines);
 
-VKAPI_ATTR void                     VKAPI_CALL CmdDispatchNeuralEngineARM(
-    VkCommandBuffer                             commandBuffer,
-    VkOffset4DARM                               offset,
-    VkExtent4DARM                               size,
-    uint32_t                                    iteratorOuterDimension,
-    uint32_t                                    iteratorInnerDimension,
-    uint32_t                                    taskIncrementOuter,
-    uint32_t                                    taskIncrementInner,
-    uint32_t                                    iteratorWeightArrayOffset,
-    uint32_t                                    iteratorWeightArrayBehavior,
-    uint32_t                                    iteratorTraceID0,
-    uint32_t                                    iteratorTraceID1,
-    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
-
 VKAPI_ATTR VkResult VKAPI_CALL CreateWeightsARM(
     VkDevice                                    device,
     const VkWeightsCreateInfoARM*               pCreateInfo,
@@ -3359,16 +3345,6 @@ VKAPI_ATTR void VKAPI_CALL GetDeviceTensorMemoryRequirementsARM(
 VKAPI_ATTR void VKAPI_CALL CmdCopyTensorARM(
     VkCommandBuffer                             commandBuffer,
     const VkCopyTensorInfoARM*                  pCopyTensorInfo);
-
-VKAPI_ATTR VkResult VKAPI_CALL GetTensorOpaqueCaptureDescriptorDataARM(
-    VkDevice                                    device,
-    const VkTensorCaptureDescriptorDataInfoARM* pInfo,
-    void*                                       pData);
-
-VKAPI_ATTR VkResult VKAPI_CALL GetTensorViewOpaqueCaptureDescriptorDataARM(
-    VkDevice                                    device,
-    const VkTensorViewCaptureDescriptorDataInfoARM* pInfo,
-    void*                                       pData);
 
 VKAPI_ATTR void VKAPI_CALL GetShaderModuleIdentifierEXT(
     VkDevice                                    device,

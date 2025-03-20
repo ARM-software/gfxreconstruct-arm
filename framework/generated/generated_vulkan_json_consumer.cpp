@@ -9766,40 +9766,6 @@ void VulkanExportJsonConsumer::Process_vkCreateNeuralEnginePipelinesARM(
     WriteBlockEnd();
 }
 
-void VulkanExportJsonConsumer::Process_vkCmdDispatchNeuralEngineARM(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            commandBuffer,
-    Decoded_VkOffset4DARM                       offset,
-    Decoded_VkExtent4DARM                       size,
-    uint32_t                                    iteratorOuterDimension,
-    uint32_t                                    iteratorInnerDimension,
-    uint32_t                                    taskIncrementOuter,
-    uint32_t                                    taskIncrementInner,
-    uint32_t                                    iteratorWeightArrayOffset,
-    uint32_t                                    iteratorWeightArrayBehavior,
-    uint32_t                                    iteratorTraceID0,
-    uint32_t                                    iteratorTraceID1,
-    StructPointerDecoder<Decoded_VkNeuralEnginePipelineStatisticsDispatchInfoARM>* pStatisticsDispatchInfo)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdDispatchNeuralEngineARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-        FieldToJson(args["offset"], &offset, json_options);
-        FieldToJson(args["size"], &size, json_options);
-        FieldToJson(args["iteratorOuterDimension"], iteratorOuterDimension, json_options);
-        FieldToJson(args["iteratorInnerDimension"], iteratorInnerDimension, json_options);
-        FieldToJson(args["taskIncrementOuter"], taskIncrementOuter, json_options);
-        FieldToJson(args["taskIncrementInner"], taskIncrementInner, json_options);
-        FieldToJson(args["iteratorWeightArrayOffset"], iteratorWeightArrayOffset, json_options);
-        FieldToJson(args["iteratorWeightArrayBehavior"], iteratorWeightArrayBehavior, json_options);
-        FieldToJson(args["iteratorTraceID0"], iteratorTraceID0, json_options);
-        FieldToJson(args["iteratorTraceID1"], iteratorTraceID1, json_options);
-        FieldToJson(args["pStatisticsDispatchInfo"], pStatisticsDispatchInfo, json_options);
-    WriteBlockEnd();
-}
-
 void VulkanExportJsonConsumer::Process_vkCreateWeightsARM(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
@@ -10495,40 +10461,6 @@ void VulkanExportJsonConsumer::Process_vkCmdCopyTensorARM(
     auto& args = jdata[NameArgs()];
         HandleToJson(args["commandBuffer"], commandBuffer, json_options);
         FieldToJson(args["pCopyTensorInfo"], pCopyTensorInfo, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetTensorOpaqueCaptureDescriptorDataARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkTensorCaptureDescriptorDataInfoARM>* pInfo,
-    uint64_t                                    pData)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetTensorOpaqueCaptureDescriptorDataARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-        FieldToJson(args["pData"], pData, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetTensorViewOpaqueCaptureDescriptorDataARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkTensorViewCaptureDescriptorDataInfoARM>* pInfo,
-    uint64_t                                    pData)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetTensorViewOpaqueCaptureDescriptorDataARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-        FieldToJson(args["pData"], pData, json_options);
     WriteBlockEnd();
 }
 

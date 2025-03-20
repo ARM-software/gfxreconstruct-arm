@@ -16988,20 +16988,6 @@ void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelin
     }
 }
 
-void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantARM* data, const JsonOptions& options)
-{
-    if (data && data->decoded_value)
-    {
-        const VkDataGraphPipelineConstantARM& decoded_value = *data->decoded_value;
-        const Decoded_VkDataGraphPipelineConstantARM& meta_struct = *data;
-
-        FieldToJson(jdata["sType"], decoded_value.sType, options);
-        FieldToJson(jdata["id"], decoded_value.id, options);
-        //FieldToJson(jdata["pConstantData"], decoded_value.pConstantData, options);
-        FieldToJson(jdata["pNext"], meta_struct.pNext, options);
-    }
-}
-
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineResourceInfoARM* data, const JsonOptions& options)
 {
     if (data && data->decoded_value)

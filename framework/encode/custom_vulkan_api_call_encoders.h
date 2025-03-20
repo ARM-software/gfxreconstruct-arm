@@ -104,6 +104,26 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateRayTracingPipelinesKHR(VkDevice            
                                                             const VkAllocationCallbacks*             pAllocator,
                                                             VkPipeline*                              pPipelines);
 
+VKAPI_ATTR void VKAPI_CALL CmdDispatchNeuralEngineARM(VkCommandBuffer,
+                                                      VkOffset4DARM,
+                                                      VkExtent4DARM,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      const VkNeuralEnginePipelineStatisticsDispatchInfoARM*);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetTensorOpaqueCaptureDescriptorDataARM(VkDevice,
+                                                                       const VkTensorCaptureDescriptorDataInfoARM*,
+                                                                       void*);
+
+VKAPI_ATTR VkResult VKAPI_CALL
+GetTensorViewOpaqueCaptureDescriptorDataARM(VkDevice, const VkTensorViewCaptureDescriptorDataInfoARM*, void*);
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

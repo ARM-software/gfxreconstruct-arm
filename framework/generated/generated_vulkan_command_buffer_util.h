@@ -265,8 +265,6 @@ void TrackCmdDrawClusterIndirectHUAWEIHandles(vulkan_wrappers::CommandBufferWrap
 
 void TrackCmdUpdatePipelineIndirectBufferNVHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkPipeline pipeline);
 
-void TrackCmdDispatchNeuralEngineARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
-
 void TrackCmdCopyTensorARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkCopyTensorInfoARM* pCopyTensorInfo);
 
 void TrackCmdOpticalFlowExecuteNVHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkOpticalFlowSessionNV session);
