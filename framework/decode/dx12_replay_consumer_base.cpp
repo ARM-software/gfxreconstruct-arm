@@ -5265,5 +5265,39 @@ void Dx12ReplayConsumerBase::PostCall_ID3D12Device_CopyDescriptorsSimple(
     }
 }
 
+void Dx12ReplayConsumerBase::PreCall_ID3D12PipelineLibrary_Serialize(const ApiCallInfo&       call_info,
+                                                                     DxObjectInfo*            object_info,
+                                                                     PointerDecoder<uint8_t>* pData,
+                                                                     SIZE_T                   DataSizeInBytes)
+{
+    auto library_extra_info = GetExtraInfo<D3D12PipelineLibraryInfo>(object_info);
+
+    SIZE_T current_size = reinterpret_cast<ID3D12PipelineLibrary*>(object_info->object)->GetSerializedSize();
+    library_extra_info->serialized_size = current_size;
+    if (!pData->IsNull())
+    {
+        SIZE_T alloc_size = std::max(DataSizeInBytes, current_size);
+        pData->AllocateOutputData(alloc_size);
+
+        if (current_size != DataSizeInBytes)
+        {
+            GFXRECON_LOG_WARNING("Size mismatch for object_id %llu: serialized_size (%zu) != DataSizeInBytes (%zu)",
+                                 object_info->capture_id,
+                                 current_size,
+                                 DataSizeInBytes);
+            if (current_size > DataSizeInBytes)
+            {
+                GFXRECON_LOG_INFO("Adjusted buffer size to %zu for object_id %llu due to cross-GPU difference",
+                                  alloc_size,
+                                  object_info->capture_id);
+            }
+        }
+    }
+    else
+    {
+        GFXRECON_LOG_WARNING("pData is null for object_id %llu", object_info->capture_id);
+    }
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

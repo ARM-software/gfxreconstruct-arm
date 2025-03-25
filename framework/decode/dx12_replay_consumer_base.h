@@ -260,6 +260,11 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                      Decoded_D3D12_CPU_DESCRIPTOR_HANDLE SrcDescriptorRangeStart,
                                                      D3D12_DESCRIPTOR_HEAP_TYPE          DescriptorHeapsType);
 
+    void PreCall_ID3D12PipelineLibrary_Serialize(const ApiCallInfo&       call_info,
+                                                 DxObjectInfo*            object_info,
+                                                 PointerDecoder<uint8_t>* pData,
+                                                 SIZE_T                   DataSizeInBytes);
+
     template <typename T>
     T* MapObject(const format::HandleId id)
     {

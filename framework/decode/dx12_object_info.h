@@ -64,7 +64,8 @@ enum class DxObjectInfoType : uint32_t
     kID3D12CommandSignatureInfo,
     kID3D12CommandListInfo,
     kID3D12RootSignatureInfo,
-    kID3D12StateObjectInfo
+    kID3D12StateObjectInfo,
+    kID3D12PipelineLibraryInfo
 };
 
 //
@@ -464,6 +465,15 @@ struct D3D12StateObjectInfo : DxObjectExtraInfo
 
     std::map<std::wstring, format::HandleId>                              export_name_lrs_map;
     std::map<graphics::Dx12ShaderIdentifier, std::set<ResourceValueInfo>> shader_id_lrs_map;
+};
+
+struct D3D12PipelineLibraryInfo : DxObjectExtraInfo
+{
+    static constexpr DxObjectInfoType kType         = DxObjectInfoType::kID3D12PipelineLibraryInfo;
+    static constexpr char             kObjectType[] = "ID3D12PipelineLibraryInfo";
+    D3D12PipelineLibraryInfo() : DxObjectExtraInfo(kType) {}
+
+    SIZE_T serialized_size{ 0 };
 };
 
 GFXRECON_END_NAMESPACE(decode)

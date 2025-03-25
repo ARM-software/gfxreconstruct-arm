@@ -234,6 +234,16 @@ struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CopyDescript
     }
 };
 
+template <>
+struct CustomReplayPreCall<format::ApiCallId::ApiCall_ID3D12PipelineLibrary_Serialize>
+{
+    template <typename... Args>
+    static void Dispatch(Dx12ReplayConsumerBase* replay, Args... args)
+    {
+        replay->PreCall_ID3D12PipelineLibrary_Serialize(args...);
+    }
+};
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
