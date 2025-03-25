@@ -433,9 +433,9 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void ProcessDxgiAdapterInfo(const format::DxgiAdapterInfoCommandHeader& adapter_info_header);
 
-    void InitCommandQueueExtraInfo(ID3D12Device*                device,
-                                   HandlePointerDecoder<void*>* command_queue_decoder,
-                                   Dx12ResourceAllocator*       allocator);
+    void InitCommandQueueExtraInfo(format::HandleId             device_id,
+                                   ID3D12Device*                device,
+                                   HandlePointerDecoder<void*>* command_queue_decoder);
 
     HRESULT OverrideCreateCommandQueue(DxObjectInfo*                                           replay_object_info,
                                        HRESULT                                                 original_result,

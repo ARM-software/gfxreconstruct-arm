@@ -107,28 +107,73 @@ void Dx12RebindAllocator::Release(IUnknown* object)
         resource_allocation_[pResource] = nullptr;
         resource_allocation_.erase(pResource);
     }
-}
 
-HRESULT Dx12RebindAllocator::CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap)
-{
-    return S_OK;
-}
-
-void Dx12RebindAllocator::PostCreateHeap(format::HandleId            capture_id,
-                                         _In_ const D3D12_HEAP_DESC* pDesc,
-                                         REFIID                      riid,
-                                         _COM_Outptr_opt_ void**     ppvHeap)
-{
-    if (pDesc && ppvHeap)
+    if (resource_recreated_heap_.find(pResource) != resource_recreated_heap_.end())
     {
-        ID3D12Heap* pHeap = reinterpret_cast<ID3D12Heap*>(*ppvHeap);
-        heap_desc_.emplace(pHeap, *pDesc);
+        for (auto& heap : resource_recreated_heap_[pResource])
+        {
+            heap->Release();
+            heap = nullptr;
+        }
+        resource_recreated_heap_.erase(pResource);
     }
+}
 
+void Dx12RebindAllocator::AllRelease()
+{
+    for (auto& alloc : resource_allocation_)
+    {
+        alloc.second->Release();
+        alloc.second = nullptr;
+    }
+    resource_allocation_.clear();
+
+    for (auto& recreated_heap : resource_recreated_heap_)
+    {
+        for (auto& heap : recreated_heap.second)
+        {
+            heap->Release();
+            heap = nullptr;
+        }
+    }
+    resource_recreated_heap_.clear();
+}
+
+HRESULT Dx12RebindAllocator::CreateHeap(format::HandleId            capture_id,
+                                        _In_ const D3D12_HEAP_DESC* pDesc,
+                                        REFIID                      riid,
+                                        _COM_Outptr_opt_ void**     ppvHeap)
+{
     if (pDesc)
     {
         heap_id_desc_.emplace(capture_id, *pDesc);
     }
+
+    const_cast<D3D12_HEAP_DESC*>(pDesc)->SizeInBytes = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+
+    HRESULT result = device_->CreateHeap(pDesc, riid, ppvHeap);
+
+    return result;
+}
+
+HRESULT Dx12RebindAllocator::CreateHeap1(format::HandleId                         capture_id,
+                                         _In_ const D3D12_HEAP_DESC*              pDesc,
+                                         _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
+                                         REFIID                                   riid,
+                                         _COM_Outptr_opt_ void**                  ppvHeap)
+{
+    if (pDesc)
+    {
+        heap_id_desc_.emplace(capture_id, *pDesc);
+    }
+
+    const_cast<D3D12_HEAP_DESC*>(pDesc)->SizeInBytes = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+
+    graphics::dx12::ID3D12Device4ComPtr device4;
+    device_->QueryInterface(IID_PPV_ARGS(&device4));
+    HRESULT result = device4->CreateHeap1(pDesc, pProtectedSession, riid, ppvHeap);
+
+    return result;
 }
 
 HRESULT Dx12RebindAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROPERTIES* pHeapProperties,
@@ -143,6 +188,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROPE
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = pHeapProperties->Type;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
 
     if (allocator_)
     {
@@ -158,7 +204,8 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROPE
     return result;
 }
 
-HRESULT Dx12RebindAllocator::CreatePlacedResource(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12RebindAllocator::CreatePlacedResource(format::HandleId                  heap_capture_id,
+                                                  _In_ ID3D12Heap*                  pHeap,
                                                   UINT64                            HeapOffset,
                                                   _In_ const D3D12_RESOURCE_DESC*   pDesc,
                                                   D3D12_RESOURCE_STATES             InitialState,
@@ -170,10 +217,18 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource(_In_ ID3D12Heap*              
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_desc_.find(pHeap) != heap_desc_.end())
+    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
     {
-        alloc_desc.HeapType = heap_desc_[pHeap].Properties.Type;
+        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
+    }
+    else
+    {
+        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
+        {
+            const_cast<D3D12_RESOURCE_DESC*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+        }
     }
 
     if (allocator_)
@@ -219,6 +274,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PROP
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = pHeapProperties->Type;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
 
     if (allocator_)
     {
@@ -234,7 +290,8 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PROP
     return result;
 }
 
-HRESULT Dx12RebindAllocator::CreatePlacedResource1(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId                  heap_capture_id,
+                                                   _In_ ID3D12Heap*                  pHeap,
                                                    UINT64                            HeapOffset,
                                                    _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                                    D3D12_RESOURCE_STATES             InitialState,
@@ -246,10 +303,18 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(_In_ ID3D12Heap*             
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_desc_.find(pHeap) != heap_desc_.end())
+    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
     {
-        alloc_desc.HeapType = heap_desc_[pHeap].Properties.Type;
+        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
+    }
+    else
+    {
+        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
+        {
+            const_cast<D3D12_RESOURCE_DESC1*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+        }
     }
 
     if (allocator_)
@@ -303,6 +368,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PROP
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = pHeapProperties->Type;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
 
     if (allocator_)
     {
@@ -318,7 +384,8 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PROP
     return result;
 }
 
-HRESULT Dx12RebindAllocator::CreatePlacedResource2(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId                  heap_capture_id,
+                                                   _In_ ID3D12Heap*                  pHeap,
                                                    UINT64                            HeapOffset,
                                                    _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                                    D3D12_BARRIER_LAYOUT              InitialLayout,
@@ -333,10 +400,18 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(_In_ ID3D12Heap*             
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_desc_.find(pHeap) != heap_desc_.end())
+    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
     {
-        alloc_desc.HeapType = heap_desc_[pHeap].Properties.Type;
+        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
+    }
+    else
+    {
+        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
+        {
+            const_cast<D3D12_RESOURCE_DESC1*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+        }
     }
 
     if (allocator_)
@@ -410,6 +485,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PROP
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
     alloc_desc.HeapType                 = pHeapProperties->Type;
+    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
 
     if (allocator_)
     {
@@ -465,30 +541,65 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
                                              const UINT*                            pRangeTileCounts,
                                              D3D12_TILE_MAPPING_FLAGS               Flags)
 {
-    if (device_)
+    if (pHeap == nullptr && pRangeTileCounts == nullptr)
     {
+        pQueue->UpdateTileMappings(pResource,
+                                   NumResourceRegions,
+                                   pResourceRegionStartCoordinates,
+                                   pResourceRegionSizes,
+                                   pHeap,
+                                   NumRanges,
+                                   pRangeFlags,
+                                   pHeapRangeStartOffsets,
+                                   pRangeTileCounts,
+                                   Flags);
+    }
+    else
+    {
+        // D3D12_RESOURCE_ALLOCATION_INFO alloc_info = device_->GetResourceAllocationInfo(0, 1, resource);
+        // UINT                           tileSize   = alloc_info.SizeInBytes;
+
         // creat heap
         ID3D12Heap* pNewHeap = nullptr;
         if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
         {
-            HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&pNewHeap));
-            if (hr == S_OK)
+            if (heap_id_recreated_heap_.find(heap_capture_id) == heap_id_recreated_heap_.end())
             {
-                pQueue->UpdateTileMappings(pResource,
-                                           NumResourceRegions,
-                                           pResourceRegionStartCoordinates,
-                                           pResourceRegionSizes,
-                                           pNewHeap,
-                                           NumRanges,
-                                           pRangeFlags,
-                                           pHeapRangeStartOffsets,
-                                           pRangeTileCounts,
-                                           Flags);
+                HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&pNewHeap));
+                if (hr == S_OK)
+                {
+                    heap_id_recreated_heap_.emplace(heap_capture_id, pNewHeap);
+                    resource_recreated_heap_[pResource].push_back(pNewHeap);
+                }
             }
+            else
+            {
+                pNewHeap = heap_id_recreated_heap_[heap_capture_id];
+            }
+
+            pQueue->UpdateTileMappings(pResource,
+                                       NumResourceRegions,
+                                       pResourceRegionStartCoordinates,
+                                       pResourceRegionSizes,
+                                       pNewHeap,
+                                       NumRanges,
+                                       pRangeFlags,
+                                       pHeapRangeStartOffsets,
+                                       pRangeTileCounts,
+                                       Flags);
         }
         else
         {
-            GFXRECON_LOG_ERROR("Heap desc for UpdateTileMappings not found in rebind allocator");
+            pQueue->UpdateTileMappings(pResource,
+                                       NumResourceRegions,
+                                       pResourceRegionStartCoordinates,
+                                       pResourceRegionSizes,
+                                       pHeap,
+                                       NumRanges,
+                                       pRangeFlags,
+                                       pHeapRangeStartOffsets,
+                                       pRangeTileCounts,
+                                       Flags);
         }
     }
 }

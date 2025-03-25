@@ -95,11 +95,32 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_D
     }
 }
 
-HRESULT
-Dx12DefaultAllocator::CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap)
+HRESULT Dx12DefaultAllocator::CreateHeap(format::HandleId            capture_id,
+                                         _In_ const D3D12_HEAP_DESC* pDesc,
+                                         REFIID                      riid,
+                                         _COM_Outptr_opt_ void**     ppvHeap)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
     HRESULT result = S_FALSE;
     result         = device_->CreateHeap(pDesc, riid, ppvHeap);
+    return result;
+}
+
+HRESULT Dx12DefaultAllocator::CreateHeap1(format::HandleId                         capture_id,
+                                          _In_ const D3D12_HEAP_DESC*              pDesc,
+                                          _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
+                                          REFIID                                   riid,
+                                          _COM_Outptr_opt_ void**                  ppvHeap)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
+    HRESULT result = S_FALSE;
+
+    graphics::dx12::ID3D12Device4ComPtr device4;
+    device_->QueryInterface(IID_PPV_ARGS(&device4));
+    result = device4->CreateHeap1(pDesc, pProtectedSession, riid, ppvHeap);
+
     return result;
 }
 
@@ -118,7 +139,8 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROP
     return result;
 }
 
-HRESULT Dx12DefaultAllocator::CreatePlacedResource(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12DefaultAllocator::CreatePlacedResource(format::HandleId                  heap_capture_id,
+                                                   _In_ ID3D12Heap*                  pHeap,
                                                    UINT64                            HeapOffset,
                                                    _In_ const D3D12_RESOURCE_DESC*   pDesc,
                                                    D3D12_RESOURCE_STATES             InitialState,
@@ -126,6 +148,8 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource(_In_ ID3D12Heap*             
                                                    REFIID                            riid,
                                                    _COM_Outptr_opt_ void**           ppvResource)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
+
     HRESULT result = S_FALSE;
     ReportResourceIncompatibility(pDesc);
     result =
@@ -171,7 +195,8 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PRO
     return result;
 }
 
-HRESULT Dx12DefaultAllocator::CreatePlacedResource1(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12DefaultAllocator::CreatePlacedResource1(format::HandleId                  heap_capture_id,
+                                                    _In_ ID3D12Heap*                  pHeap,
                                                     UINT64                            HeapOffset,
                                                     _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                                     D3D12_RESOURCE_STATES             InitialState,
@@ -179,6 +204,8 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource1(_In_ ID3D12Heap*            
                                                     REFIID                            riid,
                                                     _COM_Outptr_opt_ void**           ppvResource)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
+
     HRESULT result = S_FALSE;
 
     graphics::dx12::ID3D12Device8ComPtr device8;
@@ -233,7 +260,8 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PRO
     return result;
 }
 
-HRESULT Dx12DefaultAllocator::CreatePlacedResource2(_In_ ID3D12Heap*                  pHeap,
+HRESULT Dx12DefaultAllocator::CreatePlacedResource2(format::HandleId                  heap_capture_id,
+                                                    _In_ ID3D12Heap*                  pHeap,
                                                     UINT64                            HeapOffset,
                                                     _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                                     D3D12_BARRIER_LAYOUT              InitialLayout,
@@ -244,6 +272,8 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource2(_In_ ID3D12Heap*            
                                                     REFIID                  riid,
                                                     _COM_Outptr_opt_ void** ppvResource)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
+
     HRESULT result = S_FALSE;
 
     graphics::dx12::ID3D12Device10ComPtr device10;
@@ -350,6 +380,8 @@ void Dx12DefaultAllocator::UpdateTileMappings(ID3D12CommandQueue*               
                                               const UINT*                            pRangeTileCounts,
                                               D3D12_TILE_MAPPING_FLAGS               Flags)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
+
     pQueue->UpdateTileMappings(pResource,
                                NumResourceRegions,
                                pResourceRegionStartCoordinates,

@@ -830,13 +830,18 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
             }
 
             auto device_object = GetObjectInfo(replay_object_info->extra_info->parent_id);
-            assert(device_object != nullptr);
-            auto device_info = GetExtraInfo<D3D12DeviceInfo>(device_object);
-            assert(device_info != nullptr);
-            auto allocator = device_info->allocator.get();
-            assert(allocator != nullptr);
-
-            allocator->Release(object);
+            if (device_object != nullptr)
+            {
+                auto device_info = GetExtraInfo<D3D12DeviceInfo>(device_object);
+                if (device_info != nullptr)
+                {
+                    auto allocator = device_info->allocator.get();
+                    if (allocator != nullptr)
+                    {
+                        allocator->Release(object);
+                    }
+                }
+            }
         }
 
         RemoveObject(replay_object_info);
@@ -1324,9 +1329,9 @@ LUID Dx12ReplayConsumerBase::GetAdapterLuid(const LUID& capture_luid)
     return capture_luid;
 }
 
-void Dx12ReplayConsumerBase::InitCommandQueueExtraInfo(ID3D12Device*                device,
-                                                       HandlePointerDecoder<void*>* command_queue_decoder,
-                                                       Dx12ResourceAllocator*       allocator)
+void Dx12ReplayConsumerBase::InitCommandQueueExtraInfo(format::HandleId             device_id,
+                                                       ID3D12Device*                device,
+                                                       HandlePointerDecoder<void*>* command_queue_decoder)
 {
     auto command_queue_info = std::make_unique<D3D12CommandQueueInfo>();
 
@@ -1344,7 +1349,7 @@ void Dx12ReplayConsumerBase::InitCommandQueueExtraInfo(ID3D12Device*            
         GFXRECON_LOG_ERROR("Failed to create ID3D12Fence object used to sync after command list execution.");
     }
 
-    command_queue_info->allocator = allocator;
+    command_queue_info->parent_id = device_id;
 
     SetExtraInfo(command_queue_decoder, std::move(command_queue_info));
 }
@@ -1366,10 +1371,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommandQueue(DxObjectInfo* replay_
 
     if (SUCCEEDED(replay_result))
     {
-        auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
-        auto allocator   = device_info->allocator.get();
-        GFXRECON_ASSERT(device_info != nullptr && allocator != nullptr);
-        InitCommandQueueExtraInfo(replay_object, command_queue, allocator);
+        InitCommandQueueExtraInfo(replay_object_info->capture_id, replay_object, command_queue);
     }
 
     return replay_result;
@@ -1394,10 +1396,7 @@ Dx12ReplayConsumerBase::OverrideCreateCommandQueue1(DxObjectInfo* device9_object
 
     if (SUCCEEDED(replay_result))
     {
-        auto device_info = GetExtraInfo<D3D12DeviceInfo>(device9_object_info);
-        auto allocator   = device_info->allocator.get();
-        GFXRECON_ASSERT(device_info != nullptr && allocator != nullptr);
-        InitCommandQueueExtraInfo(device9, command_queue_decoder, allocator);
+        InitCommandQueueExtraInfo(device9_object_info->capture_id, device9, command_queue_decoder);
     }
 
     return replay_result;
@@ -1557,7 +1556,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource(
 {
     GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (pDesc != nullptr));
 
-    auto replay_object = static_cast<ID3D12Device*>(replay_object_info->object);
+    auto        replay_object = static_cast<ID3D12Device*>(replay_object_info->object);
     ID3D12Heap* heap          = nullptr;
     if (pHeap != nullptr)
     {
@@ -1566,8 +1565,10 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource(
 
     auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
     auto allocator   = device_info->allocator.get();
+    auto heap_id     = pHeap->capture_id;
     GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
-    auto replay_result = allocator->CreatePlacedResource(heap,
+    auto replay_result = allocator->CreatePlacedResource(heap_id,
+                                                         heap,
                                                          HeapOffset,
                                                          pDesc->GetPointer(),
                                                          InitialState,
@@ -1608,20 +1609,10 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateHeap(DxObjectInfo*                
 
     auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
     auto allocator   = device_info->allocator.get();
+    auto capture_id  = *ppvHeap->GetPointer();
     GFXRECON_ASSERT(device_info != nullptr && allocator != nullptr);
 
-    // TODO: move createheap to allocator
-    // auto replay_result = allocator->CreateHeap(heap_desc, *riid.decoded_value, ppvHeap->GetHandlePointer());
-
-    auto replay_result = replay_object->CreateHeap(heap_desc, *riid.decoded_value, ppvHeap->GetHandlePointer());
-    if (replay_result == S_OK)
-    {
-        auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
-        auto allocator   = device_info->allocator.get();
-        auto capture_id  = *ppvHeap->GetPointer();
-        GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
-        allocator->PostCreateHeap(capture_id, heap_desc, *riid.decoded_value, ppvHeap->GetHandlePointer());
-    }
+    auto replay_result = allocator->CreateHeap(capture_id, heap_desc, *riid.decoded_value, ppvHeap->GetHandlePointer());
 
     if (options_.create_dummy_allocations)
     {
@@ -1664,16 +1655,13 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateHeap1(DxObjectInfo*               
         }
     }
 
-    auto replay_result =
-        replay_object->CreateHeap1(heap_desc, in_pProtectedSession, *riid.decoded_value, ppvHeap->GetHandlePointer());
-    if (replay_result == S_OK)
-    {
-        auto capture_id  = *ppvHeap->GetPointer();
-        auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
-        auto allocator   = device_info->allocator.get();
-        GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
-        allocator->PostCreateHeap(capture_id, heap_desc, *riid.decoded_value, ppvHeap->GetHandlePointer());
-    }
+    auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
+    auto allocator   = device_info->allocator.get();
+    auto capture_id  = *ppvHeap->GetPointer();
+    GFXRECON_ASSERT(device_info != nullptr && allocator != nullptr);
+
+    auto replay_result = allocator->CreateHeap1(
+        capture_id, heap_desc, in_pProtectedSession, *riid.decoded_value, ppvHeap->GetHandlePointer());
 
     if (options_.create_dummy_allocations)
     {
@@ -1789,7 +1777,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource1(
 {
     GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (pDesc != nullptr));
 
-    auto replay_object = static_cast<ID3D12Device8*>(replay_object_info->object);
+    auto        replay_object = static_cast<ID3D12Device8*>(replay_object_info->object);
     ID3D12Heap* heap          = nullptr;
     if (pHeap != nullptr)
     {
@@ -1798,8 +1786,10 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource1(
 
     auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
     auto allocator   = device_info->allocator.get();
+    auto heap_id     = pHeap->capture_id;
     GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
-    auto replay_result = allocator->CreatePlacedResource1(heap,
+    auto replay_result = allocator->CreatePlacedResource1(heap_id,
+                                                          heap,
                                                           HeapOffset,
                                                           pDesc->GetPointer(),
                                                           InitialState,
@@ -1919,7 +1909,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource2(
 {
     GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (pDesc != nullptr));
 
-    auto replay_object = static_cast<ID3D12Device10*>(replay_object_info->object);
+    auto        replay_object = static_cast<ID3D12Device10*>(replay_object_info->object);
     ID3D12Heap* heap          = nullptr;
     if (pHeap != nullptr)
     {
@@ -1928,8 +1918,10 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePlacedResource2(
 
     auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
     auto allocator   = device_info->allocator.get();
+    auto heap_id     = pHeap->capture_id;
     GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
-    auto replay_result = allocator->CreatePlacedResource2(heap,
+    auto replay_result = allocator->CreatePlacedResource2(heap_id,
+                                                          heap,
                                                           HeapOffset,
                                                           pDesc->GetPointer(),
                                                           InitialLayout,
@@ -2605,8 +2597,14 @@ void Dx12ReplayConsumerBase::OverrideUpdateTileMappings(
     auto capture_id = pHeap_handle;
 
     auto command_queue_info = GetExtraInfo<D3D12CommandQueueInfo>(replay_object_info);
-    auto allocator          = command_queue_info->allocator;
-    GFXRECON_ASSERT(command_queue_info != nullptr && allocator != nullptr);
+    assert(command_queue_info != nullptr);
+    auto device_object = GetObjectInfo(command_queue_info->parent_id);
+    assert(device_object != nullptr);
+    auto device_info = GetExtraInfo<D3D12DeviceInfo>(device_object);
+    assert(device_info != nullptr);
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
     allocator->UpdateTileMappings(pQueue,
                                   capture_id,
                                   pResource,

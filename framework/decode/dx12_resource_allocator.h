@@ -40,7 +40,16 @@ class Dx12ResourceAllocator
 
     virtual void Destroy() = 0;
 
-    virtual HRESULT CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap) = 0;
+    virtual HRESULT CreateHeap(format::HandleId            capture_id,
+                               _In_ const D3D12_HEAP_DESC* pDesc,
+                               REFIID                      riid,
+                               _COM_Outptr_opt_ void**     ppvHeap) = 0;
+
+    virtual HRESULT CreateHeap1(format::HandleId                         capture_id,
+                                _In_ const D3D12_HEAP_DESC*              pDesc,
+                                _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
+                                REFIID                                   riid,
+                                _COM_Outptr_opt_ void**                  ppvHeap) = 0;
 
     virtual HRESULT CreateCommittedResource(_In_ const D3D12_HEAP_PROPERTIES* pHeapProperties,
                                             D3D12_HEAP_FLAGS                  HeapFlags,
@@ -50,7 +59,8 @@ class Dx12ResourceAllocator
                                             REFIID                            riidResource,
                                             _COM_Outptr_opt_ void**           ppvResource) = 0;
 
-    virtual HRESULT CreatePlacedResource(_In_ ID3D12Heap*                  pHeap,
+    virtual HRESULT CreatePlacedResource(format::HandleId                  heap_capture_id,
+                                         _In_ ID3D12Heap*                  pHeap,
                                          UINT64                            HeapOffset,
                                          _In_ const D3D12_RESOURCE_DESC*   pDesc,
                                          D3D12_RESOURCE_STATES             InitialState,
@@ -73,7 +83,8 @@ class Dx12ResourceAllocator
                                              REFIID                                   riidResource,
                                              _COM_Outptr_opt_ void**                  ppvResource) = 0;
 
-    virtual HRESULT CreatePlacedResource1(_In_ ID3D12Heap*                  pHeap,
+    virtual HRESULT CreatePlacedResource1(format::HandleId                  heap_capture_id,
+                                          _In_ ID3D12Heap*                  pHeap,
                                           UINT64                            HeapOffset,
                                           _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                           D3D12_RESOURCE_STATES             InitialState,
@@ -97,7 +108,8 @@ class Dx12ResourceAllocator
                                              REFIID                                   riidResource,
                                              _COM_Outptr_opt_ void**                  ppvResource) = 0;
 
-    virtual HRESULT CreatePlacedResource2(_In_ ID3D12Heap*                                      pHeap,
+    virtual HRESULT CreatePlacedResource2(format::HandleId                                      heap_capture_id,
+                                          _In_ ID3D12Heap*                                      pHeap,
                                           UINT64                                                HeapOffset,
                                           _In_ const D3D12_RESOURCE_DESC1*                      pDesc,
                                           D3D12_BARRIER_LAYOUT                                  InitialLayout,
@@ -153,11 +165,6 @@ class Dx12ResourceAllocator
     virtual bool SupportD3D12MemoryAllocator() = 0;
 
     virtual void Release(IUnknown* object) = 0;
-
-    virtual void PostCreateHeap(format::HandleId            capture_id,
-                                _In_ const D3D12_HEAP_DESC* pDesc,
-                                REFIID                      riid,
-                                _COM_Outptr_opt_ void**     ppvHeap) = 0;
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) = 0;
 

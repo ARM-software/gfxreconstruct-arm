@@ -35,14 +35,22 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
   public:
     Dx12RebindAllocator();
 
-    ~Dx12RebindAllocator() override = default;
+    ~Dx12RebindAllocator() override { AllRelease(); }
 
     virtual HRESULT Initialize(const IUnknown* adapter, const void* pvDevice) override;
 
     virtual void Destroy() override;
 
-    virtual HRESULT
-    CreateHeap(_In_ const D3D12_HEAP_DESC* pDesc, REFIID riid, _COM_Outptr_opt_ void** ppvHeap) override;
+    virtual HRESULT CreateHeap(format::HandleId            capture_id,
+                               _In_ const D3D12_HEAP_DESC* pDesc,
+                               REFIID                      riid,
+                               _COM_Outptr_opt_ void**     ppvHeap) override;
+
+    virtual HRESULT CreateHeap1(format::HandleId                         capture_id,
+                                _In_ const D3D12_HEAP_DESC*              pDesc,
+                                _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
+                                REFIID                                   riid,
+                                _COM_Outptr_opt_ void**                  ppvHeap) override;
 
     virtual HRESULT CreateCommittedResource(_In_ const D3D12_HEAP_PROPERTIES* pHeapProperties,
                                             D3D12_HEAP_FLAGS                  HeapFlags,
@@ -52,7 +60,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
                                             REFIID                            riidResource,
                                             _COM_Outptr_opt_ void**           ppvResource) override;
 
-    virtual HRESULT CreatePlacedResource(_In_ ID3D12Heap*                  pHeap,
+    virtual HRESULT CreatePlacedResource(format::HandleId                  heap_capture_id,
+                                         _In_ ID3D12Heap*                  pHeap,
                                          UINT64                            HeapOffset,
                                          _In_ const D3D12_RESOURCE_DESC*   pDesc,
                                          D3D12_RESOURCE_STATES             InitialState,
@@ -75,7 +84,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
                                              REFIID                                   riidResource,
                                              _COM_Outptr_opt_ void**                  ppvResource) override;
 
-    virtual HRESULT CreatePlacedResource1(_In_ ID3D12Heap*                  pHeap,
+    virtual HRESULT CreatePlacedResource1(format::HandleId                  heap_capture_id,
+                                          _In_ ID3D12Heap*                  pHeap,
                                           UINT64                            HeapOffset,
                                           _In_ const D3D12_RESOURCE_DESC1*  pDesc,
                                           D3D12_RESOURCE_STATES             InitialState,
@@ -99,7 +109,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
                                              REFIID                                   riidResource,
                                              _COM_Outptr_opt_ void**                  ppvResource) override;
 
-    virtual HRESULT CreatePlacedResource2(_In_ ID3D12Heap*                                      pHeap,
+    virtual HRESULT CreatePlacedResource2(format::HandleId                                      heap_capture_id,
+                                          _In_ ID3D12Heap*                                      pHeap,
                                           UINT64                                                HeapOffset,
                                           _In_ const D3D12_RESOURCE_DESC1*                      pDesc,
                                           D3D12_BARRIER_LAYOUT                                  InitialLayout,
@@ -156,10 +167,7 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     virtual void Release(IUnknown* object) override;
 
-    virtual void PostCreateHeap(format::HandleId            capture_id,
-                                _In_ const D3D12_HEAP_DESC* pDesc,
-                                REFIID                      riid,
-                                _COM_Outptr_opt_ void**     ppvHeap) override;
+    void AllRelease();
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) override;
 
@@ -175,9 +183,10 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     D3D12MA::Allocator* allocator_;
     ID3D12Device*       device_;
 
-    std::unordered_map<ID3D12Resource*, D3D12MA::Allocation*> resource_allocation_;
-    std::unordered_map<ID3D12Heap*, D3D12_HEAP_DESC>          heap_desc_;
-    std::unordered_map<format::HandleId, D3D12_HEAP_DESC>     heap_id_desc_;
+    std::unordered_map<ID3D12Resource*, D3D12MA::Allocation*>     resource_allocation_;
+    std::unordered_map<format::HandleId, D3D12_HEAP_DESC>         heap_id_desc_;
+    std::unordered_map<format::HandleId, ID3D12Heap*>             heap_id_recreated_heap_;
+    std::unordered_map<ID3D12Resource*, std::vector<ID3D12Heap*>> resource_recreated_heap_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
