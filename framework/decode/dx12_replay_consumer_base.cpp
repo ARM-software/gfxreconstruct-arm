@@ -1523,7 +1523,19 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateCommittedResource(
 
     auto device_info = GetExtraInfo<D3D12DeviceInfo>(replay_object_info);
     auto allocator   = device_info->allocator.get();
+
     GFXRECON_ASSERT((device_info != nullptr) && (allocator != nullptr));
+    if (support_memory_allocator_)
+    {
+        auto it = parameter_resource_size_map_.find(desc_pointer->Width);
+        if (it != parameter_resource_size_map_.end() && desc_pointer->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+        {
+            GFXRECON_LOG_INFO("Adjusting resource width from %llu to %llu for parameter resource size",
+                              desc_pointer->Width,
+                              it->second);
+            const_cast<D3D12_RESOURCE_DESC*>(desc_pointer)->Width = it->second;
+        }
+    }
     auto replay_result = allocator->CreateCommittedResource(heap_properties_pointer,
                                                             HeapFlags,
                                                             desc_pointer,
@@ -4124,6 +4136,54 @@ void Dx12ReplayConsumerBase::OverrideCopyResource(DxObjectInfo* command_list_obj
     {
         resource_value_mapper_->PostProcessCopyResource(
             command_list_object_info, dst_resource_object_info, src_resource_object_info);
+    }
+}
+
+UINT64
+Dx12ReplayConsumerBase::OverrideGetRequiredParameterResourceSize(DxObjectInfo*                      replay_object,
+                                                                 UINT64                             return_value,
+                                                                 D3D12_META_COMMAND_PARAMETER_STAGE Stage,
+                                                                 UINT                               ParameterIndex)
+{
+    assert((replay_object != nullptr) && (replay_object->object != nullptr));
+    auto replay_meta_command = static_cast<ID3D12MetaCommand*>(replay_object->object);
+
+    UINT64 replay_size = replay_meta_command->GetRequiredParameterResourceSize(Stage, ParameterIndex);
+
+    if (replay_size > return_value)
+    {
+        GFXRECON_LOG_WARNING("GetRequiredParameterResourceSize (object_id=%llu, Stage=%d, ParameterIndex=%u): "
+                             "replay_size (%llu) > return_value (%llu)",
+                             replay_object->capture_id,
+                             Stage,
+                             ParameterIndex,
+                             replay_size,
+                             return_value);
+        parameter_resource_size_map_[return_value] = replay_size;
+    }
+
+    return replay_size;
+}
+
+HRESULT Dx12ReplayConsumerBase::OverrideSerialize(DxObjectInfo*            replay_object,
+                                                  HRESULT                  return_value,
+                                                  PointerDecoder<uint8_t>* pData,
+                                                  SIZE_T                   DataSizeInBytes)
+{
+    assert((replay_object != nullptr) && (replay_object->object != nullptr));
+    auto replay_library     = static_cast<ID3D12PipelineLibrary*>(replay_object->object);
+    auto library_extra_info = GetExtraInfo<D3D12PipelineLibraryInfo>(replay_object);
+
+    SIZE_T adjusted_size = library_extra_info->serialized_size;
+
+    if (!pData->IsNull() && pData->GetOutputPointer())
+    {
+        return replay_library->Serialize(pData->GetOutputPointer(), adjusted_size);
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("pData is null or not allocated for object_id %llu", replay_object->capture_id);
+        return E_FAIL;
     }
 }
 

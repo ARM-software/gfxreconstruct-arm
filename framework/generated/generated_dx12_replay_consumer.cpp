@@ -10442,10 +10442,14 @@ void Dx12ReplayConsumer::Process_ID3D12PipelineLibrary_Serialize(
             replay_object,
             pData,
             DataSizeInBytes);
-        auto library_extra_info = GetExtraInfo<D3D12PipelineLibraryInfo>(replay_object);
-        SIZE_T adjusted_size = library_extra_info->serialized_size;
-        auto replay_result = reinterpret_cast<ID3D12PipelineLibrary*>(replay_object->object)->Serialize(pData->GetOutputPointer(),
-                                                                                                        adjusted_size);
+        if(!pData->IsNull())
+        {
+            pData->AllocateOutputData(DataSizeInBytes);
+        }
+        auto replay_result = OverrideSerialize(replay_object,
+                                               return_value,
+                                               pData,
+                                               DataSizeInBytes);
         CheckReplayResult("ID3D12PipelineLibrary_Serialize", return_value, replay_result);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12PipelineLibrary_Serialize>::Dispatch(
             this,
@@ -12639,8 +12643,10 @@ void Dx12ReplayConsumer::Process_ID3D12MetaCommand_GetRequiredParameterResourceS
             replay_object,
             Stage,
             ParameterIndex);
-        auto replay_result = reinterpret_cast<ID3D12MetaCommand*>(replay_object->object)->GetRequiredParameterResourceSize(Stage,
-                                                                                                                           ParameterIndex);
+        auto replay_result = OverrideGetRequiredParameterResourceSize(replay_object,
+                                                                      return_value,
+                                                                      Stage,
+                                                                      ParameterIndex);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12MetaCommand_GetRequiredParameterResourceSize>::Dispatch(
             this,
             call_info,
