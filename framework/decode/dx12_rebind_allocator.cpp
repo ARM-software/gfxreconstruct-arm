@@ -64,7 +64,10 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment(const D3D12_RESOURCE_DE
     if (device_ != nullptr)
     {
         alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
-        const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
+        {
+            const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        }
     }
 }
 
@@ -79,7 +82,10 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment1(const D3D12_RESOURCE_D
         device_->QueryInterface(IID_PPV_ARGS(&device4));
 
         alloc_info = device4->GetResourceAllocationInfo1(0, 1, pResourceDesc, &alloc_info1);
-        const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
+        {
+            const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        }
     }
 }
 
@@ -94,7 +100,10 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment2(const D3D12_RESOURCE_D
         device_->QueryInterface(IID_PPV_ARGS(&device8));
 
         alloc_info = device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
-        const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
+        {
+            const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        }
     }
 }
 
