@@ -94,6 +94,7 @@ struct JsonOptions
     bool        expand_flags  = false;
     bool        hex_handles   = false;
     bool        verbose       = false;
+    bool        bare          = false;
 };
 
 void FieldToJson(nlohmann::ordered_json& jdata, const short& data, const JsonOptions& options = JsonOptions());
