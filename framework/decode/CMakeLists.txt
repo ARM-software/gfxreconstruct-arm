@@ -390,3 +390,22 @@ if (${RUN_TESTS})
     common_build_directives(gfxrecon_decode_test)
     common_test_directives(gfxrecon_decode_test)
 endif()
+
+if (${RUN_TESTS})
+    add_executable(gfxrecon_asb_test "")
+    target_sources(gfxrecon_asb_test PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/test/acceleration_structure_builder_test.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp)
+    target_link_libraries(gfxrecon_asb_test PRIVATE gfxrecon_decode)
+    if (MSVC)
+        # Force inclusion of "gfxrecon_disable_popup_result" variable in linking.
+        # On 32-bit windows, MSVC prefixes symbols with "_" but on 64-bit windows it doesn't.
+        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+            target_link_options(gfxrecon_asb_test PUBLIC "LINKER:/Include:_gfxrecon_disable_popup_result")
+        else()
+            target_link_options(gfxrecon_asb_test PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
+        endif()
+    endif()
+    common_build_directives(gfxrecon_asb_test)
+    common_test_directives(gfxrecon_asb_test)
+endif()
