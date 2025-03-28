@@ -65,7 +65,8 @@ enum class DxObjectInfoType : uint32_t
     kID3D12CommandListInfo,
     kID3D12RootSignatureInfo,
     kID3D12StateObjectInfo,
-    kID3D12PipelineLibraryInfo
+    kID3D12PipelineLibraryInfo,
+    kID3D12StateObjectPropertiesInfo
 };
 
 //
@@ -474,6 +475,15 @@ struct D3D12PipelineLibraryInfo : DxObjectExtraInfo
     D3D12PipelineLibraryInfo() : DxObjectExtraInfo(kType) {}
 
     SIZE_T serialized_size{ 0 };
+};
+
+struct D3D12StateObjectPropertiesInfo : DxObjectExtraInfo
+{
+    static constexpr DxObjectInfoType kType         = DxObjectInfoType::kID3D12StateObjectPropertiesInfo;
+    static constexpr char             kObjectType[] = "ID3D12StateObjectPropertiesInfo";
+    D3D12StateObjectPropertiesInfo() : DxObjectExtraInfo(kType) {}
+
+    UINT64 stack_size_delta{ 0 };
 };
 
 GFXRECON_END_NAMESPACE(decode)

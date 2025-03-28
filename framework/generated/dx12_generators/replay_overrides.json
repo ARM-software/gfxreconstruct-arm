@@ -105,7 +105,10 @@
       "LoadPipeline": "OverrideLoadPipeline"
     },
     "ID3D12StateObjectProperties": {
-      "GetShaderIdentifier": "OverrideGetShaderIdentifier"
+      "GetShaderIdentifier": "OverrideGetShaderIdentifier",
+      "GetShaderStackSize": "OverrideGetShaderStackSize",
+      "GetPipelineStackSize": "OverrideGetPipelineStackSize",
+      "SetPipelineStackSize": "OverrideSetPipelineStackSize"
     },
     "ID3D12GraphicsCommandList": {
       "CopyBufferRegion": "OverrideCopyBufferRegion",

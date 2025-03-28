@@ -11416,7 +11416,9 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_GetShaderStackSize(
             call_info,
             replay_object,
             pExportName);
-        auto replay_result = reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->GetShaderStackSize(pExportName->GetPointer());
+        auto replay_result = OverrideGetShaderStackSize(replay_object,
+                                                        return_value,
+                                                        pExportName);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_GetShaderStackSize>::Dispatch(
             this,
             call_info,
@@ -11439,7 +11441,8 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_GetPipelineStackSiz
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->GetPipelineStackSize();
+        auto replay_result = OverrideGetPipelineStackSize(replay_object,
+                                                          return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_GetPipelineStackSize>::Dispatch(
             this,
             call_info,
@@ -11462,7 +11465,8 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_SetPipelineStackSiz
             call_info,
             replay_object,
             PipelineStackSizeInBytes);
-        reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->SetPipelineStackSize(PipelineStackSizeInBytes);
+        OverrideSetPipelineStackSize(replay_object,
+                                     PipelineStackSizeInBytes);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_SetPipelineStackSize>::Dispatch(
             this,
             call_info,

@@ -950,6 +950,13 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void OverrideExecuteBundle(DxObjectInfo* replay_object_info, DxObjectInfo* command_list_object_info);
 
+    UINT64 OverrideGetPipelineStackSize(DxObjectInfo* replay_object, UINT64 return_value);
+
+    UINT64
+    OverrideGetShaderStackSize(DxObjectInfo* replay_object, UINT64 return_value, WStringDecoder* export_name);
+
+    void OverrideSetPipelineStackSize(DxObjectInfo* replay_object, UINT64 pipeline_stack_size_in_bytes);
+
     const Dx12ObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
 
     Dx12ObjectInfoTable& GetObjectInfoTable() { return object_info_table_; }

@@ -2965,6 +2965,85 @@ void* Dx12ReplayConsumerBase::OverrideGetShaderIdentifier(DxObjectInfo*         
     return new_shader_identifier_ptr;
 }
 
+UINT64 Dx12ReplayConsumerBase::OverrideGetPipelineStackSize(DxObjectInfo* replay_object, UINT64 return_value)
+{
+    assert((replay_object != nullptr) && (replay_object->object != nullptr));
+    auto state_object = static_cast<ID3D12StateObjectProperties*>(replay_object->object);
+
+    UINT64 replay_result = state_object->GetPipelineStackSize();
+    auto   state_info    = GetExtraInfo<D3D12StateObjectPropertiesInfo>(replay_object);
+
+    if (replay_result != return_value)
+    {
+        INT64 delta = static_cast<INT64>(replay_result) - static_cast<INT64>(return_value);
+        if (delta > 0)
+        {
+            state_info->stack_size_delta += delta;
+            GFXRECON_LOG_DEBUG("OverrideGetPipelineStackSize for object_id %llu: capture (%llu) < replay (%llu), delta "
+                               "= %lld, total delta = %llu",
+                               replay_object->capture_id,
+                               return_value,
+                               replay_result,
+                               delta,
+                               state_info->stack_size_delta);
+        }
+    }
+
+    return replay_result;
+}
+
+UINT64 Dx12ReplayConsumerBase::OverrideGetShaderStackSize(DxObjectInfo*   replay_object,
+                                                          UINT64          return_value,
+                                                          WStringDecoder* export_name)
+{
+    assert((replay_object != nullptr) && (replay_object->object != nullptr));
+    auto state_object = static_cast<ID3D12StateObjectProperties*>(replay_object->object);
+
+    UINT64 replay_result = state_object->GetShaderStackSize(export_name->GetPointer());
+    auto   state_info    = GetExtraInfo<D3D12StateObjectPropertiesInfo>(replay_object);
+
+    if (replay_result != return_value)
+    {
+        INT64 delta = static_cast<INT64>(replay_result) - static_cast<INT64>(return_value);
+        if (delta > 0)
+        {
+            state_info->stack_size_delta += delta;
+            GFXRECON_LOG_DEBUG("OverrideGetShaderStackSize for object_id %llu, export %ls: capture (%llu) < replay "
+                               "(%llu), delta = %lld, total delta = %llu",
+                               replay_object->capture_id,
+                               export_name,
+                               return_value,
+                               replay_result,
+                               delta,
+                               state_info->stack_size_delta);
+        }
+    }
+
+    return replay_result;
+}
+
+void Dx12ReplayConsumerBase::OverrideSetPipelineStackSize(DxObjectInfo* replay_object,
+                                                          UINT64        pipeline_stack_size_in_bytes)
+{
+    assert((replay_object != nullptr) && (replay_object->object != nullptr));
+    auto state_object = static_cast<ID3D12StateObjectProperties*>(replay_object->object);
+    auto state_info   = GetExtraInfo<D3D12StateObjectPropertiesInfo>(replay_object);
+
+    UINT64 adjusted_stack_size = pipeline_stack_size_in_bytes + state_info->stack_size_delta;
+
+    if (state_info->stack_size_delta > 0)
+    {
+        GFXRECON_LOG_INFO("OverrideSetPipelineStackSize for object_id %llu: adjusted from %llu to %llu (delta = %llu) "
+                          "for replay compatibility",
+                          replay_object->capture_id,
+                          pipeline_stack_size_in_bytes,
+                          adjusted_stack_size,
+                          state_info->stack_size_delta);
+    }
+
+    state_object->SetPipelineStackSize(adjusted_stack_size);
+}
+
 HRESULT Dx12ReplayConsumerBase::CreateSwapChainForHwnd(
     DxObjectInfo*                                                  replay_object_info,
     HRESULT                                                        original_result,
