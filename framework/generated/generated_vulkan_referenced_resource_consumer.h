@@ -353,16 +353,6 @@ class VulkanReferencedResourceConsumer : public VulkanReferencedResourceConsumer
         uint32_t                                    descriptorWriteCount,
         StructPointerDecoder<Decoded_VkWriteDescriptorSet>* pDescriptorWrites) override;
 
-    virtual void Process_vkCmdSetRenderingAttachmentLocations(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkRenderingAttachmentLocationInfo>* pLocationInfo) override;
-
-    virtual void Process_vkCmdSetRenderingInputAttachmentIndices(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkRenderingInputAttachmentIndexInfo>* pInputAttachmentIndexInfo) override;
-
     virtual void Process_vkCmdBindDescriptorSets2(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -427,16 +417,6 @@ class VulkanReferencedResourceConsumer : public VulkanReferencedResourceConsumer
         VkDeviceSize                                countBufferOffset,
         uint32_t                                    maxDrawCount,
         uint32_t                                    stride) override;
-
-    virtual void Process_vkCmdSetRenderingAttachmentLocationsKHR(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkRenderingAttachmentLocationInfo>* pLocationInfo) override;
-
-    virtual void Process_vkCmdSetRenderingInputAttachmentIndicesKHR(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        StructPointerDecoder<Decoded_VkRenderingInputAttachmentIndexInfo>* pInputAttachmentIndexInfo) override;
 
     virtual void Process_vkCmdEncodeVideoKHR(
         const ApiCallInfo&                          call_info,

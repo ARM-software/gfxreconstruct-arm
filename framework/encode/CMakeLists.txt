@@ -124,12 +124,12 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_state_table.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_command_list_util.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_command_list_util.cpp>
-                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_encode_pnext_struct.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_api_call_encoders.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_api_call_encoders.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_command_buffer_util.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_command_buffer_util.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_dispatch_table.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_encoder.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_encoders.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_encoders.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_wrappers.h
