@@ -169,7 +169,7 @@ class Dx12DefaultAllocator : public Dx12ResourceAllocator
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) override;
 
-    virtual void ReportResourceIncompatibility2(const D3D12_RESOURCE_DESC1* pResourceDesc) override;
+    virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc) override;
 
   private:
     ID3D12Device* device_;

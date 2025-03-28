@@ -59,20 +59,6 @@ void Dx12RebindAllocator::Destroy()
 
 void Dx12RebindAllocator::SetReplayResourceDescAlignment(const D3D12_RESOURCE_DESC* pResourceDesc)
 {
-    D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
-
-    if (device_ != nullptr)
-    {
-        alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
-        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
-        {
-            const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
-        }
-    }
-}
-
-void Dx12RebindAllocator::SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC* pResourceDesc)
-{
     D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
     D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
 
@@ -81,15 +67,33 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment1(const D3D12_RESOURCE_D
         graphics::dx12::ID3D12Device4ComPtr device4;
         device_->QueryInterface(IID_PPV_ARGS(&device4));
 
-        alloc_info = device4->GetResourceAllocationInfo1(0, 1, pResourceDesc, &alloc_info1);
+        if (device4 != nullptr)
+        {
+            device4->GetResourceAllocationInfo1(0, 1, pResourceDesc, &alloc_info1);
+            alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
+            alloc_info.Alignment   = alloc_info1.Alignment;
+        }
+        else
+        {
+            alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
+        }
+
         if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
             const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Alignment = alloc_info.Alignment;
         }
+
+        if (pResourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+        {
+            if (alloc_info.SizeInBytes && alloc_info.SizeInBytes != pResourceDesc->Width)
+            {
+                const_cast<D3D12_RESOURCE_DESC*>(pResourceDesc)->Width = alloc_info.SizeInBytes;
+            }
+        }
     }
 }
 
-void Dx12RebindAllocator::SetReplayResourceDescAlignment2(const D3D12_RESOURCE_DESC1* pResourceDesc)
+void Dx12RebindAllocator::SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC1* pResourceDesc)
 {
     D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
     D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
@@ -99,10 +103,30 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment2(const D3D12_RESOURCE_D
         graphics::dx12::ID3D12Device8ComPtr device8;
         device_->QueryInterface(IID_PPV_ARGS(&device8));
 
-        alloc_info = device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+        if (device8 != nullptr)
+        {
+            device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+            alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
+            alloc_info.Alignment   = alloc_info1.Alignment;
+        }
+        else
+        {
+            D3D12_RESOURCE_DESC* desc =
+                reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc));
+            alloc_info = device_->GetResourceAllocationInfo(0, 1, desc);
+        }
+
         if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
             const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc)->Alignment = alloc_info.Alignment;
+        }
+
+        if (pResourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+        {
+            if (alloc_info.SizeInBytes && alloc_info.SizeInBytes != pResourceDesc->Width)
+            {
+                const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc)->Width = alloc_info.SizeInBytes;
+            }
         }
     }
 }
@@ -287,7 +311,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PROP
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment1(pDesc);
+        SetReplayResourceDescAlignment(pDesc);
         result = allocator_->CreateResource(
             &alloc_desc, pDesc, InitialResourceState, pOptimizedClearValue, &allocation, riidResource, ppvResource);
         if (!result)
@@ -328,7 +352,7 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId             
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment2(pDesc);
+        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource2(
             &alloc_desc, pDesc, InitialState, pOptimizedClearValue, &allocation, riid, ppvResource);
         if (!result)
@@ -381,7 +405,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PROP
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment2(pDesc);
+        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource2(
             &alloc_desc, pDesc, InitialResourceState, pOptimizedClearValue, &allocation, riidResource, ppvResource);
         if (!result)
@@ -425,7 +449,7 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment2(pDesc);
+        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource3(&alloc_desc,
                                              pDesc,
                                              InitialLayout,
@@ -498,7 +522,7 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PROP
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment2(pDesc);
+        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource3(&alloc_desc,
                                              pDesc,
                                              InitialLayout,
@@ -618,7 +642,7 @@ void Dx12RebindAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DES
     return;
 }
 
-void Dx12RebindAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_DESC1* pResourceDesc)
+void Dx12RebindAllocator::ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc)
 {
     return;
 }

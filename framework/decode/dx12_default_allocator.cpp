@@ -53,11 +53,24 @@ void Dx12DefaultAllocator::Destroy()
 
 void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc)
 {
-    D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
+    D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
+    D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
 
     if (device_ != nullptr && pResourceDesc != nullptr)
     {
-        alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
+        graphics::dx12::ID3D12Device4ComPtr device4;
+        device_->QueryInterface(IID_PPV_ARGS(&device4));
+
+        if (device4 != nullptr)
+        {
+            device4->GetResourceAllocationInfo1(0, 1, pResourceDesc, &alloc_info1);
+            alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
+            alloc_info.Alignment   = alloc_info1.Alignment;
+        }
+        else
+        {
+            alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
+        }
 
         if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
@@ -71,7 +84,7 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DE
     }
 }
 
-void Dx12DefaultAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_DESC1* pResourceDesc)
+void Dx12DefaultAllocator::ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc)
 {
     D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
     D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
@@ -81,7 +94,18 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility2(const D3D12_RESOURCE_D
         graphics::dx12::ID3D12Device8ComPtr device8;
         device_->QueryInterface(IID_PPV_ARGS(&device8));
 
-        alloc_info = device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+        if (device8 != nullptr)
+        {
+            device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+            alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
+            alloc_info.Alignment   = alloc_info1.Alignment;
+        }
+        else
+        {
+            D3D12_RESOURCE_DESC* desc =
+                reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc));
+            alloc_info = device_->GetResourceAllocationInfo(0, 1, desc);
+        }
 
         if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
         {
@@ -210,7 +234,7 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource1(format::HandleId            
 
     graphics::dx12::ID3D12Device8ComPtr device8;
     device_->QueryInterface(IID_PPV_ARGS(&device8));
-    ReportResourceIncompatibility2(pDesc);
+    ReportResourceIncompatibility1(pDesc);
     result =
         device8->CreatePlacedResource1(pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
 
@@ -247,7 +271,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PRO
 
     graphics::dx12::ID3D12Device8ComPtr device8;
     device_->QueryInterface(IID_PPV_ARGS(&device8));
-    ReportResourceIncompatibility2(pDesc);
+    ReportResourceIncompatibility1(pDesc);
     result = device8->CreateCommittedResource2(pHeapProperties,
                                                HeapFlags,
                                                pDesc,
@@ -278,7 +302,7 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource2(format::HandleId            
 
     graphics::dx12::ID3D12Device10ComPtr device10;
     device_->QueryInterface(IID_PPV_ARGS(&device10));
-    ReportResourceIncompatibility2(pDesc);
+    ReportResourceIncompatibility1(pDesc);
     result = device10->CreatePlacedResource2(pHeap,
                                              HeapOffset,
                                              pDesc,
@@ -335,7 +359,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PRO
 
     graphics::dx12::ID3D12Device10ComPtr device10;
     device_->QueryInterface(IID_PPV_ARGS(&device10));
-    ReportResourceIncompatibility2(pDesc);
+    ReportResourceIncompatibility1(pDesc);
     result = device10->CreateCommittedResource3(pHeapProperties,
                                                 HeapFlags,
                                                 pDesc,

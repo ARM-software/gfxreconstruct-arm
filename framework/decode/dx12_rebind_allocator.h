@@ -171,13 +171,11 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) override;
 
-    virtual void ReportResourceIncompatibility2(const D3D12_RESOURCE_DESC1* pResourceDesc) override;
+    virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc) override;
 
     void SetReplayResourceDescAlignment(const D3D12_RESOURCE_DESC* pResourceDesc);
 
-    void SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC* pResourceDesc);
-
-    void SetReplayResourceDescAlignment2(const D3D12_RESOURCE_DESC1* pResourceDesc);
+    void SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC1* pResourceDesc);
 
   private:
     D3D12MA::Allocator* allocator_;

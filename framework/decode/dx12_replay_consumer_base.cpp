@@ -821,14 +821,18 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
     if ((replay_object_info->ref_count == 0) && (replay_object_info->extra_ref == 0))
     {
         if ((replay_object_info->extra_info != nullptr) &&
-            (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12ResourceInfo) &&
-            (replay_object_info->extra_info->parent_id != format::kNullHandleId))
+            (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12CommandListInfo))
         {
             if (support_memory_allocator_ && accel_struct_builder_)
             {
-                accel_struct_builder_->PostRemoveGpuVirtualAddress(replay_object_info->capture_id);
+                accel_struct_builder_->ReleaseScratchBuffer(replay_object_info->capture_id);
             }
+        }
 
+        if ((replay_object_info->extra_info != nullptr) &&
+            (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12ResourceInfo) &&
+            (replay_object_info->extra_info->parent_id != format::kNullHandleId))
+        {
             auto device_object = GetObjectInfo(replay_object_info->extra_info->parent_id);
             if (device_object != nullptr)
             {
@@ -2172,11 +2176,6 @@ Dx12ReplayConsumerBase::OverrideGetGpuVirtualAddress(DxObjectInfo*             r
                     replay_object_info->capture_id, replay_result, desc.Width, original_result);
             }
         }
-
-        if (support_memory_allocator_ && accel_struct_builder_)
-        {
-            accel_struct_builder_->PostGetGpuVirtualAddress(replay_object_info->capture_id, replay_result);
-        }
     }
 
     return replay_result;
@@ -2472,6 +2471,12 @@ void Dx12ReplayConsumerBase::OverrideExecuteCommandLists(DxObjectInfo*          
             replay_object_info, num_command_lists, command_lists, needs_mapping);
     }
 
+    if (support_memory_allocator_ && accel_struct_builder_)
+    {
+        accel_struct_builder_->PostExecuteCommandLists(
+            replay_object_info->capture_id, num_command_lists, command_lists->GetPointer());
+    }
+
     if (do_sync_after_execute)
     {
         auto command_queue_info = GetExtraInfo<D3D12CommandQueueInfo>(replay_object_info);
@@ -2535,6 +2540,11 @@ HRESULT Dx12ReplayConsumerBase::OverrideCommandQueueSignal(DxObjectInfo* replay_
         ProcessQueueSignal(replay_object_info, fence_info, value);
     }
 
+    if (support_memory_allocator_ && accel_struct_builder_)
+    {
+        accel_struct_builder_->PostCommandQueueSignal(replay_object_info->capture_id, fence_info->capture_id, value);
+    }
+
     return replay_result;
 }
 
@@ -2566,6 +2576,11 @@ HRESULT Dx12ReplayConsumerBase::OverrideCommandQueueWait(DxObjectInfo* replay_ob
     if (SUCCEEDED(replay_result))
     {
         ProcessQueueWait(replay_object_info, fence_info, value);
+    }
+
+    if (support_memory_allocator_ && accel_struct_builder_)
+    {
+        accel_struct_builder_->PostCommandQueueWait(replay_object_info->capture_id, fence_info->capture_id, value);
     }
 
     return replay_result;
@@ -2625,6 +2640,11 @@ UINT64 Dx12ReplayConsumerBase::OverrideGetCompletedValue(DxObjectInfo* replay_ob
 
     auto replay_object = static_cast<ID3D12Fence*>(replay_object_info->object);
     auto replay_result = replay_object->GetCompletedValue();
+
+    if (support_memory_allocator_ && accel_struct_builder_)
+    {
+        accel_struct_builder_->PostGetCompletedValue(replay_object_info->capture_id, replay_result);
+    }
 
     auto fence_info = GetExtraInfo<D3D12FenceInfo>(replay_object_info);
     if (fence_info != nullptr)
@@ -4052,6 +4072,11 @@ HRESULT Dx12ReplayConsumerBase::OverrideCommandListReset(DxObjectInfo* command_l
 
     HRESULT replay_result = command_list->Reset(allocator, initial_state);
 
+    if (support_memory_allocator_ && accel_struct_builder_)
+    {
+        accel_struct_builder_->ReleaseScratchBuffer(command_list_object_info->capture_id);
+    }
+
     if (options_.enable_dump_resources)
     {
         GFXRECON_ASSERT(dump_resources_);
@@ -4247,7 +4272,8 @@ void Dx12ReplayConsumerBase::OverrideBuildRaytracingAccelerationStructure(
 
     if (support_memory_allocator_ && accel_struct_builder_)
     {
-        accel_struct_builder_->PreBuildRaytracingAccelerationStructure(desc->GetPointer());
+        auto command_list_id = command_list4_object_info->capture_id;
+        accel_struct_builder_->PreBuildRaytracingAccelerationStructure(command_list_id, desc->GetPointer());
     }
 
     command_list4->BuildRaytracingAccelerationStructure(

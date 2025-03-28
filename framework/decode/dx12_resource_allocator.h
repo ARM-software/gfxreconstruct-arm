@@ -168,7 +168,7 @@ class Dx12ResourceAllocator
 
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) = 0;
 
-    virtual void ReportResourceIncompatibility2(const D3D12_RESOURCE_DESC1* pResourceDesc) = 0;
+    virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc) = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)
