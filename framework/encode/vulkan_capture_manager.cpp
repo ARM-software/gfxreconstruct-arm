@@ -563,8 +563,31 @@ VkResult VulkanCaptureManager::OverrideCreateInstance(const VkInstanceCreateInfo
         std::vector<const char*> modified_extensions{ extensions, extensions + extension_count };
 
         std::vector<VkExtensionProperties> supported_extensions;
-        feature_util::GetInstanceExtensions(vulkan_layer_table_.EnumerateInstanceExtensionProperties,
-                                            &supported_extensions);
+
+        const VkLayerInstanceCreateInfo* chain_info =
+            reinterpret_cast<const VkLayerInstanceCreateInfo*>(pCreateInfo->pNext);
+
+        while (chain_info && ((chain_info->sType != VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO) ||
+                              (chain_info->function != VK_LAYER_LINK_INFO)))
+        {
+            chain_info = reinterpret_cast<const VkLayerInstanceCreateInfo*>(chain_info->pNext);
+        }
+
+        if (chain_info && chain_info->u.pLayerInfo)
+        {
+            PFN_vkGetInstanceProcAddr fpGetInstanceProcAddr = chain_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
+            if (fpGetInstanceProcAddr)
+            {
+                PFN_vkEnumerateInstanceExtensionProperties fpEnumerateInstanceExtensionProperties =
+                    reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
+                        fpGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties"));
+
+                if (fpEnumerateInstanceExtensionProperties)
+                {
+                    feature_util::GetInstanceExtensions(fpEnumerateInstanceExtensionProperties, &supported_extensions);
+                }
+            }
+        }
 
         if (singleton_->IsPageGuardMemoryModeExternal())
         {
@@ -2166,18 +2189,36 @@ VulkanCaptureManager::OverrideCreateDebugUtilsMessengerEXT(VkInstance           
                                                            const VkAllocationCallbacks*              pAllocator,
                                                            VkDebugUtilsMessengerEXT*                 pMessenger)
 {
-    if (!IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    VkResult result = VK_SUCCESS;
+
+    if (IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
     {
-        return GetInstanceTable(instance)->CreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+        // Because letting it to null is not valid according to Vulkan spec...
+        *pMessenger = (VkDebugUtilsMessengerEXT)(new char);
     }
-    return VK_SUCCESS;
+    else
+    {
+        result =
+            GetInstanceTable(instance)->CreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    }
+
+    vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::InstanceWrapper,
+                                         vulkan_wrappers::NoParentWrapper,
+                                         vulkan_wrappers::DebugUtilsMessengerEXTWrapper>(
+        instance, vulkan_wrappers::NoParentWrapper::kHandleValue, pMessenger, VulkanCaptureManager::GetUniqueId);
+
+    return result;
 }
 
 void VulkanCaptureManager::OverrideDestroyDebugUtilsMessengerEXT(VkInstance                   instance,
                                                                  VkDebugUtilsMessengerEXT     messenger,
                                                                  const VkAllocationCallbacks* pAllocator)
 {
-    if (!IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    if (IsExtensionBeingFaked(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    {
+        delete ((char*)messenger);
+    }
+    else
     {
         GetInstanceTable(instance)->DestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
     }
