@@ -89,6 +89,8 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("                  \tFrame ranges should be specified in ascending order and cannot "
                            "overlap. Frame numbering is zero-indexed and inclusive.");
     GFXRECON_WRITE_CONSOLE("                  \tExample: 0-2,5,8-10 will generate data for 7 frames.");
+    GFXRECON_WRITE_CONSOLE("  --log-level <level>\tSpecify highest level message to log. Options are:");
+    GFXRECON_WRITE_CONSOLE("                  \t\tdebug, info, warning, error, and fatal. Default is info.");
     GFXRECON_WRITE_CONSOLE("  --verbose\t Request verbose output.")
     GFXRECON_WRITE_CONSOLE("  --bare");
     GFXRECON_WRITE_CONSOLE("                  \tCreate a 'diff-friendly' output by removing block indices and other");
