@@ -83,6 +83,8 @@ void FieldToJson(nlohmann::ordered_json&                               jdata,
             {
                 FieldToJson(jdata[i], decoded_value[i], options);
             }
+
+            WriteChecksumToJson(jdata[length], reinterpret_cast<const uint8_t*>(decoded_value), length, options);
         }
         else if (length == 1)
         {

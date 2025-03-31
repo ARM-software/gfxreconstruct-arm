@@ -158,6 +158,8 @@ const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-i
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
 const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
 const char kVerboseOption[]                       = "--verbose";
+const char kChecksumOption[]                      = "--checksum";
+const char kChecksumTriggerOption[]               = "--checksum-trigger";
 
 enum class WsiPlatform
 {
