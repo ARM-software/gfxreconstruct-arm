@@ -337,7 +337,7 @@ class VulkanReplayConsumerBodyGenerator(
                     body += '    CheckResult("{}", returnValue, replay_result, call_info, in_device, GetDeviceTable({})->GetDeviceFaultInfoEXT);\n'.format(
                         name, args[0]
                     )
-            elif 'GetDeviceTable' in dispatchfunc:
+            elif 'GetDeviceTable' in dispatchfunc and name not in ['vkCreateInstance', 'vkCreateDevice']:
                 if is_override:
                     body += '    auto in_device = GetObjectInfoTable().GetVkDeviceInfo({}->parent_id);\n'.format(args[0])
                     body += '    CheckResult("{}", returnValue, replay_result, call_info, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);\n'.format(
