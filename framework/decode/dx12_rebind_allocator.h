@@ -177,11 +177,37 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     void SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC1* pResourceDesc);
 
+    void SetReplayResourceCompatibility(const format::HandleId       heap_capture_id,
+                                        const ID3D12Heap*            pHeap,
+                                        const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                                        const D3D12_HEAP_FLAGS       HeapFlags,
+                                        D3D12_RESOURCE_DESC*         pResourceDesc,
+                                        D3D12MA::ALLOCATION_DESC&    AllocationDesc)
+    {
+        D3D12_RESOURCE_DESC1 resource_desc1 = {};
+        memcpy(&resource_desc1, pResourceDesc, sizeof(D3D12_RESOURCE_DESC));
+
+        SetReplayResourceCompatibility(
+            heap_capture_id, pHeap, pHeapProperties, HeapFlags, &resource_desc1, AllocationDesc);
+
+        pResourceDesc->Flags     = resource_desc1.Flags;
+        pResourceDesc->Alignment = resource_desc1.Alignment;
+        pResourceDesc->Width     = resource_desc1.Width;
+    }
+
+    void SetReplayResourceCompatibility(const format::HandleId       heap_capture_id,
+                                        const ID3D12Heap*            pHeap,
+                                        const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                                        const D3D12_HEAP_FLAGS       HeapFlags,
+                                        D3D12_RESOURCE_DESC1*        pResourceDesc,
+                                        D3D12MA::ALLOCATION_DESC&    AllocationDesc);
+
   private:
     D3D12MA::Allocator* allocator_;
     ID3D12Device*       device_;
 
     std::unordered_map<ID3D12Resource*, D3D12MA::Allocation*>     resource_allocation_;
+    std::unordered_map<ID3D12Resource*, D3D12MA::Pool*>           resource_custom_pool_;
     std::unordered_map<format::HandleId, D3D12_HEAP_DESC>         heap_id_desc_;
     std::unordered_map<format::HandleId, ID3D12Heap*>             heap_id_recreated_heap_;
     std::unordered_map<ID3D12Resource*, std::vector<ID3D12Heap*>> resource_recreated_heap_;

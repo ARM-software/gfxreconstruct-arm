@@ -39,9 +39,10 @@ HRESULT Dx12RebindAllocator::Initialize(const IUnknown* adapter, const void* pvD
 {
     device_                      = reinterpret_cast<ID3D12Device*>(const_cast<void*>(pvDevice));
     D3D12MA::ALLOCATOR_DESC desc = {};
-    desc.Flags                   = D3D12MA::ALLOCATOR_FLAG_NONE;
     desc.pDevice                 = reinterpret_cast<ID3D12Device*>(const_cast<void*>(pvDevice));
     desc.pAdapter                = reinterpret_cast<IDXGIAdapter*>(const_cast<IUnknown*>(adapter));
+    desc.Flags =
+        (D3D12MA::ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED | D3D12MA::ALLOCATOR_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED);
 
     HRESULT result = D3D12MA::CreateAllocator(&desc, &allocator_);
     return result;
@@ -55,6 +56,98 @@ void Dx12RebindAllocator::Destroy()
         allocator_->Release();
         allocator_ = nullptr;
     }
+}
+
+void Dx12RebindAllocator::SetReplayResourceCompatibility(const format::HandleId       heap_capture_id,
+                                                         const ID3D12Heap*            pHeap,
+                                                         const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                                                         const D3D12_HEAP_FLAGS       HeapFlags,
+                                                         D3D12_RESOURCE_DESC1*        pResourceDesc,
+                                                         D3D12MA::ALLOCATION_DESC&    AllocationDesc)
+{
+    if (pHeapProperties != nullptr)
+    {
+        AllocationDesc.HeapType       = pHeapProperties->Type;
+        AllocationDesc.Flags          = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
+        AllocationDesc.ExtraHeapFlags = HeapFlags;
+    }
+
+    if (pHeap != nullptr)
+    {
+        AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
+        if (heap_id_desc_.find(heap_capture_id) == heap_id_desc_.end())
+        {
+            D3D12_HEAP_DESC heap_desc = const_cast<ID3D12Heap*>(pHeap)->GetDesc();
+            heap_id_desc_.emplace(heap_capture_id, heap_desc);
+        }
+
+        // remove SHARED and SHARED_CROSS_ADAPTER flags that are not allowed on real heaps
+        heap_id_desc_[heap_capture_id].Flags &= ~(D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER);
+        pResourceDesc->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+
+        D3D12_FEATURE_DATA_D3D12_OPTIONS opts = {};
+        if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opts, sizeof(opts))))
+        {
+            if (opts.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1)
+            {
+                if ((heap_id_desc_[heap_capture_id].Flags &
+                     (D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES |
+                      D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES)) == 0)
+                {
+                    GFXRECON_LOG_WARNING("Adding DENY_RT_DS_TEXTURES|DENY_NON_RT_DS_TEXTURES to OpenExistingHeap heap "
+                                         "for tier 1 compatibility");
+                    heap_id_desc_[heap_capture_id].Flags |=
+                        (D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES);
+                }
+            }
+        }
+
+        AllocationDesc.HeapType       = heap_id_desc_[heap_capture_id].Properties.Type;
+        AllocationDesc.ExtraHeapFlags = heap_id_desc_[heap_capture_id].Flags;
+    }
+
+    if (AllocationDesc.HeapType == D3D12_HEAP_TYPE_CUSTOM)
+    {
+        D3D12_HEAP_PROPERTIES heap_properties = {};
+        D3D12_HEAP_FLAGS      heap_flags      = {};
+
+        if (pHeapProperties != nullptr)
+        {
+            heap_flags      = HeapFlags;
+            heap_properties = *pHeapProperties;
+        }
+
+        if (pHeap != nullptr)
+        {
+            if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+            {
+                heap_flags      = heap_id_desc_[heap_capture_id].Flags;
+                heap_properties = heap_id_desc_[heap_capture_id].Properties;
+            }
+            else
+            {
+                heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+            }
+        }
+
+        D3D12MA::Pool*      custom_pool = nullptr;
+        D3D12MA::CPOOL_DESC pool_desc{ heap_properties, heap_flags };
+        pool_desc.HeapFlags |= D3D12MA_RECOMMENDED_HEAP_FLAGS;
+
+        if (S_OK == allocator_->CreatePool(&pool_desc, &custom_pool))
+        {
+            AllocationDesc.CustomPool = std::move(custom_pool);
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("There is failed to create custom pool for resource using D3D12_HEAP_TYPE_CUSTOM");
+        }
+    }
+
+    // don't create resources non-resident
+    AllocationDesc.ExtraHeapFlags &= ~D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT;
+
+    SetReplayResourceDescAlignment1(pResourceDesc);
 }
 
 void Dx12RebindAllocator::SetReplayResourceDescAlignment(const D3D12_RESOURCE_DESC* pResourceDesc)
@@ -100,12 +193,23 @@ void Dx12RebindAllocator::SetReplayResourceDescAlignment1(const D3D12_RESOURCE_D
 
     if (device_ != nullptr)
     {
+        graphics::dx12::ID3D12Device4ComPtr device4;
+        device_->QueryInterface(IID_PPV_ARGS(&device4));
+
         graphics::dx12::ID3D12Device8ComPtr device8;
         device_->QueryInterface(IID_PPV_ARGS(&device8));
 
         if (device8 != nullptr)
         {
             device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+            alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
+            alloc_info.Alignment   = alloc_info1.Alignment;
+        }
+        else if (device4 != nullptr)
+        {
+            D3D12_RESOURCE_DESC* desc =
+                reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc));
+            device4->GetResourceAllocationInfo1(0, 1, desc, &alloc_info1);
             alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
             alloc_info.Alignment   = alloc_info1.Alignment;
         }
@@ -141,6 +245,13 @@ void Dx12RebindAllocator::Release(IUnknown* object)
         resource_allocation_.erase(pResource);
     }
 
+    if (resource_custom_pool_.find(pResource) != resource_custom_pool_.end())
+    {
+        resource_custom_pool_[pResource]->Release();
+        resource_custom_pool_[pResource] = nullptr;
+        resource_custom_pool_.erase(pResource);
+    }
+
     if (resource_recreated_heap_.find(pResource) != resource_recreated_heap_.end())
     {
         for (auto& heap : resource_recreated_heap_[pResource])
@@ -160,6 +271,13 @@ void Dx12RebindAllocator::AllRelease()
         alloc.second = nullptr;
     }
     resource_allocation_.clear();
+
+    for (auto& pool : resource_custom_pool_)
+    {
+        pool.second->Release();
+        pool.second = nullptr;
+    }
+    resource_custom_pool_.clear();
 
     for (auto& recreated_heap : resource_recreated_heap_)
     {
@@ -220,18 +338,23 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROPE
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = pHeapProperties->Type;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
+
+    D3D12_RESOURCE_DESC* resource_desc = const_cast<D3D12_RESOURCE_DESC*>(pDesc);
+    SetReplayResourceCompatibility(0, nullptr, pHeapProperties, HeapFlags, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment(pDesc);
         result = allocator_->CreateResource(
             &alloc_desc, pDesc, InitialResourceState, pOptimizedClearValue, &allocation, riidResource, ppvResource);
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
     return result;
@@ -249,30 +372,23 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource(format::HandleId              
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
-    {
-        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
-    }
-    else
-    {
-        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
-        {
-            const_cast<D3D12_RESOURCE_DESC*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
-        }
-    }
+    D3D12_RESOURCE_DESC* resource_desc = const_cast<D3D12_RESOURCE_DESC*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment(pDesc);
         result = allocator_->CreateResource(
             &alloc_desc, pDesc, InitialState, pOptimizedClearValue, &allocation, riid, ppvResource);
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
     return result;
@@ -306,18 +422,23 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PROP
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = pHeapProperties->Type;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
+
+    D3D12_RESOURCE_DESC* resource_desc = const_cast<D3D12_RESOURCE_DESC*>(pDesc);
+    SetReplayResourceCompatibility(0, nullptr, pHeapProperties, HeapFlags, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment(pDesc);
         result = allocator_->CreateResource(
             &alloc_desc, pDesc, InitialResourceState, pOptimizedClearValue, &allocation, riidResource, ppvResource);
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
     return result;
@@ -335,30 +456,23 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId             
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
-    {
-        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
-    }
-    else
-    {
-        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
-        {
-            const_cast<D3D12_RESOURCE_DESC1*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
-        }
-    }
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource2(
             &alloc_desc, pDesc, InitialState, pOptimizedClearValue, &allocation, riid, ppvResource);
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
 
@@ -400,18 +514,23 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PROP
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = pHeapProperties->Type;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
+
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(0, nullptr, pHeapProperties, HeapFlags, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource2(
             &alloc_desc, pDesc, InitialResourceState, pOptimizedClearValue, &allocation, riidResource, ppvResource);
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
     return result;
@@ -432,24 +551,12 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = D3D12_HEAP_TYPE_DEFAULT;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_CAN_ALIAS;
 
-    if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
-    {
-        alloc_desc.HeapType = heap_id_desc_[heap_capture_id].Properties.Type;
-    }
-    else
-    {
-        if ((pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) == D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)
-        {
-            const_cast<D3D12_RESOURCE_DESC1*>(pDesc)->Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
-        }
-    }
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource3(&alloc_desc,
                                              pDesc,
                                              InitialLayout,
@@ -463,7 +570,12 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
 
@@ -517,12 +629,12 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PROP
     HRESULT                  result     = S_FALSE;
     D3D12MA::Allocation*     allocation = nullptr;
     D3D12MA::ALLOCATION_DESC alloc_desc = {};
-    alloc_desc.HeapType                 = pHeapProperties->Type;
-    alloc_desc.Flags                    = D3D12MA::ALLOCATION_FLAGS::ALLOCATION_FLAG_COMMITTED;
+
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(0, nullptr, pHeapProperties, HeapFlags, resource_desc, alloc_desc);
 
     if (allocator_)
     {
-        SetReplayResourceDescAlignment1(pDesc);
         result = allocator_->CreateResource3(&alloc_desc,
                                              pDesc,
                                              InitialLayout,
@@ -535,7 +647,12 @@ HRESULT Dx12RebindAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PROP
         if (!result)
         {
             ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-            resource_allocation_.emplace(pResource, allocation);
+            resource_allocation_.emplace(pResource, std::move(allocation));
+
+            if (alloc_desc.CustomPool)
+            {
+                resource_custom_pool_.emplace(pResource, std::move(alloc_desc.CustomPool));
+            }
         }
     }
     return result;
@@ -574,7 +691,7 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
                                              const UINT*                            pRangeTileCounts,
                                              D3D12_TILE_MAPPING_FLAGS               Flags)
 {
-    if (pHeap == nullptr && pRangeTileCounts == nullptr)
+    if (pHeap == nullptr)
     {
         pQueue->UpdateTileMappings(pResource,
                                    NumResourceRegions,
@@ -589,51 +706,66 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
     }
     else
     {
-        // D3D12_RESOURCE_ALLOCATION_INFO alloc_info = device_->GetResourceAllocationInfo(0, 1, resource);
-        // UINT                           tileSize   = alloc_info.SizeInBytes;
+        if (heap_id_desc_.find(heap_capture_id) == heap_id_desc_.end())
+        {
+            D3D12_HEAP_DESC heap_desc = pHeap->GetDesc();
+
+            if (heap_desc.Properties.Type == D3D12_HEAP_TYPE_CUSTOM)
+            {
+                // remove SHARED and SHARED_CROSS_ADAPTER flags that are not allowed on real heaps
+                heap_desc.Flags &= ~(D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER);
+
+                D3D12_FEATURE_DATA_D3D12_OPTIONS opts = {};
+                if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opts, sizeof(opts))))
+                {
+                    if (opts.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1)
+                    {
+                        if ((heap_desc.Flags & (D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES |
+                                                D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES)) == 0)
+                        {
+                            GFXRECON_LOG_WARNING(
+                                "Adding DENY_RT_DS_TEXTURES|DENY_NON_RT_DS_TEXTURES to OpenExistingHeap heap "
+                                "for tier 1 compatibility");
+                            heap_desc.Flags |=
+                                (D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES);
+                        }
+                    }
+                }
+            }
+
+            heap_id_desc_.emplace(heap_capture_id, heap_desc);
+        }
 
         // creat heap
         ID3D12Heap* pNewHeap = nullptr;
-        if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+        if (heap_id_recreated_heap_.find(heap_capture_id) == heap_id_recreated_heap_.end())
         {
-            if (heap_id_recreated_heap_.find(heap_capture_id) == heap_id_recreated_heap_.end())
+            HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&pNewHeap));
+            if (hr == S_OK)
             {
-                HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&pNewHeap));
-                if (hr == S_OK)
-                {
-                    heap_id_recreated_heap_.emplace(heap_capture_id, pNewHeap);
-                    resource_recreated_heap_[pResource].push_back(pNewHeap);
-                }
+                heap_id_recreated_heap_.emplace(heap_capture_id, pNewHeap);
+                resource_recreated_heap_[pResource].push_back(pNewHeap);
             }
             else
             {
-                pNewHeap = heap_id_recreated_heap_[heap_capture_id];
+                pNewHeap = pHeap;
             }
-
-            pQueue->UpdateTileMappings(pResource,
-                                       NumResourceRegions,
-                                       pResourceRegionStartCoordinates,
-                                       pResourceRegionSizes,
-                                       pNewHeap,
-                                       NumRanges,
-                                       pRangeFlags,
-                                       pHeapRangeStartOffsets,
-                                       pRangeTileCounts,
-                                       Flags);
         }
         else
         {
-            pQueue->UpdateTileMappings(pResource,
-                                       NumResourceRegions,
-                                       pResourceRegionStartCoordinates,
-                                       pResourceRegionSizes,
-                                       pHeap,
-                                       NumRanges,
-                                       pRangeFlags,
-                                       pHeapRangeStartOffsets,
-                                       pRangeTileCounts,
-                                       Flags);
+            pNewHeap = heap_id_recreated_heap_[heap_capture_id];
         }
+
+        pQueue->UpdateTileMappings(pResource,
+                                   NumResourceRegions,
+                                   pResourceRegionStartCoordinates,
+                                   pResourceRegionSizes,
+                                   pNewHeap,
+                                   NumRanges,
+                                   pRangeFlags,
+                                   pHeapRangeStartOffsets,
+                                   pRangeTileCounts,
+                                   Flags);
     }
 }
 

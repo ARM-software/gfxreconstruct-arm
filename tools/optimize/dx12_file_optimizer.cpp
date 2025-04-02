@@ -225,20 +225,18 @@ bool Dx12FileOptimizer::AddPrebuildInfoResourceValueCommand(const format::BlockH
     return success;
 }
 
-bool Dx12FileOptimizer::ProcessMethodCall(const format::BlockHeader& block_header,
-                                          format::ApiCallId          call_id,
-                                          uint64_t                   block_index)
+bool Dx12FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index)
 {
-    if ((call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateCommittedResource) ||
-        (call_id == format::ApiCallId::ApiCall_ID3D12Device4_CreateCommittedResource1) ||
-        (call_id == format::ApiCallId::ApiCall_ID3D12Device8_CreateCommittedResource2) ||
-        (call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreateCommittedResource3))
+    if ((header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateCommittedResource) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device4_CreateCommittedResource1) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device8_CreateCommittedResource2) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreateCommittedResource3))
     {
         GFXRECON_ASSERT(prebuild_Info_resource_values_ != nullptr);
 
         if (prebuild_Info_resource_values_->find(GetCurrentBlockIndex()) != prebuild_Info_resource_values_->end())
         {
-            if (!AddPrebuildInfoResourceValueCommand(block_header, call_id))
+            if (!AddPrebuildInfoResourceValueCommand(header.block_header, header.api_call_id))
             {
                 GFXRECON_LOG_ERROR("Failed to write the GetRaytracingAccelerationStructurePrebuildInfo needed "
                                    "for DXR or EI optimization. Optimized file may be invalid.");
@@ -246,7 +244,7 @@ bool Dx12FileOptimizer::ProcessMethodCall(const format::BlockHeader& block_heade
         }
     }
 
-    return FileOptimizer::ProcessMethodCall(block_header, call_id, block_index);
+    return FileOptimizer::ProcessMethodCall(header, block_index);
 }
 
 bool Dx12FileOptimizer::ProcessMetaData(const format::MetaDataHeader& meta_header)

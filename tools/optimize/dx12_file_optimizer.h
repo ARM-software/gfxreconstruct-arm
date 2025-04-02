@@ -55,9 +55,7 @@ class Dx12FileOptimizer : public FileOptimizer
                          format::ThreadId                thread_id,
                          const util::MemoryOutputStream* parameter_buffer);
 
-    virtual bool ProcessMethodCall(const format::BlockHeader& block_header,
-                                   format::ApiCallId          call_id,
-                                   uint64_t                   block_index = 0) override;
+    virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
 
     virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
 
