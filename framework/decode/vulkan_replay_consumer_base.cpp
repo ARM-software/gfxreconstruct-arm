@@ -3393,6 +3393,17 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
             }
         }
 
+        // Fake VK_GOOGLE_display_timing if querried but not supported
+        if (feature_util::IsSupportedExtension(modified_extensions, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME) &&
+            !feature_util::IsSupportedExtension(available_extensions, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+        {
+            auto iter = std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
+                return util::platform::StringCompare(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME, extension) == 0;
+            });
+            modified_extensions.erase(iter);
+            faked_extensions_.push_back(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+        }
+
         if (feature_util::IsSupportedExtension(available_extensions, VK_EXT_DEVICE_FAULT_EXTENSION_NAME))
         {
             modified_extensions.emplace_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
@@ -12368,6 +12379,38 @@ void VulkanReplayConsumerBase::OverrideDestroyShaderModule(
         }
     }
     func(in_device, in_shader_module, in_pAllocator);
+}
+
+VkResult VulkanReplayConsumerBase::OverrideGetPastPresentationTimingGOOGLE(
+    PFN_vkGetPastPresentationTimingGOOGLE                         func,
+    VkResult                                                      original_result,
+    const VulkanDeviceInfo*                                       device_info,
+    const VulkanSwapchainKHRInfo*                                 swapchain_info,
+    PointerDecoder<uint32_t>*                                     pPresentationTimingCount,
+    StructPointerDecoder<Decoded_VkPastPresentationTimingGOOGLE>* pPresentationTimings)
+{
+    if (!IsExtensionBeingFaked(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+    {
+        return func(device_info->handle,
+                    swapchain_info->handle,
+                    pPresentationTimingCount->GetPointer(),
+                    pPresentationTimings->GetPointer());
+    }
+    return VK_SUCCESS;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideGetRefreshCycleDurationGOOGLE(
+    PFN_vkGetRefreshCycleDurationGOOGLE                         func,
+    VkResult                                                    original_result,
+    const VulkanDeviceInfo*                                     device_info,
+    const VulkanSwapchainKHRInfo*                               swapchain_info,
+    StructPointerDecoder<Decoded_VkRefreshCycleDurationGOOGLE>* pDisplayTimingProperties)
+{
+    if (!IsExtensionBeingFaked(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+    {
+        return func(device_info->handle, swapchain_info->handle, pDisplayTimingProperties->GetPointer());
+    }
+    return VK_SUCCESS;
 }
 
 std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::AsyncCreateGraphicsPipelines(
