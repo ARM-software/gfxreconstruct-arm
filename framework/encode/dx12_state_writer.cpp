@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -1082,6 +1082,14 @@ void Dx12StateWriter::WriteCommandListCommands(const ID3D12CommandList_Wrapper* 
 {
     auto list_info = list_wrapper->GetObjectInfo();
 
+    bool invalid_command_allocator =
+        (list_info->reset_command_allocator_id != format::kNullHandleId) &&
+        (state_table.GetID3D12CommandAllocator_Wrapper(list_info->reset_command_allocator_id) == nullptr);
+    if (invalid_command_allocator == true)
+    {
+        return;
+    }
+
     bool write_commands = CheckCommandListObjects(list_info.get(), state_table);
 
     // Write each of the commands that was recorded for the command buffer.
@@ -1089,8 +1097,6 @@ void Dx12StateWriter::WriteCommandListCommands(const ID3D12CommandList_Wrapper* 
     size_t         data_size = list_info->command_data.GetDataSize();
     const uint8_t* data      = list_info->command_data.GetData();
 
-    // TODO: Don't write any commands, including the Reset or Close commands, if the command allocator used in the most
-    // recent Reset command no longer exists.
     while (offset < data_size)
     {
         const size_t*            parameter_size = reinterpret_cast<const size_t*>(&data[offset]);
