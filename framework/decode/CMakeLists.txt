@@ -233,6 +233,7 @@ target_sources(gfxrecon_decode
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_feature_util.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_replay_consumer.h
@@ -244,7 +245,6 @@ target_sources(gfxrecon_decode
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_decoders.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_mappers.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_mappers.cpp
-                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_decode_pnext_struct.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_to_json.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_to_json.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_object_info_table_base2.h
