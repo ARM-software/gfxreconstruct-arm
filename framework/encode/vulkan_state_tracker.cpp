@@ -2093,20 +2093,6 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::SwapchainKHRWrapper* wrap
 {
     assert(wrapper != nullptr);
     wrapper->create_parameters = nullptr;
-
-    // Swapchain images are not explicitly destroyed, so need to be removed from state tracking when the parent
-    // swapchain is destroyed.
-    std::unique_lock<std::mutex> lock(state_table_mutex_);
-    for (auto entry : wrapper->child_images)
-    {
-        // Note that after this the create parameters are not valid
-        // as the swapchain is destroyed
-        if (entry->parent_swapchains.size() <= 1)
-        {
-            DestroyState(entry);
-            state_table_.RemoveWrapper(entry);
-        }
-    }
 }
 
 void VulkanStateTracker::DestroyState(vulkan_wrappers::DeviceMemoryWrapper* wrapper)

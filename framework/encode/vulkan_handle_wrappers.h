@@ -224,16 +224,15 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
 struct ImageViewWrapper;
 struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
 {
-    VkImageType              image_type{ VK_IMAGE_TYPE_2D };
-    VkFormat                 format{ VK_FORMAT_UNDEFINED };
-    VkExtent3D               extent{ 0, 0, 0 };
-    uint32_t                 mip_levels{ 0 };
-    uint32_t                 array_layers{ 0 };
-    VkSampleCountFlagBits    samples{};
-    VkImageTiling            tiling{};
-    VkImageLayout            current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
-    bool                     is_swapchain_image{ false };
-    std::set<VkSwapchainKHR> parent_swapchains;
+    VkImageType           image_type{ VK_IMAGE_TYPE_2D };
+    VkFormat              format{ VK_FORMAT_UNDEFINED };
+    VkExtent3D            extent{ 0, 0, 0 };
+    uint32_t              mip_levels{ 0 };
+    uint32_t              array_layers{ 0 };
+    VkSampleCountFlagBits samples{};
+    VkImageTiling         tiling{};
+    VkImageLayout         current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+    bool                  is_swapchain_image{ false };
 
     std::set<ImageViewWrapper*> image_views;
 };
@@ -546,8 +545,7 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
 {
     // Members for general wrapper support.
     std::vector<ImageWrapper*> child_images;
-    SwapchainKHRWrapper*       old_swapchain{ nullptr };
-    SwapchainKHRWrapper*       new_swapchain{ nullptr };
+    bool                       retired{ false };
 
     // Members for trimming state tracking.
     DeviceWrapper*                                    device{ nullptr };
