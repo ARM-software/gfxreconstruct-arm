@@ -40,6 +40,7 @@
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "generated/generated_vulkan_command_buffer_util.h"
 #include "util/defines.h"
+#include "util/ahardwarebuffer_format_converter.h"
 
 #include "vulkan/vulkan.h"
 #include "vulkan/vulkan_core.h"
@@ -288,6 +289,22 @@ class VulkanCaptureManager : public ApiCaptureManager
                                  const VkImageCreateInfo*     pCreateInfo,
                                  const VkAllocationCallbacks* pAllocator,
                                  VkImage*                     pImage);
+
+    void OverrideDestroyImage(VkDevice device, VkImage image, const VkAllocationCallbacks* pAllocator);
+
+    VkResult OverrideCreateImageView(VkDevice                     device,
+                                     const VkImageViewCreateInfo* pCreateInfo,
+                                     const VkAllocationCallbacks* pAllocator,
+                                     VkImageView*                 pView);
+
+    void OverrideFreeMemory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* pAllocator);
+
+    VkResult OverrideCreateSampler(VkDevice                     device,
+                                   const VkSamplerCreateInfo*   pCreateInfo,
+                                   const VkAllocationCallbacks* pAllocator,
+                                   VkSampler*                   pSampler);
+
+    void OverrideDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator);
 
     VkResult OverrideCreateAccelerationStructureKHR(VkDevice                                    device,
                                                     const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
@@ -1875,6 +1892,12 @@ class VulkanCaptureManager : public ApiCaptureManager
     {
         format::HandleId      memory_id;
         std::atomic<uint32_t> reference_count;
+
+        VkAndroidHardwareBufferFormatPropertiesANDROID properties = {
+            VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID, nullptr
+        };
+        bool isStandardFormat;
+        bool hasProperties;
     };
 
     typedef std::unordered_map<AHardwareBuffer*, HardwareBufferInfo> HardwareBufferMap;
@@ -1940,6 +1963,12 @@ class VulkanCaptureManager : public ApiCaptureManager
     std::mutex                                      deferred_operation_mutex;
     std::unordered_map<format::HandleId, vulkan_wrappers::DeviceMemoryWrapper*> memories;
     std::mutex                                                                  mapped_memory_lock_;
+
+#if defined(__ANDROID__)
+    bool enable_hardwarebuffer_format_conversion_ = false;
+    // format conversion is bound to a specific device instance
+    std::unordered_map<VkDevice, std::unique_ptr<util::AHardwareBufferFormatConverter>> ahb_format_converter_;
+#endif
 };
 
 GFXRECON_END_NAMESPACE(encode)

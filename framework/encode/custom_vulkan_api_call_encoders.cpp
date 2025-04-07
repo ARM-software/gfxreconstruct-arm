@@ -895,5 +895,32 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateRayTracingPipelinesKHR(VkDevice            
     return result;
 }
 
+VKAPI_ATTR void VKAPI_CALL CmdDispatchNeuralEngineARM(VkCommandBuffer,
+                                                      VkOffset4DARM,
+                                                      VkExtent4DARM,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      uint32_t,
+                                                      const VkNeuralEnginePipelineStatisticsDispatchInfoARM*)
+{}
+
+VKAPI_ATTR VkResult VKAPI_CALL GetTensorOpaqueCaptureDescriptorDataARM(VkDevice,
+                                                                       const VkTensorCaptureDescriptorDataInfoARM*,
+                                                                       void*)
+{
+    return VK_SUCCESS;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+GetTensorViewOpaqueCaptureDescriptorDataARM(VkDevice, const VkTensorViewCaptureDescriptorDataInfoARM*, void*)
+{
+    return VK_SUCCESS;
+}
+
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

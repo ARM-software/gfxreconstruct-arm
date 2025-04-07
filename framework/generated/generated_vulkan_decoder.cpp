@@ -12530,48 +12530,6 @@ size_t VulkanDecoder::Decode_vkCreateNeuralEnginePipelinesARM(const ApiCallInfo&
     return bytes_read;
 }
 
-size_t VulkanDecoder::Decode_vkCmdDispatchNeuralEngineARM(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size)
-{
-    size_t bytes_read = 0;
-
-    format::HandleId commandBuffer;
-    Decoded_VkOffset4DARM offset;
-    VkOffset4DARM value_offset;
-    offset.decoded_value = &value_offset;
-    Decoded_VkExtent4DARM size;
-    VkExtent4DARM value_size;
-    size.decoded_value = &value_size;
-    uint32_t iteratorOuterDimension;
-    uint32_t iteratorInnerDimension;
-    uint32_t taskIncrementOuter;
-    uint32_t taskIncrementInner;
-    uint32_t iteratorWeightArrayOffset;
-    uint32_t iteratorWeightArrayBehavior;
-    uint32_t iteratorTraceID0;
-    uint32_t iteratorTraceID1;
-    StructPointerDecoder<Decoded_VkNeuralEnginePipelineStatisticsDispatchInfoARM> pStatisticsDispatchInfo;
-
-    bytes_read += ValueDecoder::DecodeHandleIdValue((parameter_buffer + bytes_read), (buffer_size - bytes_read), &commandBuffer);
-    bytes_read += DecodeStruct((parameter_buffer + bytes_read), (buffer_size - bytes_read), &offset);
-    bytes_read += DecodeStruct((parameter_buffer + bytes_read), (buffer_size - bytes_read), &size);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorOuterDimension);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorInnerDimension);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &taskIncrementOuter);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &taskIncrementInner);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorWeightArrayOffset);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorWeightArrayBehavior);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorTraceID0);
-    bytes_read += ValueDecoder::DecodeUInt32Value((parameter_buffer + bytes_read), (buffer_size - bytes_read), &iteratorTraceID1);
-    bytes_read += pStatisticsDispatchInfo.Decode((parameter_buffer + bytes_read), (buffer_size - bytes_read));
-
-    for (auto consumer : GetConsumers())
-    {
-        consumer->Process_vkCmdDispatchNeuralEngineARM(call_info, commandBuffer, offset, size, iteratorOuterDimension, iteratorInnerDimension, taskIncrementOuter, taskIncrementInner, iteratorWeightArrayOffset, iteratorWeightArrayBehavior, iteratorTraceID0, iteratorTraceID1, &pStatisticsDispatchInfo);
-    }
-
-    return bytes_read;
-}
-
 size_t VulkanDecoder::Decode_vkCreateWeightsARM(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size)
 {
     size_t bytes_read = 0;
@@ -13463,50 +13421,6 @@ size_t VulkanDecoder::Decode_vkCmdCopyTensorARM(const ApiCallInfo& call_info, co
     for (auto consumer : GetConsumers())
     {
         consumer->Process_vkCmdCopyTensorARM(call_info, commandBuffer, &pCopyTensorInfo);
-    }
-
-    return bytes_read;
-}
-
-size_t VulkanDecoder::Decode_vkGetTensorOpaqueCaptureDescriptorDataARM(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size)
-{
-    size_t bytes_read = 0;
-
-    format::HandleId device;
-    StructPointerDecoder<Decoded_VkTensorCaptureDescriptorDataInfoARM> pInfo;
-    uint64_t pData;
-    VkResult return_value;
-
-    bytes_read += ValueDecoder::DecodeHandleIdValue((parameter_buffer + bytes_read), (buffer_size - bytes_read), &device);
-    bytes_read += pInfo.Decode((parameter_buffer + bytes_read), (buffer_size - bytes_read));
-    bytes_read += ValueDecoder::DecodeAddress((parameter_buffer + bytes_read), (buffer_size - bytes_read), &pData);
-    bytes_read += ValueDecoder::DecodeEnumValue((parameter_buffer + bytes_read), (buffer_size - bytes_read), &return_value);
-
-    for (auto consumer : GetConsumers())
-    {
-        consumer->Process_vkGetTensorOpaqueCaptureDescriptorDataARM(call_info, return_value, device, &pInfo, pData);
-    }
-
-    return bytes_read;
-}
-
-size_t VulkanDecoder::Decode_vkGetTensorViewOpaqueCaptureDescriptorDataARM(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size)
-{
-    size_t bytes_read = 0;
-
-    format::HandleId device;
-    StructPointerDecoder<Decoded_VkTensorViewCaptureDescriptorDataInfoARM> pInfo;
-    uint64_t pData;
-    VkResult return_value;
-
-    bytes_read += ValueDecoder::DecodeHandleIdValue((parameter_buffer + bytes_read), (buffer_size - bytes_read), &device);
-    bytes_read += pInfo.Decode((parameter_buffer + bytes_read), (buffer_size - bytes_read));
-    bytes_read += ValueDecoder::DecodeAddress((parameter_buffer + bytes_read), (buffer_size - bytes_read), &pData);
-    bytes_read += ValueDecoder::DecodeEnumValue((parameter_buffer + bytes_read), (buffer_size - bytes_read), &return_value);
-
-    for (auto consumer : GetConsumers())
-    {
-        consumer->Process_vkGetTensorViewOpaqueCaptureDescriptorDataARM(call_info, return_value, device, &pInfo, pData);
     }
 
     return bytes_read;
@@ -16626,9 +16540,6 @@ void VulkanDecoder::DecodeFunctionCall(format::ApiCallId             call_id,
     case format::ApiCallId::ApiCall_vkCreateNeuralEnginePipelinesARM:
         Decode_vkCreateNeuralEnginePipelinesARM(call_info, parameter_buffer, buffer_size);
         break;
-    case format::ApiCallId::ApiCall_vkCmdDispatchNeuralEngineARM:
-        Decode_vkCmdDispatchNeuralEngineARM(call_info, parameter_buffer, buffer_size);
-        break;
     case format::ApiCallId::ApiCall_vkCreateWeightsARM:
         Decode_vkCreateWeightsARM(call_info, parameter_buffer, buffer_size);
         break;
@@ -16766,12 +16677,6 @@ void VulkanDecoder::DecodeFunctionCall(format::ApiCallId             call_id,
         break;
     case format::ApiCallId::ApiCall_vkCmdCopyTensorARM:
         Decode_vkCmdCopyTensorARM(call_info, parameter_buffer, buffer_size);
-        break;
-    case format::ApiCallId::ApiCall_vkGetTensorOpaqueCaptureDescriptorDataARM:
-        Decode_vkGetTensorOpaqueCaptureDescriptorDataARM(call_info, parameter_buffer, buffer_size);
-        break;
-    case format::ApiCallId::ApiCall_vkGetTensorViewOpaqueCaptureDescriptorDataARM:
-        Decode_vkGetTensorViewOpaqueCaptureDescriptorDataARM(call_info, parameter_buffer, buffer_size);
         break;
     case format::ApiCallId::ApiCall_vkGetShaderModuleIdentifierEXT:
         Decode_vkGetShaderModuleIdentifierEXT(call_info, parameter_buffer, buffer_size);

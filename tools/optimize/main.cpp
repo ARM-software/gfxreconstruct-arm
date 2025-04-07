@@ -71,15 +71,18 @@ extern "C"
 #endif
 
 const char kOptions[]   = "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--dxr,--dxr-experimental";
-const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options,--remove-device-instance";
+const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options,--remove-device-instance,--remove-thread";
 
 const char kD3d12PsoRemoval[]             = "--d3d12-pso-removal";
 const char kDx12OptimizeDxr[]             = "--dxr";
 const char kDx12OptimizeDxrExperimental[] = "--dxr-experimental";
 const char kReplayOptions[]               = "--set-replay-options";
 const char kVulkanDevInsRemoval[]         = "--remove-device-instance";
+const char kThreadRemoval[]               = "--remove-thread";
 
-std::vector<std::string> remove_app_name;
+std::vector<std::string>                       remove_app_name;
+std::unordered_set<gfxrecon::format::ThreadId> removed_threads_ids;
+
 static void PrintUsage(const char* exe_name)
 {
     std::string app_name     = exe_name;
@@ -112,6 +115,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE(
         "  --remove-device-instance <options>\t\tRemove redundant instance/device and corresponding APIs. Use "
         "comma marks for multiple arguments. the default value is \"android framework\".");
+    GFXRECON_WRITE_CONSOLE("  --remove-thread <threads>\t\tRemove the specified threads from the trace.");
     GFXRECON_WRITE_CONSOLE("  -h\t\t\tPrint usage information and exit (same as --help).");
     GFXRECON_WRITE_CONSOLE("  --version\t\tPrint version information and exit.");
 #if defined(WIN32)
@@ -157,8 +161,8 @@ GetVulkanOptimizationData(const std::string& input_filename)
     {
         gfxrecon::decode::VulkanDecoder                    decoder;
         gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-        auto feature_tracker_consumer     = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
-        auto micromap_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
+        auto feature_tracker_consumer      = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+        auto micromap_modifier_consumer    = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
         auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
         auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>();
 
@@ -220,6 +224,8 @@ void RunVulkanOptimizations(const std::string& input_filename, const std::string
     gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get());
     if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
     {
+        file_optimizer.SetRemovedThreads(removed_threads_ids);
+
         file_optimizer.Process();
 
         if (file_optimizer.GetErrorState() != gfxrecon::FileOptimizer::kErrorNone &&
@@ -291,8 +297,9 @@ int main(int argc, const char** argv)
         input_filename                                       = positional_arguments[0];
         output_filename                                      = positional_arguments[1];
 
-        const bool set_replay_options = arg_parser.IsArgumentSet(kReplayOptions);
+        const bool set_replay_options     = arg_parser.IsArgumentSet(kReplayOptions);
         const bool remove_device_instance = arg_parser.IsArgumentSet(kVulkanDevInsRemoval);
+        const bool remove_thread          = arg_parser.IsArgumentSet(kThreadRemoval);
 
         // Parameter checking and API detection
         gfxrecon::decode::Dx12OptimizationOptions dx12_options;
@@ -331,6 +338,15 @@ int main(int argc, const char** argv)
             GFXRECON_WRITE_CONSOLE("Running experimental DXR optimization. This mode is experimental, and should only "
                                    "be used if --dxr did not produce a valid capture file.");
             dx12_options.optimize_resource_values = true;
+        }
+
+        if (remove_thread)
+        {
+            std::string remove_thread_string = arg_parser.GetArgumentValue(kThreadRemoval);
+            for (const std::string& thread_string : arg_parser.SplitStringByFlag(remove_thread_string, ','))
+            {
+                removed_threads_ids.insert(std::stoi(thread_string));
+            }
         }
 
         // Setting default replay options only, skip all other optimizations

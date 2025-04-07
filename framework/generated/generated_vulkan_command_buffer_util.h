@@ -141,10 +141,6 @@ void TrackCmdBindIndexBuffer2Handles(vulkan_wrappers::CommandBufferWrapper* wrap
 
 void TrackCmdPushDescriptorSetHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkPipelineLayout layout, uint32_t descriptorWriteCount, const VkWriteDescriptorSet* pDescriptorWrites);
 
-void TrackCmdSetRenderingAttachmentLocationsHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingAttachmentLocationInfo* pLocationInfo);
-
-void TrackCmdSetRenderingInputAttachmentIndicesHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfo* pInputAttachmentIndexInfo);
-
 void TrackCmdBindDescriptorSets2Handles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkBindDescriptorSetsInfo* pBindDescriptorSetsInfo);
 
 void TrackCmdPushConstants2Handles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkPushConstantsInfo* pPushConstantsInfo);
@@ -164,10 +160,6 @@ void TrackCmdBeginRenderPass2KHRHandles(vulkan_wrappers::CommandBufferWrapper* w
 void TrackCmdDrawIndirectCountKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkBuffer buffer, VkBuffer countBuffer);
 
 void TrackCmdDrawIndexedIndirectCountKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkBuffer buffer, VkBuffer countBuffer);
-
-void TrackCmdSetRenderingAttachmentLocationsKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingAttachmentLocationInfo* pLocationInfo);
-
-void TrackCmdSetRenderingInputAttachmentIndicesKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkRenderingInputAttachmentIndexInfo* pInputAttachmentIndexInfo);
 
 void TrackCmdEncodeVideoKHRHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkVideoEncodeInfoKHR* pEncodeInfo);
 
@@ -264,8 +256,6 @@ void TrackCmdWriteMicromapsPropertiesEXTHandles(vulkan_wrappers::CommandBufferWr
 void TrackCmdDrawClusterIndirectHUAWEIHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkBuffer buffer);
 
 void TrackCmdUpdatePipelineIndirectBufferNVHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkPipeline pipeline);
-
-void TrackCmdDispatchNeuralEngineARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
 
 void TrackCmdCopyTensorARMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkCopyTensorInfoARM* pCopyTensorInfo);
 

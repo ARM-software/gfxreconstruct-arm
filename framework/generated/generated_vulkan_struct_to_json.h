@@ -1119,7 +1119,6 @@ void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkLatencySurfaceCa
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkPhysicalDeviceDataGraphInstructionSetARM* data, const util::JsonOptions& options = util::JsonOptions());
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkPhysicalDeviceDataGraphFeaturesARM* data, const util::JsonOptions& options = util::JsonOptions());
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantTensorSemiStructuredSparsityInfoARM* data, const util::JsonOptions& options = util::JsonOptions());
-void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantARM* data, const util::JsonOptions& options = util::JsonOptions());
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineResourceInfoARM* data, const util::JsonOptions& options = util::JsonOptions());
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineCompilerControlCreateInfoARM* data, const util::JsonOptions& options = util::JsonOptions());
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineCreateInfoARM* data, const util::JsonOptions& options = util::JsonOptions());

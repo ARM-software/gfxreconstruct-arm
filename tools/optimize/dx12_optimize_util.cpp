@@ -43,6 +43,8 @@
 
 void PrintUsage(const char*) {}
 
+extern std::unordered_set<gfxrecon::format::ThreadId> removed_threads_ids;
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
 struct Dx12OptimizationInfo
@@ -439,6 +441,7 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
         {
             file_optimizer.SetUnreferencedBlocks(info.unreferenced_blocks);
             file_optimizer.SetPrebuildInfoResourceValues(&info.prebuild_Info_resource_values);
+            file_optimizer.SetRemovedThreads(removed_threads_ids);
             file_optimizer.SetFillCommandResourceValues(&info.fill_command_resource_values,
                                                         info.inject_noop_resource_value_optimization);
 

@@ -443,12 +443,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         std::unordered_map<VkTensorARM, ResourceAllocInfo*> original_ngp_tensors;
         std::unordered_map<VkDataGraphPipelineSessionARM, ResourceAllocInfo*> original_ngp_sessions;
 
+        std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*>     original_sessions;
+        std::unordered_map<VkImage, VulkanAndroidHardwareBufferInfo*> original_ahardwarebuffers;
+
         std::string          debug_utils_name;
         std::vector<uint8_t> debug_utils_tag;
         uint64_t             debug_utils_tag_name;
-
-        std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*> original_sessions;
-        std::unordered_map<VkImage, VulkanAndroidHardwareBufferInfo*> original_ahardwarebuffers;
     };
 
   private:

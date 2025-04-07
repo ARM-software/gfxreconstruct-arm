@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021-2022 LunarG, Inc.
-** Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -298,6 +298,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void SetDumpTarget(TrackDumpDrawCall& track_dump_target);
 
     IDXGIAdapter* GetAdapter();
+
+    graphics::dx12::ActiveAdapterMap& GetAdaptersMap() { return adapters_; }
 
   protected:
     void MapGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE& handle);

@@ -468,6 +468,21 @@ void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryType& 
     FieldToJson(jdata["heap_index"], data.heap_index, options);
 }
 
+void FieldToJson(nlohmann::ordered_json&                       jdata,
+                 const Decoded_VkDataGraphPipelineConstantARM* data,
+                 const JsonOptions&                            options)
+{
+    if (data && data->decoded_value)
+    {
+        const VkDataGraphPipelineConstantARM&         decoded_value = *data->decoded_value;
+        const Decoded_VkDataGraphPipelineConstantARM& meta_struct   = *data;
+
+        FieldToJson(jdata["sType"], decoded_value.sType, options);
+        FieldToJson(jdata["id"], decoded_value.id, options);
+        FieldToJson(jdata["pNext"], meta_struct.pNext, options);
+    }
+}
+
 void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryHeap& data, const util::JsonOptions& options)
 {
     FieldToJson(jdata["size"], data.size, options);

@@ -88,6 +88,7 @@ static util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat f
         case VK_FORMAT_D32_SFLOAT_S8_UINT:
             return util::imagewriter::DataFormats::kFormat_D32_FLOAT;
 
+        case VK_FORMAT_D24_UNORM_S8_UINT:
         case VK_FORMAT_X8_D24_UNORM_PACK32:
             return util::imagewriter::DataFormats::kFormat_D24_UNORM;
 
@@ -95,6 +96,8 @@ static util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat f
             return util::imagewriter::DataFormats::kFormat_D16_UNORM;
 
         default:
+            GFXRECON_LOG_ERROR("%s isn't supported in VkFormatToImageWriterDataFormat",
+                               util::ToString<VkFormat>(format).c_str());
             return util::imagewriter::DataFormats::kFormat_UNSPECIFIED;
     }
 }
@@ -316,10 +319,11 @@ uint32_t VkIndexTypeToBytes(VkIndexType type)
     }
 }
 
-uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
-                                 uint32_t                    index_count,
-                                 uint32_t                    first_index,
-                                 VkIndexType                 type)
+std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
+                                                      uint32_t                    index_count,
+                                                      uint32_t                    first_index,
+                                                      int32_t                     vertex_offset,
+                                                      VkIndexType                 type)
 {
     switch (type)
     {
@@ -335,9 +339,10 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
 
             if (i == index_count)
             {
-                return 0;
+                return std::make_pair(0, 0);
             }
 
+            uint8_t min = indices[first_index + i];
             uint8_t max = indices[first_index + i];
 
             for (; i < index_count; ++i)
@@ -351,9 +356,15 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
                 {
                     max = indices[first_index + i];
                 }
+
+                if (indices[first_index + i] < min)
+                {
+                    min = indices[first_index + i];
+                }
             }
 
-            return max;
+            return std::make_pair(static_cast<uint32_t>(min) + vertex_offset,
+                                  static_cast<uint32_t>(max) + vertex_offset);
         }
         break;
 
@@ -369,9 +380,10 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
 
             if (i == index_count)
             {
-                return 0;
+                return std::make_pair(0, 0);
             }
 
+            uint16_t min = indices[first_index + i];
             uint16_t max = indices[first_index + i];
 
             for (; i < index_count; ++i)
@@ -385,9 +397,15 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
                 {
                     max = indices[first_index + i];
                 }
+
+                if (indices[first_index + i] < min)
+                {
+                    min = indices[first_index + i];
+                }
             }
 
-            return max;
+            return std::make_pair(static_cast<uint32_t>(min) + vertex_offset,
+                                  static_cast<uint32_t>(max) + vertex_offset);
         }
         break;
 
@@ -403,9 +421,10 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
 
             if (i == index_count)
             {
-                return 0;
+                return std::make_pair(0, 0);
             }
 
+            uint32_t min = indices[first_index + i];
             uint32_t max = indices[first_index + i];
 
             for (; i < index_count; ++i)
@@ -419,9 +438,14 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
                 {
                     max = indices[first_index + i];
                 }
+
+                if (indices[first_index + i] < min)
+                {
+                    min = indices[first_index + i];
+                }
             }
 
-            return max;
+            return std::make_pair(min + vertex_offset, max + vertex_offset);
         }
         break;
 
@@ -429,7 +453,8 @@ uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
         default:
             GFXRECON_LOG_ERROR("%s() Unrecognized/unhandled index type (%u)", __func__, static_cast<uint32_t>(type));
             assert(0);
-            return 0;
+
+            return std::make_pair(0, 0);
             break;
     }
 }
@@ -446,8 +471,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
                          bool                               dump_all_subresources,
                          bool                               dump_image_raw,
                          bool                               dump_separate_alpha,
-                         VkImageLayout                      layout,
-                         const VkExtent3D*                  extent_p)
+                         VkImageLayout                      layout)
 {
     assert(image_info != nullptr);
     assert(device_info != nullptr);
@@ -471,11 +495,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
                                                 *instance_table,
                                                 *phys_dev_info->replay_device_info->memory_properties);
 
-    const VkExtent3D extent{ (extent_p != nullptr) ? extent_p->width : image_info->extent.width,
-                             (extent_p != nullptr) ? extent_p->height : image_info->extent.height,
-                             (extent_p != nullptr) ? extent_p->depth : image_info->extent.depth };
-
-    const VkFormat dst_format = ChooseDestinationImageFormat(image_info->format);
+    const VkFormat dst_format = dump_image_raw ? image_info->format : ChooseDestinationImageFormat(image_info->format);
 
     uint32_t f = 0;
     for (size_t i = 0; i < aspects.size(); ++i)
@@ -491,7 +511,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
             image_info->handle,
             image_info->format,
             image_info->type,
-            extent,
+            image_info->extent,
             image_info->level_count,
             image_info->layer_count,
             image_info->tiling,
@@ -533,183 +553,108 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
         const util::imagewriter::DataFormats image_writer_format = VkFormatToImageWriterDataFormat(dst_format);
         assert(image_writer_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED);
 
-        if ((image_info->level_count == 1 && image_info->layer_count == 1) || !dump_all_subresources)
+        for (uint32_t mip = 0; mip < image_info->level_count; ++mip)
         {
-            std::string filename = filenames[f++];
-
-            // We don't support stencil output yet
-            if (aspects[i] == VK_IMAGE_ASPECT_STENCIL_BIT)
-                continue;
-
-            if (output_image_format != KFormatRaw)
+            for (uint32_t layer = 0; layer < image_info->layer_count; ++layer)
             {
-                VkExtent3D scaled_extent;
-                if (scale != 1.0f && scaled)
-                {
-                    scaled_extent.width  = std::max(image_info->extent.width * scale, 1.0f);
-                    scaled_extent.height = std::max(image_info->extent.height * scale, 1.0f);
-                    scaled_extent.depth  = image_info->extent.depth;
-                }
-                else
-                {
-                    scaled_extent = image_info->extent;
-                }
+                std::string filename = filenames[f++];
 
-                const uint32_t texel_size = vkuFormatElementSizeWithAspect(dst_format, aspects[i]);
-                const uint32_t stride     = texel_size * scaled_extent.width;
+                // We don't support stencil output yet
+                if (aspects[i] == VK_IMAGE_ASPECT_STENCIL_BIT)
+                    continue;
 
-                if (output_image_format == kFormatBMP)
+                const uint32_t sub_res_idx    = mip * image_info->layer_count + layer;
+                const void*    offsetted_data = reinterpret_cast<const void*>(
+                    reinterpret_cast<const uint8_t*>(data.data()) + subresource_offsets[sub_res_idx]);
+
+                if (output_image_format != KFormatRaw)
                 {
-                    if (dump_separate_alpha)
+                    VkExtent3D scaled_extent;
+                    if (scale != 1.0f && scaled)
                     {
-                        util::imagewriter::WriteBmpImageSeparateAlpha(filename,
-                                                                      scaled_extent.width,
-                                                                      scaled_extent.height,
-                                                                      subresource_sizes[0],
-                                                                      data.data(),
-                                                                      stride,
-                                                                      image_writer_format);
+                        scaled_extent.width  = std::max(image_info->extent.width * scale, 1.0f);
+                        scaled_extent.height = std::max(image_info->extent.height * scale, 1.0f);
+                        scaled_extent.depth  = image_info->extent.depth;
                     }
                     else
                     {
-                        util::imagewriter::WriteBmpImage(filename,
-                                                         scaled_extent.width,
-                                                         scaled_extent.height,
-                                                         subresource_sizes[0],
-                                                         data.data(),
-                                                         stride,
-                                                         image_writer_format,
-                                                         vkuFormatHasAlpha(image_info->format));
+                        scaled_extent = image_info->extent;
                     }
-                }
-                else if (output_image_format == KFormatPNG)
-                {
-                    if (dump_separate_alpha)
+
+                    scaled_extent.width  = std::max(1u, scaled_extent.width >> mip);
+                    scaled_extent.height = std::max(1u, scaled_extent.height >> mip);
+                    scaled_extent.depth  = std::max(1u, scaled_extent.depth >> mip);
+
+                    const uint32_t texel_size = vkuFormatElementSizeWithAspect(dst_format, aspect);
+                    const uint32_t stride     = texel_size * scaled_extent.width;
+
+                    if (output_image_format == kFormatBMP)
                     {
-                        util::imagewriter::WritePngImageSeparateAlpha(filename,
-                                                                      scaled_extent.width,
-                                                                      scaled_extent.height,
-                                                                      subresource_sizes[0],
-                                                                      data.data(),
-                                                                      stride,
-                                                                      image_writer_format);
-                    }
-                    else
-                    {
-                        util::imagewriter::WritePngImage(filename,
-                                                         scaled_extent.width,
-                                                         scaled_extent.height,
-                                                         subresource_sizes[0],
-                                                         data.data(),
-                                                         stride,
-                                                         image_writer_format,
-                                                         vkuFormatHasAlpha(image_info->format));
-                    }
-                }
-            }
-            else
-            {
-                GFXRECON_LOG_WARNING(
-                    "%s format is not handled. Images with that format will be dump as a plain binary file.",
-                    util::ToString<VkFormat>(image_info->format).c_str());
-
-                util::bufferwriter::WriteBuffer(filename, data.data(), data.size());
-            }
-        }
-        else
-        {
-            for (uint32_t mip = 0; mip < image_info->level_count; ++mip)
-            {
-                for (uint32_t layer = 0; layer < image_info->layer_count; ++layer)
-                {
-                    std::string filename = filenames[f++];
-
-                    if (aspects[i] == VK_IMAGE_ASPECT_STENCIL_BIT)
-                        continue;
-
-                    const uint32_t sub_res_idx = mip * image_info->layer_count + layer;
-                    const void*    data_offset = reinterpret_cast<const void*>(
-                        reinterpret_cast<const uint8_t*>(data.data()) + subresource_offsets[sub_res_idx]);
-
-                    if (output_image_format != KFormatRaw)
-                    {
-                        VkExtent3D scaled_extent;
-                        if (scale != 1.0f && scaled)
+                        if (dump_separate_alpha)
                         {
-                            scaled_extent.width  = extent.width * scale;
-                            scaled_extent.height = extent.height * scale;
-                            scaled_extent.depth  = extent.depth;
+                            util::imagewriter::WriteBmpImageSeparateAlpha(filename,
+                                                                          scaled_extent.width,
+                                                                          scaled_extent.height,
+                                                                          subresource_sizes[0],
+                                                                          offsetted_data,
+                                                                          stride,
+                                                                          image_writer_format);
                         }
                         else
                         {
-                            scaled_extent = extent;
-                        }
-
-                        scaled_extent.width  = std::max(1u, scaled_extent.width >> mip);
-                        scaled_extent.height = std::max(1u, scaled_extent.height >> mip);
-                        scaled_extent.depth  = std::max(1u, scaled_extent.depth >> mip);
-
-                        const uint32_t texel_size = vkuFormatElementSizeWithAspect(image_info->format, aspect);
-                        const uint32_t stride     = texel_size * scaled_extent.width;
-
-                        if (output_image_format == kFormatBMP)
-                        {
-                            if (dump_separate_alpha)
-                            {
-                                util::imagewriter::WriteBmpImageSeparateAlpha(filename,
-                                                                              scaled_extent.width,
-                                                                              scaled_extent.height,
-                                                                              subresource_sizes[sub_res_idx],
-                                                                              data_offset,
-                                                                              stride,
-                                                                              image_writer_format);
-                            }
-                            else
-                            {
-                                util::imagewriter::WriteBmpImage(filename,
-                                                                 scaled_extent.width,
-                                                                 scaled_extent.height,
-                                                                 subresource_sizes[sub_res_idx],
-                                                                 data_offset,
-                                                                 stride,
-                                                                 image_writer_format,
-                                                                 vkuFormatHasAlpha(image_info->format));
-                            }
-                        }
-                        else if (output_image_format == KFormatPNG)
-                        {
-                            if (dump_separate_alpha)
-                            {
-                                util::imagewriter::WritePngImageSeparateAlpha(filename,
-                                                                              scaled_extent.width,
-                                                                              scaled_extent.height,
-                                                                              subresource_sizes[sub_res_idx],
-                                                                              data_offset,
-                                                                              stride,
-                                                                              image_writer_format);
-                            }
-                            else
-                            {
-                                util::imagewriter::WritePngImage(filename,
-                                                                 scaled_extent.width,
-                                                                 scaled_extent.height,
-                                                                 subresource_sizes[sub_res_idx],
-                                                                 data_offset,
-                                                                 stride,
-                                                                 image_writer_format,
-                                                                 vkuFormatHasAlpha(image_info->format));
-                            }
+                            util::imagewriter::WriteBmpImage(filename,
+                                                             scaled_extent.width,
+                                                             scaled_extent.height,
+                                                             subresource_sizes[0],
+                                                             offsetted_data,
+                                                             stride,
+                                                             image_writer_format,
+                                                             vkuFormatHasAlpha(image_info->format));
                         }
                     }
-                    else
+                    else if (output_image_format == KFormatPNG)
                     {
-                        GFXRECON_LOG_WARNING(
-                            "%s format is not handled. Images with that format will be dump as a plain binary file.",
-                            util::ToString<VkFormat>(image_info->format).c_str());
-
-                        util::bufferwriter::WriteBuffer(filename, data_offset, subresource_sizes[sub_res_idx]);
+                        if (dump_separate_alpha)
+                        {
+                            util::imagewriter::WritePngImageSeparateAlpha(filename,
+                                                                          scaled_extent.width,
+                                                                          scaled_extent.height,
+                                                                          subresource_sizes[0],
+                                                                          offsetted_data,
+                                                                          stride,
+                                                                          image_writer_format);
+                        }
+                        else
+                        {
+                            util::imagewriter::WritePngImage(filename,
+                                                             scaled_extent.width,
+                                                             scaled_extent.height,
+                                                             subresource_sizes[0],
+                                                             offsetted_data,
+                                                             stride,
+                                                             image_writer_format,
+                                                             vkuFormatHasAlpha(image_info->format));
+                        }
                     }
                 }
+                else
+                {
+                    GFXRECON_LOG_WARNING(
+                        "%s format is not handled. Images with that format will be dump as a plain binary file.",
+                        util::ToString<VkFormat>(image_info->format).c_str());
+
+                    util::bufferwriter::WriteBuffer(filename, data.data(), data.size());
+                }
+
+                if (!dump_all_subresources)
+                {
+                    break;
+                }
+            }
+
+            if (!dump_all_subresources)
+            {
+                break;
             }
         }
     }

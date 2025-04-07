@@ -135,8 +135,9 @@ void FpsInfo::EndFile(uint64_t frame)
 
 void FpsInfo::ProcessStateEndMarker(uint64_t frame_number)
 {
-    replay_start_frame_ = static_cast<int64_t>(frame_number);
-    replay_start_time_  = static_cast<uint64_t>(util::datetime::GetTimestamp());
+    replay_start_frame_  = static_cast<int64_t>(frame_number);
+    replay_start_time_   = static_cast<uint64_t>(util::datetime::GetTimestamp());
+    started_measurement_ = false; // End of loading trimmed state, so we reset the measurement if it started too soon
 }
 
 void FpsInfo::LogMeasurements()

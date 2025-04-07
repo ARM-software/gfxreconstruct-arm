@@ -7585,7 +7585,7 @@ uintptr_t VulkanReplayConsumerBase::GetObjectAllocatorData(VkObjectType object_t
 
 VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
     PFN_vkSetDebugUtilsObjectNameEXT                             func,
-    const VkResult                                               original_result,
+    VkResult                                                     original_result,
     const VulkanDeviceInfo*                                      device_info,
     StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info)
 {
@@ -7603,8 +7603,14 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
         VkDebugUtilsObjectNameInfoEXT* info = meta_info->decoded_value;
         GFXRECON_ASSERT(info != nullptr);
 
-        return allocator->SetDebugUtilsObjectNameEXT(
-            device_info->handle, info, GetObjectAllocatorData(info->objectType, meta_info->objectHandle));
+        uintptr_t allocator_data = GetObjectAllocatorData(info->objectType, meta_info->objectHandle);
+
+        if (allocator_data != 0)
+        {
+            // depending on which allocator is used, the call might get deferred until resources are actually bound
+            return allocator->SetDebugUtilsObjectNameEXT(device_info->handle, info, allocator_data);
+        }
+        return func(device_info->handle, info);
     }
 
     return original_result;
@@ -7612,7 +7618,7 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectNameEXT(
 
 VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectTagEXT(
     PFN_vkSetDebugUtilsObjectTagEXT                             func,
-    const VkResult                                              original_result,
+    VkResult                                                    original_result,
     const VulkanDeviceInfo*                                     device_info,
     StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* tag_info)
 {
@@ -7630,8 +7636,14 @@ VkResult VulkanReplayConsumerBase::OverrideSetDebugUtilsObjectTagEXT(
         VkDebugUtilsObjectTagInfoEXT* info = meta_info->decoded_value;
         GFXRECON_ASSERT(info != nullptr);
 
-        return allocator->SetDebugUtilsObjectTagEXT(
-            device_info->handle, info, GetObjectAllocatorData(info->objectType, meta_info->objectHandle));
+        uintptr_t allocator_data = GetObjectAllocatorData(info->objectType, meta_info->objectHandle);
+
+        if (allocator_data != 0)
+        {
+            // depending on which allocator is used, the call might get deferred until resources are actually bound
+            return allocator->SetDebugUtilsObjectTagEXT(device_info->handle, info, allocator_data);
+        }
+        return func(device_info->handle, info);
     }
 
     return original_result;
@@ -7693,15 +7705,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
                      window_size.height != modified_create_info.imageExtent.height) &&
                     !(window_size.width == 0 && window_size.height == 0))
                 {
-                    GFXRECON_LOG_WARNING("Could not resize window to (%u, %u). Instead, window was resized to (%u, "
-                                         "%u). Swapchain will "
-                                         "be resized accordingly, but bugs might occur. Using virtual swapchain "
-                                         "should mitigate those "
-                                         "bugs.",
-                                         modified_create_info.imageExtent.width,
-                                         modified_create_info.imageExtent.height,
-                                         window_size.width,
-                                         window_size.height);
+                    GFXRECON_LOG_WARNING(
+                        "Could not resize window to (%u, %u). Instead, window was resized to (%u, %u). Swapchain will "
+                        "be resized accordingly, but bugs might occur. Using virtual swapchain should mitigate those "
+                        "bugs.",
+                        modified_create_info.imageExtent.width,
+                        modified_create_info.imageExtent.height,
+                        window_size.width,
+                        window_size.height);
 
                     modified_create_info.imageExtent = window_size;
                 }
@@ -7710,7 +7721,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
 
         ProcessSwapchainFullScreenExclusiveInfo(pCreateInfo->GetMetaStructPointer());
 
-        // Screenshots are active, so ensure that swapchain images can be used as a transfer source.
         if (screenshot_handler_ != nullptr || options_.dumping_resources)
         {
             // Screenshots and/or dump resources are active, so ensure that swapchain images can be used as a
@@ -9837,9 +9847,9 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
 
     if (!device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay)
     {
-        GFXRECON_LOG_ERROR_ONCE("The captured application used vkGetBufferDeviceAddress, which requires the "
-                                "bufferDeviceAddressCaptureReplay feature for accurate capture and replay. The "
-                                "replay device does not support this feature, so replay may fail.");
+        GFXRECON_LOG_WARNING_ONCE("The captured application used vkGetBufferDeviceAddress, which requires the "
+                                  "bufferDeviceAddressCaptureReplay feature for accurate capture and replay. The "
+                                  "replay device does not support this feature, so replay may fail.");
     }
     VkDevice                         device       = device_info->handle;
     const VkBufferDeviceAddressInfo* address_info = pInfo->GetPointer();

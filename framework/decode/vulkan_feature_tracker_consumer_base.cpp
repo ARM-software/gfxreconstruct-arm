@@ -406,6 +406,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
             }
             else
             {
+                output_core11_.back().pNext                 = ((VkPhysicalDeviceVulkan11Features*)pNext)->pNext;
                 *((VkPhysicalDeviceVulkan11Features*)pNext) = output_core11_.back();
                 output_core11_.pop_back();
             }
@@ -418,6 +419,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
             }
             else
             {
+                output_core12_.back().pNext                 = ((VkPhysicalDeviceVulkan12Features*)pNext)->pNext;
                 *((VkPhysicalDeviceVulkan12Features*)pNext) = output_core12_.back();
                 output_core12_.pop_back();
             }
@@ -430,6 +432,7 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
             }
             else
             {
+                output_core13_.back().pNext                 = ((VkPhysicalDeviceVulkan13Features*)pNext)->pNext;
                 *((VkPhysicalDeviceVulkan13Features*)pNext) = output_core13_.back();
                 output_core13_.pop_back();
             }

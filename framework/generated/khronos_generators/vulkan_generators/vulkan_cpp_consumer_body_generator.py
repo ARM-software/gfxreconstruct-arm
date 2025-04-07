@@ -457,6 +457,9 @@ def makeObjectType(handle_value):
     elif handle_value.endswith('FUCHSIA'):
         extension = '_FUCHSIA'
         value = handle_value[2:-7]
+    elif handle_value.endswith('ARM'):
+        extension = '_ARM'
+        value = handle_value[2:-3]
     else:
         value = handle_value[2:]
 
@@ -1014,6 +1017,8 @@ class VulkanCppConsumerBodyGenerator(BaseGenerator):
 
                 callArgs.append(f'{varName}.c_str()')
                 callTempl.append('&%s')
+            elif self.is_struct(arg.base_type):
+                print(f'Argument {arg.name} in function {name} ignored because {arg.base_type} is not supported yet.')
             else:
                 # simple input argument (float, etc..)
                 valueSuffix = valueSuffixDict.get(arg.base_type, '')
