@@ -8,6 +8,7 @@
 
 #include "decode/referenced_resource_table.h"
 #include "generated/generated_vulkan_consumer.h"
+#include "tools/optimize/vulkan_optimize_options.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
@@ -18,6 +19,8 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+VulkanRayTracingModifier::VulkanRayTracingModifier(const VulkanOptimizationOptions& options) : options_(options){};
 
 bool VulkanRayTracingModifier::CanOptimize()
 {
@@ -75,6 +78,12 @@ void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKH
     const auto& as_id = pInfo->GetMetaStructPointer()->accelerationStructure;
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
+
         if (acceleration_structure_build_infos_.count(as_id) &&
             acceleration_structure_build_infos_[as_id].is_meta_copy &&
             block_index_ < acceleration_structure_build_infos_[as_id].process_compacted_as_index)
@@ -116,6 +125,11 @@ void VulkanRayTracingModifier::Process_vkGetRayTracingShaderGroupHandlesKHR(cons
 {
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
         return;
     }
 
@@ -213,6 +227,11 @@ std::vector<format::AddressLocationInfo> VulkanRayTracingModifier::GetBufferDevi
 std::vector<format::AddressLocationInfo>
 VulkanRayTracingModifier::GetAccelerationStructureDeviceAddressesInFillMemory(const void* data, size_t size)
 {
+    if (options_.remove_rt)
+    {
+        return {};
+    }
+
     if (acceleration_structure_device_addresses_.empty())
     {
         return {};
@@ -278,6 +297,12 @@ VulkanRayTracingModifier::GetShaderGroupHandlesInFillMemory(const void* data, si
 {
     const uint32_t single_shader_group_size = format::kMaxShaderGroupHandleSize;
     assert(data != nullptr);
+
+    if (options_.remove_rt)
+    {
+        return {};
+    }
+
     if (shader_group_handle_entries_.empty())
     {
         return {};
@@ -746,6 +771,12 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
         return;
     }
 
+    if (options_.remove_rt)
+    {
+        SetDeleteCurrentCall();
+        return;
+    }
+
     assert(acceleration_structure_entries_.count(handle) > 0);
     if (acceleration_structure_build_infos_.find(handle) == acceleration_structure_build_infos_.end())
     {
@@ -881,6 +912,11 @@ void VulkanRayTracingModifier::Process_vkDestroyAccelerationStructureKHR(
 {
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
         return;
     }
 
@@ -899,6 +935,11 @@ void VulkanRayTracingModifier::Process_vkCmdBuildAccelerationStructuresKHR(
 {
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
         return;
     }
 
@@ -1002,6 +1043,11 @@ void VulkanRayTracingModifier::Process_vkCmdCopyAccelerationStructureKHR(
 {
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
         return;
     }
 
@@ -1041,6 +1087,11 @@ void VulkanRayTracingModifier::ProcessBuildVulkanAccelerationStructuresMetaComma
     if (IsModificationPass())
     {
         // Update device addresses and shader group handles before first build_as meta command for fastforward
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
         WriteInitBufferDataFixCmd();
         return;
     }
@@ -1143,6 +1194,12 @@ void VulkanRayTracingModifier::ProcessCopyVulkanAccelerationStructuresMetaComman
 {
     if (IsModificationPass())
     {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
+
         for (uint32_t index = 0; index < copy_infos->GetLength(); ++index)
         {
             format::HandleId dst_id = copy_infos->GetMetaStructPointer()[index].dst;
@@ -1737,6 +1794,26 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&     
     }
 
     per_submit_fill_memory_index_.clear();
+}
+
+void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertiesKHR(
+    const ApiCallInfo&                                call_info,
+    format::HandleId                                  commandBuffer,
+    uint32_t                                          accelerationStructureCount,
+    HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
+    VkQueryType                                       queryType,
+    format::HandleId                                  queryPool,
+    uint32_t                                          firstQuery)
+{
+    if (IsModificationPass())
+    {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
+        return;
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

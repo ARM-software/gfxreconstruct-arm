@@ -18,6 +18,7 @@
 #include "decode/vulkan_object_info.h"
 #include "util/vulkan_modifier_base.h"
 #include "encode/struct_pointer_encoder.h"
+#include "vulkan_optimize_options.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -31,6 +32,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 {
   public:
     VulkanRayTracingModifier() = default;
+    VulkanRayTracingModifier(const VulkanOptimizationOptions& options);
 
     virtual bool CanOptimize() override;
 
@@ -171,6 +173,15 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         const ApiCallInfo&                                                call_info,
         format::HandleId                                                  commandBuffer,
         StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo) override;
+
+    virtual void Process_vkCmdWriteAccelerationStructuresPropertiesKHR(
+        const ApiCallInfo&                                call_info,
+        format::HandleId                                  commandBuffer,
+        uint32_t                                          accelerationStructureCount,
+        HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
+        VkQueryType                                       queryType,
+        format::HandleId                                  queryPool,
+        uint32_t                                          firstQuery) override;
 
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
@@ -445,6 +456,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     // -----init buffer handle-----InitBufferObject
     std::unordered_map<format::HandleId, InitBufferObject> init_buffer_entries_;
+
+    VulkanOptimizationOptions options_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
