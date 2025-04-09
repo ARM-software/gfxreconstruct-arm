@@ -1359,6 +1359,7 @@ void D3D12CaptureManager::PostProcess_ID3D12Resource_Map(
                 }
                 else
                 {
+                    mapped_subresource.map_count--;
                     // The application has mapped the same ID3D12Resource object more than once and the pageguard
                     // manager is already tracking it, so we will return the pointer obtained from the pageguard manager
                     // on the first map call.
@@ -1410,6 +1411,10 @@ void D3D12CaptureManager::PostProcess_ID3D12Resource_Map(
                         // Need to keep track of mapped memory objects so memory content can be written at queue submit.
                         mapped_resources_.insert(wrapper);
                     }
+                }
+                else
+                {
+                    mapped_subresource.map_count--;
                 }
             }
         }

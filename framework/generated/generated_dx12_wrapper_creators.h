@@ -90,11 +90,17 @@ void WrapIDXGIOutput(REFIID riid, void** object, DxWrapperResources* resources);
 
 void WrapIDXGIFactory(REFIID riid, void** object, DxWrapperResources* resources);
 
+void WrapID3D12Object(REFIID riid, void** object, DxWrapperResources* resources);
+
+void WrapID3D12DeviceChild(REFIID riid, void** object, DxWrapperResources* resources);
+
 void WrapID3D12RootSignature(REFIID riid, void** object, DxWrapperResources* resources);
 
 void WrapID3D12RootSignatureDeserializer(REFIID riid, void** object, DxWrapperResources* resources);
 
 void WrapID3D12VersionedRootSignatureDeserializer(REFIID riid, void** object, DxWrapperResources* resources);
+
+void WrapID3D12Pageable(REFIID riid, void** object, DxWrapperResources* resources);
 
 void WrapID3D12CommandAllocator(REFIID riid, void** object, DxWrapperResources* resources);
 
@@ -221,9 +227,12 @@ const std::unordered_map<IID, std::function<void(REFIID, void**,DxWrapperResourc
     { IID_IDXGIFactory5, WrapIDXGIFactory },
     { IID_IDXGIFactory6, WrapIDXGIFactory },
     { IID_IDXGIFactory7, WrapIDXGIFactory },
+    { IID_ID3D12Object, WrapID3D12Object },
+    { IID_ID3D12DeviceChild, WrapID3D12DeviceChild },
     { IID_ID3D12RootSignature, WrapID3D12RootSignature },
     { IID_ID3D12RootSignatureDeserializer, WrapID3D12RootSignatureDeserializer },
     { IID_ID3D12VersionedRootSignatureDeserializer, WrapID3D12VersionedRootSignatureDeserializer },
+    { IID_ID3D12Pageable, WrapID3D12Pageable },
     { IID_ID3D12CommandAllocator, WrapID3D12CommandAllocator },
     { IID_ID3D12Fence, WrapID3D12Fence },
     { IID_ID3D12Fence1, WrapID3D12Fence },

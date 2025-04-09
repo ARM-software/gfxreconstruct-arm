@@ -254,6 +254,15 @@ struct IDXGISwapChainInfo : public DxgiWrapperInfo
     void*                  hdr_metadata{ nullptr };
 };
 
+struct ID3D12ObjectInfo : public DxgiWrapperInfo
+{};
+
+struct ID3D12DeviceChildInfo : public DxgiWrapperInfo
+{};
+
+struct ID3D12PageableInfo : public DxgiWrapperInfo
+{};
+
 struct IDXGIDeviceInfo : public DxgiWrapperInfo
 {};
 

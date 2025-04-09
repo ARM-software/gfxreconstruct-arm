@@ -50,12 +50,8 @@ HRESULT Dx12RebindAllocator::Initialize(const IUnknown* adapter, const void* pvD
 
 void Dx12RebindAllocator::Destroy()
 {
-    device_ = nullptr;
-    if (allocator_)
-    {
-        allocator_->Release();
-        allocator_ = nullptr;
-    }
+    device_    = nullptr;
+    allocator_ = nullptr;
 }
 
 void Dx12RebindAllocator::SetReplayResourceCompatibility(const format::HandleId       heap_capture_id,
@@ -240,14 +236,12 @@ void Dx12RebindAllocator::Release(IUnknown* object)
     ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(object);
     if (resource_allocation_.find(pResource) != resource_allocation_.end())
     {
-        resource_allocation_[pResource]->Release();
         resource_allocation_[pResource] = nullptr;
         resource_allocation_.erase(pResource);
     }
 
     if (resource_custom_pool_.find(pResource) != resource_custom_pool_.end())
     {
-        resource_custom_pool_[pResource]->Release();
         resource_custom_pool_[pResource] = nullptr;
         resource_custom_pool_.erase(pResource);
     }
@@ -256,7 +250,15 @@ void Dx12RebindAllocator::Release(IUnknown* object)
     {
         for (auto& heap : resource_recreated_heap_[pResource])
         {
-            heap->Release();
+            for (auto& recreated_heap : heap_id_recreated_heap_)
+            {
+                if (heap == recreated_heap.second)
+                {
+                    heap_id_recreated_heap_.erase(recreated_heap.first);
+                    break;
+                }
+            }
+
             heap = nullptr;
         }
         resource_recreated_heap_.erase(pResource);
@@ -267,14 +269,12 @@ void Dx12RebindAllocator::AllRelease()
 {
     for (auto& alloc : resource_allocation_)
     {
-        alloc.second->Release();
         alloc.second = nullptr;
     }
     resource_allocation_.clear();
 
     for (auto& pool : resource_custom_pool_)
     {
-        pool.second->Release();
         pool.second = nullptr;
     }
     resource_custom_pool_.clear();
@@ -283,7 +283,6 @@ void Dx12RebindAllocator::AllRelease()
     {
         for (auto& heap : recreated_heap.second)
         {
-            heap->Release();
             heap = nullptr;
         }
     }
@@ -753,7 +752,7 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
         }
         else
         {
-            pNewHeap = heap_id_recreated_heap_[heap_capture_id];
+            pNewHeap = heap_id_recreated_heap_[heap_capture_id].Get();
         }
 
         pQueue->UpdateTileMappings(pResource,

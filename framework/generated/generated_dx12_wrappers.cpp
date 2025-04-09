@@ -88,12 +88,18 @@ IDXGIOutput_Wrapper::ObjectMap IDXGIOutput_Wrapper::object_map_;
 std::mutex IDXGIOutput_Wrapper::object_map_lock_;
 IDXGIFactory_Wrapper::ObjectMap IDXGIFactory_Wrapper::object_map_;
 std::mutex IDXGIFactory_Wrapper::object_map_lock_;
+ID3D12Object_Wrapper::ObjectMap ID3D12Object_Wrapper::object_map_;
+std::mutex ID3D12Object_Wrapper::object_map_lock_;
+ID3D12DeviceChild_Wrapper::ObjectMap ID3D12DeviceChild_Wrapper::object_map_;
+std::mutex ID3D12DeviceChild_Wrapper::object_map_lock_;
 ID3D12RootSignature_Wrapper::ObjectMap ID3D12RootSignature_Wrapper::object_map_;
 std::mutex ID3D12RootSignature_Wrapper::object_map_lock_;
 ID3D12RootSignatureDeserializer_Wrapper::ObjectMap ID3D12RootSignatureDeserializer_Wrapper::object_map_;
 std::mutex ID3D12RootSignatureDeserializer_Wrapper::object_map_lock_;
 ID3D12VersionedRootSignatureDeserializer_Wrapper::ObjectMap ID3D12VersionedRootSignatureDeserializer_Wrapper::object_map_;
 std::mutex ID3D12VersionedRootSignatureDeserializer_Wrapper::object_map_lock_;
+ID3D12Pageable_Wrapper::ObjectMap ID3D12Pageable_Wrapper::object_map_;
+std::mutex ID3D12Pageable_Wrapper::object_map_lock_;
 ID3D12CommandAllocator_Wrapper::ObjectMap ID3D12CommandAllocator_Wrapper::object_map_;
 std::mutex ID3D12CommandAllocator_Wrapper::object_map_lock_;
 ID3D12Fence_Wrapper::ObjectMap ID3D12Fence_Wrapper::object_map_;
@@ -10018,6 +10024,22 @@ HRESULT WINAPI D3D12GetInterface(
 
 ID3D12Object_Wrapper::ID3D12Object_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources, const std::function<void(IUnknown_Wrapper*)>& destructor) : IUnknown_Wrapper(riid, object, resources, destructor)
 {
+    info_ = std::make_shared<ID3D12ObjectInfo>();
+    info_->SetWrapper(this);
+    AddWrapperMapEntry(object, this, object_map_, object_map_lock_);
+}
+
+ID3D12Object_Wrapper::~ID3D12Object_Wrapper()
+{
+    CustomWrapperDestroyCall(this);
+    RemoveWrapperMapEntry(GetWrappedObjectAs<ID3D12Object>(), object_map_, object_map_lock_);
+    D3D12CaptureManager::Get()->ProcessWrapperDestroy(this);
+    info_->SetWrapper(nullptr);
+}
+
+ID3D12Object_Wrapper* ID3D12Object_Wrapper::GetExistingWrapper(IUnknown* object)
+{
+    return FindMapEntry<ID3D12Object_Wrapper>(object, object_map_, object_map_lock_);
 }
 
 HRESULT STDMETHODCALLTYPE ID3D12Object_Wrapper::GetPrivateData(
@@ -10260,6 +10282,22 @@ HRESULT STDMETHODCALLTYPE ID3D12Object_Wrapper::SetName(
 
 ID3D12DeviceChild_Wrapper::ID3D12DeviceChild_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources, const std::function<void(IUnknown_Wrapper*)>& destructor) : ID3D12Object_Wrapper(riid, object, resources, destructor)
 {
+    info_ = std::make_shared<ID3D12DeviceChildInfo>();
+    info_->SetWrapper(this);
+    AddWrapperMapEntry(object, this, object_map_, object_map_lock_);
+}
+
+ID3D12DeviceChild_Wrapper::~ID3D12DeviceChild_Wrapper()
+{
+    CustomWrapperDestroyCall(this);
+    RemoveWrapperMapEntry(GetWrappedObjectAs<ID3D12DeviceChild>(), object_map_, object_map_lock_);
+    D3D12CaptureManager::Get()->ProcessWrapperDestroy(this);
+    info_->SetWrapper(nullptr);
+}
+
+ID3D12DeviceChild_Wrapper* ID3D12DeviceChild_Wrapper::GetExistingWrapper(IUnknown* object)
+{
+    return FindMapEntry<ID3D12DeviceChild_Wrapper>(object, object_map_, object_map_lock_);
 }
 
 HRESULT STDMETHODCALLTYPE ID3D12DeviceChild_Wrapper::GetDevice(
@@ -10537,6 +10575,22 @@ const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* STDMETHODCALLTYPE ID3D12VersionedRoot
 
 ID3D12Pageable_Wrapper::ID3D12Pageable_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources, const std::function<void(IUnknown_Wrapper*)>& destructor) : ID3D12DeviceChild_Wrapper(riid, object, resources, destructor)
 {
+    info_ = std::make_shared<ID3D12PageableInfo>();
+    info_->SetWrapper(this);
+    AddWrapperMapEntry(object, this, object_map_, object_map_lock_);
+}
+
+ID3D12Pageable_Wrapper::~ID3D12Pageable_Wrapper()
+{
+    CustomWrapperDestroyCall(this);
+    RemoveWrapperMapEntry(GetWrappedObjectAs<ID3D12Pageable>(), object_map_, object_map_lock_);
+    D3D12CaptureManager::Get()->ProcessWrapperDestroy(this);
+    info_->SetWrapper(nullptr);
+}
+
+ID3D12Pageable_Wrapper* ID3D12Pageable_Wrapper::GetExistingWrapper(IUnknown* object)
+{
+    return FindMapEntry<ID3D12Pageable_Wrapper>(object, object_map_, object_map_lock_);
 }
 
 ID3D12Heap_Wrapper::ID3D12Heap_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources, const std::function<void(IUnknown_Wrapper*)>& destructor) : ID3D12Pageable_Wrapper(riid, object, resources, destructor)

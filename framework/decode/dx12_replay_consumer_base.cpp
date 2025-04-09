@@ -206,6 +206,17 @@ void Dx12ReplayConsumerBase::OverrideEnableDebugLayer(DxObjectInfo* replay_objec
 
 Dx12ReplayConsumerBase::~Dx12ReplayConsumerBase()
 {
+    // Reports info about the lifetime of objects for memory leak analysis
+    if (debug_layer_enabled_)
+    {
+        Microsoft::WRL::ComPtr<IDXGIDebug1> dxgi_debug = nullptr;
+        DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgi_debug));
+        if (dxgi_debug != nullptr)
+        {
+            dxgi_debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+        }
+    }
+
     // The accel_struct_builder_ is no longer needed after the trim state load is complete.
     accel_struct_builder_ = nullptr;
 
@@ -734,6 +745,21 @@ void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT ca
     {
         if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == D3D12_ERROR_INVALID_REDIST))
         {
+            Microsoft::WRL::ComPtr<IDXGIFactory1> factory  = nullptr;
+            Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter1 = nullptr;
+            Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3 = nullptr;
+
+            CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+            factory->EnumAdapters1(0, &adapter1);
+            adapter1->QueryInterface(IID_PPV_ARGS(&adapter3));
+            if (adapter3 != nullptr)
+            {
+                DXGI_QUERY_VIDEO_MEMORY_INFO memInfo = {};
+                adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
+                GFXRECON_LOG_INFO(
+                    "GPU Memory Usage: %llu KB / %llu KB ", memInfo.CurrentUsage / 1024, memInfo.Budget / 1024);
+            }
+
             GFXRECON_LOG_FATAL(
                 "%s returned %s, which does not match the value returned at capture %s. Replay cannot continue.",
                 call_name,

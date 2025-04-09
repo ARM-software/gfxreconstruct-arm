@@ -112,9 +112,12 @@ const std::unordered_map<IID, std::function<void(typename void**, format::ApiCal
     { IID_IDXGIFactory5, AddEntry<IDXGIFactory_Wrapper, ParentWrapper> },
     { IID_IDXGIFactory6, AddEntry<IDXGIFactory_Wrapper, ParentWrapper> },
     { IID_IDXGIFactory7, AddEntry<IDXGIFactory_Wrapper, ParentWrapper> },
+    { IID_ID3D12Object, AddEntry<ID3D12Object_Wrapper, ParentWrapper> },
+    { IID_ID3D12DeviceChild, AddEntry<ID3D12DeviceChild_Wrapper, ParentWrapper> },
     { IID_ID3D12RootSignature, AddEntry<ID3D12RootSignature_Wrapper, ParentWrapper> },
     { IID_ID3D12RootSignatureDeserializer, AddEntry<ID3D12RootSignatureDeserializer_Wrapper, ParentWrapper> },
     { IID_ID3D12VersionedRootSignatureDeserializer, AddEntry<ID3D12VersionedRootSignatureDeserializer_Wrapper, ParentWrapper> },
+    { IID_ID3D12Pageable, AddEntry<ID3D12Pageable_Wrapper, ParentWrapper> },
     { IID_ID3D12CommandAllocator, AddEntry<ID3D12CommandAllocator_Wrapper, ParentWrapper> },
     { IID_ID3D12Fence, AddEntry<ID3D12Fence_Wrapper, ParentWrapper> },
     { IID_ID3D12Fence1, AddEntry<ID3D12Fence_Wrapper, ParentWrapper> },
@@ -247,9 +250,12 @@ const std::unordered_map<IID, std::function<void(typename void**, format::ApiCal
     { IID_IDXGIFactory5, AddEntry<IDXGIFactory_Wrapper> },
     { IID_IDXGIFactory6, AddEntry<IDXGIFactory_Wrapper> },
     { IID_IDXGIFactory7, AddEntry<IDXGIFactory_Wrapper> },
+    { IID_ID3D12Object, AddEntry<ID3D12Object_Wrapper> },
+    { IID_ID3D12DeviceChild, AddEntry<ID3D12DeviceChild_Wrapper> },
     { IID_ID3D12RootSignature, AddEntry<ID3D12RootSignature_Wrapper> },
     { IID_ID3D12RootSignatureDeserializer, AddEntry<ID3D12RootSignatureDeserializer_Wrapper> },
     { IID_ID3D12VersionedRootSignatureDeserializer, AddEntry<ID3D12VersionedRootSignatureDeserializer_Wrapper> },
+    { IID_ID3D12Pageable, AddEntry<ID3D12Pageable_Wrapper> },
     { IID_ID3D12CommandAllocator, AddEntry<ID3D12CommandAllocator_Wrapper> },
     { IID_ID3D12Fence, AddEntry<ID3D12Fence_Wrapper> },
     { IID_ID3D12Fence1, AddEntry<ID3D12Fence_Wrapper> },
@@ -548,6 +554,16 @@ static DxWrapperInfo* GetWrapperInfo(IUnknown_Wrapper* wrapper)
         auto* new_wrapper = reinterpret_cast<IDXGIFactory_Wrapper*>(wrapper);
         return new_wrapper->GetObjectInfo().get();
     }
+    if(riid == IID_ID3D12Object)
+    {
+        auto* new_wrapper = reinterpret_cast<ID3D12Object_Wrapper*>(wrapper);
+        return new_wrapper->GetObjectInfo().get();
+    }
+    if(riid == IID_ID3D12DeviceChild)
+    {
+        auto* new_wrapper = reinterpret_cast<ID3D12DeviceChild_Wrapper*>(wrapper);
+        return new_wrapper->GetObjectInfo().get();
+    }
     if(riid == IID_ID3D12RootSignature)
     {
         auto* new_wrapper = reinterpret_cast<ID3D12RootSignature_Wrapper*>(wrapper);
@@ -561,6 +577,11 @@ static DxWrapperInfo* GetWrapperInfo(IUnknown_Wrapper* wrapper)
     if(riid == IID_ID3D12VersionedRootSignatureDeserializer)
     {
         auto* new_wrapper = reinterpret_cast<ID3D12VersionedRootSignatureDeserializer_Wrapper*>(wrapper);
+        return new_wrapper->GetObjectInfo().get();
+    }
+    if(riid == IID_ID3D12Pageable)
+    {
+        auto* new_wrapper = reinterpret_cast<ID3D12Pageable_Wrapper*>(wrapper);
         return new_wrapper->GetObjectInfo().get();
     }
     if(riid == IID_ID3D12CommandAllocator)

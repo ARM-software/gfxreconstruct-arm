@@ -40,12 +40,6 @@ void UpdateBufferSize(ID3D12Device*                         device,
                       D3D12_RESOURCE_FLAGS                  flags)
 {
     // Create an upload resource of the required size.
-    if ((buffer != nullptr) && (buffer_size < required_size))
-    {
-        buffer->Release();
-        buffer = nullptr;
-    }
-
     if (!buffer || (buffer_size < required_size))
     {
         buffer = graphics::dx12::CreateBufferResource(device, required_size, heap_type, initial_state, flags);
@@ -438,12 +432,7 @@ void Dx12AccelerationStructureBuilder::ReleaseScratchBuffer(const format::Handle
 {
     if (command_lis_recorded_scratches_.find(command_list) != command_lis_recorded_scratches_.end())
     {
-        auto& scratches = command_lis_recorded_scratches_[command_list];
-        for (auto& scratch_data : scratches)
-        {
-            scratch_data.scratch_buffer->Release();
-            scratch_data.scratch_buffer = nullptr;
-        }
+        // The scratch_buffer in command_lis_recorded_scratches_[command_list] will be automatically released.
         command_lis_recorded_scratches_.erase(command_list);
     }
 }

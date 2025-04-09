@@ -25,6 +25,7 @@
 
 #include "format/format.h"
 #include "util/defines.h"
+#include "graphics/dx12_util.h"
 #include <d3d12.h>
 #include <dxgi.h>
 

@@ -32,6 +32,8 @@
 #include "graphics/dx12_image_renderer.h"
 #include "format/format.h"
 
+#include <wrl/client.h>
+
 #include <comdef.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>

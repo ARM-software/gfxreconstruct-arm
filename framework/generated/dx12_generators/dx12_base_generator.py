@@ -304,6 +304,11 @@ class Dx12BaseGenerator():
         'ID3D12DebugCommandList1'
     ]
 
+    # Those parent classes need to be wrapped
+    PARENT_CLASSES_EXECPTION = [
+        'ID3D12Object', 'ID3D12DeviceChild', 'ID3D12Pageable'
+    ]
+
     # ID3D23CommandList is top parent class for all ID3D12GraphicsCommandList[n]
     FAMILY_CLASSES_EXECPTION = {
         'ID3D12GraphicsCommandList':
