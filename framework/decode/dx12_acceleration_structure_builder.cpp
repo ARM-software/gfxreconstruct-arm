@@ -479,19 +479,27 @@ void Dx12AccelerationStructureBuilder::PostCommandQueueSignal(const format::Hand
 
 void Dx12AccelerationStructureBuilder::PostGetCompletedValue(const format::HandleId fence, const UINT64 value)
 {
-    for (auto& queue_data : command_queue_data_)
+    for (auto it = command_queue_data_.begin(); it != command_queue_data_.end();)
     {
-        auto& wait_fence_value = queue_data.second.wait_fences_value;
+        auto& wait_fence_value = it->second.wait_fences_value;
         if (wait_fence_value.find(fence) != wait_fence_value.end())
         {
             if (value >= wait_fence_value[fence])
             {
-                for (auto& command_list : queue_data.second.command_lists)
+                for (auto& command_list : it->second.command_lists)
                 {
                     ReleaseScratchBuffer(command_list);
                 }
-                command_queue_data_.erase(queue_data.first);
+                it = command_queue_data_.erase(it);
             }
+            else
+            {
+                ++it;
+            }
+        }
+        else
+        {
+            ++it;
         }
     }
 }
