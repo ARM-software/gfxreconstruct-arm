@@ -418,18 +418,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                 VkQueryPool          queryPool,
                                                 uint32_t             firstQuery);
 
-    void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
-                                          VkDevice                        device,
-                                          const VkSwapchainCreateInfoKHR* pCreateInfo,
-                                          const VkAllocationCallbacks*    pAllocator,
-                                          VkSwapchainKHR*                 pSwapchain);
-
-    void PostProcess_vkGetSwapchainImagesKHR(VkResult       result,
-                                             VkDevice       device,
-                                             VkSwapchainKHR swapchain,
-                                             uint32_t*      pSwapchainImageCount,
-                                             VkImage*       pSwapchainImages);
-
     void PostProcess_vkEnumeratePhysicalDevices(VkResult          result,
                                                 VkInstance        instance,
                                                 uint32_t*         pPhysicalDeviceCount,
@@ -571,10 +559,16 @@ class VulkanCaptureManager : public ApiCaptureManager
                                               const VkAllocationCallbacks*         pAllocator,
                                               VkSurfaceKHR*                        pSurface);
 
-    void PreProcess_vkCreateSwapchain(VkDevice                        device,
-                                      const VkSwapchainCreateInfoKHR* pCreateInfo,
-                                      const VkAllocationCallbacks*    pAllocator,
-                                      VkSwapchainKHR*                 pSwapchain);
+    void PreProcess_vkCreateSwapchainKHR(VkDevice                        device,
+                                         const VkSwapchainCreateInfoKHR* pCreateInfo,
+                                         const VkAllocationCallbacks*    pAllocator,
+                                         VkSwapchainKHR*                 pSwapchain);
+
+    void PostProcess_vkCreateSwapchainKHR(VkResult                        result,
+                                          VkDevice                        device,
+                                          const VkSwapchainCreateInfoKHR* pCreateInfo,
+                                          const VkAllocationCallbacks*    pAllocator,
+                                          VkSwapchainKHR*                 pSwapchain);
 
     void PostProcess_vkAcquireNextImageKHR(VkResult result,
                                            VkDevice,
