@@ -67,6 +67,8 @@ class Dx12AccelerationStructureBuilder
 
     void PostCommandQueueWait(const format::HandleId queue, const format::HandleId fence, const UINT64 value);
 
+    ID3D12Device5* GetDevice5() { return device5_; }
+
   private:
     void SetupBuild(const graphics::Dx12GpuVaMap&                                         gpu_va_map,
                     const format::InitDx12AccelerationStructureCommandHeader&             command_header,
