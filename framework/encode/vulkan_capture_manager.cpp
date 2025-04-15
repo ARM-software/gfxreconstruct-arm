@@ -2682,7 +2682,7 @@ void VulkanCaptureManager::PostProcess_vkMapMemory(VkResult         result,
             if (IsCaptureModeTrack())
             {
                 assert(state_tracker_ != nullptr);
-                state_tracker_->TrackMappedMemory(device, memory, (*ppData), offset, size, flags);
+                state_tracker_->TrackMappedMemory(device, memory, (*ppData), offset, size, flags, GetUseAssetFile());
             }
             else
             {
@@ -2861,7 +2861,7 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
         if (IsCaptureModeTrack())
         {
             assert(state_tracker_ != nullptr);
-            state_tracker_->TrackMappedMemory(device, memory, nullptr, 0, 0, 0);
+            state_tracker_->TrackMappedMemory(device, memory, nullptr, 0, 0, 0, GetUseAssetFile());
         }
         else
         {
@@ -2907,7 +2907,7 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
         if (IsCaptureModeTrack())
         {
             assert(state_tracker_ != nullptr);
-            state_tracker_->TrackMappedMemory(device, memory, nullptr, 0, 0, 0);
+            state_tracker_->TrackMappedMemory(device, memory, nullptr, 0, 0, 0, GetUseAssetFile());
         }
         else
         {
@@ -3097,9 +3097,9 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptu
 
     // This must be done before QueueSubmitWriteFillMemoryCmd is called
     // and tracked mapped memory regions are resetted
-    if (IsCaptureModeTrack())
+    if (IsCaptureModeTrack() && GetUseAssetFile())
     {
-        state_tracker_->TrackSubmission(submitCount, pSubmits);
+        state_tracker_->TrackAssetsInSubmission(submitCount, pSubmits);
     }
 
     QueueSubmitWriteFillMemoryCmd();
@@ -3134,9 +3134,9 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit2(
 
     // This must be done before QueueSubmitWriteFillMemoryCmd is called
     // and tracked mapped memory regions are resetted
-    if (IsCaptureModeTrack())
+    if (IsCaptureModeTrack() && GetUseAssetFile())
     {
-        state_tracker_->TrackSubmission(submitCount, pSubmits);
+        state_tracker_->TrackAssetsInSubmission(submitCount, pSubmits);
     }
 
     QueueSubmitWriteFillMemoryCmd();
@@ -3551,6 +3551,7 @@ void VulkanCaptureManager::PostProcess_vkCreateDevice(VkPhysicalDevice          
         SetObjectName<DeviceWrapper>(*pDevice, *pDevice);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateSemaphore(VkDevice                     device,
                                                          const VkSemaphoreCreateInfo* pCreateInfo,
                                                          const VkAllocationCallbacks* pAllocator,
@@ -3561,6 +3562,7 @@ void VulkanCaptureManager::PostProcess_vkCreateSemaphore(VkDevice               
         SetObjectName<SemaphoreWrapper>(device, *pSemaphore);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkAllocateCommandBuffers(VkDevice                           device,
                                                                 const VkCommandBufferAllocateInfo* pAllocateInfo,
                                                                 VkCommandBuffer*                   pCommandBuffers)
@@ -3570,6 +3572,7 @@ void VulkanCaptureManager::PostProcess_vkAllocateCommandBuffers(VkDevice        
         SetObjectName<CommandBufferWrapper>(device, *pCommandBuffers);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateFence(VkDevice                     device,
                                                      const VkFenceCreateInfo*     pCreateInfo,
                                                      const VkAllocationCallbacks* pAllocator,
@@ -3580,6 +3583,7 @@ void VulkanCaptureManager::PostProcess_vkCreateFence(VkDevice                   
         SetObjectName<FenceWrapper>(device, *pFence);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkAllocateMemory(VkDevice                     device,
                                                         const VkMemoryAllocateInfo*  pAllocateInfo,
                                                         const VkAllocationCallbacks* pAllocator,
@@ -3590,6 +3594,7 @@ void VulkanCaptureManager::PostProcess_vkAllocateMemory(VkDevice                
         SetObjectName<DeviceMemoryWrapper>(device, *pMemory);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateBuffer(VkDevice                     device,
                                                       const VkBufferCreateInfo*    pCreateInfo,
                                                       const VkAllocationCallbacks* pAllocator,
@@ -3600,6 +3605,7 @@ void VulkanCaptureManager::PostProcess_vkCreateBuffer(VkDevice                  
         SetObjectName<BufferWrapper>(device, *pBuffer);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateImage(VkDevice                     device,
                                                      const VkImageCreateInfo*     pCreateInfo,
                                                      const VkAllocationCallbacks* pAllocator,
@@ -3610,6 +3616,7 @@ void VulkanCaptureManager::PostProcess_vkCreateImage(VkDevice                   
         SetObjectName<ImageWrapper>(device, *pImage);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateEvent(VkDevice                     device,
                                                      const VkEventCreateInfo*     pCreateInfo,
                                                      const VkAllocationCallbacks* pAllocator,
@@ -3620,6 +3627,7 @@ void VulkanCaptureManager::PostProcess_vkCreateEvent(VkDevice                   
         SetObjectName<EventWrapper>(device, *pEvent);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateQueryPool(VkDevice                     device,
                                                          const VkQueryPoolCreateInfo* pCreateInfo,
                                                          const VkAllocationCallbacks* pAllocator,
@@ -3630,6 +3638,7 @@ void VulkanCaptureManager::PostProcess_vkCreateQueryPool(VkDevice               
         SetObjectName<QueryPoolWrapper>(device, *pQueryPool);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateBufferView(VkDevice                      device,
                                                           const VkBufferViewCreateInfo* pCreateInfo,
                                                           const VkAllocationCallbacks*  pAllocator,
@@ -3640,6 +3649,7 @@ void VulkanCaptureManager::PostProcess_vkCreateBufferView(VkDevice              
         SetObjectName<BufferViewWrapper>(device, *pView);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateImageView(VkDevice                     device,
                                                          const VkImageViewCreateInfo* pCreateInfo,
                                                          const VkAllocationCallbacks* pAllocator,
@@ -3650,31 +3660,13 @@ void VulkanCaptureManager::PostProcess_vkCreateImageView(VkDevice               
         SetObjectName<ImageViewWrapper>(device, *pView);
     }
 }
+
 void VulkanCaptureManager::PostProcess_vkCreateShaderModule(VkResult                        result,
                                                             VkDevice                        device,
                                                             const VkShaderModuleCreateInfo* pCreateInfo,
                                                             const VkAllocationCallbacks*    pAllocator,
                                                             VkShaderModule*                 pShaderModule)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(pAllocator);
-
-    if (result == VK_SUCCESS)
-    {
-        graphics::vulkan_check_buffer_references(pCreateInfo->pCode, pCreateInfo->codeSize);
-
-        vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
-            vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(*pShaderModule);
-        if (shader_wrapper != nullptr)
-        {
-            gfxrecon::util::SpirVParsingUtil spirv_util;
-            if (!spirv_util.SPIRVReflectPerformReflectionOnShaderModule(
-                    pCreateInfo->codeSize, pCreateInfo->pCode, shader_wrapper->used_descriptors_info))
-            {
-                GFXRECON_LOG_WARNING("Reflection on shader %" PRIu64 "failed", shader_wrapper->handle_id);
-            }
-        }
-    }
-
     if (common_manager_->debug_set_objects_name_)
     {
         SetObjectName<ShaderModuleWrapper>(device, *pShaderModule);
@@ -3703,32 +3695,6 @@ void VulkanCaptureManager::PostProcess_vkCreateGraphicsPipelines(VkResult       
     {
         SetObjectName<PipelineWrapper>(device, *pPipelines);
     }
-
-    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
-    {
-        for (uint32_t p = 0; p < createInfoCount; ++p)
-        {
-            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
-                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
-            assert(ppl_wrapper != nullptr);
-
-            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
-            if (binary_info == nullptr || !binary_info->binaryCount)
-            {
-                for (uint32_t s = 0; s < pCreateInfos[p].stageCount; ++s)
-                {
-                    const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
-                        vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(
-                            pCreateInfos[p].pStages[s].module);
-
-                    if (shader_wrapper != nullptr)
-                    {
-                        ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
-                    }
-                }
-            }
-        }
-    }
 }
 
 void VulkanCaptureManager::PostProcess_vkCreateComputePipelines(VkResult                           result,
@@ -3739,26 +3705,9 @@ void VulkanCaptureManager::PostProcess_vkCreateComputePipelines(VkResult        
                                                                 const VkAllocationCallbacks*       pAllocator,
                                                                 VkPipeline*                        pPipelines)
 {
-    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
+    if (common_manager_->debug_set_objects_name_)
     {
-        for (uint32_t p = 0; p < createInfoCount; ++p)
-        {
-            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
-                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
-            assert(ppl_wrapper != nullptr);
-
-            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
-            if (binary_info == nullptr || !binary_info->binaryCount)
-            {
-                const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
-                    vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(pCreateInfos[p].stage.module);
-
-                if (shader_wrapper != nullptr)
-                {
-                    ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
-                }
-            }
-        }
+        SetObjectName<PipelineWrapper>(device, *pPipelines);
     }
 }
 
@@ -3772,30 +3721,9 @@ void VulkanCaptureManager::PostProcess_vkCreateRayTracingPipelinesKHR(
     const VkAllocationCallbacks*             pAllocator,
     VkPipeline*                              pPipelines)
 {
-    if (result == VK_SUCCESS && createInfoCount && pPipelines != nullptr)
+    if (common_manager_->debug_set_objects_name_)
     {
-        for (uint32_t p = 0; p < createInfoCount; ++p)
-        {
-            vulkan_wrappers::PipelineWrapper* ppl_wrapper =
-                vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(pPipelines[p]);
-            assert(ppl_wrapper != nullptr);
-
-            const auto binary_info = graphics::vulkan_struct_get_pnext<VkPipelineBinaryInfoKHR>(&pCreateInfos[p]);
-            if (binary_info == nullptr || !binary_info->binaryCount)
-            {
-                for (uint32_t s = 0; s < pCreateInfos[p].stageCount; ++s)
-                {
-                    const vulkan_wrappers::ShaderModuleWrapper* shader_wrapper =
-                        vulkan_wrappers::GetWrapper<vulkan_wrappers::ShaderModuleWrapper>(
-                            pCreateInfos[p].pStages[s].module);
-
-                    if (shader_wrapper != nullptr)
-                    {
-                        ppl_wrapper->bound_shaders.push_back(*shader_wrapper);
-                    }
-                }
-            }
-        }
+        SetObjectName<PipelineWrapper>(device, *pPipelines);
     }
 }
 

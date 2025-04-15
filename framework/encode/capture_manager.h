@@ -391,6 +391,10 @@ class CommonCaptureManager
     {
         return queue_submit_count_;
     }
+    bool GetUseAssetFile() const
+    {
+        return use_asset_file_;
+    }
 
     util::Compressor* GetCompressor()
     {
