@@ -312,12 +312,26 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance instance
                 has_implementation = true;
                 break;
             }
+
+            if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
+                ext_props.device_funcs.end())
+            {
+                has_implementation = true;
+                break;
+            }
         }
 
         for (const auto ext_props : kDeviceExtensionProps)
         {
             if (std::find(ext_props.instance_funcs.begin(), ext_props.instance_funcs.end(), pName) !=
                 ext_props.instance_funcs.end())
+            {
+                has_implementation = true;
+                break;
+            }
+
+            if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
+                ext_props.device_funcs.end())
             {
                 has_implementation = true;
                 break;
