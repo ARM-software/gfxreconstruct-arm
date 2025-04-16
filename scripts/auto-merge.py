@@ -18,12 +18,16 @@ def main() -> int:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
         '-b', '--branch',
-        default='internal/upstream/dev',
-        required=False,
+        help='Branch to merge into the current branch.',
+        required=True,
         dest='branch'
     )
 
     args = arg_parser.parse_args()
+
+    if subprocess.run(['git', 'diff'], capture_output=True).stdout.decode():
+        print('The working directory has uncomitted changes. Aborting auto-merge.')
+        return -1
 
     if is_auto_mergeable(args.branch):
         subprocess.run(['git', 'merge', '--no-edit', args.branch], capture_output=True)
@@ -39,12 +43,12 @@ def main() -> int:
         if parent_commits[1] in upstream_commits:
             last_common_commit = parent_commits[1]
             break
-    
+
     commits_to_merge = subprocess.run(['git', 'rev-list', last_common_commit + '..' + args.branch], capture_output=True).stdout.decode().strip().split('\n')
     commits_to_merge.reverse()
 
     if not is_auto_mergeable(commits_to_merge[0]):
-        print(f'Cannot merge any commit automatically. Next commit needs to be merged manually: {commits_to_merge[0]}')
+        print(f'Cannot merge any commit automatically ({len(commits_to_merge)} commits to merge). Next commit needs to be merged manually: {commits_to_merge[0]}')
     else:
         a = 0
         b = len(commits_to_merge) - 1
