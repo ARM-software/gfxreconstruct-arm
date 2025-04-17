@@ -416,9 +416,12 @@ void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
             const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
                 replay_scratch_address;
 
-            ScratchBufferData scratch_data = {
-                scratch_buffer, prebuild_info.ScratchDataSizeInBytes, capture_scratch_address, replay_scratch_address
-            };
+            ScratchBufferData scratch_data{};
+            scratch_data.scratch_buffer          = std::move(scratch_buffer);
+            scratch_data.build_size              = prebuild_info.ScratchDataSizeInBytes;
+            scratch_data.capture_scratch_address = capture_scratch_address;
+            scratch_data.replay_scratch_address  = replay_scratch_address;
+
             command_lis_recorded_scratches_[command_list].push_back(std::move(scratch_data));
         }
         else

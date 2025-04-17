@@ -108,17 +108,7 @@ class Dx12AccelerationStructureBuilder
         D3D12_GPU_VIRTUAL_ADDRESS            capture_scratch_address;
         D3D12_GPU_VIRTUAL_ADDRESS            replay_scratch_address;
 
-        ScratchBufferData(graphics::dx12::ID3D12ResourceComPtr scratch_buffer,
-                          UINT64                               build_size,
-                          D3D12_GPU_VIRTUAL_ADDRESS            capture_scratch_address,
-                          D3D12_GPU_VIRTUAL_ADDRESS            replay_scratch_address) :
-            scratch_buffer(std::move(scratch_buffer)),
-            build_size(build_size), capture_scratch_address(capture_scratch_address),
-            replay_scratch_address(replay_scratch_address)
-        {}
-
-        ScratchBufferData(const ScratchBufferData&)            = delete;
-        ScratchBufferData& operator=(const ScratchBufferData&) = delete;
+        ScratchBufferData() {}
 
         ScratchBufferData(ScratchBufferData&& other) noexcept :
             scratch_buffer(std::move(other.scratch_buffer)), build_size(other.build_size),

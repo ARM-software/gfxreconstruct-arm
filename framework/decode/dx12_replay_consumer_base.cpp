@@ -743,7 +743,7 @@ void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT ca
 {
     if (capture_result != replay_result)
     {
-        if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == D3D12_ERROR_INVALID_REDIST))
+        if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == E_OUTOFMEMORY))
         {
             Microsoft::WRL::ComPtr<IDXGIFactory1> factory  = nullptr;
             Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter1 = nullptr;
@@ -759,7 +759,10 @@ void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT ca
                 GFXRECON_LOG_INFO(
                     "GPU Memory Usage: %llu KB / %llu KB ", memInfo.CurrentUsage / 1024, memInfo.Budget / 1024);
             }
+        }
 
+        if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == D3D12_ERROR_INVALID_REDIST))
+        {
             GFXRECON_LOG_FATAL(
                 "%s returned %s, which does not match the value returned at capture %s. Replay cannot continue.",
                 call_name,

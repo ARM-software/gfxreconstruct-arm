@@ -35,7 +35,7 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
   public:
     Dx12RebindAllocator();
 
-    ~Dx12RebindAllocator() override { AllRelease(); }
+    ~Dx12RebindAllocator() override { Destroy(); }
 
     virtual HRESULT Initialize(const IUnknown* adapter, const void* pvDevice) override;
 
@@ -167,15 +167,13 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     virtual void Release(IUnknown* object) override;
 
-    void AllRelease();
-
     virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) override;
 
     virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc) override;
 
-    void SetReplayResourceDescAlignment(const D3D12_RESOURCE_DESC* pResourceDesc);
+    void SetReplayResourceDescAlignment(const D3D12_RESOURCE_DESC* pResourceDesc, UINT64* alloc_size = nullptr);
 
-    void SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC1* pResourceDesc);
+    void SetReplayResourceDescAlignment1(const D3D12_RESOURCE_DESC1* pResourceDesc, UINT64* alloc_size = nullptr);
 
     void SetReplayResourceCompatibility(const format::HandleId       heap_capture_id,
                                         const ID3D12Heap*            pHeap,
@@ -207,9 +205,10 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
 
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Allocation>>     resource_allocation_;
+    std::unordered_map<format::HandleId, D3D12MA::Pool*>                                 heap_id_custom_pool_;
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Pool>>           resource_custom_pool_;
     std::unordered_map<format::HandleId, D3D12_HEAP_DESC>                                heap_id_desc_;
-    std::unordered_map<format::HandleId, Microsoft::WRL::ComPtr<ID3D12Heap>>             heap_id_recreated_heap_;
+    std::unordered_map<format::HandleId, ID3D12Heap*>                                    heap_id_recreated_heap_;
     std::unordered_map<ID3D12Resource*, std::vector<Microsoft::WRL::ComPtr<ID3D12Heap>>> resource_recreated_heap_;
 };
 
