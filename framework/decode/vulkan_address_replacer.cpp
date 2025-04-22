@@ -220,174 +220,203 @@ void VulkanAddressReplacer::ProcessCmdTraceRays(
     address_remap(hit_sbt);
     address_remap(callable_sbt);
 
-    // if (!valid_sbt_alignment_ || !valid_group_handles)
-    // {
-    //     // mark injected commands
-    //     mark_injected_commands_helper_t mark_injected_commands_helper;
+    /******************** UPSTREAM CODE ********************
 
-    //     if (pipeline_sbt_ == VK_NULL_HANDLE)
-    //     {
-    //         if (!init_pipeline())
-    //         {
-    //             GFXRECON_LOG_WARNING_ONCE("ProcessCmdTraceRays: internal pipeline-creation failed")
-    //             return;
-    //         }
-    //     }
+    if (!valid_sbt_alignment_ || !valid_group_handles)
+    {
+        // mark injected commands
+        MarkInjectedCommandsHelper mark_injected_commands_helper;
 
-    // // prepare linear hashmap
-    // hashmap_sbt_.clear();
+        if (pipeline_sbt_ == VK_NULL_HANDLE)
+        {
+            if (!init_pipeline())
+            {
+                GFXRECON_LOG_WARNING_ONCE("ProcessCmdTraceRays: internal pipeline-creation failed")
+                return;
+            }
+        }
 
-    // for (const auto& [lhs, rhs] : group_handle_map)
-    // {
-    //     hashmap_sbt_.put(lhs, rhs);
-    // }
+        // prepare linear hashmap
+        hashmap_sbt_.clear();
 
-    // if (!create_buffer(hashmap_sbt_.get_storage(nullptr), pipeline_context_sbt_.hashmap_storage))
-    // {
-    //     GFXRECON_LOG_ERROR("VulkanAddressReplacer: hashmap-storage-buffer creation failed");
-    // }
-    // hashmap_sbt_.get_storage(pipeline_context_sbt_.hashmap_storage.mapped_data);
+        for (const auto& [lhs, rhs] : group_handle_map)
+        {
+            hashmap_sbt_.put(lhs, rhs);
+        }
 
-    // // input-handles
-    // constexpr uint32_t max_num_handles = 4;
-    // if (!create_buffer(max_num_handles * sizeof(VkDeviceAddress), pipeline_context_sbt_.input_handle_buffer))
-    // {
-    //     GFXRECON_LOG_ERROR("VulkanAddressReplacer: input-handle-buffer creation failed");
-    // }
-    // auto input_addresses =
-    //     reinterpret_cast<VkDeviceAddress*>(pipeline_context_sbt_.input_handle_buffer.mapped_data);
-    // uint32_t num_addresses = 0;
+        // get a context for this command-buffer
+        auto& pipeline_context_sbt = pipeline_sbt_context_map_[command_buffer_info->handle];
 
-    // for (const auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
-    // {
-    //     if (region != nullptr && region->size)
-    //     {
-    //         input_addresses[num_addresses++] = region->deviceAddress;
-    //     }
-    // }
+        if (!create_buffer(pipeline_context_sbt.hashmap_storage, hashmap_sbt_.get_storage(nullptr)))
+        {
+            GFXRECON_LOG_ERROR("VulkanAddressReplacer: hashmap-storage-buffer creation failed");
+        }
+        hashmap_sbt_.get_storage(pipeline_context_sbt.hashmap_storage.mapped_data);
 
-    // replacer_params_t replacer_params = {};
-    // replacer_params.hashmap.storage   = pipeline_context_sbt_.hashmap_storage.device_address;
-    // replacer_params.hashmap.size      = hashmap_sbt_.size();
-    // replacer_params.hashmap.capacity  = hashmap_sbt_.capacity();
+        // input-handles
+        constexpr uint32_t max_num_handles = 512;
+        if (!create_buffer(pipeline_context_sbt.input_handle_buffer, max_num_handles * sizeof(VkDeviceAddress)))
+        {
+            GFXRECON_LOG_ERROR("VulkanAddressReplacer: input-handle-buffer creation failed");
+        }
+        auto input_addresses = reinterpret_cast<VkDeviceAddress*>(pipeline_context_sbt.input_handle_buffer.mapped_data);
 
-    // replacer_params.input_handles = pipeline_context_sbt_.input_handle_buffer.device_address;
-    // replacer_params.num_handles   = num_addresses;
+        std::unordered_map<const VkStridedDeviceAddressRegionKHR*, uint32_t> num_handles_map;
+        uint32_t num_addresses = 0;
 
-    // if (valid_sbt_alignment_)
-    // {
-    //     GFXRECON_LOG_INFO_ONCE("Replay adjusted mismatching raytracing shader-group-handles");
+        {
+            const auto handle_size_capture = static_cast<uint32_t>(util::aligned_value(
+                capture_ray_properties_->shaderGroupHandleSize, capture_ray_properties_->shaderGroupHandleAlignment));
 
-    //     // rewrite group-handles in-place
-    //     replacer_params.output_handles = replacer_params.input_handles;
+            for (const auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
+            {
+                if (region != nullptr && region->size != 0 && region->stride != 0)
+                {
+                    num_handles_map[region] = region->size / region->stride;
 
-    //     // pre memory-barrier
-    //     for (const auto& buf : buffer_set)
-    //     {
-    //         barrier(command_buffer_info->handle,
-    //                 buf,
-    //                 VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
-    //                 VK_ACCESS_SHADER_READ_BIT,
-    //                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //                 VK_ACCESS_SHADER_WRITE_BIT);
-    //     }
-    // }
-    // else
-    // {
-    //     GFXRECON_LOG_INFO_ONCE(
-    //         "Replay adjusted a mismatching raytracing shader-binding-table using a shadow-buffer");
+                    for (uint32_t offset = 0; offset < region->size; offset += region->stride)
+                    {
+                        input_addresses[num_addresses++] = region->deviceAddress + offset;
+                    }
+                }
+            }
+        }
 
-    //     // output-handles
-    //     if (!create_buffer(max_num_handles * sizeof(VkDeviceAddress),
-    //     pipeline_context_sbt_.output_handle_buffer))
-    //     {
-    //         GFXRECON_LOG_ERROR("VulkanAddressReplacer: input-handle-buffer creation failed");
-    //         return;
-    //     }
-    //     // output to shadow-sbt-buffer
-    //     replacer_params.output_handles = pipeline_context_sbt_.output_handle_buffer.device_address;
+        replacer_params_t replacer_params = {};
+        replacer_params.hashmap.storage   = pipeline_context_sbt.hashmap_storage.device_address;
+        replacer_params.hashmap.size      = hashmap_sbt_.size();
+        replacer_params.hashmap.capacity  = hashmap_sbt_.capacity();
 
-    //     // find/create shadow-SBT-buffer
-    //     uint32_t sbt_offset         = 0;
-    //     auto&    shadow_buf_context = shadow_sbt_map_[command_buffer_info->handle];
+        replacer_params.input_handles = pipeline_context_sbt.input_handle_buffer.device_address;
+        replacer_params.num_handles   = num_addresses;
 
-    //     const uint32_t handle_size_aligned = aligned_size(replay_ray_properties_.shaderGroupHandleSize,
-    //                                                       replay_ray_properties_.shaderGroupHandleAlignment);
+        if (valid_sbt_alignment_)
+        {
+            GFXRECON_LOG_INFO_ONCE("VulkanAddressReplacer::ProcessCmdTraceRays: Replay is adjusting mismatching "
+                                   "raytracing shader-group-handles");
 
-    //     for (auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
-    //     {
-    //         if (region != nullptr)
-    //         {
-    //             uint32_t num_handles_limit = region->size / region->stride;
-    //             uint32_t group_size        = aligned_size(num_handles_limit * handle_size_aligned,
-    //                                                replay_ray_properties_.shaderGroupBaseAlignment);
-    //             sbt_offset += group_size;
+            // rewrite group-handles in-place
+            replacer_params.output_handles = replacer_params.input_handles;
 
-    //             // adjust group-size
-    //             region->size   = group_size;
-    //             region->stride = handle_size_aligned;
-    //         }
-    //     }
-    //     // raygen: stride == size
-    //     raygen_sbt->size = raygen_sbt->stride = replay_ray_properties_.shaderGroupBaseAlignment;
+            // pre memory-barrier
+            for (const auto& buf : buffer_set)
+            {
+                barrier(command_buffer_info->handle,
+                        buf,
+                        VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                        VK_ACCESS_SHADER_READ_BIT,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT);
+            }
+        }
+        else
+        {
+            GFXRECON_LOG_INFO_ONCE("VulkanAddressReplacer::ProcessCmdTraceRays: Replay is adjusting mismatching "
+                                   "raytracing shader-binding-tables using shadow-buffers");
 
-    //     if (!create_buffer(sbt_offset, shadow_buf_context, VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR))
-    //     {
-    //         GFXRECON_LOG_ERROR("VulkanAddressReplacer: shadow shader-binding-table creation failed");
-    //         return;
-    //     }
+            // output-handles
+            if (!create_buffer(pipeline_context_sbt.output_handle_buffer, max_num_handles * sizeof(VkDeviceAddress)))
+            {
+                GFXRECON_LOG_ERROR("VulkanAddressReplacer: input-handle-buffer creation failed");
+                return;
+            }
+            // output to shadow-sbt-buffer
+            replacer_params.output_handles = pipeline_context_sbt.output_handle_buffer.device_address;
 
-    //     auto output_addresses =
-    //         reinterpret_cast<VkDeviceAddress*>(pipeline_context_sbt_.output_handle_buffer.mapped_data);
-    //     uint32_t out_index = 0;
-    //     sbt_offset         = 0;
-    //     for (auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
-    //     {
-    //         if (region != nullptr)
-    //         {
-    //             // assign shadow-sbt-address
-    //             region->deviceAddress = shadow_buf_context.device_address + sbt_offset;
-    //             sbt_offset += region->size;
-    //             output_addresses[out_index++] = region->deviceAddress;
-    //         }
-    //     }
-    // }
+            // find/create shadow-SBT-buffer
+            uint32_t sbt_offset         = 0;
+            auto&    shadow_buf_context = shadow_sbt_map_[command_buffer_info->handle];
 
-    // device_table_->CmdBindPipeline(command_buffer_info->handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_sbt_);
+            const auto handle_size_aligned = static_cast<uint32_t>(util::aligned_value(
+                replay_ray_properties_->shaderGroupHandleSize, replay_ray_properties_->shaderGroupHandleAlignment));
 
-    // // NOTE: using push-constants here requires us to re-establish the previous data, if any
-    // device_table_->CmdPushConstants(command_buffer_info->handle,
-    //                                 pipeline_layout_,
-    //                                 VK_SHADER_STAGE_COMPUTE_BIT,
-    //                                 0,
-    //                                 sizeof(replacer_params_t),
-    //                                 &replacer_params);
-    // // run a single workgroup
-    // constexpr uint32_t wg_size = 32;
-    // device_table_->CmdDispatch(command_buffer_info->handle, div_up(replacer_params.num_handles, wg_size), 1, 1);
+            for (auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
+            {
+                if (region != nullptr && region->size != 0 && region->stride != 0)
+                {
+                    uint32_t num_handles_limit = region->size / region->stride;
+                    auto     group_size        = static_cast<uint32_t>(util::aligned_value(
+                        num_handles_limit * handle_size_aligned, replay_ray_properties_->shaderGroupBaseAlignment));
+                    sbt_offset += group_size;
 
-    // // post memory-barrier
-    // for (const auto& buf : buffer_set)
-    // {
-    //     barrier(command_buffer_info->handle,
-    //             buf,
-    //             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //             VK_ACCESS_SHADER_WRITE_BIT,
-    //             VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-    //             VK_ACCESS_SHADER_READ_BIT);
-    // }
+                    // adjust group-size
+                    region->size   = group_size;
+                    region->stride = handle_size_aligned;
+                }
+            }
+            // raygen: stride == size
+            raygen_sbt->size = raygen_sbt->stride = replay_ray_properties_->shaderGroupBaseAlignment;
 
-    // // set previous push-constant data
-    // if (!command_buffer_info->push_constant_data.empty())
-    // {
-    //     device_table_->CmdPushConstants(command_buffer_info->handle,
-    //                                     command_buffer_info->push_constant_pipeline_layout,
-    //                                     command_buffer_info->push_constant_stage_flags,
-    //                                     0,
-    //                                     command_buffer_info->push_constant_data.size(),
-    //                                     command_buffer_info->push_constant_data.data());
-    // }
-    // } // !valid_sbt_alignment_ || !valid_group_handles
+            if (!create_buffer(shadow_buf_context,
+                               sbt_offset,
+                               VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR,
+                               replay_ray_properties_->shaderGroupBaseAlignment))
+            {
+                GFXRECON_LOG_ERROR("VulkanAddressReplacer: shadow shader-binding-table creation failed");
+                return;
+            }
+
+            auto output_addresses =
+                reinterpret_cast<VkDeviceAddress*>(pipeline_context_sbt.output_handle_buffer.mapped_data);
+            uint32_t out_index = 0;
+            sbt_offset         = 0;
+            for (auto& region : { raygen_sbt, miss_sbt, hit_sbt, callable_sbt })
+            {
+                if (region != nullptr && region->size != 0 && region->stride != 0)
+                {
+                    uint32_t num_handles = num_handles_map[region];
+
+                    // assign shadow-sbt-address
+                    region->deviceAddress = shadow_buf_context.device_address + sbt_offset;
+
+                    for (uint32_t i = 0; i < num_handles; ++i)
+                    {
+                        output_addresses[out_index++] = region->deviceAddress + i * handle_size_aligned;
+                    }
+                    sbt_offset += region->size;
+                }
+            }
+            GFXRECON_ASSERT(out_index == num_addresses);
+        }
+
+        device_table_->CmdBindPipeline(command_buffer_info->handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_sbt_);
+
+        // NOTE: using push-constants here requires us to re-establish the previous data, if any
+        device_table_->CmdPushConstants(command_buffer_info->handle,
+                                        pipeline_layout_,
+                                        VK_SHADER_STAGE_COMPUTE_BIT,
+                                        0,
+                                        sizeof(replacer_params_t),
+                                        &replacer_params);
+        // run a single workgroup
+        constexpr uint32_t wg_size = 32;
+        device_table_->CmdDispatch(
+            command_buffer_info->handle, util::div_up(replacer_params.num_handles, wg_size), 1, 1);
+
+        // post memory-barrier
+        for (const auto& buf : buffer_set)
+        {
+            barrier(command_buffer_info->handle,
+                    buf,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_ACCESS_SHADER_WRITE_BIT,
+                    VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                    VK_ACCESS_SHADER_READ_BIT);
+        }
+
+        // set previous push-constant data
+        if (!command_buffer_info->push_constant_data.empty())
+        {
+            device_table_->CmdPushConstants(command_buffer_info->handle,
+                                            command_buffer_info->push_constant_pipeline_layout,
+                                            command_buffer_info->push_constant_stage_flags,
+                                            0,
+                                            command_buffer_info->push_constant_data.size(),
+                                            command_buffer_info->push_constant_data.data());
+        }
+    } // !valid_sbt_alignment_ || !valid_group_handles
+
+    ******************** UPSTREAM CODE ********************/
 }
 
 void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(

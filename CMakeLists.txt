@@ -143,6 +143,8 @@ endif()
 
 option(GFXRECON_TOCPP_SUPPORT "Build ToCpp export tool as part of GFXReconstruct builds." TRUE)
 
+option(GFXRECON_INCLUDE_TEST_APPS "Build and install test apps" ON)
+
 if(MSVC)
 
     # The host toolchain architecture (i.e. are the compiler and other tools compiled to ARM/Intel 32bit/64bit binaries):
@@ -388,7 +390,10 @@ if(NOT BUILD_STATIC)
     add_subdirectory(layer)
 endif()
 add_subdirectory(tools)
-# add_subdirectory(test)
+
+if(GFXRECON_INCLUDE_TEST_APPS)
+add_subdirectory(test)
+endif()
 
 if (${RUN_TESTS})
     add_test_package_file(${CMAKE_CURRENT_LIST_DIR}/scripts/build.py)
