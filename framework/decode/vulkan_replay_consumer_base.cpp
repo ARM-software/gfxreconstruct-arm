@@ -611,14 +611,6 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
         if (info)
         {
             result = acceleration_structure_address_remap(address);
-            if (!result)
-            {
-                VkAccelerationStructureKHR handle = info->handle;
-                // Execution of this code means that there was a GetAccelerationStructureDeviceAddressCall
-                // Therefore no need for check if the builder should be used
-                address = GetAccelerationStructureBuilder(device_info).GetActualDeviceAddress(handle);
-                result  = true;
-            }
         }
         else
         {
