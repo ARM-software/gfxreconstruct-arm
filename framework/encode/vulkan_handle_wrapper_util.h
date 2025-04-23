@@ -485,7 +485,8 @@ inline void CreateWrappedHandle<DeviceWrapper,
     {
         if (entry->handle == (*handle))
         {
-            return;
+            wrapper = entry;
+            break;
         }
     }
 
