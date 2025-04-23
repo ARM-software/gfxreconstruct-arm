@@ -220,8 +220,8 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     assert(result == VK_SUCCESS);
 
     acceleration_structure_data.new_build_sizes = build_sizes;
-    acceleration_structures_[*handle]           = std::move(acceleration_structure_data);
     buffer_binding_acceleration_structures_[acceleration_structure_data.create_info.buffer].push_back(*handle);
+    acceleration_structures_[*handle] = std::move(acceleration_structure_data);
 
     return result;
 }
