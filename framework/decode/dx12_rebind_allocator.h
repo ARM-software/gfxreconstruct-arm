@@ -204,12 +204,40 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     ID3D12Device*                              device_;
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
 
-    std::unordered_map<format::HandleId, D3D12MA::Allocation*>                           heap_id_aliasing_allocation_;
-    std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Allocation>>     resource_allocation_;
-    std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Pool>>           resource_custom_pool_;
-    std::unordered_map<format::HandleId, D3D12_HEAP_DESC>                                heap_id_desc_;
-    std::unordered_map<format::HandleId, ID3D12Heap*>                                    heap_id_recreated_heap_;
-    std::unordered_map<ID3D12Resource*, std::vector<Microsoft::WRL::ComPtr<ID3D12Heap>>> resource_recreated_heap_;
+    struct ResourceHeapAllocInfo
+    {
+        D3D12MA::Allocation* allocation{ nullptr };
+        UINT64               allocation_size{ 0 };
+        UINT64               current_offset{ 0 };
+
+        ResourceHeapAllocInfo& operator=(ResourceHeapAllocInfo&& other) noexcept
+        {
+            if (this != &other)
+            {
+                allocation      = other.allocation;
+                allocation_size = other.allocation_size;
+                current_offset  = other.current_offset;
+            }
+            return *this;
+        }
+
+        ResourceHeapAllocInfo& operator=(ResourceHeapAllocInfo& other) noexcept
+        {
+            if (this != &other)
+            {
+                allocation      = other.allocation;
+                allocation_size = other.allocation_size;
+                current_offset  = other.current_offset;
+            }
+            return *this;
+        }
+    };
+
+    std::unordered_map<format::HandleId, std::unordered_map<UINT64, UINT64>>         heap_id_rebind_offset_;
+    std::unordered_map<format::HandleId, ResourceHeapAllocInfo>                      heap_id_aliasing_allocation_;
+    std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Allocation>> resource_allocation_;
+    std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Pool>>       resource_custom_pool_;
+    std::unordered_map<format::HandleId, D3D12_HEAP_DESC>                            heap_id_desc_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
