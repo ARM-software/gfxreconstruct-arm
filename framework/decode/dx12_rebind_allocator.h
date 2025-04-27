@@ -204,8 +204,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     ID3D12Device*                              device_;
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
 
-    std::unordered_map<format::HandleId, D3D12MA::Allocation*>                           heap_id_aliasing_allocation_;
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Allocation>>     resource_allocation_;
+    std::unordered_map<format::HandleId, D3D12MA::Pool*>                                 heap_id_custom_pool_;
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<D3D12MA::Pool>>           resource_custom_pool_;
     std::unordered_map<format::HandleId, D3D12_HEAP_DESC>                                heap_id_desc_;
     std::unordered_map<format::HandleId, ID3D12Heap*>                                    heap_id_recreated_heap_;
