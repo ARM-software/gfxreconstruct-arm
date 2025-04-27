@@ -23,6 +23,7 @@
 #ifndef GFXRECON_DECODE_DX12_RESOURCE_ALLOCATOR_H
 #define GFXRECON_DECODE_DX12_RESOURCE_ALLOCATOR_H
 
+#include "decode/handle_pointer_decoder.h"
 #include "format/format.h"
 #include "util/defines.h"
 #include "graphics/dx12_util.h"
@@ -58,7 +59,7 @@ class Dx12ResourceAllocator
                                             D3D12_RESOURCE_STATES             InitialResourceState,
                                             _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                             REFIID                            riidResource,
-                                            _COM_Outptr_opt_ void**           ppvResource) = 0;
+                                            HandlePointerDecoder<void*>*      ppvResource) = 0;
 
     virtual HRESULT CreatePlacedResource(format::HandleId                  heap_capture_id,
                                          _In_ ID3D12Heap*                  pHeap,
@@ -67,13 +68,13 @@ class Dx12ResourceAllocator
                                          D3D12_RESOURCE_STATES             InitialState,
                                          _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                          REFIID                            riid,
-                                         _COM_Outptr_opt_ void**           ppvResource) = 0;
+                                         HandlePointerDecoder<void*>*      ppvResource) = 0;
 
     virtual HRESULT CreateReservedResource(_In_ const D3D12_RESOURCE_DESC*   pDesc,
                                            D3D12_RESOURCE_STATES             InitialState,
                                            _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                            REFIID                            riid,
-                                           _COM_Outptr_opt_ void**           ppvResource) = 0;
+                                           HandlePointerDecoder<void*>*      ppvResource) = 0;
 
     virtual HRESULT CreateCommittedResource1(_In_ const D3D12_HEAP_PROPERTIES*        pHeapProperties,
                                              D3D12_HEAP_FLAGS                         HeapFlags,
@@ -82,7 +83,7 @@ class Dx12ResourceAllocator
                                              _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                              _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                              REFIID                                   riidResource,
-                                             _COM_Outptr_opt_ void**                  ppvResource) = 0;
+                                             HandlePointerDecoder<void*>*             ppvResource) = 0;
 
     virtual HRESULT CreatePlacedResource1(format::HandleId                  heap_capture_id,
                                           _In_ ID3D12Heap*                  pHeap,
@@ -91,14 +92,14 @@ class Dx12ResourceAllocator
                                           D3D12_RESOURCE_STATES             InitialState,
                                           _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                           REFIID                            riid,
-                                          _COM_Outptr_opt_ void**           ppvResource) = 0;
+                                          HandlePointerDecoder<void*>*      ppvResource) = 0;
 
     virtual HRESULT CreateReservedResource1(_In_ const D3D12_RESOURCE_DESC*          pDesc,
                                             D3D12_RESOURCE_STATES                    InitialState,
                                             _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                             _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                             REFIID                                   riid,
-                                            _COM_Outptr_opt_ void**                  ppvResource) = 0;
+                                            HandlePointerDecoder<void*>*             ppvResource) = 0;
 
     virtual HRESULT CreateCommittedResource2(_In_ const D3D12_HEAP_PROPERTIES*        pHeapProperties,
                                              D3D12_HEAP_FLAGS                         HeapFlags,
@@ -107,7 +108,7 @@ class Dx12ResourceAllocator
                                              _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                              _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                              REFIID                                   riidResource,
-                                             _COM_Outptr_opt_ void**                  ppvResource) = 0;
+                                             HandlePointerDecoder<void*>*             ppvResource) = 0;
 
     virtual HRESULT CreatePlacedResource2(format::HandleId                                      heap_capture_id,
                                           _In_ ID3D12Heap*                                      pHeap,
@@ -118,7 +119,7 @@ class Dx12ResourceAllocator
                                           UINT32                                                NumCastableFormats,
                                           _In_opt_count_(NumCastableFormats) const DXGI_FORMAT* pCastableFormats,
                                           REFIID                                                riid,
-                                          _COM_Outptr_opt_ void**                               ppvResource) = 0;
+                                          HandlePointerDecoder<void*>*                          ppvResource) = 0;
 
     virtual HRESULT CreateReservedResource2(_In_ const D3D12_RESOURCE_DESC*                       pDesc,
                                             D3D12_BARRIER_LAYOUT                                  InitialLayout,
@@ -127,7 +128,7 @@ class Dx12ResourceAllocator
                                             UINT32                                                NumCastableFormats,
                                             _In_opt_count_(NumCastableFormats) const DXGI_FORMAT* pCastableFormats,
                                             REFIID                                                riid,
-                                            _COM_Outptr_opt_ void**                               ppvResource) = 0;
+                                            HandlePointerDecoder<void*>*                          ppvResource) = 0;
 
     virtual HRESULT CreateCommittedResource3(_In_ const D3D12_HEAP_PROPERTIES*                     pHeapProperties,
                                              D3D12_HEAP_FLAGS                                      HeapFlags,
@@ -138,7 +139,11 @@ class Dx12ResourceAllocator
                                              UINT32                                                NumCastableFormats,
                                              _In_opt_count_(NumCastableFormats) const DXGI_FORMAT* pCastableFormats,
                                              REFIID                                                riidResource,
-                                             _COM_Outptr_opt_ void**                               ppvResource) = 0;
+                                             HandlePointerDecoder<void*>*                          ppvResource) = 0;
+
+    virtual HRESULT SetResidencyPriority(UINT                                   NumObjects,
+                                         HandlePointerDecoder<ID3D12Pageable*>* ppObjects,
+                                         const D3D12_RESIDENCY_PRIORITY*        pPriorities) = 0;
 
     virtual void GetResourceTiling(_In_ ID3D12Resource*             pTiledResource,
                                    _Out_opt_ UINT*                  pNumTilesForEntireResource,
@@ -149,6 +154,7 @@ class Dx12ResourceAllocator
                                    _Out_ D3D12_SUBRESOURCE_TILING*  pSubresourceTilingsForNonPackedMips) = 0;
 
     virtual void UpdateTileMappings(ID3D12CommandQueue*  pQueue,
+                                    format::HandleId     resource_capture_id,
                                     format::HandleId     heap_capture_id,
                                     _In_ ID3D12Resource* pResource,
                                     UINT                 NumResourceRegions,
@@ -165,11 +171,13 @@ class Dx12ResourceAllocator
 
     virtual bool SupportD3D12MemoryAllocator() = 0;
 
-    virtual void Release(IUnknown* object) = 0;
+    virtual ULONG Release(IUnknown* object, format::HandleId object_id) = 0;
 
-    virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc) = 0;
+    virtual void PostPresent() = 0;
 
-    virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc) = 0;
+    virtual void ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* resource_desc) = 0;
+
+    virtual void ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* resource_desc) = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)

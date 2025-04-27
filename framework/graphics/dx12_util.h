@@ -54,6 +54,7 @@ typedef _com_ptr_t<_com_IIID<IDXGISwapChain3, &__uuidof(IDXGISwapChain3)>> IDXGI
 
 typedef _com_ptr_t<_com_IIID<ID3D12DescriptorHeap, &__uuidof(ID3D12DescriptorHeap)>>     ID3D12DescriptorHeapComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12Device, &__uuidof(ID3D12Device)>>                     ID3D12DeviceComPtr;
+typedef _com_ptr_t<_com_IIID<ID3D12Device1, &__uuidof(ID3D12Device1)>>                   ID3D12Device1ComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12Device4, &__uuidof(ID3D12Device4)>>                   ID3D12Device4ComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12Device5, &__uuidof(ID3D12Device5)>>                   ID3D12Device5ComPtr;
 typedef _com_ptr_t<_com_IIID<ID3D12Device8, &__uuidof(ID3D12Device8)>>                   ID3D12Device8ComPtr;

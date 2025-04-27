@@ -10619,10 +10619,12 @@ void Dx12ReplayConsumer::Process_ID3D12Device1_SetResidencyPriority(
             NumObjects,
             ppObjects,
             pPriorities);
-        auto in_ppObjects = MapObjects<ID3D12Pageable>(ppObjects, NumObjects);
-        auto replay_result = reinterpret_cast<ID3D12Device1*>(replay_object->object)->SetResidencyPriority(NumObjects,
-                                                                                                           in_ppObjects,
-                                                                                                           pPriorities->GetPointer());
+        MapObjects<ID3D12Pageable>(ppObjects, NumObjects);
+        auto replay_result = OverrideSetResidencyPriority(replay_object,
+                                                          return_value,
+                                                          NumObjects,
+                                                          ppObjects,
+                                                          pPriorities);
         CheckReplayResult("ID3D12Device1_SetResidencyPriority", return_value, replay_result);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device1_SetResidencyPriority>::Dispatch(
             this,

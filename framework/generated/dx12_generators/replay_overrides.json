@@ -38,7 +38,8 @@
       "GetResourceTiling": "OverrideGetResourceTiling"
     },
     "ID3D12Device1": {
-      "CreatePipelineLibrary": "OverrideCreatePipelineLibrary"
+      "CreatePipelineLibrary": "OverrideCreatePipelineLibrary",
+      "SetResidencyPriority": "OverrideSetResidencyPriority"
     },
     "ID3D12Device2": {
       "CreatePipelineState": "OverrideCreatePipelineState"

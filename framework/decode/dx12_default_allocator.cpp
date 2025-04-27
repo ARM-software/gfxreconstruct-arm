@@ -51,28 +51,28 @@ void Dx12DefaultAllocator::Destroy()
     device_ = nullptr;
 }
 
-void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* pResourceDesc)
+void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DESC* resource_desc)
 {
     D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
     D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
 
-    if (device_ != nullptr && pResourceDesc != nullptr)
+    if (device_ != nullptr && resource_desc != nullptr)
     {
         graphics::dx12::ID3D12Device4ComPtr device4;
         device_->QueryInterface(IID_PPV_ARGS(&device4));
 
         if (device4 != nullptr)
         {
-            device4->GetResourceAllocationInfo1(0, 1, pResourceDesc, &alloc_info1);
+            device4->GetResourceAllocationInfo1(0, 1, resource_desc, &alloc_info1);
             alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
             alloc_info.Alignment   = alloc_info1.Alignment;
         }
         else
         {
-            alloc_info = device_->GetResourceAllocationInfo(0, 1, pResourceDesc);
+            alloc_info = device_->GetResourceAllocationInfo(0, 1, resource_desc);
         }
 
-        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
+        if (alloc_info.Alignment && resource_desc->Alignment && alloc_info.Alignment != resource_desc->Alignment)
         {
             GFXRECON_LOG_WARNING("The captured resource may be incompatible with the replayed device!");
 
@@ -84,30 +84,30 @@ void Dx12DefaultAllocator::ReportResourceIncompatibility(const D3D12_RESOURCE_DE
     }
 }
 
-void Dx12DefaultAllocator::ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* pResourceDesc)
+void Dx12DefaultAllocator::ReportResourceIncompatibility1(const D3D12_RESOURCE_DESC1* resource_desc)
 {
     D3D12_RESOURCE_ALLOCATION_INFO  alloc_info  = {};
     D3D12_RESOURCE_ALLOCATION_INFO1 alloc_info1 = {};
 
-    if (device_ != nullptr && pResourceDesc != nullptr)
+    if (device_ != nullptr && resource_desc != nullptr)
     {
         graphics::dx12::ID3D12Device8ComPtr device8;
         device_->QueryInterface(IID_PPV_ARGS(&device8));
 
         if (device8 != nullptr)
         {
-            device8->GetResourceAllocationInfo2(0, 1, pResourceDesc, &alloc_info1);
+            device8->GetResourceAllocationInfo2(0, 1, resource_desc, &alloc_info1);
             alloc_info.SizeInBytes = alloc_info1.SizeInBytes;
             alloc_info.Alignment   = alloc_info1.Alignment;
         }
         else
         {
             D3D12_RESOURCE_DESC* desc =
-                reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pResourceDesc));
+                reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(resource_desc));
             alloc_info = device_->GetResourceAllocationInfo(0, 1, desc);
         }
 
-        if (alloc_info.Alignment && pResourceDesc->Alignment && alloc_info.Alignment != pResourceDesc->Alignment)
+        if (alloc_info.Alignment && resource_desc->Alignment && alloc_info.Alignment != resource_desc->Alignment)
         {
             GFXRECON_LOG_WARNING("The captured resource may be incompatible with the replayed device!");
 
@@ -154,12 +154,18 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource(_In_ const D3D12_HEAP_PROP
                                                       D3D12_RESOURCE_STATES             InitialResourceState,
                                                       _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                                       REFIID                            riidResource,
-                                                      _COM_Outptr_opt_ void**           ppvResource)
+                                                      HandlePointerDecoder<void*>*      ppvResource)
 {
     HRESULT result = S_FALSE;
     ReportResourceIncompatibility(pDesc);
-    result = device_->CreateCommittedResource(
-        pHeapProperties, HeapFlags, pDesc, InitialResourceState, pOptimizedClearValue, riidResource, ppvResource);
+    result = device_->CreateCommittedResource(pHeapProperties,
+                                              HeapFlags,
+                                              pDesc,
+                                              InitialResourceState,
+                                              pOptimizedClearValue,
+                                              riidResource,
+                                              ppvResource->GetHandlePointer());
+
     return result;
 }
 
@@ -170,14 +176,14 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource(format::HandleId             
                                                    D3D12_RESOURCE_STATES             InitialState,
                                                    _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                                    REFIID                            riid,
-                                                   _COM_Outptr_opt_ void**           ppvResource)
+                                                   HandlePointerDecoder<void*>*      ppvResource)
 {
     GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
 
     HRESULT result = S_FALSE;
     ReportResourceIncompatibility(pDesc);
-    result =
-        device_->CreatePlacedResource(pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
+    result = device_->CreatePlacedResource(
+        pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource->GetHandlePointer());
     return result;
 }
 
@@ -185,11 +191,12 @@ HRESULT Dx12DefaultAllocator::CreateReservedResource(_In_ const D3D12_RESOURCE_D
                                                      D3D12_RESOURCE_STATES             InitialState,
                                                      _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                                      REFIID                            riid,
-                                                     _COM_Outptr_opt_ void**           ppvResource)
+                                                     HandlePointerDecoder<void*>*      ppvResource)
 {
     HRESULT result = S_FALSE;
     ReportResourceIncompatibility(pDesc);
-    result = device_->CreateReservedResource(pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
+    result = device_->CreateReservedResource(
+        pDesc, InitialState, pOptimizedClearValue, riid, ppvResource->GetHandlePointer());
     return result;
 }
 
@@ -200,7 +207,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PRO
                                                        _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                                        _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                                        REFIID                                   riidResource,
-                                                       _COM_Outptr_opt_ void**                  ppvResource)
+                                                       HandlePointerDecoder<void*>*             ppvResource)
 {
     HRESULT result = S_FALSE;
 
@@ -214,7 +221,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource1(_In_ const D3D12_HEAP_PRO
                                                pOptimizedClearValue,
                                                pProtectedSession,
                                                riidResource,
-                                               ppvResource);
+                                               ppvResource->GetHandlePointer());
 
     return result;
 }
@@ -226,7 +233,7 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource1(format::HandleId            
                                                     D3D12_RESOURCE_STATES             InitialState,
                                                     _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                                     REFIID                            riid,
-                                                    _COM_Outptr_opt_ void**           ppvResource)
+                                                    HandlePointerDecoder<void*>*      ppvResource)
 {
     GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
 
@@ -235,8 +242,8 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource1(format::HandleId            
     graphics::dx12::ID3D12Device8ComPtr device8;
     device_->QueryInterface(IID_PPV_ARGS(&device8));
     ReportResourceIncompatibility1(pDesc);
-    result =
-        device8->CreatePlacedResource1(pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
+    result = device8->CreatePlacedResource1(
+        pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource->GetHandlePointer());
 
     return result;
 }
@@ -246,7 +253,7 @@ HRESULT Dx12DefaultAllocator::CreateReservedResource1(_In_ const D3D12_RESOURCE_
                                                       _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                                       _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                                       REFIID                                   riid,
-                                                      _COM_Outptr_opt_ void**                  ppvResource)
+                                                      HandlePointerDecoder<void*>*             ppvResource)
 {
     HRESULT result = S_FALSE;
 
@@ -254,7 +261,7 @@ HRESULT Dx12DefaultAllocator::CreateReservedResource1(_In_ const D3D12_RESOURCE_
     device_->QueryInterface(IID_PPV_ARGS(&device4));
     ReportResourceIncompatibility(pDesc);
     result = device4->CreateReservedResource1(
-        pDesc, InitialState, pOptimizedClearValue, pProtectedSession, riid, ppvResource);
+        pDesc, InitialState, pOptimizedClearValue, pProtectedSession, riid, ppvResource->GetHandlePointer());
     return result;
 }
 
@@ -265,7 +272,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PRO
                                                        _In_opt_ const D3D12_CLEAR_VALUE*        pOptimizedClearValue,
                                                        _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                                        REFIID                                   riidResource,
-                                                       _COM_Outptr_opt_ void**                  ppvResource)
+                                                       HandlePointerDecoder<void*>*             ppvResource)
 {
     HRESULT result = S_FALSE;
 
@@ -279,7 +286,7 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource2(_In_ const D3D12_HEAP_PRO
                                                pOptimizedClearValue,
                                                pProtectedSession,
                                                riidResource,
-                                               ppvResource);
+                                               ppvResource->GetHandlePointer());
 
     return result;
 }
@@ -292,9 +299,9 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource2(format::HandleId            
                                                     _In_opt_ const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                                                     UINT32                            NumCastableFormats,
                                                     _In_opt_count_(NumCastableFormats)
-                                                        const DXGI_FORMAT*  pCastableFormats,
-                                                    REFIID                  riid,
-                                                    _COM_Outptr_opt_ void** ppvResource)
+                                                        const DXGI_FORMAT*       pCastableFormats,
+                                                    REFIID                       riid,
+                                                    HandlePointerDecoder<void*>* ppvResource)
 {
     GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
 
@@ -311,7 +318,7 @@ HRESULT Dx12DefaultAllocator::CreatePlacedResource2(format::HandleId            
                                              NumCastableFormats,
                                              pCastableFormats,
                                              riid,
-                                             ppvResource);
+                                             ppvResource->GetHandlePointer());
 
     return result;
 }
@@ -322,9 +329,9 @@ HRESULT Dx12DefaultAllocator::CreateReservedResource2(_In_ const D3D12_RESOURCE_
                                                       _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                                       UINT32                                   NumCastableFormats,
                                                       _In_opt_count_(NumCastableFormats)
-                                                          const DXGI_FORMAT*  pCastableFormats,
-                                                      REFIID                  riid,
-                                                      _COM_Outptr_opt_ void** ppvResource)
+                                                          const DXGI_FORMAT*       pCastableFormats,
+                                                      REFIID                       riid,
+                                                      HandlePointerDecoder<void*>* ppvResource)
 {
     HRESULT result = S_FALSE;
 
@@ -338,7 +345,7 @@ HRESULT Dx12DefaultAllocator::CreateReservedResource2(_In_ const D3D12_RESOURCE_
                                                NumCastableFormats,
                                                pCastableFormats,
                                                riid,
-                                               ppvResource);
+                                               ppvResource->GetHandlePointer());
 
     return result;
 }
@@ -351,9 +358,9 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PRO
                                                        _In_opt_ ID3D12ProtectedResourceSession* pProtectedSession,
                                                        UINT32                                   NumCastableFormats,
                                                        _In_opt_count_(NumCastableFormats)
-                                                           const DXGI_FORMAT*  pCastableFormats,
-                                                       REFIID                  riidResource,
-                                                       _COM_Outptr_opt_ void** ppvResource)
+                                                           const DXGI_FORMAT*       pCastableFormats,
+                                                       REFIID                       riidResource,
+                                                       HandlePointerDecoder<void*>* ppvResource)
 {
     HRESULT result = S_FALSE;
 
@@ -369,7 +376,24 @@ HRESULT Dx12DefaultAllocator::CreateCommittedResource3(_In_ const D3D12_HEAP_PRO
                                                 NumCastableFormats,
                                                 pCastableFormats,
                                                 riidResource,
-                                                ppvResource);
+                                                ppvResource->GetHandlePointer());
+
+    return result;
+}
+
+HRESULT Dx12DefaultAllocator::SetResidencyPriority(UINT                                   NumObjects,
+                                                   HandlePointerDecoder<ID3D12Pageable*>* ppObjects,
+                                                   const D3D12_RESIDENCY_PRIORITY*        pPriorities)
+{
+    HRESULT result = S_FALSE;
+
+    graphics::dx12::ID3D12Device1ComPtr device1;
+    device_->QueryInterface(IID_PPV_ARGS(&device1));
+
+    if (device1 != nullptr)
+    {
+        result = device1->SetResidencyPriority(NumObjects, ppObjects->GetHandlePointer(), pPriorities);
+    }
 
     return result;
 }
@@ -392,6 +416,7 @@ void Dx12DefaultAllocator::GetResourceTiling(_In_ ID3D12Resource*             pT
 }
 
 void Dx12DefaultAllocator::UpdateTileMappings(ID3D12CommandQueue*                    pQueue,
+                                              format::HandleId                       resource_capture_id,
                                               format::HandleId                       heap_capture_id,
                                               ID3D12Resource*                        pResource,
                                               UINT                                   NumResourceRegions,
@@ -404,6 +429,7 @@ void Dx12DefaultAllocator::UpdateTileMappings(ID3D12CommandQueue*               
                                               const UINT*                            pRangeTileCounts,
                                               D3D12_TILE_MAPPING_FLAGS               Flags)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(resource_capture_id);
     GFXRECON_UNREFERENCED_PARAMETER(heap_capture_id);
 
     pQueue->UpdateTileMappings(pResource,
