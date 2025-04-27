@@ -36,21 +36,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 static constexpr UINT64 MEGABYTE                   = (1024 * 1024);
 static constexpr UINT64 DEFAULT_HEAP_ALIASING_SIZE = (64 * MEGABYTE);
 
-UINT64 Align(UINT64 size, UINT64 alignment)
-{
-    if (alignment == 0)
-    {
-        alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-    }
-
-    return (size + (alignment - 1)) & ~(alignment - 1);
-}
-
-UINT64 GetAllocationSize(UINT64 size)
-{
-    return size + 2 * MEGABYTE;
-}
-
 Dx12RebindAllocator::Dx12RebindAllocator() : allocator_(nullptr), device_(nullptr) {}
 
 HRESULT Dx12RebindAllocator::Initialize(const IUnknown* adapter, const void* pvDevice)
@@ -81,6 +66,15 @@ void Dx12RebindAllocator::Destroy()
     }
     resource_allocation_.clear();
 
+    for (auto& recreated_heap : resource_recreated_heap_)
+    {
+        for (auto& heap : recreated_heap.second)
+        {
+            heap.Reset();
+        }
+    }
+    resource_recreated_heap_.clear();
+
     if (allocator_ != nullptr)
     {
         allocator_.Reset();
@@ -96,6 +90,9 @@ void Dx12RebindAllocator::SetReplayResourceCompatibility(const format::HandleId 
                                                          D3D12_RESOURCE_DESC1*        pResourceDesc,
                                                          D3D12MA::ALLOCATION_DESC&    AllocationDesc)
 {
+    UINT64 alloc_size = 0;
+    SetReplayResourceDescAlignment1(pResourceDesc, &alloc_size);
+
     D3D12_HEAP_PROPERTIES heap_properties = {};
     D3D12_HEAP_FLAGS      heap_flags      = {};
 
@@ -155,7 +152,7 @@ void Dx12RebindAllocator::SetReplayResourceCompatibility(const format::HandleId 
         if (heap_capture_id != 0)
         {
             // Creating **placed allocations in custom pools** is supported to set POOL_DESC::BlockSize.
-            pool_desc.BlockSize = GetAllocationSize(heap_id_desc_[heap_capture_id].SizeInBytes);
+            pool_desc.BlockSize = alloc_size;
         }
 
         if (S_OK == allocator_->CreatePool(&pool_desc, &custom_pool))
@@ -282,6 +279,24 @@ void Dx12RebindAllocator::Release(IUnknown* object)
         resource_allocation_[pResource] = nullptr;
         resource_allocation_.erase(pResource);
     }
+
+    if (resource_recreated_heap_.find(pResource) != resource_recreated_heap_.end())
+    {
+        for (auto& heap : resource_recreated_heap_[pResource])
+        {
+            for (auto& recreated_heap : heap_id_recreated_heap_)
+            {
+                if (heap.Get() == recreated_heap.second)
+                {
+                    heap_id_recreated_heap_.erase(recreated_heap.first);
+                    break;
+                }
+            }
+
+            heap = nullptr;
+        }
+        resource_recreated_heap_.erase(pResource);
+    }
 }
 
 HRESULT Dx12RebindAllocator::CreateHeap(format::HandleId            capture_id,
@@ -365,99 +380,73 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource(format::HandleId              
                                                   REFIID                            riid,
                                                   _COM_Outptr_opt_ void**           ppvResource)
 {
-    assert(allocator_ != nullptr);
     HRESULT                                     result     = S_FALSE;
     Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
     D3D12MA::ALLOCATION_DESC                    alloc_desc = {};
 
-    bool                           recreated_allocation = false;
-    UINT64                         new_offset           = 0;
-    ResourceHeapAllocInfo          heap_allocation_info = {};
-    D3D12_RESOURCE_ALLOCATION_INFO resource_alloc_info  = device_->GetResourceAllocationInfo(0, 1, pDesc);
+    D3D12_RESOURCE_DESC* resource_desc = const_cast<D3D12_RESOURCE_DESC*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
-    if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
+    if (allocator_ != nullptr)
     {
-        recreated_allocation = true;
-    }
-
-    if (recreated_allocation)
-    {
-        D3D12_RESOURCE_DESC* resource_desc = const_cast<D3D12_RESOURCE_DESC*>(pDesc);
-        SetReplayResourceCompatibility(
-            heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
-
-        D3D12_RESOURCE_ALLOCATION_INFO alloc_info{};
-        alloc_info.SizeInBytes = DEFAULT_HEAP_ALIASING_SIZE;
-        alloc_info.Alignment   = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-        if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+        if (HeapOffset != 0)
         {
-            alloc_info.SizeInBytes = GetAllocationSize(heap_id_desc_[heap_capture_id].SizeInBytes);
+            result = allocator_->CreateResource(
+                &alloc_desc, pDesc, InitialState, pOptimizedClearValue, &allocation, riid, ppvResource);
         }
-
-        result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &heap_allocation_info.allocation);
-        if (SUCCEEDED(result))
+        else
         {
-            heap_allocation_info.allocation_size                = alloc_info.SizeInBytes;
-            heap_allocation_info.current_offset                 = resource_alloc_info.SizeInBytes;
-            heap_id_aliasing_allocation_[heap_capture_id]       = std::move(heap_allocation_info);
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
-    else
-    {
-        result               = S_OK;
-        heap_allocation_info = heap_id_aliasing_allocation_[heap_capture_id];
-        heap_allocation_info.allocation->AddRef();
+            bool                 recreated_allocation = false;
+            D3D12MA::Allocation* aliasing_alloc       = nullptr;
 
-        if (heap_id_rebind_offset_.find(heap_capture_id) != heap_id_rebind_offset_.end())
-        {
-            auto& rebind_offset = heap_id_rebind_offset_[heap_capture_id];
-            if (rebind_offset.find(HeapOffset) != rebind_offset.end())
+            if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
             {
-                new_offset            = rebind_offset[HeapOffset];
-                UINT64 current_offset = new_offset + resource_alloc_info.SizeInBytes;
-                if (current_offset > heap_id_aliasing_allocation_[heap_capture_id].current_offset)
+                recreated_allocation = true;
+            }
+
+            if (recreated_allocation)
+            {
+                D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
+                alloc_info.SizeInBytes                    = DEFAULT_HEAP_ALIASING_SIZE;
+                alloc_info.Alignment                      = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+                if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = current_offset;
+                    // TODO: Temporarily multiplied by 2
+                    alloc_info.SizeInBytes = 2 * heap_id_desc_[heap_capture_id].SizeInBytes;
                 }
-                if (HeapOffset == 0 && rebind_offset.size() > 1)
+
+                result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &aliasing_alloc);
+                if (SUCCEEDED(result))
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = resource_alloc_info.SizeInBytes;
+                    heap_id_aliasing_allocation_[heap_capture_id] = aliasing_alloc;
                 }
             }
             else
             {
-                new_offset = Align(heap_allocation_info.current_offset, resource_alloc_info.Alignment);
-                assert(new_offset < heap_allocation_info.allocation_size);
-                assert(new_offset + resource_alloc_info.SizeInBytes <= heap_allocation_info.allocation_size);
-                heap_id_aliasing_allocation_[heap_capture_id].current_offset =
-                    new_offset + resource_alloc_info.SizeInBytes;
-                heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
+                result         = S_OK;
+                aliasing_alloc = heap_id_aliasing_allocation_[heap_capture_id];
+                aliasing_alloc->AddRef();
+            }
+
+            if (SUCCEEDED(result))
+            {
+                allocation = aliasing_alloc;
+                result     = allocator_->CreateAliasingResource(
+                    aliasing_alloc, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
             }
         }
-        else
+
+        if (SUCCEEDED(result))
         {
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
+            ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
+            resource_allocation_.emplace(pResource, std::move(allocation));
 
-    if (SUCCEEDED(result))
-    {
-        allocation = heap_allocation_info.allocation;
-        result     = allocator_->CreateAliasingResource(
-            heap_allocation_info.allocation, new_offset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
-    }
-
-    if (SUCCEEDED(result))
-    {
-        ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-        resource_allocation_.emplace(pResource, std::move(allocation));
-
-        if (alloc_desc.CustomPool != nullptr)
-        {
-            Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
-            custom_pool.Attach(alloc_desc.CustomPool);
-            resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            if (alloc_desc.CustomPool != nullptr)
+            {
+                Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
+                custom_pool.Attach(alloc_desc.CustomPool);
+                resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            }
         }
     }
 
@@ -525,101 +514,73 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId             
                                                    REFIID                            riid,
                                                    _COM_Outptr_opt_ void**           ppvResource)
 {
-    assert(allocator_ != nullptr);
     HRESULT                                     result     = S_FALSE;
     Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
     D3D12MA::ALLOCATION_DESC                    alloc_desc = {};
 
-    bool                  recreated_allocation = false;
-    UINT64                new_offset           = 0;
-    ResourceHeapAllocInfo heap_allocation_info = {};
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
-    D3D12_RESOURCE_DESC* desc = reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pDesc));
-    D3D12_RESOURCE_ALLOCATION_INFO resource_alloc_info = device_->GetResourceAllocationInfo(0, 1, desc);
-
-    if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
+    if (allocator_ != nullptr)
     {
-        recreated_allocation = true;
-    }
-
-    if (recreated_allocation)
-    {
-        D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
-        SetReplayResourceCompatibility(
-            heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
-
-        D3D12_RESOURCE_ALLOCATION_INFO alloc_info{};
-        alloc_info.SizeInBytes = DEFAULT_HEAP_ALIASING_SIZE;
-        alloc_info.Alignment   = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-        if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+        if (HeapOffset != 0)
         {
-            alloc_info.SizeInBytes = GetAllocationSize(heap_id_desc_[heap_capture_id].SizeInBytes);
+            result = allocator_->CreateResource2(
+                &alloc_desc, pDesc, InitialState, pOptimizedClearValue, &allocation, riid, ppvResource);
         }
-
-        result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &heap_allocation_info.allocation);
-        if (SUCCEEDED(result))
+        else
         {
-            heap_allocation_info.allocation_size                = alloc_info.SizeInBytes;
-            heap_allocation_info.current_offset                 = resource_alloc_info.SizeInBytes;
-            heap_id_aliasing_allocation_[heap_capture_id]       = std::move(heap_allocation_info);
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
-    else
-    {
-        result               = S_OK;
-        heap_allocation_info = heap_id_aliasing_allocation_[heap_capture_id];
-        heap_allocation_info.allocation->AddRef();
+            bool                 recreated_allocation = false;
+            D3D12MA::Allocation* aliasing_alloc       = nullptr;
 
-        if (heap_id_rebind_offset_.find(heap_capture_id) != heap_id_rebind_offset_.end())
-        {
-            auto& rebind_offset = heap_id_rebind_offset_[heap_capture_id];
-            if (rebind_offset.find(HeapOffset) != rebind_offset.end())
+            if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
             {
-                new_offset = rebind_offset[HeapOffset];
-                UINT64 current_offset = new_offset + resource_alloc_info.SizeInBytes;
-                if (current_offset > heap_id_aliasing_allocation_[heap_capture_id].current_offset)
+                recreated_allocation = true;
+            }
+
+            if (recreated_allocation)
+            {
+                D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
+                alloc_info.SizeInBytes                    = DEFAULT_HEAP_ALIASING_SIZE;
+                alloc_info.Alignment                      = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+                if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = current_offset;
+                    // TODO: Temporarily multiplied by 2
+                    alloc_info.SizeInBytes = 2 * heap_id_desc_[heap_capture_id].SizeInBytes;
                 }
-                if (HeapOffset == 0 && rebind_offset.size() > 1)
+
+                result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &aliasing_alloc);
+                if (SUCCEEDED(result))
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = resource_alloc_info.SizeInBytes;
+                    heap_id_aliasing_allocation_[heap_capture_id] = aliasing_alloc;
                 }
             }
             else
             {
-                new_offset = Align(heap_allocation_info.current_offset, resource_alloc_info.Alignment);
-                assert(new_offset < heap_allocation_info.allocation_size);
-                assert(new_offset + resource_alloc_info.SizeInBytes <= heap_allocation_info.allocation_size);
-                heap_id_aliasing_allocation_[heap_capture_id].current_offset =
-                    new_offset + resource_alloc_info.SizeInBytes;
-                heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
+                result         = S_OK;
+                aliasing_alloc = heap_id_aliasing_allocation_[heap_capture_id];
+                aliasing_alloc->AddRef();
+            }
+
+            if (SUCCEEDED(result))
+            {
+                allocation = aliasing_alloc;
+                result     = allocator_->CreateAliasingResource1(
+                    aliasing_alloc, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
             }
         }
-        else
+
+        if (SUCCEEDED(result))
         {
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
+            ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
+            resource_allocation_.emplace(pResource, std::move(allocation));
 
-    if (SUCCEEDED(result))
-    {
-        allocation = heap_allocation_info.allocation;
-        result     = allocator_->CreateAliasingResource1(
-            heap_allocation_info.allocation, new_offset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
-    }
-
-    if (SUCCEEDED(result))
-    {
-        ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-        resource_allocation_.emplace(pResource, std::move(allocation));
-
-        if (alloc_desc.CustomPool != nullptr)
-        {
-            Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
-            custom_pool.Attach(alloc_desc.CustomPool);
-            resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            if (alloc_desc.CustomPool != nullptr)
+            {
+                Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
+                custom_pool.Attach(alloc_desc.CustomPool);
+                resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            }
         }
     }
 
@@ -697,108 +658,87 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
                                                    REFIID                  riid,
                                                    _COM_Outptr_opt_ void** ppvResource)
 {
-    assert(allocator_ != nullptr);
     HRESULT                                     result     = S_FALSE;
     Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
     D3D12MA::ALLOCATION_DESC                    alloc_desc = {};
 
-    bool                  recreated_allocation = false;
-    UINT64                new_offset           = 0;
-    ResourceHeapAllocInfo heap_allocation_info = {};
+    D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
+    SetReplayResourceCompatibility(heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
 
-    D3D12_RESOURCE_DESC* desc = reinterpret_cast<D3D12_RESOURCE_DESC*>(const_cast<D3D12_RESOURCE_DESC1*>(pDesc));
-    D3D12_RESOURCE_ALLOCATION_INFO resource_alloc_info = device_->GetResourceAllocationInfo(0, 1, desc);
-
-    if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
+    if (allocator_ != nullptr)
     {
-        recreated_allocation = true;
-    }
-
-    if (recreated_allocation)
-    {
-        D3D12_RESOURCE_DESC1* resource_desc = const_cast<D3D12_RESOURCE_DESC1*>(pDesc);
-        SetReplayResourceCompatibility(
-            heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, resource_desc, alloc_desc);
-
-        D3D12_RESOURCE_ALLOCATION_INFO alloc_info{};
-        alloc_info.SizeInBytes = DEFAULT_HEAP_ALIASING_SIZE;
-        alloc_info.Alignment   = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-        if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+        if (HeapOffset != 0)
         {
-            alloc_info.SizeInBytes = GetAllocationSize(heap_id_desc_[heap_capture_id].SizeInBytes);
+            result = allocator_->CreateResource3(&alloc_desc,
+                                                 pDesc,
+                                                 InitialLayout,
+                                                 pOptimizedClearValue,
+                                                 NumCastableFormats,
+                                                 const_cast<DXGI_FORMAT*>(pCastableFormats),
+                                                 &allocation,
+                                                 riid,
+                                                 ppvResource);
         }
-
-        result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &heap_allocation_info.allocation);
-        if (SUCCEEDED(result))
+        else
         {
-            heap_allocation_info.allocation_size                = alloc_info.SizeInBytes;
-            heap_allocation_info.current_offset                 = resource_alloc_info.SizeInBytes;
-            heap_id_aliasing_allocation_[heap_capture_id]       = std::move(heap_allocation_info);
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
-    else
-    {
-        result               = S_OK;
-        heap_allocation_info = heap_id_aliasing_allocation_[heap_capture_id];
-        heap_allocation_info.allocation->AddRef();
+            bool                 recreated_allocation = false;
+            D3D12MA::Allocation* aliasing_alloc       = nullptr;
 
-        if (heap_id_rebind_offset_.find(heap_capture_id) != heap_id_rebind_offset_.end())
-        {
-            auto& rebind_offset = heap_id_rebind_offset_[heap_capture_id];
-            if (rebind_offset.find(HeapOffset) != rebind_offset.end())
+            if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
             {
-                new_offset = rebind_offset[HeapOffset];
-                UINT64 current_offset = new_offset + resource_alloc_info.SizeInBytes;
-                if (current_offset > heap_id_aliasing_allocation_[heap_capture_id].current_offset)
+                recreated_allocation = true;
+            }
+
+            if (recreated_allocation)
+            {
+                D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
+                alloc_info.SizeInBytes                    = DEFAULT_HEAP_ALIASING_SIZE;
+                alloc_info.Alignment                      = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+                if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = current_offset;
+                    // TODO: Temporarily multiplied by 2
+                    alloc_info.SizeInBytes = 2 * heap_id_desc_[heap_capture_id].SizeInBytes;
                 }
-                if (HeapOffset == 0 && rebind_offset.size() > 1)
+
+                result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &aliasing_alloc);
+                if (SUCCEEDED(result))
                 {
-                    heap_id_aliasing_allocation_[heap_capture_id].current_offset = resource_alloc_info.SizeInBytes;
+                    heap_id_aliasing_allocation_[heap_capture_id] = aliasing_alloc;
                 }
             }
             else
             {
-                new_offset = Align(heap_allocation_info.current_offset, resource_alloc_info.Alignment);
-                assert(new_offset < heap_allocation_info.allocation_size);
-                assert(new_offset + resource_alloc_info.SizeInBytes <= heap_allocation_info.allocation_size);
-                heap_id_aliasing_allocation_[heap_capture_id].current_offset =
-                    new_offset + resource_alloc_info.SizeInBytes;
-                heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
+                result         = S_OK;
+                aliasing_alloc = heap_id_aliasing_allocation_[heap_capture_id];
+                aliasing_alloc->AddRef();
             }
+
+            if (SUCCEEDED(result))
+            {
+                allocation = aliasing_alloc;
+                result     = allocator_->CreateAliasingResource2(aliasing_alloc,
+                                                                 HeapOffset,
+                                                                 pDesc,
+                                                                 InitialLayout,
+                                                                 pOptimizedClearValue,
+                                                                 NumCastableFormats,
+                                                                 const_cast<DXGI_FORMAT*>(pCastableFormats),
+                                                                 riid,
+                                                                 ppvResource);
+                }
         }
-        else
+
+        if (SUCCEEDED(result))
         {
-            heap_id_rebind_offset_[heap_capture_id][HeapOffset] = new_offset;
-        }
-    }
+            ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
+            resource_allocation_.emplace(pResource, std::move(allocation));
 
-    if (SUCCEEDED(result))
-    {
-        allocation = heap_allocation_info.allocation;
-        result     = allocator_->CreateAliasingResource2(heap_allocation_info.allocation,
-                                                     new_offset,
-                                                     pDesc,
-                                                     InitialLayout,
-                                                     pOptimizedClearValue,
-                                                     NumCastableFormats,
-                                                     const_cast<DXGI_FORMAT*>(pCastableFormats),
-                                                     riid,
-                                                     ppvResource);
-    }
-
-    if (SUCCEEDED(result))
-    {
-        ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(*ppvResource);
-        resource_allocation_.emplace(pResource, std::move(allocation));
-
-        if (alloc_desc.CustomPool != nullptr)
-        {
-            Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
-            custom_pool.Attach(alloc_desc.CustomPool);
-            resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            if (alloc_desc.CustomPool != nullptr)
+            {
+                Microsoft::WRL::ComPtr<D3D12MA::Pool> custom_pool;
+                custom_pool.Attach(alloc_desc.CustomPool);
+                resource_custom_pool_.emplace(pResource, std::move(custom_pool));
+            }
         }
     }
 
@@ -931,10 +871,6 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
     }
     else
     {
-        HRESULT               result               = S_FALSE;
-        bool                  recreated_allocation = false;
-        ResourceHeapAllocInfo heap_allocation_info = {};
-
         if (heap_id_desc_.find(heap_capture_id) == heap_id_desc_.end())
         {
             D3D12_HEAP_DESC heap_desc = pHeap->GetDesc();
@@ -965,47 +901,27 @@ void Dx12RebindAllocator::UpdateTileMappings(ID3D12CommandQueue*                
             heap_id_desc_.emplace(heap_capture_id, heap_desc);
         }
 
-        if (heap_id_aliasing_allocation_.find(heap_capture_id) == heap_id_aliasing_allocation_.end())
+        // creat heap
+        ID3D12Heap* pNewHeap = nullptr;
+        if (heap_id_recreated_heap_.find(heap_capture_id) == heap_id_recreated_heap_.end())
         {
-            recreated_allocation = true;
-        }
-
-        if (recreated_allocation)
-        {
-            D3D12MA::ALLOCATION_DESC alloc_desc    = {};
-            D3D12_RESOURCE_DESC      resource_desc = pResource->GetDesc();
-            SetReplayResourceCompatibility(
-                heap_capture_id, pHeap, nullptr, D3D12_HEAP_FLAG_NONE, &resource_desc, alloc_desc);
-
-            D3D12_RESOURCE_ALLOCATION_INFO alloc_info = {};
-            alloc_info.SizeInBytes                    = DEFAULT_HEAP_ALIASING_SIZE;
-            alloc_info.Alignment                      = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-            if (heap_id_desc_.find(heap_capture_id) != heap_id_desc_.end())
+            Microsoft::WRL::ComPtr<ID3D12Heap> heap = nullptr;
+            HRESULT hr = device_->CreateHeap(&heap_id_desc_[heap_capture_id], IID_PPV_ARGS(&heap));
+            if (hr == S_OK)
             {
-                alloc_info.SizeInBytes = GetAllocationSize(heap_id_desc_[heap_capture_id].SizeInBytes);
+                resource_recreated_heap_[pResource].push_back(std::move(heap));
+                pNewHeap = resource_recreated_heap_[pResource].back().Get();
+                heap_id_recreated_heap_.emplace(heap_capture_id, pNewHeap);
             }
-
-            result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &heap_allocation_info.allocation);
-            if (SUCCEEDED(result))
+            else
             {
-                heap_allocation_info.allocation_size          = alloc_info.SizeInBytes;
-                heap_allocation_info.current_offset           = 0;
-                heap_id_aliasing_allocation_[heap_capture_id] = std::move(heap_allocation_info);
+                pNewHeap = pHeap;
             }
         }
         else
         {
-            result               = S_OK;
-            heap_allocation_info = heap_id_aliasing_allocation_[heap_capture_id];
-            heap_allocation_info.allocation->AddRef();
+            pNewHeap = heap_id_recreated_heap_[heap_capture_id];
         }
-
-        Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
-        ID3D12Heap*                                 pNewHeap   = nullptr;
-
-        allocation = heap_allocation_info.allocation;
-        pNewHeap   = heap_allocation_info.allocation->GetHeap();
-        resource_allocation_.emplace(pResource, std::move(allocation));
 
         pQueue->UpdateTileMappings(pResource,
                                    NumResourceRegions,
