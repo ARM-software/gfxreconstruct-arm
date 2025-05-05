@@ -9245,28 +9245,41 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
     auto     replay_create_info  = pCreateInfo->GetPointer();
     VkDevice device              = device_info->handle;
 
-    auto            device_map_entry = device_info->opaque_addresses.find(capture_id);
-    VkDeviceAddress device_address;
-    if (device_map_entry != device_info->opaque_addresses.end())
-    {
-        device_address = device_map_entry->second;
-    }
-    else
-    {
-        GFXRECON_LOG_DEBUG("Opaque device address is not available for VkAccelerationStructureKHR object (ID = %" PRIu64
-                           ")",
-                           capture_id);
-    }
-
     VkAccelerationStructureCreateInfoKHR modified_create_info = (*replay_create_info);
-    if (device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
-        device_info->allocator->SupportsOpaqueDeviceAddresses())
+
+    // keep track of associated buffer
+    auto* acceleration_structure_info =
+        reinterpret_cast<VulkanAccelerationStructureKHRInfo*>(pAccelerationStructureKHR->GetConsumerData(0));
+    GFXRECON_ASSERT(acceleration_structure_info);
+
+    // even when available, the feature also requires allocator-support
+    bool use_capture_replay_feature = device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
+                                      device_info->allocator->SupportsOpaqueDeviceAddresses();
+
+    if (use_capture_replay_feature)
     {
         // Set opaque device address
         modified_create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
-        modified_create_info.deviceAddress = device_address;
+        auto entry = device_info->opaque_addresses.find(capture_id);
+        if (entry != device_info->opaque_addresses.end())
+        {
+            modified_create_info.deviceAddress = entry->second;
+
+            // assign opaque address, same for capture and replay
+            acceleration_structure_info->capture_address = acceleration_structure_info->replay_address =
+                modified_create_info.deviceAddress;
+        }
+        else
+        {
+            GFXRECON_LOG_DEBUG(
+                "Opaque device address is not available for VkAccelerationStructureKHR object (ID = %" PRIu64 ")",
+                capture_id);
+        }
 
         result = func(device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
+
+        // track newly created acceleration-structure
+        GetDeviceAddressTracker(device_info).TrackAccelerationStructure(acceleration_structure_info);
     }
     else
     {
@@ -10072,7 +10085,7 @@ void VulkanReplayConsumerBase::ClearCommandBufferInfo(VulkanCommandBufferInfo* c
     GFXRECON_ASSERT(command_buffer_info != nullptr)
     command_buffer_info->is_frame_boundary = false;
     command_buffer_info->frame_buffer_ids.clear();
-    command_buffer_info->bound_pipeline_id = format::kNullHandleId;
+    command_buffer_info->bound_pipelines.clear();
     command_buffer_info->push_constant_data.clear();
     command_buffer_info->push_constant_stage_flags     = 0;
     command_buffer_info->push_constant_pipeline_layout = VK_NULL_HANDLE;
@@ -10255,7 +10268,7 @@ void VulkanReplayConsumerBase::OverrideCmdBindPipeline(PFN_vkCmdBindPipeline    
         pipeline = MapHandle<VulkanPipelineInfo>(pipeline_info->capture_id, &CommonObjectInfoTable::GetVkPipelineInfo);
 
         // keep track of currently bound pipeline
-        command_buffer_info->bound_pipeline_id = pipeline_info->capture_id;
+        command_buffer_info->bound_pipelines[pipelineBindPoint] = pipeline_info->capture_id;
     }
     func(command_buffer, pipelineBindPoint, pipeline);
 }
@@ -10440,7 +10453,9 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
             const auto& address_tracker  = GetDeviceAddressTracker(device_info);
             auto&       address_replacer = GetDeviceAddressReplacer(device_info);
 
-            auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(command_buffer_info->bound_pipeline_id);
+            GFXRECON_ASSERT(command_buffer_info->bound_pipelines.count(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR));
+            auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(
+                command_buffer_info->bound_pipelines[VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR]);
             GFXRECON_ASSERT(bound_pipeline != nullptr)
 
             address_replacer.ProcessCmdTraceRays(command_buffer_info,
