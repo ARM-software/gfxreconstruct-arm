@@ -1126,7 +1126,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
         if (replay_options.screenshot_interval == 0)
         {
-            throw std::runtime_error("A screenshot interval of 0 is invalid. Closing the program.");
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
         }
     }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
@@ -1320,7 +1321,8 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
         if (replay_options.screenshot_interval == 0)
         {
-            throw std::runtime_error("A screenshot interval of 0 is invalid. Closing the program.");
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
         }
     }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);

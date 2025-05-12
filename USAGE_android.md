@@ -788,7 +788,7 @@ optional arguments:
                         (forwarded to replay tool)
   --screenshot-interval INTERVAL
                         Specifies the number of frames between two screenshots
-                        twithin a screenshot range.
+                        within a screenshot range.
                         Example: If screenshot range is 10-15 and interval is 2,
                         screenshot will be generated for frames 10, 12 and 14.
                         Default is 1.
