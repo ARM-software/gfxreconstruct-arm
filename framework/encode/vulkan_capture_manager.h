@@ -873,78 +873,23 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void PostProcess_vkBindBufferMemory(
-        VkResult result, VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset)
-    {
-        auto wrapper            = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(buffer);
-        wrapper->bind_memory_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(memory);
-        wrapper->bind_offset    = memoryOffset;
-        vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-            vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    void ProcessImportFd(VkDevice device, VkBuffer buffer, VkDeviceSize memoryOffset);
 
-        if (IsCaptureModeTrack() && (result == VK_SUCCESS))
-        {
-            assert(state_tracker_ != nullptr);
-            state_tracker_->TrackBufferMemoryBinding(device, buffer, memory, memoryOffset);
-        }
-    }
+    void PostProcess_vkBindBufferMemory(
+        VkResult result, VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset);
 
     void PostProcess_vkBindBufferMemory2(VkResult                      result,
                                          VkDevice                      device,
                                          uint32_t                      bindInfoCount,
-                                         const VkBindBufferMemoryInfo* pBindInfos)
-    {
-        for (uint32_t i = 0; i < bindInfoCount; ++i)
-        {
-            auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(pBindInfos[i].buffer);
-            wrapper->bind_memory_id =
-                vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(pBindInfos[i].memory);
-            wrapper->bind_offset = pBindInfos[i].memoryOffset;
-            vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-                vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(pBindInfos[i].memory);
-        }
-
-        if (IsCaptureModeTrack() && (result == VK_SUCCESS) && (pBindInfos != nullptr))
-        {
-            assert(state_tracker_ != nullptr);
-
-            for (uint32_t i = 0; i < bindInfoCount; ++i)
-            {
-                state_tracker_->TrackBufferMemoryBinding(device,
-                                                         pBindInfos[i].buffer,
-                                                         pBindInfos[i].memory,
-                                                         pBindInfos[i].memoryOffset,
-                                                         pBindInfos[i].pNext);
-            }
-        }
-    }
+                                         const VkBindBufferMemoryInfo* pBindInfos);
 
     void PostProcess_vkBindImageMemory(
-        VkResult result, VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset)
-    {
-        if (IsCaptureModeTrack() && (result == VK_SUCCESS))
-        {
-            assert(state_tracker_ != nullptr);
-            state_tracker_->TrackImageMemoryBinding(device, image, memory, memoryOffset);
-        }
-    }
+        VkResult result, VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset);
 
     void PostProcess_vkBindImageMemory2(VkResult                     result,
                                         VkDevice                     device,
                                         uint32_t                     bindInfoCount,
-                                        const VkBindImageMemoryInfo* pBindInfos)
-    {
-        if (IsCaptureModeTrack() && (result == VK_SUCCESS) && (pBindInfos != nullptr))
-        {
-            assert(state_tracker_ != nullptr);
-
-            for (uint32_t i = 0; i < bindInfoCount; ++i)
-            {
-                state_tracker_->TrackImageMemoryBinding(
-                    device, pBindInfos[i].image, pBindInfos[i].memory, pBindInfos[i].memoryOffset, pBindInfos[i].pNext);
-            }
-        }
-    }
+                                        const VkBindImageMemoryInfo* pBindInfos);
 
     void PostProcess_vkCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,

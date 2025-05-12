@@ -5174,10 +5174,14 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         auto allocator = device_info->allocator.get();
         assert(allocator != nullptr);
 
-        format::HandleId capture_id = (*pMemory->GetPointer());
+        auto* modified_allocate_info = const_cast<VkMemoryAllocateInfo*>(pAllocateInfo->GetPointer());
+        auto  capture_id             = (*pMemory->GetPointer());
 
         bool     uses_address   = false;
         uint64_t opaque_address = 0;
+
+        // FD is not available at replay time
+        graphics::vulkan_struct_remove_pnext<VkImportMemoryFdInfoKHR>(modified_allocate_info);
 
         bool address_override_found = false;
 
@@ -5191,9 +5195,7 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         uint64_t external_buffer_id = 0;
         VkImage  dedicated_image    = VK_NULL_HANDLE;
 
-        VkMemoryAllocateInfo modified_allocate_info = (*pAllocateInfo->GetPointer());
-
-        VkBaseOutStructure*               prev_struct = reinterpret_cast<VkBaseOutStructure*>(&modified_allocate_info);
+        VkBaseOutStructure*               prev_struct = reinterpret_cast<VkBaseOutStructure*>(modified_allocate_info);
         const Decoded_VkBaseOutStructure* prev_node =
             reinterpret_cast<const Decoded_VkBaseOutStructure*>(pAllocateInfo->GetMetaStructPointer());
 
@@ -5243,9 +5245,9 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
                 const Decoded_VkImportMemoryHostPointerInfoEXT* import_node =
                     reinterpret_cast<const Decoded_VkImportMemoryHostPointerInfoEXT*>(current_node);
 
-                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, modified_allocate_info.allocationSize);
+                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, modified_allocate_info->allocationSize);
 
-                host_pointer_memory_size = static_cast<size_t>(modified_allocate_info.allocationSize);
+                host_pointer_memory_size = static_cast<size_t>(modified_allocate_info->allocationSize);
                 host_pointer_memory_size =
                     util::platform::GetAlignedSize(host_pointer_memory_size, util::platform::GetSystemPageSize());
 
@@ -5339,14 +5341,14 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
             }
 
             address_info.sType                = VK_STRUCTURE_TYPE_MEMORY_OPAQUE_CAPTURE_ADDRESS_ALLOCATE_INFO;
-            address_info.pNext                = modified_allocate_info.pNext;
+            address_info.pNext                = modified_allocate_info->pNext;
             address_info.opaqueCaptureAddress = opaque_address;
 
-            modified_allocate_info.pNext = &address_info;
+            modified_allocate_info->pNext = &address_info;
         }
 
         result = allocator->AllocateMemory(
-            &modified_allocate_info, GetAllocationCallbacks(pAllocator), capture_id, replay_memory, &allocator_data);
+            modified_allocate_info, GetAllocationCallbacks(pAllocator), capture_id, replay_memory, &allocator_data);
 
         if (result == VK_SUCCESS)
         {
@@ -5440,7 +5442,7 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         {
             // When memory allocation fails at replay, but succeeded at capture, check for memory incompatibilities
             // and recommend enabling memory translation.
-            allocator->ReportAllocateMemoryIncompatibility(&modified_allocate_info);
+            allocator->ReportAllocateMemoryIncompatibility(modified_allocate_info);
         }
     }
     else
