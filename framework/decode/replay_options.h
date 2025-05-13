@@ -66,12 +66,14 @@ struct ReplayOptions
     bool                         remove_unsupported_features{ false };
     util::ScreenshotFormat       screenshot_format{ util::ScreenshotFormat::kBmp };
     std::vector<ScreenshotRange> screenshot_ranges;
+    uint32_t                     screenshot_interval{ 1 };
     std::string                  screenshot_dir;
     std::string                  screenshot_file_prefix{ kDefaultScreenshotFilePrefix };
     uint32_t                     screenshot_width, screenshot_height;
     int32_t                      num_pipeline_creation_jobs{ 0 };
     std::string                  asset_file_path;
     std::string                  dump_resources_output_dir;
+    bool                         dump_resources_before{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

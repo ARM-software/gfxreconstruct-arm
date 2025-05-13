@@ -63,6 +63,19 @@ struct LayerExtensionProps
     std::vector<std::string> device_funcs;
 };
 
+const std::vector<struct LayerExtensionProps> kInstanceExtensionProps = {
+    { VkExtensionProperties{ VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_SPEC_VERSION },
+      { "vkCreateDebugUtilsMessengerEXT", "vkDestroyDebugUtilsMessengerEXT", "vkSubmitDebugUtilsMessageEXT" },
+      { "vkCmdBeginDebugUtilsLabelEXT",
+        "vkCmdEndDebugUtilsLabelEXT",
+        "vkCmdInsertDebugUtilsLabelEXT",
+        "vkQueueBeginDebugUtilsLabelEXT",
+        "vkQueueEndDebugUtilsLabelEXT",
+        "vkQueueInsertDebugUtilsLabelEXT",
+        "vkSetDebugUtilsObjectNameEXT",
+        "vkSetDebugUtilsObjectTagEXT" } }
+};
+
 const std::vector<struct LayerExtensionProps> kDeviceExtensionProps = {
     { VkExtensionProperties{ "VK_EXT_tooling_info", 1 }, { "vkGetPhysicalDeviceToolPropertiesEXT" }, {} },
     { VkExtensionProperties{ VK_EXT_DEBUG_MARKER_EXTENSION_NAME, VK_EXT_DEBUG_MARKER_SPEC_VERSION },
@@ -291,10 +304,34 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance instance
     // Check for implementation in the layer itself
     if (!has_implementation)
     {
+        for (const auto ext_props : kInstanceExtensionProps)
+        {
+            if (std::find(ext_props.instance_funcs.begin(), ext_props.instance_funcs.end(), pName) !=
+                ext_props.instance_funcs.end())
+            {
+                has_implementation = true;
+                break;
+            }
+
+            if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
+                ext_props.device_funcs.end())
+            {
+                has_implementation = true;
+                break;
+            }
+        }
+
         for (const auto ext_props : kDeviceExtensionProps)
         {
             if (std::find(ext_props.instance_funcs.begin(), ext_props.instance_funcs.end(), pName) !=
                 ext_props.instance_funcs.end())
+            {
+                has_implementation = true;
+                break;
+            }
+
+            if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
+                ext_props.device_funcs.end())
             {
                 has_implementation = true;
                 break;
@@ -346,6 +383,16 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice device, cons
         // Check for implementation in the layer itself
         if (!has_implementation)
         {
+            for (const auto ext_props : kInstanceExtensionProps)
+            {
+                if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
+                    ext_props.device_funcs.end())
+                {
+                    has_implementation = true;
+                    break;
+                }
+            }
+
             for (const auto ext_props : kDeviceExtensionProps)
             {
                 if (std::find(ext_props.device_funcs.begin(), ext_props.device_funcs.end(), pName) !=
@@ -503,11 +550,33 @@ VKAPI_ATTR VkResult VKAPI_CALL EnumerateInstanceExtensionProperties(const char* 
 {
     VkResult result = VK_SUCCESS;
 
-    if (pLayerName && (util::platform::StringCompare(pLayerName, kLayerProps.layerName) == 0))
+    if ((pLayerName != nullptr) && (util::platform::StringCompare(pLayerName, kLayerProps.layerName) == 0))
     {
         if (pPropertyCount != nullptr)
         {
-            *pPropertyCount = 0;
+            uint32_t extension_count = static_cast<uint32_t>(kInstanceExtensionProps.size());
+
+            if (pProperties == nullptr)
+            {
+                *pPropertyCount = extension_count;
+            }
+            else
+            {
+                if ((*pPropertyCount) < extension_count)
+                {
+                    result          = VK_INCOMPLETE;
+                    extension_count = *pPropertyCount;
+                }
+                else if ((*pPropertyCount) > extension_count)
+                {
+                    *pPropertyCount = extension_count;
+                }
+
+                for (uint32_t i = 0; i < extension_count; ++i)
+                {
+                    pProperties[i] = kInstanceExtensionProps[i].props;
+                }
+            }
         }
     }
     else

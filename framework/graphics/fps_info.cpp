@@ -55,7 +55,7 @@ FpsInfo::FpsInfo(uint64_t               measurement_start_frame,
 {
     if (util::filepath::IsFile(measurement_file_name_))
     {
-        // To avoid thinking an ancient file is the result of this run
+        GFXRECON_LOG_WARNING("Removing existing file at measurement file location: %s", measurement_file_name_.c_str());
         std::remove(measurement_file_name_.c_str());
     }
 }
@@ -109,6 +109,7 @@ void FpsInfo::EndFrame(uint64_t frame)
             measurement_end_process_time_ = util::datetime::GetProcessTime();
             measurement_end_time_         = frame_end_time;
             ended_measurement_            = true;
+            GFXRECON_WRITE_CONSOLE("================== End timer (Frame: %llu) ==================", frame);
         }
     }
 }
@@ -130,6 +131,7 @@ void FpsInfo::EndFile(uint64_t frame)
         measurement_end_process_time_ = util::datetime::GetProcessTime();
         measurement_end_time_         = replay_end_time_;
         measurement_end_frame_        = frame;
+        GFXRECON_WRITE_CONSOLE("================== End timer (Frame: %llu) ==================", frame);
     }
 }
 

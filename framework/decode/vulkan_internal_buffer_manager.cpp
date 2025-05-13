@@ -125,6 +125,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
         VulkanBufferInfo(), VulkanDeviceMemoryInfo(), allocator_, physical_device_info_);
     entry->info_.allocator_data        = buffer_allocator_data;
     entry->info_.handle                = buffer;
+    entry->info_.size                  = size;
     entry->memory_info_.handle         = memory;
     entry->memory_info_.allocator_data = memory_allocator_data;
 

@@ -46,9 +46,9 @@ using Dx12JsonConsumer =
     gfxrecon::decode::MetadataJsonConsumer<gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::Dx12JsonConsumer>>;
 #endif
 const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags,--"
-                        "verbose,--bare";
+                        "verbose,--bare,--checksum";
 
-const char kArguments[] = "--output,--format,--log-level,--frame-range";
+const char kArguments[] = "--output,--format,--log-level,--frame-range,--checksum-trigger";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -95,6 +95,10 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --bare");
     GFXRECON_WRITE_CONSOLE("                  \tCreate a 'diff-friendly' output by removing block indices and other");
     GFXRECON_WRITE_CONSOLE("                  \tfields that generates artificial differences.");
+    GFXRECON_WRITE_CONSOLE("  --checksum\t Show checksum of every data vector (ex pData field in a vkApiCall) with "
+                           "size bigger than --checksum-trigger")
+    GFXRECON_WRITE_CONSOLE("  --checksum-trigger\t If --checksum set, represents the minimum data vector length for "
+                           "which checksums are generated. Default value: 5.")
 
 #if defined(WIN32) && defined(_DEBUG)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
@@ -221,7 +225,10 @@ int main(int argc, const char** argv)
     bool        file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
     bool        verbose              = arg_parser.IsOptionSet(kVerboseOption);
     bool        bare                 = arg_parser.IsOptionSet(kBareOption);
+    bool        checksum             = arg_parser.IsOptionSet(kChecksumOption);
     bool        output_to_stdout     = output_filename == "stdout";
+
+    uint32_t checksum_trigger = gfxrecon::util::ParseUintString(arg_parser.GetArgumentValue(kChecksumTriggerOption), 5);
 
     std::vector<uint32_t> frame_indices      = GetFrameIndices(arg_parser);
     bool                  frame_range_option = !arg_parser.GetArgumentValue(kFrameRange).empty();
@@ -304,13 +311,15 @@ int main(int argc, const char** argv)
             decoder.AddConsumer(&json_consumer);
             file_processor.AddDecoder(&decoder);
 
-            json_options.root_dir      = output_dir;
-            json_options.data_sub_dir  = filename_stem;
-            json_options.format        = output_format;
-            json_options.dump_binaries = dump_binaries;
-            json_options.expand_flags  = expand_flags;
-            json_options.verbose       = verbose;
-            json_options.bare          = bare;
+            json_options.root_dir         = output_dir;
+            json_options.data_sub_dir     = filename_stem;
+            json_options.format           = output_format;
+            json_options.dump_binaries    = dump_binaries;
+            json_options.expand_flags     = expand_flags;
+            json_options.verbose          = verbose;
+            json_options.bare             = bare;
+            json_options.checksum         = checksum;
+            json_options.checksum_trigger = checksum_trigger;
 
             gfxrecon::decode::JsonWriter json_writer{ json_options, GFXRECON_PROJECT_VERSION_STRING, input_filename };
             file_processor.SetAnnotationProcessor(&json_writer);

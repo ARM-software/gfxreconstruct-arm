@@ -84,6 +84,7 @@ def CreateCommandParser():
 def CreateInstallApkParser():
     parser = argparse.ArgumentParser(prog=os.path.basename(sys.argv[0]) + ' install-apk', description='Install the replay tool.')
     parser.add_argument('file', help='APK file to install')
+    parser.add_argument('-s', '--select', metavar='DEVICE_ID', help='Specify the destination device id. Needed if multiple devices are attached.')
     return parser
 
 def CreateReplayParser():
@@ -99,6 +100,7 @@ def CreateReplayParser():
     parser.add_argument('--trigger-script-frame', metavar='RANGES', help='Frame ranges to trigger the script.)')
     parser.add_argument('--screenshot-all', action='store_true', default=False, help='Generate screenshots for all frames.  When this option is specified, --screenshots is ignored (forwarded to replay tool)')
     parser.add_argument('--screenshots', metavar='RANGES', help='Generate screenshots for the specified frames.  Target frames are specified as a comma separated list of frame ranges.  A frame range can be specified as a single value, to specify a single frame, or as two hyphenated values, to specify the first and last frames to process.  Frame ranges should be specified in ascending order and cannot overlap.  Note that frame numbering is 1-based (i.e. the first frame is frame 1).  Example: 200,301-305 will generate six screenshots (forwarded to replay tool)')
+    parser.add_argument('--screenshot-interval', metavar='INTERVAL', help='Specifies the number of frames between two screenshots within a screenshot range. Example: If screenshot range is 10-15 and interval is 2, screenshot will be generated for frames 10, 12 and 14. Default is 1. (forwarded to replay tool)')
     parser.add_argument('--screenshot-format', metavar='FORMAT', choices=['bmp', 'png'], help='Image file format to use for screenshot generation.  Available formats are: bmp, png (forwarded to replay tool)')
     parser.add_argument('--screenshot-dir', metavar='DIR', help='Directory to write screenshots. Default is "/sdcard" (forwarded to replay tool)')
     parser.add_argument('--screenshot-prefix', metavar='PREFIX', help='Prefix to apply to the screenshot file name.  Default is "screenshot" (forwarded to replay tool)')
@@ -151,6 +153,7 @@ def CreateReplayParser():
     parser.add_argument('--load-pipeline-cache', metavar='DEVICE_FILE', help='If set, loads data created by the `--save-pipeline-cache` option in DEVICE_FILE and uses it to create the pipelines instead of the pipeline caches saved at capture time. (forwarded to replay tool)')
     parser.add_argument('--add-new-pipeline-caches', action='store_true', default=False, help='If set, allows gfxreconstruct to create new vkPipelineCache objects when it encounters a pipeline created without cache. This option can be used in coordination with `--save-pipeline-cache` and `--load-pipeline-cache`. (forwarded to replay tool)')
     parser.add_argument('--quit-after-frame', metavar='FRAME', help='Specify a frame after which replay will terminate.')
+
     return parser
 
 def MakeExtrasString(args):
@@ -183,6 +186,10 @@ def MakeExtrasString(args):
     elif args.screenshots:
         arg_list.append('--screenshots')
         arg_list.append('{}'.format(args.screenshots))
+    
+    if args.screenshot_interval:
+        arg_list.append('--screenshot-interval')
+        arg_list.append('{}'.format(args.screenshot_interval))
 
     if args.screenshot_format:
         arg_list.append('--screenshot-format')
@@ -379,7 +386,9 @@ def InstallApk(install_args):
     sdk = int(subprocess.check_output(shlex.split(adb_sdk_version)).decode())
     force_queryable = ' --force-queryable' if sdk >= 30 else ''
     cmd = adb_install + force_queryable + ' ' + args.file
+
     CheckDeviceSelection()
+
     print('Executing:', cmd)
     subprocess.check_call(shlex.split(cmd, posix='win' not in sys.platform))
 
@@ -407,6 +416,8 @@ def Replay(replay_args):
         subprocess.check_call(shlex.split(cmd, posix=False))
 
 if __name__ == '__main__':
+    devices = QueryAvailableDevices()
+
     command_parser = CreateCommandParser()
     command = command_parser.parse_args()
 

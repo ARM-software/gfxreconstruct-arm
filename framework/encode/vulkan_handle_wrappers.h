@@ -78,6 +78,7 @@ struct HandleWrapper
 //
 
 // clang-format off
+struct ShaderModuleWrapper                            : public HandleWrapper<VkShaderModule> {};
 struct SamplerYcbcrConversionWrapper                  : public HandleWrapper<VkSamplerYcbcrConversion> {};
 struct DebugReportCallbackEXTWrapper                  : public HandleWrapper<VkDebugReportCallbackEXT> {};
 struct DebugUtilsMessengerEXTWrapper                  : public HandleWrapper<VkDebugUtilsMessengerEXT> {};
@@ -112,11 +113,6 @@ struct DisplayModeKHRWrapper            : public HandleWrapper<VkDisplayModeKHR>
 //
 // Declarations for handle wrappers that require additional state info.
 //
-
-struct ShaderModuleWrapper : public HandleWrapper<VkShaderModule>
-{
-    vulkan_state_info::ShaderReflectionDescriptorSetsInfos used_descriptors_info;
-};
 
 // This handle type is retrieved and has no destroy function. The handle wrapper will be owned by its parent
 // VkPhysicalDevice handle wrapper, which will filter duplicate handle retrievals and ensure that the wrapper is
@@ -224,16 +220,15 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
 struct ImageViewWrapper;
 struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
 {
-    VkImageType              image_type{ VK_IMAGE_TYPE_2D };
-    VkFormat                 format{ VK_FORMAT_UNDEFINED };
-    VkExtent3D               extent{ 0, 0, 0 };
-    uint32_t                 mip_levels{ 0 };
-    uint32_t                 array_layers{ 0 };
-    VkSampleCountFlagBits    samples{};
-    VkImageTiling            tiling{};
-    VkImageLayout            current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
-    bool                     is_swapchain_image{ false };
-    std::set<VkSwapchainKHR> parent_swapchains;
+    VkImageType           image_type{ VK_IMAGE_TYPE_2D };
+    VkFormat              format{ VK_FORMAT_UNDEFINED };
+    VkExtent3D            extent{ 0, 0, 0 };
+    uint32_t              mip_levels{ 0 };
+    uint32_t              array_layers{ 0 };
+    VkSampleCountFlagBits samples{};
+    VkImageTiling         tiling{};
+    VkImageLayout         current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+    bool                  is_swapchain_image{ false };
 
     std::set<ImageViewWrapper*> image_views;
 };
@@ -392,8 +387,6 @@ struct PipelineWrapper : public HandleWrapper<VkPipeline>
 
     // TODO: Base pipeline
     // TODO: Pipeline cache
-
-    std::vector<ShaderModuleWrapper> bound_shaders;
 };
 
 struct AccelerationStructureKHRWrapper;
@@ -546,8 +539,7 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
 {
     // Members for general wrapper support.
     std::vector<ImageWrapper*> child_images;
-    SwapchainKHRWrapper*       old_swapchain{ nullptr };
-    SwapchainKHRWrapper*       new_swapchain{ nullptr };
+    bool                       retired{ false };
 
     // Members for trimming state tracking.
     DeviceWrapper*                                    device{ nullptr };

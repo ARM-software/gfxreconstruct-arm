@@ -25,7 +25,11 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-fexceptions", "-std=c++17", "-Wno-nullability-completeness"
-                arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}"
+                arguments "-DANDROID_TOOLCHAIN=clang",
+                          "-DANDROID_STL=c++_static",
+                          "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}",
+                          "-DCMAKE_C_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}",
+                          "-DCMAKE_CXX_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}"
             }
         }
     }

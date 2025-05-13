@@ -255,6 +255,9 @@ void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantAR
                 case VK_FORMAT_R64_SFLOAT:
                     element_size = 8;
                     break;
+                default:
+                    GFXRECON_LOG_ERROR("Unhandled tensor format: %d", description->format);
+                    break;
             }
             for (int i = 0; i < description->dimensionCount; i++)
             {

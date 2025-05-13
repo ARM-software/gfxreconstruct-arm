@@ -175,9 +175,13 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     WriteBufferDeviceAddressCalls(state_table);
 
     WriteBufferViewState(state_table);
-    WriteImageViewState(state_table);
-    StandardCreateWrite<vulkan_wrappers::SamplerWrapper>(state_table);
+
+    // Sampler and image view create infos can reference a VkSamplerYcbcrConversion object (through VkSamplerYcbcrConversionInfo
+    // in the pnext chain). For that reason dump VkSamplerYcbcrConversion object first.
     StandardCreateWrite<vulkan_wrappers::SamplerYcbcrConversionWrapper>(state_table);
+    StandardCreateWrite<vulkan_wrappers::SamplerWrapper>(state_table);
+
+    WriteImageViewState(state_table);
 
     // Retrieve buffer-device-addresses
     WriteBufferDeviceAddressState(state_table);
@@ -1290,7 +1294,12 @@ void VulkanStateWriter::WriteSwapchainKhrState(const VulkanStateTable& state_tab
             encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
             encoder_.EncodeHandleIdValue(wrapper->handle_id);
             encoder_.EncodeUInt32Ptr(&image_count, false);
-            encoder_.EncodeHandleIdArray(nullptr, 0, false);
+            auto handle_array = std::vector<format::HandleId>(wrapper->child_images.size());
+            for (int i = 0; i < wrapper->child_images.size(); ++i)
+            {
+                handle_array[i] = wrapper->child_images[i]->handle_id;
+            }
+            encoder_.EncodeHandleIdArray(handle_array.data(), handle_array.size(), false);
             encoder_.EncodeEnumValue(result);
 
             WriteFunctionCall(format::ApiCallId::ApiCall_vkGetSwapchainImagesKHR, &parameter_stream_);

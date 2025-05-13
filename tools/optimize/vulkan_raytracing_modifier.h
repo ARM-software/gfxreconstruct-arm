@@ -6,7 +6,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <vulkan/vulkan_core.h>
 
+#include "decode/api_decoder.h"
 #include "decode/referenced_resource_table.h"
 #include "generated/generated_vulkan_consumer.h"
 #include "util/defines.h"
@@ -16,6 +18,7 @@
 #include "decode/vulkan_object_info.h"
 #include "util/vulkan_modifier_base.h"
 #include "encode/struct_pointer_encoder.h"
+#include "vulkan_optimize_options.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -29,6 +32,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 {
   public:
     VulkanRayTracingModifier() = default;
+    VulkanRayTracingModifier(const VulkanOptimizationOptions& options);
 
     virtual bool CanOptimize() override;
 
@@ -144,6 +148,14 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                   pAccelerationStructure) override;
 
+    virtual void Process_vkGetAccelerationStructureBuildSizesKHR(
+        const ApiCallInfo&                                                         call_info,
+        format::HandleId                                                           device,
+        VkAccelerationStructureBuildTypeKHR                                        buildType,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* pBuildInfo,
+        PointerDecoder<uint32_t>*                                                  pMaxPrimitiveCounts,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>*    pSizeInfo) override;
+
     virtual void
     Process_vkDestroyAccelerationStructureKHR(const ApiCallInfo& call_info,
                                               format::HandleId   device,
@@ -161,6 +173,15 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         const ApiCallInfo&                                                call_info,
         format::HandleId                                                  commandBuffer,
         StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* pInfo) override;
+
+    virtual void Process_vkCmdWriteAccelerationStructuresPropertiesKHR(
+        const ApiCallInfo&                                call_info,
+        format::HandleId                                  commandBuffer,
+        uint32_t                                          accelerationStructureCount,
+        HandlePointerDecoder<VkAccelerationStructureKHR>* pAccelerationStructures,
+        VkQueryType                                       queryType,
+        format::HandleId                                  queryPool,
+        uint32_t                                          firstQuery) override;
 
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
@@ -285,11 +306,6 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
                                            uint32_t                                     submitCount,
                                            StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
                                            format::HandleId                             fence) override;
-
-    bool GetDeleteCurrentCall()
-    {
-        return (delete_device_address_meta_command.find(block_index_) != delete_device_address_meta_command.end());
-    }
 
   private:
     std::vector<format::ShaderHandleLocationInfo> GetShaderGroupHandlesInFillMemory(const void* data, size_t size);
@@ -419,9 +435,6 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
         shader_group_handle_entries_;
 
-    // -----block index-----isDelete
-    std::unordered_map<uint64_t, bool> delete_device_address_meta_command;
-
     // -----compute pipeline handle-----PipelineObject
     std::unordered_map<format::HandleId, PipelineObject> compute_pipeline_entries_;
 
@@ -443,6 +456,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     // -----init buffer handle-----InitBufferObject
     std::unordered_map<format::HandleId, InitBufferObject> init_buffer_entries_;
+
+    VulkanOptimizationOptions options_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

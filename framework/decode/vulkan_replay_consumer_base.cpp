@@ -611,14 +611,6 @@ void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixD
         if (info)
         {
             result = acceleration_structure_address_remap(address);
-            if (!result)
-            {
-                VkAccelerationStructureKHR handle = info->handle;
-                // Execution of this code means that there was a GetAccelerationStructureDeviceAddressCall
-                // Therefore no need for check if the builder should be used
-                address = GetAccelerationStructureBuilder(device_info).GetActualDeviceAddress(handle);
-                result  = true;
-            }
         }
         else
         {
@@ -2737,7 +2729,8 @@ void VulkanReplayConsumerBase::InitializeScreenshotHandler()
         screenshot_file_prefix_ = util::filepath::Join(options_.screenshot_dir, screenshot_file_prefix_);
     }
 
-    screenshot_handler_ = std::make_unique<ScreenshotHandler>(options_.screenshot_format, options_.screenshot_ranges);
+    screenshot_handler_ = std::make_unique<ScreenshotHandler>(
+        options_.screenshot_format, options_.screenshot_ranges, options_.screenshot_interval);
 }
 
 void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const
@@ -3086,6 +3079,16 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
             }
         }
 
+        if (!feature_util::IsSupportedExtension(available_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) &&
+            feature_util::IsSupportedExtension(modified_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+        {
+            auto iter = std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
+                return util::platform::StringCompare(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, extension) == 0;
+            });
+            modified_extensions.erase(iter);
+            faked_extensions_.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
+
         if (options_.remove_unsupported_features)
         {
             // Remove enabled extensions that are not available from the replay instance.
@@ -3381,6 +3384,17 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
                 }
                 current = current->pNext;
             }
+        }
+
+        // Fake VK_GOOGLE_display_timing if querried but not supported
+        if (feature_util::IsSupportedExtension(modified_extensions, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME) &&
+            !feature_util::IsSupportedExtension(available_extensions, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+        {
+            auto iter = std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
+                return util::platform::StringCompare(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME, extension) == 0;
+            });
+            modified_extensions.erase(iter);
+            faked_extensions_.push_back(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
         }
 
         if (feature_util::IsSupportedExtension(available_extensions, VK_EXT_DEVICE_FAULT_EXTENSION_NAME))
@@ -9231,28 +9245,41 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
     auto     replay_create_info  = pCreateInfo->GetPointer();
     VkDevice device              = device_info->handle;
 
-    auto            device_map_entry = device_info->opaque_addresses.find(capture_id);
-    VkDeviceAddress device_address;
-    if (device_map_entry != device_info->opaque_addresses.end())
-    {
-        device_address = device_map_entry->second;
-    }
-    else
-    {
-        GFXRECON_LOG_DEBUG("Opaque device address is not available for VkAccelerationStructureKHR object (ID = %" PRIu64
-                           ")",
-                           capture_id);
-    }
-
     VkAccelerationStructureCreateInfoKHR modified_create_info = (*replay_create_info);
-    if (device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
-        device_info->allocator->SupportsOpaqueDeviceAddresses())
+
+    // keep track of associated buffer
+    auto* acceleration_structure_info =
+        reinterpret_cast<VulkanAccelerationStructureKHRInfo*>(pAccelerationStructureKHR->GetConsumerData(0));
+    GFXRECON_ASSERT(acceleration_structure_info);
+
+    // even when available, the feature also requires allocator-support
+    bool use_capture_replay_feature = device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
+                                      device_info->allocator->SupportsOpaqueDeviceAddresses();
+
+    if (use_capture_replay_feature)
     {
         // Set opaque device address
         modified_create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
-        modified_create_info.deviceAddress = device_address;
+        auto entry = device_info->opaque_addresses.find(capture_id);
+        if (entry != device_info->opaque_addresses.end())
+        {
+            modified_create_info.deviceAddress = entry->second;
+
+            // assign opaque address, same for capture and replay
+            acceleration_structure_info->capture_address = acceleration_structure_info->replay_address =
+                modified_create_info.deviceAddress;
+        }
+        else
+        {
+            GFXRECON_LOG_DEBUG(
+                "Opaque device address is not available for VkAccelerationStructureKHR object (ID = %" PRIu64 ")",
+                capture_id);
+        }
 
         result = func(device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
+
+        // track newly created acceleration-structure
+        GetDeviceAddressTracker(device_info).TrackAccelerationStructure(acceleration_structure_info);
     }
     else
     {
@@ -10058,7 +10085,7 @@ void VulkanReplayConsumerBase::ClearCommandBufferInfo(VulkanCommandBufferInfo* c
     GFXRECON_ASSERT(command_buffer_info != nullptr)
     command_buffer_info->is_frame_boundary = false;
     command_buffer_info->frame_buffer_ids.clear();
-    command_buffer_info->bound_pipeline_id = format::kNullHandleId;
+    command_buffer_info->bound_pipelines.clear();
     command_buffer_info->push_constant_data.clear();
     command_buffer_info->push_constant_stage_flags     = 0;
     command_buffer_info->push_constant_pipeline_layout = VK_NULL_HANDLE;
@@ -10241,7 +10268,7 @@ void VulkanReplayConsumerBase::OverrideCmdBindPipeline(PFN_vkCmdBindPipeline    
         pipeline = MapHandle<VulkanPipelineInfo>(pipeline_info->capture_id, &CommonObjectInfoTable::GetVkPipelineInfo);
 
         // keep track of currently bound pipeline
-        command_buffer_info->bound_pipeline_id = pipeline_info->capture_id;
+        command_buffer_info->bound_pipelines[pipelineBindPoint] = pipeline_info->capture_id;
     }
     func(command_buffer, pipelineBindPoint, pipeline);
 }
@@ -10426,7 +10453,9 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysKHR(
             const auto& address_tracker  = GetDeviceAddressTracker(device_info);
             auto&       address_replacer = GetDeviceAddressReplacer(device_info);
 
-            auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(command_buffer_info->bound_pipeline_id);
+            GFXRECON_ASSERT(command_buffer_info->bound_pipelines.count(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR));
+            auto bound_pipeline = GetObjectInfoTable().GetVkPipelineInfo(
+                command_buffer_info->bound_pipelines[VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR]);
             GFXRECON_ASSERT(bound_pipeline != nullptr)
 
             address_replacer.ProcessCmdTraceRays(command_buffer_info,
@@ -12358,6 +12387,38 @@ void VulkanReplayConsumerBase::OverrideDestroyShaderModule(
         }
     }
     func(in_device, in_shader_module, in_pAllocator);
+}
+
+VkResult VulkanReplayConsumerBase::OverrideGetPastPresentationTimingGOOGLE(
+    PFN_vkGetPastPresentationTimingGOOGLE                         func,
+    VkResult                                                      original_result,
+    const VulkanDeviceInfo*                                       device_info,
+    const VulkanSwapchainKHRInfo*                                 swapchain_info,
+    PointerDecoder<uint32_t>*                                     pPresentationTimingCount,
+    StructPointerDecoder<Decoded_VkPastPresentationTimingGOOGLE>* pPresentationTimings)
+{
+    if (!IsExtensionBeingFaked(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+    {
+        return func(device_info->handle,
+                    swapchain_info->handle,
+                    pPresentationTimingCount->GetPointer(),
+                    pPresentationTimings->GetPointer());
+    }
+    return VK_SUCCESS;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideGetRefreshCycleDurationGOOGLE(
+    PFN_vkGetRefreshCycleDurationGOOGLE                         func,
+    VkResult                                                    original_result,
+    const VulkanDeviceInfo*                                     device_info,
+    const VulkanSwapchainKHRInfo*                               swapchain_info,
+    StructPointerDecoder<Decoded_VkRefreshCycleDurationGOOGLE>* pDisplayTimingProperties)
+{
+    if (!IsExtensionBeingFaked(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
+    {
+        return func(device_info->handle, swapchain_info->handle, pDisplayTimingProperties->GetPointer());
+    }
+    return VK_SUCCESS;
 }
 
 std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::AsyncCreateGraphicsPipelines(

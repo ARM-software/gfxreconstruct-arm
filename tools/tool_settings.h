@@ -94,6 +94,7 @@ const char kAllowedMessages[]                    = "--allowed-messages";
 const char kShaderReplaceArgument[]              = "--replace-shaders";
 const char kScreenshotAllOption[]                = "--screenshot-all";
 const char kScreenshotRangeArgument[]            = "--screenshots";
+const char kScreenshotIntervalArgument[]         = "--screenshot-interval";
 const char kScreenshotFormatArgument[]           = "--screenshot-format";
 const char kScreenshotDirArgument[]              = "--screenshot-dir";
 const char kScreenshotFilePrefixArgument[]       = "--screenshot-prefix";
@@ -160,6 +161,8 @@ const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-i
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
 const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
 const char kVerboseOption[]                       = "--verbose";
+const char kChecksumOption[]                      = "--checksum";
+const char kChecksumTriggerOption[]               = "--checksum-trigger";
 
 enum class WsiPlatform
 {
@@ -1119,7 +1122,16 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.create_resource_allocator =
         GetCreateResourceAllocatorFunc(arg_parser, filename, replay_options, tracked_object_info_table);
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
@@ -1324,6 +1336,7 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
     }
 
     replay_options.dump_resources_output_dir = GetDumpResourcesDir(arg_parser);
+    replay_options.dump_resources_before     = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
 
     const std::string& memory_usage = arg_parser.GetArgumentValue(kBatchingMemoryUsageArgument);
     if (!memory_usage.empty())
@@ -1340,7 +1353,16 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         }
     }
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
