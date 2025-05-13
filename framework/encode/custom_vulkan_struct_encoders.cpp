@@ -222,7 +222,7 @@ void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantAR
         const VkBaseInStructure* base = reinterpret_cast<const VkBaseInStructure*>(value.pNext);
         if (base->sType == VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM)
         {
-            const VkTensorDescriptionARM* description  = (const VkTensorDescriptionARM*)base->pNext;
+            const VkTensorDescriptionARM* description  = (const VkTensorDescriptionARM*)base;
             uint64_t                      size         = 0;
             uint64_t                      element_size = 0;
             switch (description->format)
