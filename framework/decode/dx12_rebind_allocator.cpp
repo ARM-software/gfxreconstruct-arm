@@ -44,7 +44,9 @@ HRESULT Dx12RebindAllocator::Initialize(const IUnknown* adapter, const void* pvD
     desc.Flags =
         (D3D12MA::ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED | D3D12MA::ALLOCATOR_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED);
 
+    GFXRECON_LOG_INFO_ONCE("Replay with D3D12 rebind memory translation.");
     HRESULT result = D3D12MA::CreateAllocator(&desc, &allocator_);
+
     return result;
 }
 
