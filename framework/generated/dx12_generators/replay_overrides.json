@@ -151,6 +151,10 @@
     "IDXGISwapChain3": {
       "ResizeBuffers1": "OverrideResizeBuffers1"
     },
+    "ID3D10Blob": {
+      "GetBufferPointer": "OverrideGetBufferPointer",
+      "GetBufferSize": "OverrideGetBufferSize"
+    },
     "ID3D12Object": {
       "SetName": "OverrideSetName"
     }

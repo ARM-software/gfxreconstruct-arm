@@ -14428,7 +14428,8 @@ void Dx12ReplayConsumer::Process_ID3D10Blob_GetBufferPointer(
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D10Blob*>(replay_object->object)->GetBufferPointer();
+        auto replay_result = OverrideGetBufferPointer(replay_object,
+                                                      return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D10Blob_GetBufferPointer>::Dispatch(
             this,
             call_info,
@@ -14450,7 +14451,8 @@ void Dx12ReplayConsumer::Process_ID3D10Blob_GetBufferSize(
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D10Blob*>(replay_object->object)->GetBufferSize();
+        auto replay_result = OverrideGetBufferSize(replay_object,
+                                                   return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D10Blob_GetBufferSize>::Dispatch(
             this,
             call_info,

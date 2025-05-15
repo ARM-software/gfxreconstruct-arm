@@ -230,7 +230,10 @@ bool Dx12FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header
     if ((header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreateCommittedResource) ||
         (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device4_CreateCommittedResource1) ||
         (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device8_CreateCommittedResource2) ||
-        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreateCommittedResource3))
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreateCommittedResource3) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreatePlacedResource) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device8_CreatePlacedResource1) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreatePlacedResource2))
     {
         GFXRECON_ASSERT(prebuild_Info_resource_values_ != nullptr);
 
@@ -286,6 +289,20 @@ bool Dx12FileOptimizer::ProcessMetaData(const format::MetaDataHeader& meta_heade
             fill_command_resource_values_ = nullptr;
             resource_values_iter_         = {};
         }
+    }
+    else if (meta_data_type == format::MetaDataType::kFillMemoryResourceValueCommand)
+    {
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes =
+            meta_header.block_header.size - sizeof(meta_header) + sizeof(meta_header.block_header);
+
+        if (!FileOptimizer::SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip meta block data");
+            return false;
+        }
+
+        return true;
     }
 
     return FileOptimizer::ProcessMetaData(meta_header);

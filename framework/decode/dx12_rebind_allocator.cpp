@@ -41,8 +41,7 @@ HRESULT Dx12RebindAllocator::Initialize(const IUnknown* adapter, const void* pvD
     D3D12MA::ALLOCATOR_DESC desc = {};
     desc.pDevice                 = reinterpret_cast<ID3D12Device*>(const_cast<void*>(pvDevice));
     desc.pAdapter                = reinterpret_cast<IDXGIAdapter*>(const_cast<IUnknown*>(adapter));
-    desc.Flags =
-        (D3D12MA::ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED | D3D12MA::ALLOCATOR_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED);
+    desc.Flags                   = D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS;
 
     GFXRECON_LOG_INFO_ONCE("Replay with D3D12 rebind memory translation.");
     HRESULT result = D3D12MA::CreateAllocator(&desc, &allocator_);

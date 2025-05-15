@@ -777,6 +777,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void PostPresent();
 
+    void PostRelease(const format::HandleId object_id, const format::HandleId device_id, const DxObjectInfoType type);
+
     void OverrideSetAutoBreadcrumbsEnablement(DxObjectInfo* replay_object_info, D3D12_DRED_ENABLEMENT enablement);
 
     void SetAutoBreadcrumbsEnablement(ID3D12DeviceRemovedExtendedDataSettings1* dred_settings,
@@ -964,6 +966,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     OverrideGetShaderStackSize(DxObjectInfo* replay_object, UINT64 return_value, WStringDecoder* export_name);
 
     void OverrideSetPipelineStackSize(DxObjectInfo* replay_object, UINT64 pipeline_stack_size_in_bytes);
+
+    LPVOID OverrideGetBufferPointer(DxObjectInfo* replay_object, UINT64 original_result);
+
+    SIZE_T OverrideGetBufferSize(DxObjectInfo* replay_object, UINT64 original_result);
 
     const Dx12ObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
 
@@ -1195,6 +1201,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                   const format::InitSubresourceCommandHeader& command_header,
                                   const uint8_t*                              data);
 
+    void SetResourceReplayRequiredSize(StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC>*  pDesc,
+                                       StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC1>* pDesc1,
+                                       D3D12_RESOURCE_STATES                               InitialResourceState);
+
     std::wstring ConstructObjectName(format::HandleId capture_id, format::ApiCallId call_id);
 
     std::unique_ptr<graphics::DX12ImageRenderer>          frame_buffer_renderer_;
@@ -1232,6 +1242,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unordered_map<ID3D12Resource*, ResourceInitInfo> resource_init_infos_;
     uint64_t                                              frame_end_marker_count_;
 
+    std::optional<std::pair<uint64_t, std::vector<uint8_t>>> latest_root_signature_blob_datas_;
     // map dx12 acceleration structure builders for each device
     std::unordered_map<ID3D12Device5*, std::unique_ptr<Dx12AccelerationStructureBuilder>>
         acceleration_structure_builders_;

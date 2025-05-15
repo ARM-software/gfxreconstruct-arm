@@ -183,11 +183,11 @@ bool GetPsoOptimizationInfo(const std::string&               input_filename,
     return pso_scan_result;
 }
 
-bool GetPrebuildInfoOptimizationInfo(const std::string&               input_filename,
-                                     Dx12OptimizationInfo&            info,
-                                     decode::Dx12OptimizationOptions& options)
+bool GetDxrOfflineOptimizationInfo(const std::string&               input_filename,
+                                   Dx12OptimizationInfo&            info,
+                                   decode::Dx12OptimizationOptions& options)
 {
-    bool prebuild_scan_result = false;
+    bool dxr_offline_scan_result = false;
 
     decode::FileProcessor file_processor;
     if (file_processor.Initialize(input_filename))
@@ -195,24 +195,31 @@ bool GetPrebuildInfoOptimizationInfo(const std::string&               input_file
         gfxrecon::decode::Dx12Decoder            decoder;
         gfxrecon::decode::Dx12RayTracingModifier ray_tracing_modifier_consumer;
 
-        GFXRECON_WRITE_CONSOLE("Scanning D3D12 capture %s for ray tracing prebuild infos.", input_filename.c_str());
+        GFXRECON_WRITE_CONSOLE("Scanning D3D12 capture %s for ray tracing offline infos.", input_filename.c_str());
         decoder.AddConsumer(&ray_tracing_modifier_consumer);
         file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
         if (FileProcessorSucceeded(file_processor))
         {
-            ray_tracing_modifier_consumer.GetTrackedResourceValues(info.prebuild_Info_resource_values);
-            GFXRECON_WRITE_CONSOLE("Finished scanning capture file for ray tracing prebuild infos.");
+            ray_tracing_modifier_consumer.GetTrackedResourceValues(info.prebuild_Info_resource_values,
+                                                                   info.fill_command_resource_values);
+            GFXRECON_WRITE_CONSOLE("Finished scanning capture file for ray tracing offline infos.");
 
-            prebuild_scan_result = true;
+            if (info.prebuild_Info_resource_values.empty() && info.fill_command_resource_values.empty())
+            {
+                // If the file is not optimized for DXR but does not contain any resource values that need to be
+                // mapped during replay, mark it as optimized.
+                info.inject_noop_resource_value_optimization = true;
+            }
+            dxr_offline_scan_result = true;
         }
         else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
         {
-            GFXRECON_WRITE_CONSOLE("A failure has occurred during scanning file for ray tracing prebuild infos.");
+            GFXRECON_WRITE_CONSOLE("A failure has occurred during scanning file for ray tracing offline infos.");
         }
         else if (!file_processor.EntireFileWasProcessed())
         {
-            GFXRECON_WRITE_CONSOLE("Failed to process the entire capture file for ray tracing prebuild infos.");
+            GFXRECON_WRITE_CONSOLE("Failed to process the entire capture file for ray tracing offline infos.");
         }
         else
         {
@@ -222,7 +229,7 @@ bool GetPrebuildInfoOptimizationInfo(const std::string&               input_file
         }
     }
 
-    return prebuild_scan_result;
+    return dxr_offline_scan_result;
 }
 
 bool GetDxrOptimizationInfo(const std::string&               input_filename,
@@ -347,9 +354,7 @@ bool GetDx12OptimizationInfo(const std::string&               input_filename,
 
     if (options.optimize_resource_values)
     {
-        dxr_scan_result = GetPrebuildInfoOptimizationInfo(input_filename, info, options);
-
-        dxr_scan_result = dxr_scan_result && GetDxrOptimizationInfo(input_filename, info, true, options);
+        dxr_scan_result = GetDxrOptimizationInfo(input_filename, info, true, options);
 
         // If unassocaited resource values were found the resource value tracker must be run again.
         if (options.optimize_resource_values_experimental && (info.unassociated_resource_values.size() > 0))
@@ -359,6 +364,10 @@ bool GetDx12OptimizationInfo(const std::string&               input_filename,
                 "A second pass will attempt to find this data using a brute-force search.");
             dxr_scan_result = dxr_scan_result && GetDxrOptimizationInfo(input_filename, info, false, options);
         }
+    }
+    else if (options.optimize_resource_values_offline)
+    {
+        dxr_scan_result = GetDxrOfflineOptimizationInfo(input_filename, info, options);
     }
 
     return pso_scan_result || dxr_scan_result;
@@ -405,7 +414,7 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
     }
 
     // Log info about resource value optimization
-    if (options.optimize_resource_values)
+    if (options.optimize_resource_values || options.optimize_resource_values_offline)
     {
         if (info.inject_noop_resource_value_optimization)
         {
@@ -495,9 +504,16 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
 bool Dx12OptimizeFile(std::string input_filename, std::string output_filename, decode::Dx12OptimizationOptions& options)
 {
     // Return early if no DX12 optimizations were enabled.
-    if (!options.remove_redundant_psos && !options.optimize_resource_values)
+    if (!options.remove_redundant_psos && !options.optimize_resource_values &&
+        !options.optimize_resource_values_offline)
     {
         return true;
+    }
+
+    if (options.optimize_resource_values_offline)
+    {
+        options.optimize_resource_values              = false;
+        options.optimize_resource_values_experimental = false;
     }
 
     // Run a scanning pass to collect the necessary optimization info.
