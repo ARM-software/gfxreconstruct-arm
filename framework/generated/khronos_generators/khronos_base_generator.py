@@ -79,6 +79,9 @@ class ApiData():
         extended_struct_variable    - The extended struct varible name used in this Khronos API
         extended_struct_func_prefix - The function prefix to use for extended struct functions for this Khronos API.
         boolean_type                - The type used by the API for booleans
+        flags_type                  - The type used for general flags in the API
+        flags_64_type               - The type used for 64-bit flags in the API
+        void_func_pointer_type      - The type for the void function pointer
         return_const_ptr_on_extended- Return a constant on extended pointer types
         supports_handles            - This API supports Handles
         handle_func_name_mod        - The name used to indicate a function is processing handles
@@ -103,6 +106,9 @@ class ApiData():
             extended_struct_variable,
             extended_struct_func_prefix,
             boolean_type,
+            flags_type,
+            flags_64_type,
+            void_func_pointer_type,
             return_const_ptr_on_extended,
             supports_handles,
             handle_func_name_mod,
@@ -125,6 +131,9 @@ class ApiData():
         self.extended_struct_variable = extended_struct_variable
         self.extended_struct_func_prefix = extended_struct_func_prefix
         self.boolean_type = boolean_type
+        self.flags_type = flags_type
+        self.flags_64_type = flags_64_type
+        self.void_func_pointer_type = void_func_pointer_type
         self.return_const_ptr_on_extended = return_const_ptr_on_extended
         self.supports_handles = supports_handles
         self.handle_func_name_mod = handle_func_name_mod
@@ -327,7 +336,6 @@ class KhronosBaseGenerator(OutputGenerator):
 
         # These types represent pointers to non-Khronos objects that were written as 64-bit address IDs.
         self.EXTERNAL_OBJECT_TYPES = ['void', 'Void']
-        self.DUPLICATE_HANDLE_TYPES = []
         self.MANUALLY_GENERATED_COMMANDS = []
         self.SKIP_COMMANDS = []
 
@@ -341,6 +349,7 @@ class KhronosBaseGenerator(OutputGenerator):
         self.base_types = dict()  # Set of current API's basetypes
         self.union_names = set()  # Set of current API's union typenames
         self.handle_names = set()  # Set of current API's handle typenames
+        self.handle_aliases = dict() # Map of hanlde aliases
         self.dispatchable_handle_names = set()  # Set of current API's dispatchable handle typenames
         self.flags_types = dict()  # Map of flags types
         self.flags_type_aliases = dict()  # Map of flags type aliases
@@ -387,7 +396,9 @@ class KhronosBaseGenerator(OutputGenerator):
         )  # Set of structures with handles
 
         self.atom_names = set()  # Set of current API's Atom typenames
+        self.atom_aliases = dict()  # Map of current API's Atom aliases
         self.opaque_names = set()  # Set of current API's Opaque typenames
+        self.opaque_aliases = dict()  # Map of current API's Opaque aliases
 
         # Data for every supported Khronos API
         # TODO: Eventually, we should move this info into a data file that we read (JSON?)
@@ -408,6 +419,9 @@ class KhronosBaseGenerator(OutputGenerator):
                 extended_struct_variable='pNext',
                 extended_struct_func_prefix='PNext',
                 boolean_type='VkBool32',
+                flags_type='VkFlags',
+                flags_64_type='VkFlags64',
+                void_func_pointer_type='PFN_vkVoidFunction',
                 return_const_ptr_on_extended=True,
                 supports_handles=True,
                 handle_func_name_mod='Handle',
@@ -433,6 +447,9 @@ class KhronosBaseGenerator(OutputGenerator):
                 extended_struct_variable='next',
                 extended_struct_func_prefix='Next',
                 boolean_type='XrBool32',
+                flags_type='',
+                flags_64_type='XrFlags64',
+                void_func_pointer_type='PFN_xrVoidFunction',
                 return_const_ptr_on_extended=False,
                 supports_handles=True,
                 handle_func_name_mod='Handle',
@@ -677,8 +694,10 @@ class KhronosBaseGenerator(OutputGenerator):
     # that is 64 bits wide.
     def is_64bit_flags(self, flag_type):
         if flag_type in self.flags_types:
-            if self.flags_types[flag_type].endswith('Flags64'):
-                return True
+            for api_data in self.valid_khronos_supported_api_data:
+                if (flag_type.startswith(api_data.type_prefix) and
+                    self.flags_types[flag_type] == api_data.flags_64_type):
+                    return True
         return False
 
     # Return true if the enum or 64 bit pseudo enum passed-in represents a set
@@ -1047,6 +1066,11 @@ class KhronosBaseGenerator(OutputGenerator):
                 and '_DEFINE_HANDLE' == type_elem.find('type').text[2:]
             ):
                 self.dispatchable_handle_names.add(name)
+
+            # Flags can have either VkFlags or VkFlags64 base type
+            alias = type_elem.get('alias')
+            if alias:
+                self.handle_aliases[name] = alias
         elif (category == 'bitmask'):
             # Flags can have either VkFlags or VkFlags64 base type
             alias = type_elem.get('alias')
@@ -1607,6 +1631,12 @@ class KhronosBaseGenerator(OutputGenerator):
                 return api_data.api_class_prefix
         return self.get_api_prefix()
 
+    def get_api_struct_prefix_from_type(self, type):
+        for api_data in self.valid_khronos_supported_api_data:
+            if type.startswith(api_data.type_prefix):
+                return api_data.type_prefix
+        return self.get_api_prefix()
+
     def get_api_prefix_from_command(self, cmd):
         for api_data in self.valid_khronos_supported_api_data:
             if cmd.startswith(api_data.command_prefix):
@@ -1652,8 +1682,42 @@ class KhronosBaseGenerator(OutputGenerator):
         return lower_type
 
     def write_includes_of_common_api_headers(self, gen_opts):
-        """
-        Intended to be overridden.
-        Must implement.
-        """
+        """ Method intended to be overridden. """
         raise NotImplementedError
+
+    def generate_child_struct_switch_statement(
+        self, parent_struct, value, initial_indent, switch_expression,
+        fn_emit_default, fn_emit_case
+    ):
+        """ Parent structs are abstract, need to case to specific child struct based on type """
+        indent = '    '
+        indent1 = initial_indent
+        indent2 = indent1 + indent
+        indent3 = indent2 + indent
+        body = ''
+        body += f'{indent1}// Cast and call the appropriate encoder based on the structure type\n'
+        body += f'{indent1}switch({switch_expression})\n'
+
+        body += f'{indent1}{{\n'
+        body += f'{indent2}default:\n'
+        body += f'{indent2}{{\n'
+        body += '\n'.join(
+            [indent3 + line for line in fn_emit_default(parent_struct, value)]
+        )
+        body += f'\n{indent2}}}\n'
+
+        for child_struct in self.children_structs[parent_struct]:
+            struct_type_name = self.struct_type_names[child_struct]
+            body += f'{indent2}case {struct_type_name}:\n'
+            body += f'{indent2}{{\n'
+            body += '\n'.join(
+                [
+                    indent3 + line for line in fn_emit_case(
+                        parent_struct, child_struct, struct_type_name, value
+                    )
+                ]
+            )
+            body += f'\n{indent2}}}\n'
+
+        body += f'{indent1}}}\n'
+        return body

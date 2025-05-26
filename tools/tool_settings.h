@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2023 LunarG, Inc.
-** Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -142,11 +142,11 @@ const char kBareOption[]                          = "--bare";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
+const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
 const char kDumpResourcesArgument[]               = "--dump-resources";
-const char kDumpResourcesBlockIndicesArgument[]   = "--dump-resources-block-indices";
 const char kDumpResourcesBeforeDrawOption[]       = "--dump-resources-before-draw";
 const char kDumpResourcesImageFormat[]            = "--dump-resources-image-format";
 const char kDumpResourcesScaleArgument[]          = "--dump-resources-scale";
@@ -1221,30 +1221,23 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     }
 
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
-    if (!dump_resources.empty() && dump_resources.find_first_not_of("0123456789,") == std::string::npos)
+    if (!dump_resources.empty())
     {
-        std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
-        if (values.size() == 3)
+        replay_options.enable_dump_resources = true;
+        if (dump_resources.find_first_not_of("0123456789,") == std::string::npos)
         {
-            replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
-            replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
-            replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
-            replay_options.enable_dump_resources                 = true;
-            replay_options.using_dump_resources_target           = true;
-        }
-    }
-
-    replay_options.dump_resources_block_indices = arg_parser.GetArgumentValue(kDumpResourcesBlockIndicesArgument);
-    if (!replay_options.dump_resources_block_indices.empty())
-    {
-        if (replay_options.enable_dump_resources)
-        {
-            GFXRECON_LOG_WARNING("--dump-resources and --dump-resources-block-indices shouldn't be used together."
-                                 "It will use --dump-resources-block-indices and ignore --dump-resources.");
+            std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
+            if (values.size() == 3)
+            {
+                replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
+                replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
+                replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
+                replay_options.using_dump_resources_target           = true;
+            }
         }
         else
         {
-            replay_options.enable_dump_resources = true;
+            replay_options.dump_resources_block_indices = dump_resources;
         }
     }
 
@@ -1306,6 +1299,15 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
     if (arg_parser.IsOptionSet(kDxOverrideObjectNames))
     {
         replay_options.override_object_names = true;
+    }
+
+    if (arg_parser.IsOptionSet(kDxAgsMarkRenderPasses))
+    {
+#ifdef GFXRECON_AGS_SUPPORT
+        replay_options.ags_inject_markers = true;
+#else
+        GFXRECON_LOG_ERROR("Unsupported option --dx12-ags-inject-markers");
+#endif
     }
 
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);

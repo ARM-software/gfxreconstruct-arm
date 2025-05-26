@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2023 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -31,21 +31,20 @@ const char kOptions[] =
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
     "screenshot-all,--onhb|--omit-null-hardware-buffers,--qamr|--quit-after-measurement-range,--fmr|--flush-"
     "measurement-range,--flush-inside-measurement-range,--vssb|--virtual-swapchain-skip-blit,--use-captured-swapchain-"
-    "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,--dx12-"
-    "override-object-names,--"
-    "offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
-    "--dump-resources-dump-depth-attachment,--dump-"
-    "resources-dump-vertex-index-buffers,--dump-resources-json-output-per-command,--dump-resources-dump-immutable-"
-    "resources,--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
-    "separate-alpha,--pbi-all,--preload-measurement-range,--add-new-pipeline-caches,--dsf|--disable-subpass-fusion,"
-    "--use-ext-frame-boundary";
+    "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,"
+    "--dsf|--disable-subpass-fusion,--use-ext-frame-boundary,--dx12-override-object-names,--"
+    "dx12-ags-inject-markers,--offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
+    "--dump-resources-dump-depth-attachment,--dump-resources-dump-vertex-index-buffers,"
+    "--dump-resources-json-output-per-command,--dump-resources-dump-immutable-resources,"
+    "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
+    "separate-alpha,--pbi-all,--preload-measurement-range,--add-new-pipeline-caches";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--"
-    "skip-get-fence-ranges,--dump-resources,--dump-resources-block-indices,--dump-resources-scale,--dump-resources-"
+    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-"
     "image-format,--dump-resources-dir,"
     "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-"
     "pipeline-cache,--quit-after-frame,--tsp|--trigger-script-path,--tsf|--trigger-script-frame,--marking-layers";
@@ -88,7 +87,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfr <frame-ranges> | --skip-get-fence-ranges <frame-ranges>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--pbi-all] [--pbis <index1,index2>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources <submit-index,command-index,drawcall-index>]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-block-indices <arg>] [--dump-resources-block-indices <file>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources <arg>] [--dump-resources <file>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-before-draw] [--dump-resources-scale <scale>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dir <dir>] [--dump-resources-image-format <format>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dump-depth-attachment]");
@@ -351,17 +350,17 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tForce wait on completion of queue operations for all queues");
     GFXRECON_WRITE_CONSOLE("          \t\tbefore calling Present. This is needed for accurate acquisition");
     GFXRECON_WRITE_CONSOLE("          \t\tof instrumentation data on some platforms.");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-block-indices <arg>");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources <arg>");
     GFXRECON_WRITE_CONSOLE("          \t\t<arg> is BeginCommandBuffer=<n>,Draw=<o>,BeginRenderPass=<p>,");
     GFXRECON_WRITE_CONSOLE("          \t\tNextSubpass=<q>,EndRenderPass=<r>,Dispatch=<s>,TraceRays=<t>,");
     GFXRECON_WRITE_CONSOLE("          \t\tQueueSubmit=<u>");
     GFXRECON_WRITE_CONSOLE("          \t\tGPU resources are dumped after the given vkCmdDraw*,");
     GFXRECON_WRITE_CONSOLE("          \t\tvkCmdDispatch, or vkCmdTraceRaysKHR is replayed.");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-block-indices <file>");
-    GFXRECON_WRITE_CONSOLE("          \t\tExtract --dump-resources-block-indices args from the specified file. Can be");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources <file>");
+    GFXRECON_WRITE_CONSOLE("          \t\tExtract --dump-resources block indices args from the specified file. Can be");
     GFXRECON_WRITE_CONSOLE("          \t\teither a json or a text file. If a text file is used, each");
     GFXRECON_WRITE_CONSOLE("          \t\tline of the file should contain comma separated indices as in");
-    GFXRECON_WRITE_CONSOLE("          \t\t--dump-resources-block-indices <arg> above.");
+    GFXRECON_WRITE_CONSOLE("          \t\t--dump-resources <arg> above.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-scale <scale>");
     GFXRECON_WRITE_CONSOLE("          \t\tScale images generated by dump resources by the given scale factor.");
     GFXRECON_WRITE_CONSOLE("          \t\tThe scale factor must be a floating point number greater than 0.");
@@ -424,6 +423,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tGenerate unique names for all ID3D12Objects and");
     GFXRECON_WRITE_CONSOLE("          \t\tassign each object the generated name.");
     GFXRECON_WRITE_CONSOLE("          \t\tThis is intended to assist in replay debugging.");
+    GFXRECON_WRITE_CONSOLE("  --dx12-ags-inject-markers");
+    GFXRECON_WRITE_CONSOLE("          \t\tLabel each API calls as block index of the trace");
+    GFXRECON_WRITE_CONSOLE("          \t\tRadeon GPU Detective could dump the label for debugging.");
     GFXRECON_WRITE_CONSOLE("  --batching-memory-usage <pct>");
     GFXRECON_WRITE_CONSOLE("          \t\tMax amount of memory consumption while loading a trimmed capture file.");
     GFXRECON_WRITE_CONSOLE("          \t\tAcceptable values range from 0 to 100 (default: 80)");
