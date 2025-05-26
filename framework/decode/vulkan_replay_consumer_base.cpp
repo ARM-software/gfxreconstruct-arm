@@ -163,9 +163,6 @@ VulkanReplayConsumerBase::VulkanReplayConsumerBase(std::shared_ptr<application::
     object_info_table_ = CommonObjectInfoTable::GetSingleton();
     assert(object_info_table_);
 
-    resource_dumper_ = new VulkanReplayDumpResources(options, object_info_table_);
-    assert(resource_dumper_);
-
     assert(application_ != nullptr);
     assert(options.create_resource_allocator != nullptr);
 
@@ -1395,8 +1392,8 @@ void VulkanReplayConsumerBase::ProcessInitImageCommand(format::HandleId         
                                                        const std::vector<uint64_t>& level_sizes,
                                                        const uint8_t*               data)
 {
-    VulkanDeviceInfo*      device_info = object_info_table_->GetVkDeviceInfo(device_id);
-    const VulkanImageInfo* image_info  = object_info_table_->GetVkImageInfo(image_id);
+    VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(device_id);
+    VulkanImageInfo*  image_info  = object_info_table_->GetVkImageInfo(image_id);
 
     if ((device_info != nullptr) && (image_info != nullptr))
     {
@@ -1488,6 +1485,9 @@ void VulkanReplayConsumerBase::ProcessInitImageCommand(format::HandleId         
                                                       image_info->layer_count,
                                                       image_info->level_count);
             }
+
+            image_info->intermediate_layout = static_cast<VkImageLayout>(layout);
+            image_info->current_layout      = static_cast<VkImageLayout>(layout);
 
             if (result != VK_SUCCESS)
             {
@@ -2274,6 +2274,15 @@ void VulkanReplayConsumerBase::GetMatchingDevice(VulkanInstanceInfo*       insta
                 }
             }
         }
+    }
+}
+
+void VulkanReplayConsumerBase::InitializeReplayDumpResources()
+{
+    if (resource_dumper_ == nullptr)
+    {
+        resource_dumper_ = new VulkanReplayDumpResources(options_, object_info_table_);
+        GFXRECON_ASSERT(resource_dumper_);
     }
 }
 
@@ -5824,6 +5833,15 @@ VkResult VulkanReplayConsumerBase::OverrideBindImageMemory(PFN_vkBindImageMemory
             image_info->handle, image_info->allocator_data, memory_info->allocator_data);
     }
 
+    // Memory requirements for image with external format can only be queried after the memory is bound
+    if (image_info->external_format)
+    {
+        VkMemoryRequirements image_mem_reqs;
+        GetDeviceTable(device_info->handle)
+            ->GetImageMemoryRequirements(device_info->handle, image_info->handle, &image_mem_reqs);
+        image_info->size = image_mem_reqs.size;
+    }
+
     return result;
 }
 
@@ -6243,6 +6261,20 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         {
             image_info->queue_family_index = 0;
         }
+
+        // Memory requirements for image with external format can only be queried after the memory is bound
+        auto* external_format_android = graphics::vulkan_struct_get_pnext<VkExternalFormatANDROID>(replay_create_info);
+        if (external_format_android != nullptr && external_format_android->externalFormat != 0)
+        {
+            image_info->external_format = true;
+        }
+        else
+        {
+            VkMemoryRequirements image_mem_reqs;
+            GetDeviceTable(device_info->handle)
+                ->GetImageMemoryRequirements(device_info->handle, *replay_image, &image_mem_reqs);
+            image_info->size = image_mem_reqs.size;
+        }
     }
 
     return result;
@@ -6612,6 +6644,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass(
     }
 
     // Copy multiview information
+    render_pass_info->has_multiview  = false;
     const VkBaseInStructure* current = reinterpret_cast<const VkBaseInStructure*>(create_info->pNext);
     while (current != nullptr)
     {
