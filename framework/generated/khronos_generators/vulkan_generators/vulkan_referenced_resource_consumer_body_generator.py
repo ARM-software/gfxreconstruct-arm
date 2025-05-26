@@ -79,10 +79,6 @@ class VulkanReferencedResourceBodyGenerator(BaseGenerator):
             warn_file=warn_file,
             diag_file=diag_file
         )
-        # Map of Vulkan structs containing handles to a list values for handle members or struct members
-        # that contain handles (eg. VkGraphicsPipelineCreateInfo contains a VkPipelineShaderStageCreateInfo
-        # member that contains handles).
-        self.structs_with_handles = dict()
         self.restrict_handles = True  # Determines if the 'is_handle' override limits the handle test to only the values conained by RESOURCE_HANDLE_TYPES.
 
     def beginFile(self, gen_opts):
@@ -154,15 +150,6 @@ class VulkanReferencedResourceBodyGenerator(BaseGenerator):
 
         # Finish processing in superclass
         BaseGenerator.endFile(self)
-
-    def genStruct(self, typeinfo, typename, alias):
-        """Method override."""
-        BaseGenerator.genStruct(self, typeinfo, typename, alias)
-
-        if not alias:
-            self.check_struct_member_handles(
-                typename, self.structs_with_handles
-            )
 
     def need_feature_generation(self):
         """Indicates that the current feature has C++ code to generate."""

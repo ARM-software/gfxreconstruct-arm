@@ -25,7 +25,7 @@ import sys
 from khronos_base_generator import write
 
 
-class KhronosBaseStructHandleMappersBodyGenerator():
+class KhronosStructHandleMappersBodyGenerator():
     """Base class for generating struct handle mappers body code."""
 
     def endFile(self):
@@ -36,14 +36,14 @@ class KhronosBaseStructHandleMappersBodyGenerator():
 
         for struct in self.get_all_filtered_struct_names():
             if (
-                (struct in self.global_structs_with_handles)
+                (struct in self.structs_with_handles)
                 or (struct in self.GENERIC_HANDLE_STRUCTS)
             ) and (struct not in self.STRUCT_MAPPERS_BLACKLIST):
                 handle_members = list()
                 generic_handle_members = dict()
 
-                if struct in self.global_structs_with_handles:
-                    handle_members = self.global_structs_with_handles[struct].copy()
+                if struct in self.structs_with_handles:
+                    handle_members = self.structs_with_handles[struct].copy()
 
                 if struct in self.GENERIC_HANDLE_STRUCTS:
                     generic_handle_members = self.GENERIC_HANDLE_STRUCTS[struct
@@ -57,7 +57,7 @@ class KhronosBaseStructHandleMappersBodyGenerator():
                 else:
                     for member in handle_members:
                         if (
-                            (self.is_handle(member.base_type) or self.is_atom(member.base_type)) and
+                            (self.is_handle_like(member.base_type)) and
                             not (member.is_array and not member.is_dynamic)
                         ) or (member.base_type in self.MAP_STRUCT_TYPE):
                             needs_value_ptr = True
@@ -119,7 +119,7 @@ class KhronosBaseStructHandleMappersBodyGenerator():
                     extended_list.append(ext_struct)
 
         for base_type in sorted(extended_list):
-            if base_type in self.global_structs_with_handles:
+            if base_type in self.structs_with_handles:
                 write(
                     '        case {}:'.format(self.struct_type_names[base_type]),
                     file=self.outFile
@@ -144,7 +144,7 @@ class KhronosBaseStructHandleMappersBodyGenerator():
             for value_info in self.all_cmd_params[cmd][2]:
                 if self.is_output_parameter(value_info) and (
                     value_info.base_type in self.get_all_filtered_struct_names()
-                ) and (value_info.base_type in self.global_structs_with_handles) and (
+                ) and (value_info.base_type in self.structs_with_handles) and (
                     value_info.base_type
                     not in output_structs_with_handles
                 ):
@@ -158,18 +158,18 @@ class KhronosBaseStructHandleMappersBodyGenerator():
             self.newline()
             write(
                 self.make_struct_handle_additions(
-                    struct, self.global_structs_with_handles[struct]
+                    struct, self.structs_with_handles[struct]
                 ),
                 file=self.outFile
             )
 
         # Generate handle memory allocation functions for output structs with handles
         for struct in output_structs_with_handles:
-            if struct in self.global_structs_with_handle_ptrs:
+            if struct in self.structs_with_handle_ptrs:
                 self.newline()
                 write(
                     self.make_struct_handle_allocations(
-                        struct, self.global_structs_with_handles[struct]
+                        struct, self.structs_with_handles[struct]
                     ),
                     file=self.outFile
                 )
@@ -178,7 +178,7 @@ class KhronosBaseStructHandleMappersBodyGenerator():
         self, name, handle_members, generic_handle_members
     ):
         """Generating expressions for mapping struct handles read from the capture file to handles created at replay."""
-        prefix_from_type = self.get_prefix_from_type(name)
+        prefix_from_type = self.get_api_prefix_from_type(name)
 
         body = ''
         for member in handle_members:
@@ -228,7 +228,7 @@ class KhronosBaseStructHandleMappersBodyGenerator():
                     )
             else:
                 type = member.base_type
-                prefix_from_type = self.get_prefix_from_type(member.base_type)
+                prefix_from_type = self.get_api_prefix_from_type(member.base_type)
                 func_id = member.base_type + 'Info'
                 type = prefix_from_type + member.base_type[2:] + 'Info'
                 object_info_table_get = ', &CommonObjectInfoTable::Get{}'.format(
