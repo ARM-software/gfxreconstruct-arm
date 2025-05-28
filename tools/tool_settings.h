@@ -823,14 +823,14 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
                                const gfxrecon::decode::VulkanReplayOptions&    replay_options,
                                gfxrecon::decode::VulkanTrackedObjectInfoTable* tracked_object_info_table)
 {
-    gfxrecon::decode::CreateResourceAllocator func  = CreateDefaultAllocator;
+    gfxrecon::decode::CreateResourceAllocator func  = CreateRebindAllocator;
     const auto&                               value = arg_parser.GetArgumentValue(kMemoryPortabilityShortOption);
 
     if (!value.empty())
     {
-        if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRebind, value.c_str()) == 0)
+        if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) == 0)
         {
-            func = CreateRebindAllocator;
+            func = CreateDefaultAllocator;
         }
         else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRemap, value.c_str()) == 0)
         {
@@ -840,7 +840,7 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
         {
             func = InitRealignAllocatorCreateFunc(filename, replay_options, tracked_object_info_table);
         }
-        else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) != 0)
+        else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRebind, value.c_str()) != 0)
         {
             GFXRECON_LOG_FATAL("Unrecognized memory translation option \"%s\"", value.c_str());
             exit(EXIT_FAILURE);
