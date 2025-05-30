@@ -1,24 +1,19 @@
 #ifndef GFXRECON_TOOLS_OPTIMIZE_VULKAN_RAYTRACING_MODIFIER_H
 #define GFXRECON_TOOLS_OPTIMIZE_VULKAN_RAYTRACING_MODIFIER_H
 
-#include <functional>
-#include <limits>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-#include <algorithm>
 #include <vulkan/vulkan_core.h>
 
 #include "decode/api_decoder.h"
-#include "decode/referenced_resource_table.h"
-#include "generated/generated_vulkan_consumer.h"
+#include "format/format.h"
 #include "util/defines.h"
-#include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
-#include "vulkan/vulkan.h"
-#include "decode/vulkan_object_info.h"
 #include "util/vulkan_modifier_base.h"
-#include "encode/struct_pointer_encoder.h"
 #include "vulkan_optimize_options.h"
+
+#include <list>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -329,7 +324,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     void WriteInitBufferDataFixCmd();
 
   private:
-    struct BufferObject
+    struct BufferInfo
     {
         format::HandleId    handle;
         uint64_t            size;
@@ -339,25 +334,25 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         uint64_t            destruction_index;
     };
 
-    struct BindingMemory
+    struct MemoryBindingRecord
     {
         format::HandleId handle;
         bool             isBuffer;
         uint64_t         offset;
     };
 
-    struct MemoryObject
+    struct DeviceMemoryInfo
     {
-        format::HandleId           handle;
-        uint64_t                   size;
-        uint32_t                   type_index;
-        VkMemoryAllocateFlags      flags;
-        uint64_t                   creation_index;
-        uint64_t                   destruction_index;
-        std::vector<BindingMemory> bind_memory_;
+        format::HandleId                 handle;
+        uint64_t                         size;
+        uint32_t                         type_index;
+        VkMemoryAllocateFlags            flags;
+        uint64_t                         creation_index;
+        uint64_t                         destruction_index;
+        std::vector<MemoryBindingRecord> memory_binding_records_;
     };
 
-    struct AccelerationStructureObject
+    struct AccelerationStructureInfo
     {
         format::HandleId               as_handle;
         format::HandleId               buf_handle;
@@ -385,7 +380,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         format::HandleId                                                                 source_of_compaction;
     };
 
-    struct PipelineObject
+    struct PipelineInfo
     {
         format::HandleId handle;
         VkStructureType  sType;
@@ -393,17 +388,25 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         uint64_t         destruction_index;
     };
 
-    struct CommandBufferObject
+    struct CommandBufferInfo
     {
-        format::HandleId          handle;
-        format::HandleId          device_id;
-        VkCommandBufferLevel      level;
-        VkCommandBufferUsageFlags usage;
-        uint64_t                  creation_index;
-        uint64_t                  destruction_index;
+        CommandBufferInfo(format::HandleId          handle,
+                          format::HandleId          device_id,
+                          VkCommandBufferLevel      level,
+                          VkCommandBufferUsageFlags usage,
+                          uint64_t                  creation_index) :
+            handle_(handle),
+            device_id_(device_id), level_(level), usage_(usage), creation_index_(creation_index)
+        {}
+        format::HandleId          handle_;
+        format::HandleId          device_id_;
+        VkCommandBufferLevel      level_;
+        VkCommandBufferUsageFlags usage_;
+        uint64_t                  creation_index_;
+        uint64_t                  destruction_index_;
     };
 
-    struct InitBufferObject
+    struct InitBufferInfo
     {
         format::HandleId                              buffer_id;
         format::HandleId                              device_id;
@@ -414,13 +417,13 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
   private:
     // -----buffer handle-----BufferObject
-    std::unordered_map<format::HandleId, BufferObject> buffer_entries_;
+    std::unordered_map<format::HandleId, BufferInfo> buffer_entries_;
 
     // -----memory and binding-----MemoryObject
-    std::unordered_map<format::HandleId, MemoryObject> memory_binding_entries_;
+    std::unordered_map<format::HandleId, DeviceMemoryInfo> memory_binding_entries_;
 
     // -----acceleration structure handle-----AccelerationStructureObject
-    std::unordered_map<format::HandleId, AccelerationStructureObject> acceleration_structure_entries_;
+    std::unordered_map<format::HandleId, AccelerationStructureInfo> acceleration_structure_entries_;
 
     // -----acceleration structure handle-----AccelerationStructureBuildInfo
     std::unordered_map<format::HandleId, AccelerationStructureBuildInfo> acceleration_structure_build_infos_;
@@ -435,29 +438,24 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
         shader_group_handle_entries_;
 
-    // -----compute pipeline handle-----PipelineObject
-    std::unordered_map<format::HandleId, PipelineObject> compute_pipeline_entries_;
+    // All command buffer entries
+    std::unordered_map<format::HandleId, CommandBufferInfo> command_buffer_entries_;
+    // Command buffers in which binding of compute pipeline ocurred
+    std::unordered_set<format::HandleId> command_buffers_with_compute_;
 
-    // -----descriptor handle-----buffers handle
-    std::unordered_map<format::HandleId, std::vector<format::HandleId>> descriptor_bind_buffers_;
+    // Fill memory indices, we reset them per vkQueueSubmit so we can tie them later
+    std::vector<uint64_t> fill_memory_indices_per_submit_;
+    // Filled during first pass
+    std::list<uint64_t> fill_memory_indices_to_inspect_;
 
-    // -----buffers handle-----descriptor handle
-    std::unordered_map<format::HandleId, std::vector<format::HandleId>> compute_pipeline_buffer_bind_descriptors_;
-
-    // -----command buffer-----create CommandBufferObject
-    std::unordered_map<format::HandleId, CommandBufferObject> command_buffer_entries_;
-
-    // -----command buffer-----bind compute handle
-    std::unordered_map<format::HandleId, std::vector<format::HandleId>> cmd_buffer_bind_compute_handles_;
-
-    // -----call index-----fill memory handle
-    std::unordered_map<uint64_t, format::HandleId> per_submit_fill_memory_index_;
-    std::unordered_map<uint64_t, format::HandleId> fill_memory_find_address_entries_;
+    std::unordered_set<format::HandleId> instance_buffers_;
 
     // -----init buffer handle-----InitBufferObject
-    std::unordered_map<format::HandleId, InitBufferObject> init_buffer_entries_;
+    std::unordered_map<format::HandleId, InitBufferInfo> init_buffer_entries_;
 
     VulkanOptimizationOptions options_;
+
+    bool heuristic_check_compute(format::HandleId command_buffer);
 };
 
 GFXRECON_END_NAMESPACE(decode)
