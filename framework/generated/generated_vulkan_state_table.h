@@ -31,6 +31,7 @@
 #define  GFXRECON_GENERATED_VULKAN_STATE_TABLE_H
 
 #include "encode/vulkan_state_table_base.h"
+
 #include "encode/custom_vulkan_wrapper_handlers.h"
 
 
@@ -309,6 +310,7 @@ class VulkanStateTable : VulkanStateTableBase
     void VisitWrappers(std::function<void(vulkan_wrappers::WeightsARMWrapper*)> visitor) const { for (auto entry : weightsARM_map_) { visitor(entry.second); } }
 
     CustomVulkanStateTable customStateTable;
+
   private:
     std::map<format::HandleId, vulkan_wrappers::AccelerationStructureKHRWrapper*> accelerationStructureKHR_map_;
     std::map<format::HandleId, vulkan_wrappers::AccelerationStructureNVWrapper*> accelerationStructureNV_map_;

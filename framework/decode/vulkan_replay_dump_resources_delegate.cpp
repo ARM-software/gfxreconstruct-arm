@@ -275,7 +275,8 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpImageDescriptor(const VulkanDum
                                    options_.dump_resources_image_format,
                                    options_.dump_resources_dump_all_image_subresources,
                                    options_.dump_resources_dump_raw_images,
-                                   options_.dump_resources_dump_separate_alpha);
+                                   options_.dump_resources_dump_separate_alpha,
+                                   image_info->intermediate_layout);
     if (res != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Dumping image failed (%s)", util::ToString<VkResult>(res).c_str())
@@ -457,6 +458,13 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(const Vu
     const uint32_t draw_call_json_entry = dump_json_.FetchAndAddDrawCallsEntryIndex();
     auto&          draw_call_entry =
         !options_.dump_resources_json_per_command ? drawcall_json_entries[draw_call_json_entry] : drawcall_json_entries;
+
+    if (options_.using_dump_resources_target)
+    {
+        draw_call_entry["queueSubmitCallIndex"]   = options_.dump_resources_target.submit_index;
+        draw_call_entry["commandBufferCallIndex"] = options_.dump_resources_target.command_index;
+        draw_call_entry["drawCallIndex"]          = options_.dump_resources_target.draw_call_index;
+    }
 
     draw_call_entry["drawIndex"]               = draw_call_info.cmd_index;
     draw_call_entry["beginCommandBufferIndex"] = draw_call_info.bcb_index;
@@ -1280,6 +1288,13 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(const Vu
                                                    ? dispatch_json_entries[dispatch_json_entry_index]
                                                    : dump_json_.GetData();
 
+    if (options_.using_dump_resources_target)
+    {
+        dispatch_json_entry["queueSubmitCallIndex"]   = options_.dump_resources_target.submit_index;
+        dispatch_json_entry["commandBufferCallIndex"] = options_.dump_resources_target.command_index;
+        dispatch_json_entry["drawCallIndex"]          = options_.dump_resources_target.draw_call_index;
+    }
+
     dispatch_json_entry["dispatchIndex"]           = draw_call_info.cmd_index;
     dispatch_json_entry["beginCommandBufferIndex"] = draw_call_info.bcb_index;
     dispatch_json_entry["queueSubmitIndex"]        = draw_call_info.qs_index;
@@ -1744,6 +1759,13 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonTraceRaysIndex(const 
     const uint32_t trace_rays_json_entry_index = dump_json_.FetchAndAddTraceRaysEntryIndex();
     auto&          tr_entry =
         !options_.dump_resources_json_per_command ? tr_json_entries[trace_rays_json_entry_index] : dump_json_.GetData();
+
+    if (options_.using_dump_resources_target)
+    {
+        tr_entry["queueSubmitCallIndex"]   = options_.dump_resources_target.submit_index;
+        tr_entry["commandBufferCallIndex"] = options_.dump_resources_target.command_index;
+        tr_entry["drawCallIndex"]          = options_.dump_resources_target.draw_call_index;
+    }
 
     tr_entry["traceRaysIndex"]          = draw_call_info.cmd_index;
     tr_entry["beginCommandBufferIndex"] = draw_call_info.bcb_index;

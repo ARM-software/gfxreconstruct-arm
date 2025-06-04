@@ -44,6 +44,10 @@
 #include "graphics/dx12_util.h"
 #include "application/application.h"
 
+#ifdef GFXRECON_AGS_SUPPORT
+#include "graphics/dx12_ags_marker_injector.h"
+#endif
+
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -65,6 +69,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
     }
+
+#ifdef GFXRECON_AGS_SUPPORT
+    void SetAgsMarkerInjector(AGSContext* ags_context = nullptr);
+#endif
 
     void SetFatalErrorHandler(std::function<void(const char*)> handler) { fatal_error_handler_ = handler; }
 
@@ -1246,6 +1254,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     // map dx12 acceleration structure builders for each device
     std::unordered_map<ID3D12Device5*, std::unique_ptr<Dx12AccelerationStructureBuilder>>
         acceleration_structure_builders_;
+
+#ifdef GFXRECON_AGS_SUPPORT
+    graphics::Dx12AgsMarkerInjector* ags_marker_injector_{ nullptr };
+#endif
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2023 LunarG, Inc.
-** Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -144,6 +144,7 @@ const char kBareOption[]                          = "--bare";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
+const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
@@ -1221,13 +1222,33 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.preload_measurement_range = true;
     }
 
-    replay_options.dump_resources              = arg_parser.GetArgumentValue(kDumpResourcesArgument);
+    const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
+    if (!dump_resources.empty())
+    {
+        replay_options.enable_dump_resources = true;
+        if (dump_resources.find_first_not_of("0123456789,") == std::string::npos)
+        {
+            std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
+            if (values.size() == 3)
+            {
+                replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
+                replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
+                replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
+                replay_options.using_dump_resources_target           = true;
+            }
+        }
+        else
+        {
+            replay_options.dump_resources_block_indices = dump_resources;
+        }
+    }
+
     replay_options.dump_resources_before       = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
     replay_options.dump_resources_dump_depth   = arg_parser.IsOptionSet(kDumpResourcesDepth);
     replay_options.dump_resources_image_format = GetDumpresourcesImageFormat(arg_parser);
     replay_options.dump_resources_scale        = GetDumpResourcesScale(arg_parser);
     replay_options.dump_resources_output_dir   = GetDumpResourcesDir(arg_parser);
-    replay_options.dumping_resources           = !replay_options.dump_resources.empty();
+    replay_options.dumping_resources           = !replay_options.dump_resources_block_indices.empty();
     replay_options.dump_resources_dump_vertex_index_buffer =
         arg_parser.IsOptionSet(kDumpResourcesDumpVertexIndexBuffers);
     replay_options.dump_resources_json_per_command = arg_parser.IsOptionSet(kDumpResourcesJsonPerCommand);
@@ -1318,13 +1339,18 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         replay_options.override_object_names = true;
     }
 
+    if (arg_parser.IsOptionSet(kDxAgsMarkRenderPasses))
+    {
+#ifdef GFXRECON_AGS_SUPPORT
+        replay_options.ags_inject_markers = true;
+#else
+        GFXRECON_LOG_ERROR("Unsupported option --dx12-ags-inject-markers");
+#endif
+    }
+
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
     if (!dump_resources.empty() && dump_resources.find_first_not_of("0123456789,") == std::string::npos)
     {
-        // If the option parameter does not split into three comma separated numbers, consider
-        // it a Vulkan option and ignore it. If it does split into three comma separated numbers,
-        // the arg is for dx12 and should have already been validated in the Vulkan option parsing.
-        // In that case, we simply extract and save the values here.
         std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
         if (values.size() == 3)
         {
@@ -1332,6 +1358,7 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
             replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
             replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
             replay_options.enable_dump_resources                 = true;
+            replay_options.using_dump_resources_target           = true;
         }
     }
 

@@ -1,7 +1,5 @@
 /*
-** Copyright (c) 2018-2020 Valve Corporation
-** Copyright (c) 2018-2020 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -21,17 +19,38 @@
 ** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ** DEALINGS IN THE SOFTWARE.
 */
-#ifndef GFXRECON_PARSE_DUMP_RESOURCES_CLI_H
-#define GFXRECON_PARSE_DUMP_RESOURCES_CLI_H
 
-#include "replay_settings.h"
+#ifndef GFXRECON_AGS_GPU_CMD_WRAPPER_H
+#define GFXRECON_AGS_GPU_CMD_WRAPPER_H
+
+#include "util/defines.h"
+#include "format/format.h"
+
+#include "decode/dx_replay_options.h"
+
+#include <d3d12.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-GFXRECON_BEGIN_NAMESPACE(parse_dump_resources)
+GFXRECON_BEGIN_NAMESPACE(decode)
 
-bool parse_dump_resources_arg(gfxrecon::decode::VulkanReplayOptions& vulkan_replay_options);
+class AgsGpuCmdWrapper
+{
+  public:
+    AgsGpuCmdWrapper(DxReplayOptions*           options,
+                     ID3D12GraphicsCommandList* command_list,
+                     format::HandleId           capture_id,
+                     format::ApiCallId          call_id,
+                     uint64_t                   block_idx);
 
-GFXRECON_END_NAMESPACE(parse_dump_resources)
+    ~AgsGpuCmdWrapper();
+
+  private:
+    DxReplayOptions*           current_options{ nullptr };
+    ID3D12GraphicsCommandList* current_command_list{ nullptr };
+    bool                       bypass_marker_ = false;
+};
+
+GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_PARSE_DUMP_RESOURCES_CLI_H
+#endif // GFXRECON_AGS_GPU_CMD_WRAPPER_H
