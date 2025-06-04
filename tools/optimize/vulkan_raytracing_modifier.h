@@ -455,7 +455,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     VulkanOptimizationOptions options_;
 
-    bool heuristic_check_compute(format::HandleId command_buffer);
+    bool HeuristicCheckCompute(format::HandleId command_buffer);
 };
 
 GFXRECON_END_NAMESPACE(decode)

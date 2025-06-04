@@ -1606,7 +1606,7 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit(const ApiCallInfo&         
         {
 
             const format::HandleId command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
-            should_inspect                        = should_inspect || heuristic_check_compute(command_buffer);
+            should_inspect                        = should_inspect || HeuristicCheckCompute(command_buffer);
             command_buffers_with_compute_.erase(command_buffer);
         }
 
@@ -1645,7 +1645,7 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2(const ApiCallInfo&        
 
             const format::HandleId command_buffer =
                 submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
-            should_inspect = should_inspect || heuristic_check_compute(command_buffer);
+            should_inspect = should_inspect || HeuristicCheckCompute(command_buffer);
             command_buffers_with_compute_.erase(command_buffer);
         }
 
@@ -1684,7 +1684,7 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&     
 
             const format::HandleId command_buffer =
                 submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
-            should_inspect = should_inspect || heuristic_check_compute(command_buffer);
+            should_inspect = should_inspect || HeuristicCheckCompute(command_buffer);
             command_buffers_with_compute_.erase(command_buffer);
         }
 
@@ -1720,7 +1720,7 @@ void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertie
     }
 }
 
-bool VulkanRayTracingModifier::heuristic_check_compute(format::HandleId command_buffer)
+bool VulkanRayTracingModifier::HeuristicCheckCompute(format::HandleId command_buffer)
 {
     if (command_buffers_with_compute_.count(command_buffer) > 0)
     {
