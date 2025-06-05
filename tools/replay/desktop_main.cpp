@@ -29,6 +29,7 @@
 #include "decode/preload_file_processor.h"
 #include "decode/vulkan_replay_options.h"
 #include "decode/vulkan_tracked_object_info_table.h"
+#include "decode/vulkan_pre_process_consumer.h"
 #include "generated/generated_vulkan_decoder.h"
 #include "generated/generated_vulkan_replay_consumer.h"
 #include "graphics/fps_info.h"
@@ -39,7 +40,7 @@
 #if defined(D3D12_SUPPORT)
 #include "generated/generated_dx12_decoder.h"
 #include "generated/generated_dx12_replay_consumer.h"
-#include "decode/dx12_browse_consumer.h"
+#include "decode/dx12_pre_process_consumer.h"
 #ifdef GFXRECON_AGS_SUPPORT
 #include "decode/custom_ags_consumer_base.h"
 #include "decode/custom_ags_decoder.h"
@@ -70,17 +71,18 @@ void WaitForExit()
 {
     DWORD process_list[2];
     DWORD result = GetConsoleProcessList(process_list, ARRAYSIZE(process_list));
-
     // If the process list contains a single entry, we assume that the console was created when the gfxrecon-replay.exe
     // process started, and will be destroyed when it exits.  In this case, we will wait on user input before exiting
     // and closing the console window to give the user a chance to read any console output.
     if (result <= 1)
     {
-        GFXRECON_WRITE_CONSOLE("\nPress any key to close this window . . .");
-        while (!_kbhit())
-        {
-            Sleep(250);
-        }
+        // Waiting stucks some automations and is mainly useless for us
+
+        // GFXRECON_WRITE_CONSOLE("\nPress any key to close this window . . .");
+        // while (!_kbhit())
+        // {
+        //     Sleep(250);
+        // }
     }
 }
 #else
@@ -89,29 +91,80 @@ void WaitForExit() {}
 
 const char kLayerEnvVar[] = "VK_INSTANCE_LAYERS";
 
-#if defined(D3D12_SUPPORT)
-bool BrowseFile(const std::string&                           input_filename,
-                const gfxrecon::decode::DumpResourcesTarget& dump_resources_target,
-                gfxrecon::decode::TrackDumpDrawCall&         out_track_dump_target)
+void RunVulkanPreProcessConsumer(const std::string&                      input_filename,
+                                 gfxrecon::decode::VulkanReplayOptions&  replay_options,
+                                 gfxrecon::decode::VulkanReplayConsumer& replay_consumer)
 {
-    gfxrecon::decode::TrackDumpDrawCall* track_dump_target = nullptr;
-
     gfxrecon::decode::FileProcessor file_processor;
     if (file_processor.Initialize(input_filename))
     {
-        gfxrecon::decode::Dx12BrowseConsumer dx12_browse_consumer;
-        gfxrecon::decode::Dx12Decoder        dx12_decoder;
+        gfxrecon::decode::VulkanPreProcessConsumer pre_process_consumer;
 
-        dx12_browse_consumer.SetDumpTarget(dump_resources_target);
+        if (replay_options.using_dump_resources_target)
+        {
+            pre_process_consumer.EnableDumpResources(replay_options.dump_resources_target);
+        }
 
-        dx12_decoder.AddConsumer(&dx12_browse_consumer);
-        file_processor.AddDecoder(&dx12_decoder);
+        gfxrecon::decode::VulkanDecoder decoder;
+        decoder.AddConsumer(&pre_process_consumer);
+        file_processor.AddDecoder(&decoder);
         file_processor.ProcessAllFrames();
-        track_dump_target = dx12_browse_consumer.GetTrackDumpTarget();
-        GFXRECON_ASSERT((track_dump_target != nullptr));
-        out_track_dump_target = *track_dump_target;
+
+        replay_options.enable_vulkan = pre_process_consumer.WasVulkanAPIDetected();
+
+        if (replay_options.enable_vulkan)
+        {
+            if (replay_options.using_dump_resources_target)
+            {
+                replay_options.dump_resources_block_indices = pre_process_consumer.GetDumpResourcesBlockIndices();
+            }
+
+            if (replay_options.enable_dump_resources)
+            {
+                // Process --dump-resources block indices arg.
+                if (!gfxrecon::parse_dump_resources::parse_dump_resources_arg(replay_options))
+                {
+                    GFXRECON_LOG_FATAL("There was an error while parsing dump resources indices. Terminating.");
+                    exit(0);
+                }
+            }
+        }
     }
-    return (track_dump_target != nullptr);
+    replay_consumer.InitializeReplayDumpResources();
+}
+
+#if defined(D3D12_SUPPORT)
+void RunDx12PreProcessConsumer(const std::string&                    input_filename,
+                               gfxrecon::decode::DxReplayOptions&    replay_options,
+                               gfxrecon::decode::Dx12ReplayConsumer& replay_consumer)
+{
+    gfxrecon::decode::FileProcessor file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        gfxrecon::decode::Dx12PreProcessConsumer pre_process_consumer;
+
+        if (replay_options.enable_dump_resources)
+        {
+            pre_process_consumer.EnableDumpResources(replay_options.dump_resources_target);
+        }
+
+        gfxrecon::decode::Dx12Decoder decoder;
+        decoder.AddConsumer(&pre_process_consumer);
+        file_processor.AddDecoder(&decoder);
+        file_processor.ProcessAllFrames();
+
+        replay_options.enable_d3d12 = pre_process_consumer.WasD3D12APIDetected();
+
+        if (replay_options.enable_d3d12)
+        {
+            if (replay_options.enable_dump_resources)
+            {
+                auto track_dump_target = pre_process_consumer.GetTrackDumpTarget();
+                GFXRECON_ASSERT(track_dump_target != nullptr);
+                replay_consumer.SetDumpTarget(*track_dump_target);
+            }
+        }
+    }
 }
 #endif
 
@@ -174,18 +227,11 @@ int main(int argc, const char** argv)
             // Select WSI context based on CLI
             std::string wsi_extension = GetWsiExtensionName(GetWsiPlatform(arg_parser));
             auto        application   = std::make_shared<gfxrecon::application::Application>(
-                kApplicationName, wsi_extension, file_processor.get());
+                kApplicationName, file_processor.get(), wsi_extension, nullptr);
 
             gfxrecon::decode::VulkanTrackedObjectInfoTable tracked_object_info_table;
             gfxrecon::decode::VulkanReplayOptions          vulkan_replay_options =
                 GetVulkanReplayOptions(arg_parser, filename, &tracked_object_info_table);
-
-            // Process --dump-resources arg.
-            if (!gfxrecon::parse_dump_resources::parse_dump_resources_arg(vulkan_replay_options))
-            {
-                GFXRECON_LOG_FATAL("There was an error while parsing dump resources indices. Terminating.");
-                return -1;
-            }
 
             uint32_t measurement_start_frame = 0;
             uint32_t measurement_end_frame   = 0;
@@ -229,6 +275,8 @@ int main(int argc, const char** argv)
             gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, vulkan_replay_options);
             gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
+            RunVulkanPreProcessConsumer(filename, vulkan_replay_options, vulkan_replay_consumer);
+
             if (vulkan_replay_options.enable_vulkan)
             {
                 vulkan_replay_consumer.SetFatalErrorHandler(
@@ -247,17 +295,12 @@ int main(int argc, const char** argv)
             gfxrecon::decode::Dx12ReplayConsumer dx12_replay_consumer(application, dx_replay_options);
             gfxrecon::decode::Dx12Decoder        dx12_decoder;
 
-            if (dx_replay_options.enable_dump_resources)
-            {
-                gfxrecon::decode::TrackDumpDrawCall track_dump_target;
-                BrowseFile(filename, dx_replay_options.dump_resources_target, track_dump_target);
-                dx12_replay_consumer.SetDumpTarget(track_dump_target);
-            }
-
 #ifdef GFXRECON_AGS_SUPPORT
             gfxrecon::decode::AgsReplayConsumer ags_replay_consumer;
             gfxrecon::decode::AgsDecoder        ags_decoder;
 #endif // GFXRECON_AGS_SUPPORT
+
+            RunDx12PreProcessConsumer(filename, dx_replay_options, dx12_replay_consumer);
 
             if (dx_replay_options.enable_d3d12)
             {

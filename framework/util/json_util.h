@@ -89,11 +89,14 @@ struct JsonOptions
     // Fields ordered large to small for alignment/packing.
     std::string root_dir;
     std::string data_sub_dir;
-    JsonFormat  format        = JsonFormat::JSON;
-    bool        dump_binaries = false;
-    bool        expand_flags  = false;
-    bool        hex_handles   = false;
-    bool        verbose       = false;
+    JsonFormat  format           = JsonFormat::JSON;
+    bool        dump_binaries    = false;
+    bool        expand_flags     = false;
+    bool        hex_handles      = false;
+    bool        verbose          = false;
+    bool        bare             = false;
+    bool        checksum         = false;
+    uint32_t    checksum_trigger = 0;
 };
 
 void FieldToJson(nlohmann::ordered_json& jdata, const short& data, const JsonOptions& options = JsonOptions());
@@ -220,6 +223,11 @@ bool RepresentBinaryFile(const util::JsonOptions& json_options,
                          const uint64_t           instance_counter,
                          const uint64_t           data_size,
                          const uint8_t* const     data);
+
+void WriteChecksumToJson(nlohmann::ordered_json&  jdata,
+                         const uint8_t*           data,
+                         uint64_t                 data_size,
+                         const util::JsonOptions& options = util::JsonOptions());
 
 GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -125,21 +125,50 @@ class FileTransformer
 
     virtual bool WriteFileHeader(const format::FileHeader& header, const std::vector<format::FileOptionPair>& options);
 
-    virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id);
-
+    virtual bool ProcessFunctionCall(const format::FunctionCallHeader& header);
+    virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0);
+    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header);
+    virtual bool ProcessMarker(const format::Marker& marker);
     virtual bool
-    ProcessMethodCall(const format::BlockHeader& block_header, format::ApiCallId call_id, uint64_t block_index = 0);
+    ProcessAnnotation(const format::AnnotationHeader& header, const std::string& label, const std::string& data);
 
-    virtual bool ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    virtual bool ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
-
-    virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
-
-    virtual bool ProcessAnnotation(const format::BlockHeader& block_header,
-                                   format::AnnotationType     annotation_type,
-                                   std::string                label,
-                                   std::string                data);
+    virtual bool ProcessDisplayMessageCommand(const format::DisplayMessageCommandHeader& header);
+    virtual bool ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header);
+    virtual bool ProcessResizeWindowCommand(const format::ResizeWindowCommand& header);
+    virtual bool ProcessSetSwapchainImageStateCommand(const format::SetSwapchainImageStateCommandHeader& header);
+    virtual bool ProcessBeginResourceInitCommand(const format::BeginResourceInitCommand& header);
+    virtual bool ProcessEndResourceInitCommand(const format::EndResourceInitCommand& header);
+    virtual bool ProcessInitBufferCommand(const format::InitBufferCommandHeader& header);
+    virtual bool ProcessInitImageCommand(const format::InitImageCommandHeader& header);
+    virtual bool ProcessDestroyHardwareBufferCommand(const format::DestroyHardwareBufferCommand& header);
+    virtual bool ProcessSetDevicePropertiesCommand(const format::SetDevicePropertiesCommand& header);
+    virtual bool ProcessSetDeviceMemoryPropertiesCommand(const format::SetDeviceMemoryPropertiesCommand& header);
+    virtual bool ProcessResizeWindowCommand2(const format::ResizeWindowCommand2& header);
+    virtual bool ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header);
+    virtual bool
+    ProcessSetRayTracingShaderGroupHandlesCommand(const format::SetRayTracingShaderGroupHandlesCommandHeader& header);
+    virtual bool ProcessCreateHeapAllocationCommand(const format::CreateHeapAllocationCommand& header);
+    virtual bool ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& header);
+    virtual bool ProcessExeFileInfoCommand(const format::ExeFileInfoBlock& header);
+    virtual bool
+    ProcessInitDx12AccelerationStructureCommand(const format::InitDx12AccelerationStructureCommandHeader& header);
+    virtual bool ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& header);
+    virtual bool ProcessDxgiAdapterInfoCommand(const format::DxgiAdapterInfoCommandHeader& header);
+    virtual bool ProcessDriverInfoCommand(const format::DriverInfoBlock& header);
+    virtual bool ProcessCreateHardwareBufferCommand(const format::CreateHardwareBufferCommandHeader& header);
+    virtual bool ProcessDx12RuntimeInfoCommand(const format::Dx12RuntimeInfoCommandHeader& header);
+    virtual bool ProcessParentToChildDependency(const format::ParentToChildDependencyHeader& header);
+    virtual bool
+    ProcessVulkanBuildAccelerationStructuresCommand(const format::VulkanMetaBuildAccelerationStructuresHeader& header);
+    virtual bool
+    ProcessVulkanCopyAccelerationStructuresCommand(const format::VulkanCopyAccelerationStructuresCommandHeader& header);
+    virtual bool ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
+        const format::VulkanWriteAccelerationStructuresPropertiesCommandHeader& header);
+    virtual bool ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header);
+    virtual bool ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header);
+    virtual bool ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header);
+    virtual bool ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header);
+    virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header);
 
     uint64_t GetCurrentBlockIndex() { return block_index_; }
 

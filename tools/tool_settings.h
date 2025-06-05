@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2023 LunarG, Inc.
-** Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -92,6 +92,7 @@ const char kAllowedMessages[]                    = "--allowed-messages";
 const char kShaderReplaceArgument[]              = "--replace-shaders";
 const char kScreenshotAllOption[]                = "--screenshot-all";
 const char kScreenshotRangeArgument[]            = "--screenshots";
+const char kScreenshotIntervalArgument[]         = "--screenshot-interval";
 const char kScreenshotFormatArgument[]           = "--screenshot-format";
 const char kScreenshotDirArgument[]              = "--screenshot-dir";
 const char kScreenshotFilePrefixArgument[]       = "--screenshot-prefix";
@@ -137,9 +138,11 @@ const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
 const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
+const char kBareOption[]                          = "--bare";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
+const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
@@ -157,6 +160,8 @@ const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-i
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
 const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
 const char kVerboseOption[]                       = "--verbose";
+const char kChecksumOption[]                      = "--checksum";
+const char kChecksumTriggerOption[]               = "--checksum-trigger";
 
 enum class WsiPlatform
 {
@@ -817,14 +822,14 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
                                const gfxrecon::decode::VulkanReplayOptions&    replay_options,
                                gfxrecon::decode::VulkanTrackedObjectInfoTable* tracked_object_info_table)
 {
-    gfxrecon::decode::CreateResourceAllocator func  = CreateDefaultAllocator;
+    gfxrecon::decode::CreateResourceAllocator func  = CreateRebindAllocator;
     const auto&                               value = arg_parser.GetArgumentValue(kMemoryPortabilityShortOption);
 
     if (!value.empty())
     {
-        if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRebind, value.c_str()) == 0)
+        if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) == 0)
         {
-            func = CreateRebindAllocator;
+            func = CreateDefaultAllocator;
         }
         else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRemap, value.c_str()) == 0)
         {
@@ -834,7 +839,7 @@ GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&           a
         {
             func = InitRealignAllocatorCreateFunc(filename, replay_options, tracked_object_info_table);
         }
-        else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) != 0)
+        else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRebind, value.c_str()) != 0)
         {
             GFXRECON_LOG_FATAL("Unrecognized memory translation option \"%s\"", value.c_str());
             exit(EXIT_FAILURE);
@@ -1116,7 +1121,16 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.create_resource_allocator =
         GetCreateResourceAllocatorFunc(arg_parser, filename, replay_options, tracked_object_info_table);
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
@@ -1206,13 +1220,33 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.preload_measurement_range = true;
     }
 
-    replay_options.dump_resources              = arg_parser.GetArgumentValue(kDumpResourcesArgument);
+    const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
+    if (!dump_resources.empty())
+    {
+        replay_options.enable_dump_resources = true;
+        if (dump_resources.find_first_not_of("0123456789,") == std::string::npos)
+        {
+            std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
+            if (values.size() == 3)
+            {
+                replay_options.dump_resources_target.submit_index    = std::stoi(values[0]);
+                replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
+                replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
+                replay_options.using_dump_resources_target           = true;
+            }
+        }
+        else
+        {
+            replay_options.dump_resources_block_indices = dump_resources;
+        }
+    }
+
     replay_options.dump_resources_before       = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
     replay_options.dump_resources_dump_depth   = arg_parser.IsOptionSet(kDumpResourcesDepth);
     replay_options.dump_resources_image_format = GetDumpresourcesImageFormat(arg_parser);
     replay_options.dump_resources_scale        = GetDumpResourcesScale(arg_parser);
     replay_options.dump_resources_output_dir   = GetDumpResourcesDir(arg_parser);
-    replay_options.dumping_resources           = !replay_options.dump_resources.empty();
+    replay_options.dumping_resources           = !replay_options.dump_resources_block_indices.empty();
     replay_options.dump_resources_dump_vertex_index_buffer =
         arg_parser.IsOptionSet(kDumpResourcesDumpVertexIndexBuffers);
     replay_options.dump_resources_json_per_command = arg_parser.IsOptionSet(kDumpResourcesJsonPerCommand);
@@ -1267,13 +1301,18 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         replay_options.override_object_names = true;
     }
 
+    if (arg_parser.IsOptionSet(kDxAgsMarkRenderPasses))
+    {
+#ifdef GFXRECON_AGS_SUPPORT
+        replay_options.ags_inject_markers = true;
+#else
+        GFXRECON_LOG_ERROR("Unsupported option --dx12-ags-inject-markers");
+#endif
+    }
+
     const std::string& dump_resources = arg_parser.GetArgumentValue(kDumpResourcesArgument);
     if (!dump_resources.empty() && dump_resources.find_first_not_of("0123456789,") == std::string::npos)
     {
-        // If the option parameter does not split into three comma separated numbers, consider
-        // it a Vulkan option and ignore it. If it does split into three comma separated numbers,
-        // the arg is for dx12 and should have already been validated in the Vulkan option parsing.
-        // In that case, we simply extract and save the values here.
         std::vector<std::string> values = gfxrecon::util::strings::SplitString(dump_resources, ',');
         if (values.size() == 3)
         {
@@ -1281,10 +1320,12 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
             replay_options.dump_resources_target.command_index   = std::stoi(values[1]);
             replay_options.dump_resources_target.draw_call_index = std::stoi(values[2]);
             replay_options.enable_dump_resources                 = true;
+            replay_options.using_dump_resources_target           = true;
         }
     }
 
     replay_options.dump_resources_output_dir = GetDumpResourcesDir(arg_parser);
+    replay_options.dump_resources_before     = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
 
     const std::string& memory_usage = arg_parser.GetArgumentValue(kBatchingMemoryUsageArgument);
     if (!memory_usage.empty())
@@ -1301,7 +1342,16 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         }
     }
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);

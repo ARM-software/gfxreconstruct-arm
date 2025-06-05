@@ -27,11 +27,13 @@
 
 #include "decode/custom_vulkan_struct_decoders.h"
 #include "decode/api_decoder.h"
+#include "format/format.h"
 #include "generated/generated_vulkan_struct_decoders.h"
 #include "generated/generated_vulkan_consumer.h"
 #include "util/defines.h"
-#include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_hash.hpp"
+#include "vulkan/vulkan_structs.hpp"
+#include "util/platform.h"
 
 #include "vulkan/vulkan.h"
 
@@ -45,21 +47,26 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
 {
   public:
-    uint32_t           GetTrimmedStartFrame() const { return trimmed_frame_; }
-    const std::string& GetAppName() const { return app_name_; }
-    uint32_t           GetAppVersion() const { return app_version_; }
-    const std::string& GetEngineName() const { return engine_name_; }
-    uint32_t           GetEngineVersion() const { return engine_version_; }
-    uint32_t           GetApiVersion() const { return api_version_; }
-    uint64_t           GetGraphicsPipelineCount() const { return graphics_pipelines_; }
-    uint64_t           GetComputePipelineCount() const { return compute_pipelines_; }
-    uint64_t           GetRayTracingPipelineCount() const { return raytracing_pipelines_; }
-    uint64_t           GetDrawCount() const { return draw_count_; }
-    uint64_t           GetDispatchCount() const { return dispatch_count_; }
-    uint64_t           GetAllocationCount() const { return allocation_count_; }
-    uint64_t           GetMinAllocationSize() const { return min_allocation_size_; }
-    uint64_t           GetMaxAllocationSize() const { return max_allocation_size_; }
-    const auto&        GetResolutions() const { return resolutions_; }
+    uint32_t                        GetTrimmedStartFrame() const { return trimmed_frame_; }
+    const std::string&              GetAppName() const { return app_name_; }
+    uint32_t                        GetAppVersion() const { return app_version_; }
+    const std::string&              GetEngineName() const { return engine_name_; }
+    uint32_t                        GetEngineVersion() const { return engine_version_; }
+    uint32_t                        GetApiVersion() const { return api_version_; }
+    uint64_t                        GetGraphicsPipelineCount() const { return graphics_pipelines_; }
+    uint64_t                        GetComputePipelineCount() const { return compute_pipelines_; }
+    uint64_t                        GetRayTracingPipelineCount() const { return raytracing_pipelines_; }
+    uint64_t                        GetDrawCount() const { return draw_count_; }
+    uint64_t                        GetDispatchCount() const { return dispatch_count_; }
+    uint64_t                        GetAllocationCount() const { return allocation_count_; }
+    uint64_t                        GetMinAllocationSize() const { return min_allocation_size_; }
+    uint64_t                        GetMaxAllocationSize() const { return max_allocation_size_; }
+    uint64_t                        GetAnnotationCount() const { return annotation_count_; }
+    const std::vector<std::string>& GetOperationAnnotationDatas() const { return operation_annotation_datas_; }
+    const auto&                     GetResolutions() const { return resolutions_; }
+
+    using PhysicalDeviceProperties = std::unordered_map<gfxrecon::format::HandleId, VkPhysicalDeviceProperties>;
+    const PhysicalDeviceProperties& GetPhysicalDeviceProperties() const { return physical_device_properties_; }
 
     const std::set<gfxrecon::format::HandleId>& GetInstantiatedDevices() const { return used_physical_devices_; }
     const VkPhysicalDeviceProperties*           GetDeviceProperties(gfxrecon::format::HandleId id) const
@@ -381,6 +388,36 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
         ++dispatch_count_;
     }
 
+    virtual void ProcessSetDevicePropertiesCommand(format::HandleId   physical_device_id,
+                                                   uint32_t           api_version,
+                                                   uint32_t           driver_version,
+                                                   uint32_t           vendor_id,
+                                                   uint32_t           device_id,
+                                                   uint32_t           device_type,
+                                                   const uint8_t      pipeline_cache_uuid[format::kUuidSize],
+                                                   const std::string& device_name) override
+    {
+        GFXRECON_UNREFERENCED_PARAMETER(physical_device_id);
+
+        if (physical_device_properties_.find(physical_device_id) == physical_device_properties_.end())
+        {
+            physical_device_properties_.emplace(physical_device_id, VkPhysicalDeviceProperties());
+            physical_device_properties_[physical_device_id].apiVersion    = api_version;
+            physical_device_properties_[physical_device_id].driverVersion = driver_version;
+            physical_device_properties_[physical_device_id].vendorID      = vendor_id;
+            physical_device_properties_[physical_device_id].deviceID      = device_id;
+            physical_device_properties_[physical_device_id].deviceType = static_cast<VkPhysicalDeviceType>(device_type);
+
+            device_name.copy(physical_device_properties_[physical_device_id].deviceName,
+                             VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
+
+            util::platform::MemoryCopy(&physical_device_properties_[physical_device_id].pipelineCacheUUID[0],
+                                       format::kUuidSize,
+                                       pipeline_cache_uuid,
+                                       format::kUuidSize);
+        }
+    }
+
     virtual void Process_vkAllocateMemory(
         const gfxrecon::decode::ApiCallInfo& call_info,
         VkResult                             returnValue,
@@ -418,7 +455,7 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
         gfxrecon::format::HandleId                                                                  device,
         gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSwapchainCreateInfoKHR>* pCreateInfo,
         gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkAllocationCallbacks>*    pAllocator,
-        gfxrecon::decode::HandlePointerDecoder<VkSwapchainKHR>*                                     pSwapchain)
+        gfxrecon::decode::HandlePointerDecoder<VkSwapchainKHR>*                                     pSwapchain) override
     {
         if (!pCreateInfo->IsNull())
         {
@@ -434,7 +471,7 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
                                         uint32_t                                                swapchainCount,
                                         StructPointerDecoder<Decoded_VkSwapchainCreateInfoKHR>* pCreateInfos,
                                         StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
-                                        HandlePointerDecoder<VkSwapchainKHR>*                   pSwapchains)
+                                        HandlePointerDecoder<VkSwapchainKHR>*                   pSwapchains) override
     {
         if (!pCreateInfos->IsNull())
         {
@@ -473,6 +510,10 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
     uint64_t allocation_count_{ 0 };
     uint64_t min_allocation_size_{ std::numeric_limits<uint64_t>::max() };
     uint64_t max_allocation_size_{ 0 };
+
+    // Annotation info.
+    std::vector<std::string> operation_annotation_datas_;
+    uint64_t                 annotation_count_{ 0 };
 
     std::unordered_set<vk::Extent2D> resolutions_;
 };

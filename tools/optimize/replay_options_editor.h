@@ -34,10 +34,9 @@ class ReplayOptionsEditor : public AnnotationEditor
     void         SetReplayOptions(std::string replay_options);
 
   protected:
-    virtual bool ProcessAnnotation(const format::BlockHeader& block_header,
-                                   format::AnnotationType     annotation_type,
-                                   std::string                label,
-                                   std::string                data) override;
+    virtual bool ProcessAnnotation(const format::AnnotationHeader& header,
+                                   const std::string&              label,
+                                   const std::string&              data) override;
 
   private:
     std::string replay_options_;

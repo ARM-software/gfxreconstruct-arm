@@ -26,6 +26,7 @@
 #include "util/logging.h"
 #include "util/strings.h"
 #include "format/format_json.h"
+#include "util/hash.h"
 
 #include <codecvt> // For encoding wstring_view to utf8.
 
@@ -402,6 +403,18 @@ bool RepresentBinaryFile(const util::JsonOptions& json_options,
         }
     }
     return written;
+}
+
+void WriteChecksumToJson(nlohmann::ordered_json&  jdata,
+                         const uint8_t*           data,
+                         uint64_t                 data_size,
+                         const util::JsonOptions& options)
+{
+    if (options.checksum && options.checksum_trigger <= data_size)
+    {
+        FieldToJsonAsHex(
+            jdata["data_checksum"], gfxrecon::util::hash::GenerateCheckSum<uint64_t>(data, data_size), options);
+    }
 }
 
 GFXRECON_END_NAMESPACE(util)

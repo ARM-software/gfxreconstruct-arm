@@ -687,6 +687,15 @@ void VulkanStateTracker::TrackImageMemoryBinding(
     {
         wrapper->bind_pnext = vulkan_trackers::TrackStruct(bind_info_pnext, wrapper->bind_pnext_memory);
     }
+
+    // AHB image memory requirements can only be queried after the memory is bound
+    if (wrapper->external_format)
+    {
+        const VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(device);
+        VkMemoryRequirements     image_mem_reqs;
+        device_table->GetImageMemoryRequirements(device, image, &image_mem_reqs);
+        wrapper->size = image_mem_reqs.size;
+    }
 }
 
 void VulkanStateTracker::TrackMappedMemory(VkDevice         device,
@@ -694,7 +703,8 @@ void VulkanStateTracker::TrackMappedMemory(VkDevice         device,
                                            void*            mapped_data,
                                            VkDeviceSize     mapped_offset,
                                            VkDeviceSize     mapped_size,
-                                           VkMemoryMapFlags mapped_flags)
+                                           VkMemoryMapFlags mapped_flags,
+                                           bool             track_assets)
 {
     assert((device != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
 
@@ -705,7 +715,7 @@ void VulkanStateTracker::TrackMappedMemory(VkDevice         device,
     wrapper->mapped_flags  = mapped_flags;
 
     // Scan assets on unmap
-    if (mapped_data == nullptr)
+    if (track_assets && mapped_data == nullptr)
     {
         TrackMappedAssetsWrites(wrapper->handle_id);
     }
@@ -1955,9 +1965,8 @@ void VulkanStateTracker::TrackDeviceMemoryDeviceAddress(VkDevice device, VkDevic
 {
     assert((device != VK_NULL_HANDLE) && (memory != VK_NULL_HANDLE));
 
-    auto wrapper       = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
-    wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
-    wrapper->address   = address;
+    auto wrapper     = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
+    wrapper->address = address;
 
     device_memory_addresses_map.emplace(address, wrapper);
 }
@@ -2100,13 +2109,8 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::SwapchainKHRWrapper* wrap
     std::unique_lock<std::mutex> lock(state_table_mutex_);
     for (auto entry : wrapper->child_images)
     {
-        // Note that after this the create parameters are not valid
-        // as the swapchain is destroyed
-        if (entry->parent_swapchains.size() <= 1)
-        {
-            DestroyState(entry);
-            state_table_.RemoveWrapper(entry);
-        }
+        DestroyState(entry);
+        state_table_.RemoveWrapper(entry);
     }
 }
 
@@ -2404,12 +2408,17 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DescriptorSetWrapper* wra
             }
             break;
 
+            case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+                // nothing to do, only sanity-check
+                GFXRECON_ASSERT(binding.count);
+                GFXRECON_ASSERT(binding.inline_uniform_block);
+                break;
+
             default:
                 GFXRECON_LOG_WARNING("%s() Descriptor type %u not handled", __func__, binding.type);
                 break;
         }
     }
-
     wrapper->bindings.clear();
 }
 
@@ -3154,88 +3163,68 @@ void VulkanStateTracker::TrackPipelineDescriptors(vulkan_wrappers::CommandBuffer
     assert(command_wrapper != nullptr);
     assert(ppl_bind_point < vulkan_state_info::PipelineBindPoints::kBindPoint_count);
 
-    const vulkan_wrappers::PipelineWrapper* ppl_wrapper = command_wrapper->bound_pipelines[ppl_bind_point];
-    if (ppl_wrapper != nullptr)
+    for (const auto& desc_set : command_wrapper->bound_descriptors[ppl_bind_point])
     {
-        for (const auto& stage : ppl_wrapper->bound_shaders)
+        const vulkan_wrappers::DescriptorSetWrapper* desc_set_wrapper = desc_set.second;
+        if (desc_set_wrapper == nullptr)
         {
-            for (const auto& set : stage.used_descriptors_info)
+            continue;
+        }
+
+        for (const auto& descriptor_binding : desc_set_wrapper->bindings)
+        {
+            switch (descriptor_binding.second.type)
             {
-                const uint32_t desc_set_index = set.first;
-                for (const auto& desc : set.second)
+                case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                 {
-                    if (desc.second.accessed)
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
                     {
-                        const uint32_t                               binding_index = desc.first;
-                        const vulkan_wrappers::DescriptorSetWrapper* desc_set_wrapper =
-                            command_wrapper->bound_descriptors[ppl_bind_point][desc_set_index];
+                        vulkan_wrappers::ImageViewWrapper* img_view_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageViewWrapper>(
+                                descriptor_binding.second.storage_images[a].imageView);
 
-                        if (desc_set_wrapper == nullptr)
+                        if (img_view_wrapper != nullptr && img_view_wrapper->image != nullptr)
                         {
-                            continue;
-                        }
-
-                        const auto& descriptor_binding = desc_set_wrapper->bindings.find(binding_index);
-                        if (descriptor_binding == desc_set_wrapper->bindings.end())
-                        {
-                            continue;
-                        }
-
-                        switch (descriptor_binding->second.type)
-                        {
-                            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-                            {
-                                for (uint32_t a = 0; a < descriptor_binding->second.count; ++a)
-                                {
-                                    vulkan_wrappers::ImageViewWrapper* img_view_wrapper =
-                                        vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageViewWrapper>(
-                                            descriptor_binding->second.storage_images[a].imageView);
-
-                                    if (img_view_wrapper != nullptr && img_view_wrapper->image != nullptr)
-                                    {
-                                        command_wrapper->modified_assets.insert(img_view_wrapper->image);
-                                    }
-                                }
-                            }
-                            break;
-
-                            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-                            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-                            {
-                                for (uint32_t a = 0; a < descriptor_binding->second.count; ++a)
-                                {
-                                    vulkan_wrappers::BufferWrapper* buf_wrapper =
-                                        vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(
-                                            descriptor_binding->second.storage_buffers[a].buffer);
-                                    if (buf_wrapper != nullptr)
-                                    {
-                                        command_wrapper->modified_assets.insert(buf_wrapper);
-                                    }
-                                }
-                            }
-                            break;
-
-                            case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-                            {
-                                for (uint32_t a = 0; a < descriptor_binding->second.count; ++a)
-                                {
-                                    vulkan_wrappers::BufferViewWrapper* buf_view_wrapper =
-                                        vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferViewWrapper>(
-                                            descriptor_binding->second.storage_texel_buffer_views[a]);
-                                    if (buf_view_wrapper != nullptr && buf_view_wrapper->buffer != nullptr)
-                                    {
-                                        command_wrapper->modified_assets.insert(buf_view_wrapper->buffer);
-                                    }
-                                }
-                            }
-                            break;
-
-                            // Rest of descriptors are immutable within a shader
-                            default:
-                                break;
+                            command_wrapper->modified_assets.insert(img_view_wrapper->image);
                         }
                     }
                 }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+                {
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
+                    {
+                        vulkan_wrappers::BufferWrapper* buf_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(
+                                descriptor_binding.second.storage_buffers[a].buffer);
+                        if (buf_wrapper != nullptr)
+                        {
+                            command_wrapper->modified_assets.insert(buf_wrapper);
+                        }
+                    }
+                }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                {
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
+                    {
+                        vulkan_wrappers::BufferViewWrapper* buf_view_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferViewWrapper>(
+                                descriptor_binding.second.storage_texel_buffer_views[a]);
+                        if (buf_view_wrapper != nullptr && buf_view_wrapper->buffer != nullptr)
+                        {
+                            command_wrapper->modified_assets.insert(buf_view_wrapper->buffer);
+                        }
+                    }
+                }
+                break;
+
+                // Rest of descriptors are immutable within a shader
+                default:
+                    break;
             }
         }
     }
@@ -3442,7 +3431,7 @@ void VulkanStateTracker::MarkReferencedAssetsAsDirty(vulkan_wrappers::CommandBuf
     }
 }
 
-void VulkanStateTracker::TrackSubmission(uint32_t submitCount, const VkSubmitInfo* pSubmits)
+void VulkanStateTracker::TrackAssetsInSubmission(uint32_t submitCount, const VkSubmitInfo* pSubmits)
 {
     if (pSubmits != nullptr && submitCount)
     {
@@ -3465,7 +3454,7 @@ void VulkanStateTracker::TrackSubmission(uint32_t submitCount, const VkSubmitInf
     }
 }
 
-void VulkanStateTracker::TrackSubmission(uint32_t submitCount, const VkSubmitInfo2* pSubmits)
+void VulkanStateTracker::TrackAssetsInSubmission(uint32_t submitCount, const VkSubmitInfo2* pSubmits)
 {
     if (pSubmits != nullptr && submitCount)
     {

@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -163,6 +163,7 @@ void AgsReplayConsumer::Process_agsInitialize(const ApiCallInfo&      call_info,
     if (result == AGS_SUCCESS)
     {
         context_map_[context] = replay_context;
+        dx12_replay_consumer_->SetAgsMarkerInjector(replay_context);
     }
 
     CheckReplayResult("Process_agsInitialize", return_value, result);
@@ -201,7 +202,16 @@ void AgsReplayConsumer::Process_agsDriverExtensionsDX12_CreateDevice(
         DxObjectInfo object_info{};
         object_info.capture_id = pReturnParams->GetMetaStructPointer()->pDevice;
         object_info.object     = returned_parameters.pDevice;
-        object_info.extra_info = std::move(std::make_unique<D3D12DeviceInfo>());
+
+        auto device_info = std::make_unique<D3D12DeviceInfo>();
+        graphics::dx12::GetAdapterAndIndexbyDevice(returned_parameters.pDevice,
+                                                   device_info->adapter3,
+                                                   device_info->adapter_node_index,
+                                                   dx12_replay_consumer_->GetAdaptersMap());
+        device_info->is_uma = graphics::dx12::IsUma(returned_parameters.pDevice);
+        graphics::dx12::MarkActiveAdapter(returned_parameters.pDevice, dx12_replay_consumer_->GetAdaptersMap());
+        object_info.extra_info = std::move(device_info);
+
         dx12_replay_consumer_->AddObject(&(object_info.capture_id),
                                          reinterpret_cast<void**>(&(object_info.object)),
                                          std::move(object_info),

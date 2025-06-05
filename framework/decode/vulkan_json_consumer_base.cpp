@@ -210,6 +210,7 @@ void VulkanExportJsonConsumerBase::Process_vkCmdPushConstants(const ApiCallInfo&
         FieldToJson(VkShaderStageFlags_t(), args["stageFlags"], stageFlags, json_options);
         FieldToJson(args["offset"], offset, json_options);
         FieldToJson(args["size"], size, json_options);
+        WriteChecksumToJson(args, pValues->GetPointer(), size, json_options);
         FieldToJson(args["pValues"], pValues, json_options);
         if (pValues->IsNull())
         {
@@ -301,6 +302,7 @@ void VulkanExportJsonConsumerBase::Process_vkCmdUpdateBuffer(const ApiCallInfo& 
     HandleToJson(args["dstBuffer"], dstBuffer, json_options);
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["dataSize"], dataSize, json_options);
+    WriteChecksumToJson(args, pData->GetPointer(), dataSize, json_options);
     if (json_options.verbose)
     {
         FieldToJson(args["pData"], pData, json_options);

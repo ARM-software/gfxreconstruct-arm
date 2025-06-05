@@ -65,6 +65,12 @@
 #include <algorithm>
 #include <cassert>
 
+#if VK_USE_64_BIT_PTR_DEFINES == 1
+#define VK_HANDLE_TO_UINT64(value) reinterpret_cast<uint64_t>(value)
+#else
+#define VK_HANDLE_TO_UINT64(value) (value)
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -318,6 +324,7 @@ VkResult VulkanRebindAllocator::CreateImage(const VkImageCreateInfo*     create_
             resource_alloc_info->usage       = create_info->usage;
             resource_alloc_info->tiling      = create_info->tiling;
             resource_alloc_info->height      = create_info->extent.height;
+            resource_alloc_info->format      = create_info->format;
             resource_alloc_info->object_type = ObjectType::image;
             (*allocator_data)                = reinterpret_cast<uintptr_t>(resource_alloc_info);
 
@@ -347,6 +354,7 @@ void VulkanRebindAllocator::DestroyImage(VkImage                      image,
         if (memory_alloc_info != nullptr)
         {
             memory_alloc_info->original_images.erase(image);
+            memory_alloc_info->original_ahardwarebuffers.erase(image);
         }
 
         if (resource_alloc_info->mapped_pointer != nullptr)
@@ -688,11 +696,14 @@ VkResult VulkanRebindAllocator::BindBufferMemory(VkBuffer                       
                 {
                     // Memory has been mapped and written prior to bind.  Copy the original content to the new
                     // allocation to ensure it contains the correct data.
-                    WriteBoundResource(resource_alloc_info,
-                                       memory_offset,
-                                       0,
-                                       allocation_info.size,
-                                       memory_alloc_info->original_content.get());
+
+                    // If the buffer is bigger at replay time than at capture time, you don't want to read
+                    // memory_alloc_info->original_content out of bounds
+                    VkDeviceSize copy_size =
+                        std::min(allocation_info.size, memory_alloc_info->allocation_size - memory_offset);
+
+                    WriteBoundResource(
+                        resource_alloc_info, memory_offset, 0, copy_size, memory_alloc_info->original_content.get());
                 }
 
                 (*bind_memory_properties) = property_flags;
@@ -701,7 +712,7 @@ VkResult VulkanRebindAllocator::BindBufferMemory(VkBuffer                       
                                                resource_alloc_info,
                                                allocation_info.deviceMemory,
                                                VK_OBJECT_TYPE_BUFFER,
-                                               reinterpret_cast<uint64_t>(buffer));
+                                               VK_HANDLE_TO_UINT64(buffer));
             }
         }
     }
@@ -778,10 +789,16 @@ VkResult VulkanRebindAllocator::BindBufferMemory2(uint32_t                      
                         {
                             // Memory has been mapped and written prior to bind.  Copy the original content to the new
                             // allocation to ensure it contains the correct data.
+
+                            // If the buffer is bigger at replay time than at capture time, you don't want to read
+                            // memory_alloc_info->original_content out of bounds
+                            VkDeviceSize copy_size = std::min(
+                                allocation_info.size, memory_alloc_info->allocation_size - bind_info->memoryOffset);
+
                             WriteBoundResource(resource_alloc_info,
                                                bind_info->memoryOffset,
                                                0,
-                                               allocation_info.size,
+                                               copy_size,
                                                memory_alloc_info->original_content.get());
                         }
 
@@ -793,7 +810,7 @@ VkResult VulkanRebindAllocator::BindBufferMemory2(uint32_t                      
                                                        resource_alloc_info,
                                                        allocation_info.deviceMemory,
                                                        VK_OBJECT_TYPE_BUFFER,
-                                                       reinterpret_cast<uint64_t>(buffer));
+                                                       VK_HANDLE_TO_UINT64(buffer));
                     }
                 }
             }
@@ -821,7 +838,7 @@ VkResult VulkanRebindAllocator::AllocateAHBMemory(MemoryAllocInfo* memory_alloc_
     VkMemoryAllocateInfo allocate_info{};
     allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocate_info.pNext           = &dedicatedAllocateInfo;
-    allocate_info.allocationSize  = memory_alloc_info->allocation_size;
+    allocate_info.allocationSize  = memoryRequirements.size;
     allocate_info.memoryTypeIndex = replay_memory_properties_.memoryTypeCount;
     for (uint32_t i = 0; i < replay_memory_properties_.memoryTypeCount; ++i)
     {
@@ -845,6 +862,8 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
                                                 VkMemoryPropertyFlags*                  bind_memory_properties,
                                                 const VkPhysicalDeviceMemoryProperties& device_memory_properties)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(memory);
+
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
     if ((image != VK_NULL_HANDLE) && (allocator_image_data != 0) && (allocator_memory_data != 0) &&
@@ -910,12 +929,45 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
 
                     if (memory_alloc_info->original_content != nullptr)
                     {
+                        // adjust the size
+                        for (const std::pair<const VkImage, VulkanRebindAllocator::ResourceAllocInfo*>& elt :
+                             resource_alloc_info->memory_info->original_images)
+                        {
+                            VkImage original_image{};
+                            if (elt.second == resource_alloc_info)
+                            {
+                                original_image = elt.first;
+
+                                auto entry =
+                                    resource_alloc_info->memory_info->original_ahardwarebuffers.find(original_image);
+                                if (entry != resource_alloc_info->memory_info->original_ahardwarebuffers.end())
+                                {
+                                    if (auto ahb_info = entry->second)
+                                    {
+                                        auto plane_info = ahb_info->plane_info;
+                                        // TODO: multi-plane image format support
+                                        if (plane_info.size() == 1)
+                                        {
+                                            allocation_info.size =
+                                                plane_info[0].replay_row_pitch * plane_info[0].height;
+                                        }
+                                    }
+                                    resource_alloc_info->use_ahb = true;
+                                }
+                            }
+                        }
                         // Memory has been mapped and written prior to bind.  Copy the original content to the new
                         // allocation to ensure it contains the correct data.
+
+                        // If the image is bigger at replay time than at capture time, you don't want to read
+                        // memory_alloc_info->original_content out of bounds
+                        VkDeviceSize copy_size =
+                            std::min(allocation_info.size, memory_alloc_info->allocation_size - memory_offset);
+
                         WriteBoundResource(resource_alloc_info,
                                            memory_offset,
                                            0,
-                                           allocation_info.size,
+                                           copy_size,
                                            memory_alloc_info->original_content.get());
                     }
 
@@ -925,7 +977,7 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
                                                    resource_alloc_info,
                                                    allocation_info.deviceMemory,
                                                    VK_OBJECT_TYPE_IMAGE,
-                                                   reinterpret_cast<uint64_t>(image));
+                                                   VK_HANDLE_TO_UINT64(image));
                 }
             }
         }
@@ -1019,18 +1071,52 @@ VkResult VulkanRebindAllocator::BindImageMemory2(uint32_t                     bi
                                 resource_alloc_info->is_host_visible = true;
                             }
 
+                            memory_alloc_info->original_images.insert(std::make_pair(image, resource_alloc_info));
+
                             if (memory_alloc_info->original_content != nullptr)
                             {
+                                // adjust the size
+                                for (const std::pair<const VkImage, VulkanRebindAllocator::ResourceAllocInfo*>& elt :
+                                     resource_alloc_info->memory_info->original_images)
+                                {
+                                    VkImage original_image{};
+                                    if (elt.second == resource_alloc_info)
+                                    {
+                                        original_image = elt.first;
+
+                                        auto entry = resource_alloc_info->memory_info->original_ahardwarebuffers.find(
+                                            original_image);
+                                        if (entry != resource_alloc_info->memory_info->original_ahardwarebuffers.end())
+                                        {
+                                            if (auto ahb_info = entry->second)
+                                            {
+                                                auto plane_info = ahb_info->plane_info;
+                                                // TODO: multi-plane image format support
+                                                if (plane_info.size() == 1)
+                                                {
+                                                    allocation_info.size =
+                                                        plane_info[0].replay_row_pitch * plane_info[0].height;
+                                                }
+                                            }
+                                            resource_alloc_info->use_ahb = true;
+                                        }
+                                    }
+                                }
+
                                 // Memory has been mapped and written prior to bind.  Copy the original content to the
                                 // new allocation to ensure it contains the correct data.
+
+                                // If the image is bigger at replay time than at capture time, you don't want to read
+                                // memory_alloc_info->original_content out of bounds
+                                VkDeviceSize copy_size = std::min(
+                                    allocation_info.size, memory_alloc_info->allocation_size - bind_info->memoryOffset);
+
                                 WriteBoundResource(resource_alloc_info,
                                                    bind_info->memoryOffset,
                                                    0,
-                                                   allocation_info.size,
+                                                   copy_size,
                                                    memory_alloc_info->original_content.get());
                             }
-
-                            memory_alloc_info->original_images.insert(std::make_pair(image, resource_alloc_info));
 
                             bind_memory_properties[i] = property_flags;
 
@@ -1038,7 +1124,7 @@ VkResult VulkanRebindAllocator::BindImageMemory2(uint32_t                     bi
                                                            resource_alloc_info,
                                                            allocation_info.deviceMemory,
                                                            VK_OBJECT_TYPE_IMAGE,
-                                                           reinterpret_cast<uint64_t>(image));
+                                                           VK_HANDLE_TO_UINT64(image));
                         }
                     }
                 }
@@ -1191,12 +1277,18 @@ VkResult VulkanRebindAllocator::BindVideoSessionMemory(VkVideoSessionKHR        
 
                         if (memory_alloc_info->original_content != nullptr)
                         {
-                            // Memory has been mapped and written prior to bind.  Copy the original content to the new
+                            // Memory has been mapped and written prior to bind. Copy the original content to the new
                             // allocation to ensure it contains the correct data.
+
+                            // If the session is bigger at replay time than at capture time, you don't want to read
+                            // memory_alloc_info->original_content out of bounds
+                            VkDeviceSize copy_size =
+                                std::min(allocation_info.size, memory_alloc_info->allocation_size - src_offset);
+
                             WriteBoundResource(resource_alloc_info,
                                                src_offset,
                                                0,
-                                               allocation_info.size,
+                                               copy_size,
                                                memory_alloc_info->original_content.get());
                         }
 
@@ -1293,7 +1385,7 @@ VkResult VulkanRebindAllocator::SetDebugUtilsObjectNameEXT(VkDevice             
                         vmaGetAllocationInfo(allocator_, it->second->allocation, &allocation_info);
                     }
 
-                    name_info->objectHandle = reinterpret_cast<uint64_t>(allocation_info.deviceMemory);
+                    name_info->objectHandle = VK_HANDLE_TO_UINT64(allocation_info.deviceMemory);
                 }
                 break;
             }
@@ -1354,7 +1446,7 @@ VkResult VulkanRebindAllocator::SetDebugUtilsObjectTagEXT(VkDevice              
                         vmaGetAllocationInfo(allocator_, it->second->allocation, &allocation_info);
                     }
 
-                    tag_info->objectHandle = reinterpret_cast<uint64_t>(allocation_info.deviceMemory);
+                    tag_info->objectHandle = VK_HANDLE_TO_UINT64(allocation_info.deviceMemory);
                 }
                 break;
             }
@@ -1638,22 +1730,65 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
 
             if (original_image)
             {
-                // TODO: handle mip maps/array layers
-                GFXRECON_LOG_WARNING(
-                    "Ignoring potential mip maps/array layers in staging buffer to image copy: support "
-                    "not yet implemented");
+                auto entry = resource_alloc_info->memory_info->original_ahardwarebuffers.find(original_image);
+                if (entry != resource_alloc_info->memory_info->original_ahardwarebuffers.end())
+                {
+                    if (auto ahb_info = entry->second)
+                    {
+                        auto plane_info = ahb_info->plane_info;
+                        // TODO: multi-plane image format support
+                        if (plane_info.size() == 1)
+                        {
+                            VkBufferImageCopy region{};
+                            region.bufferOffset      = 0;
+                            region.bufferRowLength   = 0;
+                            region.bufferImageHeight = 0;
+                            region.imageSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+                            region.imageOffset       = { 0, 0, 0 };
+                            region.imageExtent       = { ahb_info->width, plane_info[0].height, 1 };
+                            functions_.cmd_copy_buffer_to_image(
+                                cmd_buffer_, staging_buf, original_image, VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+                        }
+                    }
+                }
+                else
+                {
+                    // TODO: handle mip maps/array layers
+                    GFXRECON_LOG_WARNING(
+                        "Ignoring potential mip maps/array layers in staging buffer to image copy: support "
+                        "not yet implemented");
 
-                VkBufferImageCopy region{};
-                region.bufferOffset      = 0;
-                region.bufferRowLength   = 0;
-                region.bufferImageHeight = 0;
-                region.imageSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-                region.imageOffset       = { 0, 0, 0 };
-                region.imageExtent       = { 1, 1, 1 };
+                    VkImageAspectFlags aspect{};
+                    switch (resource_alloc_info->format)
+                    {
+                        case VK_FORMAT_D16_UNORM:
+                        case VK_FORMAT_X8_D24_UNORM_PACK32:
+                        case VK_FORMAT_D32_SFLOAT:
+                            aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+                            break;
+                        case VK_FORMAT_S8_UINT:
+                            aspect = VK_IMAGE_ASPECT_STENCIL_BIT;
+                            break;
+                        case VK_FORMAT_D16_UNORM_S8_UINT:
+                        case VK_FORMAT_D24_UNORM_S8_UINT:
+                        case VK_FORMAT_D32_SFLOAT_S8_UINT:
+                            aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+                            break;
+                        default:
+                            aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+                            break;
+                    }
+                    VkBufferImageCopy region{};
+                    region.bufferOffset      = 0;
+                    region.bufferRowLength   = 0;
+                    region.bufferImageHeight = 0;
+                    region.imageSubresource  = { aspect, 0, 0, 1 };
+                    region.imageOffset       = { 0, 0, 0 };
+                    region.imageExtent       = { 1, 1, 1 };
 
-                functions_.cmd_copy_buffer_to_image(
-                    cmd_buffer_, staging_buf, original_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-                result = functions_.end_command_buffer(cmd_buffer_);
+                    functions_.cmd_copy_buffer_to_image(
+                        cmd_buffer_, staging_buf, original_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                }
             }
         }
         else if (resource_alloc_info->object_type == ObjectType::buffer)
@@ -1677,9 +1812,13 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
                 copy_region.size      = data_size;
 
                 functions_.cmd_copy_buffer(cmd_buffer_, staging_buf, original_buffer, 1, &copy_region);
-                result = functions_.end_command_buffer(cmd_buffer_);
             }
         }
+    }
+
+    if (result == VK_SUCCESS)
+    {
+        result = functions_.end_command_buffer(cmd_buffer_);
     }
 
     if (result == VK_SUCCESS)
@@ -1721,7 +1860,7 @@ void VulkanRebindAllocator::WriteBoundResource(ResourceAllocInfo* resource_alloc
     size_t copy_dst_offset = static_cast<size_t>(dst_offset);
     size_t copy_size       = static_cast<size_t>(data_size);
 
-    if (resource_alloc_info->is_host_visible)
+    if (resource_alloc_info->is_host_visible && !resource_alloc_info->use_ahb)
     {
         VkResult result = VK_SUCCESS;
 
@@ -2141,6 +2280,15 @@ void VulkanRebindAllocator::ReportBindIncompatibility(const ResourceData* alloca
     }
 }
 
+void VulkanRebindAllocator::BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
+                                                           VkImage     image,
+                                                           void*       ahardwarebuffer_info)
+{
+    auto memory_alloc_info = reinterpret_cast<MemoryAllocInfo*>(*allocator_memory_data);
+    memory_alloc_info->original_ahardwarebuffers.insert(
+        std::make_pair(image, reinterpret_cast<VulkanAndroidHardwareBufferInfo*>(ahardwarebuffer_info)));
+}
+
 VkResult VulkanRebindAllocator::MapResourceMemoryDirect(VkDeviceSize     size,
                                                         VkMemoryMapFlags flags,
                                                         void**           data,
@@ -2187,7 +2335,7 @@ void VulkanRebindAllocator::SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo
     if (!memory_alloc_info->debug_utils_name.empty())
     {
         name_info.objectType   = VK_OBJECT_TYPE_DEVICE_MEMORY;
-        name_info.objectHandle = reinterpret_cast<uint64_t>(device_memory);
+        name_info.objectHandle = VK_HANDLE_TO_UINT64(device_memory);
         name_info.pObjectName  = memory_alloc_info->debug_utils_name.c_str();
 
         functions_.set_debug_utils_object_name(device_, &name_info);
@@ -2196,7 +2344,7 @@ void VulkanRebindAllocator::SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo
     if (!memory_alloc_info->debug_utils_tag.empty())
     {
         tag_info.objectType   = VK_OBJECT_TYPE_DEVICE_MEMORY;
-        tag_info.objectHandle = reinterpret_cast<uint64_t>(device_memory);
+        tag_info.objectHandle = VK_HANDLE_TO_UINT64(device_memory);
         tag_info.tagName      = memory_alloc_info->debug_utils_tag_name;
         tag_info.tagSize      = memory_alloc_info->debug_utils_tag.size();
         tag_info.pTag         = memory_alloc_info->debug_utils_tag.data();

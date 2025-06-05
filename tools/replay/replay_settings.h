@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2019-2023 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -31,21 +31,21 @@ const char kOptions[] =
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
     "screenshot-all,--onhb|--omit-null-hardware-buffers,--qamr|--quit-after-measurement-range,--fmr|--flush-"
     "measurement-range,--flush-inside-measurement-range,--vssb|--virtual-swapchain-skip-blit,--use-captured-swapchain-"
-    "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,--dx12-"
-    "override-object-names,--"
-    "offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
-    "--dump-resources-dump-depth-attachment,--dump-"
-    "resources-dump-vertex-index-buffers,--dump-resources-json-output-per-command,--dump-resources-dump-immutable-"
-    "resources,--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
-    "separate-alpha,--pbi-all,--preload-measurement-range,--add-new-pipeline-caches,--dsf|--disable-subpass-fusion,"
-    "--use-ext-frame-boundary";
+    "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback|--colorspace-fallback,--use-cached-psos,"
+    "--dsf|--disable-subpass-fusion,--use-ext-frame-boundary,--dx12-override-object-names,--"
+    "dx12-ags-inject-markers,--offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
+    "--dump-resources-dump-depth-attachment,--dump-resources-dump-vertex-index-buffers,"
+    "--dump-resources-json-output-per-command,--dump-resources-dump-immutable-resources,"
+    "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
+    "separate-alpha,--pbi-all,--preload-measurement-range,--add-new-pipeline-caches";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
-    "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
+    "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--"
-    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-image-format,--dump-resources-dir,"
+    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-"
+    "image-format,--dump-resources-dir,"
     "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-"
     "pipeline-cache,--quit-after-frame,--tsp|--trigger-script-path,--tsf|--trigger-script-frame,--marking-layers";
 
@@ -67,7 +67,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshots <N1(-N2),...>] [--screenshot-format <format>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-size <width>x<height>]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-scale <scale>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-scale <scale>] [--screenshot-interval <N>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sfa | --skip-failed-allocations] [--replace-shaders <dir>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--opcd | --omit-pipeline-cache-data] [--wsi <platform>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--use-cached-psos] [--surface-index <N>]");
@@ -86,9 +86,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfs <status> | --skip-get-fence-status <status>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sgfr <frame-ranges> | --skip-get-fence-ranges <frame-ranges>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--pbi-all] [--pbis <index1,index2>]");
-#if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources <submit-index,command-index,drawcall-index>]");
-#endif
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources <arg>] [--dump-resources <file>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-before-draw] [--dump-resources-scale <scale>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dir <dir>] [--dump-resources-image-format <format>]");
@@ -142,6 +140,12 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tascending order and cannot overlap.  Note that frame");
     GFXRECON_WRITE_CONSOLE("          \t\tnumbering is 1-based (i.e. the first frame is frame 1).");
     GFXRECON_WRITE_CONSOLE("          \t\tExample: 200,301-305 will generate six screenshots.");
+    GFXRECON_WRITE_CONSOLE("  --screenshot-interval <N>");
+    GFXRECON_WRITE_CONSOLE("          \t\tSpecifies the number of frames between two screenshots");
+    GFXRECON_WRITE_CONSOLE("          \t\twithin a screenshot range.");
+    GFXRECON_WRITE_CONSOLE("          \t\tExample: If screenshot range is 10-15 and interval is 2,");
+    GFXRECON_WRITE_CONSOLE("          \t\tscreenshot will be generated for frames 10, 12 and 14.");
+    GFXRECON_WRITE_CONSOLE("          \t\tDefault is 1.");
     GFXRECON_WRITE_CONSOLE("  --screenshot-format <format>");
     GFXRECON_WRITE_CONSOLE("          \t\tImage file format to use for screenshot generation.");
     GFXRECON_WRITE_CONSOLE("          \t\tAvailable formats are:");
@@ -181,6 +185,18 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --pbi-all\t\tPrint all block information.");
     GFXRECON_WRITE_CONSOLE(
         "  --pbis <index1,index2>\t\tPrint block information between block index1 and block index2.");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources-before-draw");
+    GFXRECON_WRITE_CONSOLE("          \t\tIn addition to dumping GPU resources after the draw calls");
+    GFXRECON_WRITE_CONSOLE("          \t\tspecified by the --dump-resources argument, also dump resources");
+    GFXRECON_WRITE_CONSOLE("          \t\tbefore the draw calls.");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources <submit-index,command-index,drawcall-index>");
+    GFXRECON_WRITE_CONSOLE("          \t\tDump resources for a specific drawcall.");
+    GFXRECON_WRITE_CONSOLE(
+        "          \t\tThis can include vertex, index, const buffer, shader resource, render target,");
+    GFXRECON_WRITE_CONSOLE("          \t\tand depth stencil resources. Resources are dumped after the drawcall.");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
+    GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
+    GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("Windows only:")
@@ -341,21 +357,14 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tGPU resources are dumped after the given vkCmdDraw*,");
     GFXRECON_WRITE_CONSOLE("          \t\tvkCmdDispatch, or vkCmdTraceRaysKHR is replayed.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources <file>");
-    GFXRECON_WRITE_CONSOLE("          \t\tExtract --dump-resources args from the specified file. Can be");
+    GFXRECON_WRITE_CONSOLE("          \t\tExtract --dump-resources block indices args from the specified file. Can be");
     GFXRECON_WRITE_CONSOLE("          \t\teither a json or a text file. If a text file is used, each");
     GFXRECON_WRITE_CONSOLE("          \t\tline of the file should contain comma separated indices as in");
     GFXRECON_WRITE_CONSOLE("          \t\t--dump-resources <arg> above.");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-before-draw");
-    GFXRECON_WRITE_CONSOLE("          \t\tIn addition to dumping GPU resources after the Vulkan draw calls");
-    GFXRECON_WRITE_CONSOLE("          \t\tspecified by the --dump-resources argument, also dump resources");
-    GFXRECON_WRITE_CONSOLE("          \t\tbefore the draw calls.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-scale <scale>");
     GFXRECON_WRITE_CONSOLE("          \t\tScale images generated by dump resources by the given scale factor.");
     GFXRECON_WRITE_CONSOLE("          \t\tThe scale factor must be a floating point number greater than 0.");
     GFXRECON_WRITE_CONSOLE("          \t\tValues greater than 10 are capped at 10. Default value is 1.0.");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
-    GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
-    GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-image-format <format>");
     GFXRECON_WRITE_CONSOLE("          \t\tImage file format to use when dumping image resources.");
     GFXRECON_WRITE_CONSOLE("          \t\tAvailable formats are: bmp, png");
@@ -414,20 +423,14 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tGenerate unique names for all ID3D12Objects and");
     GFXRECON_WRITE_CONSOLE("          \t\tassign each object the generated name.");
     GFXRECON_WRITE_CONSOLE("          \t\tThis is intended to assist in replay debugging.");
+    GFXRECON_WRITE_CONSOLE("  --dx12-ags-inject-markers");
+    GFXRECON_WRITE_CONSOLE("          \t\tLabel each API calls as block index of the trace");
+    GFXRECON_WRITE_CONSOLE("          \t\tRadeon GPU Detective could dump the label for debugging.");
     GFXRECON_WRITE_CONSOLE("  --batching-memory-usage <pct>");
     GFXRECON_WRITE_CONSOLE("          \t\tMax amount of memory consumption while loading a trimmed capture file.");
     GFXRECON_WRITE_CONSOLE("          \t\tAcceptable values range from 0 to 100 (default: 80)");
     GFXRECON_WRITE_CONSOLE("          \t\t0 means no batching at all");
     GFXRECON_WRITE_CONSOLE("          \t\t100 means use all available system and GPU memory");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources <submit-index,command-index,drawcall-index>");
-    GFXRECON_WRITE_CONSOLE("          \t\tOutput binaray resources for a specific drawcall.");
-    GFXRECON_WRITE_CONSOLE("          \t\tInclude vertex, index, const buffer, shader resource, render target,");
-    GFXRECON_WRITE_CONSOLE("          \t\tand depth stencil. And for before and after drawcall.");
-    GFXRECON_WRITE_CONSOLE("          \t\tArguments becomes three indices, submit index, command index,");
-    GFXRECON_WRITE_CONSOLE("          \t\tdrawcall index. The command index is based on its in ExecuteCommandLists.");
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
-    GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
-    GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
 #endif
 }
 

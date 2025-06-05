@@ -330,6 +330,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     // Need the side effects from this when creating vulkan devices from OpenXr
     void GetMatchingDevice(VulkanPhysicalDeviceInfo* physical_device_info);
 
+    void InitializeReplayDumpResources();
+
   protected:
     const CommonObjectInfoTable& GetObjectInfoTable() const { return *object_info_table_; }
 
@@ -1075,12 +1077,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     uintptr_t GetObjectAllocatorData(VkObjectType object_type, format::HandleId handle_id);
 
     VkResult OverrideSetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT func,
-                                                const VkResult                   original_result,
+                                                VkResult                         original_result,
                                                 const VulkanDeviceInfo*          device_info,
                                                 StructPointerDecoder<Decoded_VkDebugUtilsObjectNameInfoEXT>* name_info);
 
     VkResult OverrideSetDebugUtilsObjectTagEXT(PFN_vkSetDebugUtilsObjectTagEXT func,
-                                               const VkResult                  original_result,
+                                               VkResult                        original_result,
                                                const VulkanDeviceInfo*         device_info,
                                                StructPointerDecoder<Decoded_VkDebugUtilsObjectTagInfoEXT>* tag_info);
 
@@ -1553,6 +1555,21 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      VulkanShaderModuleInfo*                                    shader_module_info,
                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
+    VkResult OverrideGetPastPresentationTimingGOOGLE(
+        PFN_vkGetPastPresentationTimingGOOGLE                         func,
+        VkResult                                                      original_result,
+        const VulkanDeviceInfo*                                       device_info,
+        const VulkanSwapchainKHRInfo*                                 swapchain_info,
+        PointerDecoder<uint32_t>*                                     pPresentationTimingCount,
+        StructPointerDecoder<Decoded_VkPastPresentationTimingGOOGLE>* pPresentationTimings);
+
+    VkResult OverrideGetRefreshCycleDurationGOOGLE(
+        PFN_vkGetRefreshCycleDurationGOOGLE                         func,
+        VkResult                                                    original_result,
+        const VulkanDeviceInfo*                                     device_info,
+        const VulkanSwapchainKHRInfo*                               swapchain_info,
+        StructPointerDecoder<Decoded_VkRefreshCycleDurationGOOGLE>* pDisplayTimingProperties);
+
     std::function<handle_create_result_t<VkPipeline>()>
     AsyncCreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines                               func,
                                  VkResult                                                    returnValue,
@@ -1585,9 +1602,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                           StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                           HandlePointerDecoder<VkShaderEXT>*                   pShaders);
 
-    const VulkanReplayOptions options_;
+    const VulkanReplayOptions& options_;
 
-    VulkanReplayDumpResources* resource_dumper_;
+    VulkanReplayDumpResources* resource_dumper_{ nullptr };
 
   private:
     void RaiseFatalError(const char* message) const;

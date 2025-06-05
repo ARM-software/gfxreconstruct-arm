@@ -44,16 +44,15 @@ void ReplayOptionsEditor::SetReplayOptions(std::string replay_options)
     replay_options_ = replay_options;
 }
 
-bool ReplayOptionsEditor::ProcessAnnotation(const format::BlockHeader& block_header,
-                                            format::AnnotationType     annotation_type,
-                                            std::string                label,
-                                            std::string                data)
+bool ReplayOptionsEditor::ProcessAnnotation(const format::AnnotationHeader& header,
+                                            const std::string&              label,
+                                            const std::string&              data)
 {
     bool success = true;
     // skip existing annotations
     if (label != gfxrecon::format::kAnnotationLabelReplayOptions)
     {
-        success = FileTransformer::ProcessAnnotation(block_header, annotation_type, label, data);
+        success = FileTransformer::ProcessAnnotation(header, label, data);
     }
     return success;
 }

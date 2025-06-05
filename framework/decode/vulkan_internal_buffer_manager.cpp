@@ -60,7 +60,6 @@ void VulkanInternalBufferManager::AddEntry(
     }
 }
 
-
 // TODO: this is exactly the same method as in VulkanInternalBufferManager. Try to remove this duplication
 VkDeviceAddress VulkanInternalBufferManager::GetBufferDeviceAddress(VkBuffer buffer)
 {
@@ -100,7 +99,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
     allocator_->CreateBufferDirect(&create_info, nullptr, &buffer, &buffer_allocator_data);
 
     VkMemoryRequirements requirements{};
-    functions_.get_buffer_memory_requirements(device_, buffer, &requirements);
+    allocator_->GetBufferMemoryRequirements(buffer, &requirements, buffer_allocator_data);
 
     uint32_t              mem_type_index = 1;
     VkMemoryPropertyFlags desired_flags{ mem_prop_flags };
@@ -126,6 +125,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
         VulkanBufferInfo(), VulkanDeviceMemoryInfo(), allocator_, physical_device_info_);
     entry->info_.allocator_data        = buffer_allocator_data;
     entry->info_.handle                = buffer;
+    entry->info_.size                  = size;
     entry->memory_info_.handle         = memory;
     entry->memory_info_.allocator_data = memory_allocator_data;
 
@@ -143,7 +143,6 @@ void VulkanInternalBufferManager::InitializeFunctionPointers(const encode::Vulka
         (device_table->GetBufferDeviceAddress != gfxrecon::encode::noop::GetBufferDeviceAddress)
             ? device_table->GetBufferDeviceAddress
             : device_table->GetBufferDeviceAddressKHR;
-    functions_.get_buffer_memory_requirements = device_table->GetBufferMemoryRequirements;
 }
 
 GFXRECON_END_NAMESPACE(decode)

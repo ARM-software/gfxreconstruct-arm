@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
 ** Copyright (c) 2018-2021 LunarG, Inc.
-** Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -172,9 +172,9 @@ void D3D12CaptureManager::EndCommandListMethodCallCapture(ID3D12CommandList_Wrap
     EndMethodCallCapture();
 }
 
-void D3D12CaptureManager::WriteTrackedState(util::FileOutputStream* file_stream, format::ThreadId thread_id)
+void D3D12CaptureManager::WriteTrackedState(util::FileOutputStream* file_stream, util::ThreadData* thread_data)
 {
-    Dx12StateWriter state_writer(file_stream, GetCompressor(), thread_id);
+    Dx12StateWriter state_writer(file_stream, GetCompressor(), thread_data->thread_id_);
     state_tracker_->WriteState(&state_writer, GetCurrentFrame());
 }
 
@@ -2473,6 +2473,17 @@ void D3D12CaptureManager::PostProcess_ID3D12GraphicsCommandList_ResourceBarrier(
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackResourceBarriers(list_wrapper, num_barriers, barriers);
+    }
+}
+
+void D3D12CaptureManager::PostProcess_ID3D12GraphicsCommandList_Reset(ID3D12CommandList_Wrapper* list_wrapper,
+                                                                      HRESULT                    result,
+                                                                      ID3D12CommandAllocator*    pAllocator,
+                                                                      ID3D12PipelineState*       pInitialState)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackCommandList_Reset(list_wrapper, pAllocator, pInitialState);
     }
 }
 

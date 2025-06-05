@@ -5,10 +5,10 @@ project(VkLayer_gfxreconstruct)
 get_filename_component(GFXRECON_SOURCE_DIR ../.. ABSOLUTE)
 
 include(../framework/cmake-config/PlatformConfig.cmake)
-add_subdirectory(../framework/util ${CMAKE_SOURCE_DIR}/../framework/util/build/layer/${ANDROID_ABI})
-add_subdirectory(../framework/graphics ${CMAKE_SOURCE_DIR}/../framework/graphics/build/layer/${ANDROID_ABI})
-add_subdirectory(../framework/format ${CMAKE_SOURCE_DIR}/../framework/format/build/layer/${ANDROID_ABI})
-add_subdirectory(../framework/encode ${CMAKE_SOURCE_DIR}/../framework/encode/build/layer/${ANDROID_ABI})
+add_subdirectory(../framework/util ${PROJECT_SOURCE_DIR}/../framework/util/build/layer/${ANDROID_ABI})
+add_subdirectory(../framework/graphics ${PROJECT_SOURCE_DIR}/../framework/graphics/build/layer/${ANDROID_ABI})
+add_subdirectory(../framework/format ${PROJECT_SOURCE_DIR}/../framework/format/build/layer/${ANDROID_ABI})
+add_subdirectory(../framework/encode ${PROJECT_SOURCE_DIR}/../framework/encode/build/layer/${ANDROID_ABI})
 
 add_library(VkLayer_gfxreconstruct SHARED "")
 
@@ -17,8 +17,8 @@ target_sources(VkLayer_gfxreconstruct
                    ${GFXRECON_SOURCE_DIR}/layer/dll_main.cpp
                    ${GFXRECON_SOURCE_DIR}/layer/trace_layer.h
                    ${GFXRECON_SOURCE_DIR}/layer/trace_layer.cpp
-                   ${GFXRECON_SOURCE_DIR}/framework/encode/custom_layer_func_table.h
-                   ${GFXRECON_SOURCE_DIR}/framework/generated/generated_layer_func_table.h
+                   ${GFXRECON_SOURCE_DIR}/framework/encode/custom_vulkan_layer_func_table.h
+                   ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_layer_func_table.h
               )
 
 target_include_directories(VkLayer_gfxreconstruct

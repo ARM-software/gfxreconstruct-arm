@@ -1551,17 +1551,26 @@ VkResult VulkanResourcesUtil::SubmitCommandBuffer(VkQueue queue)
     submit_info.signalSemaphoreCount = 0;
     submit_info.pSignalSemaphores    = nullptr;
 
-    VkResult result = device_table_.QueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
+    VkFence                 fence;
+    const VkFenceCreateInfo ci     = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, 0 };
+    VkResult                result = device_table_.CreateFence(device_, &ci, nullptr, &fence);
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("Failed to create fence (%s)", util::ToString(result).c_str());
+        return result;
+    }
+
+    result = device_table_.QueueSubmit(queue, 1, &submit_info, fence);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to submit command buffer for execution while taking a resource memory snapshot");
         return result;
     }
 
-    result = device_table_.QueueWaitIdle(queue);
+    result = device_table_.WaitForFences(device_, 1, &fence, VK_TRUE, ~0UL);
     if (result != VK_SUCCESS)
     {
-        GFXRECON_LOG_ERROR("QueueWaitIdle returned %d while taking a resource memory snapshot", result);
+        GFXRECON_LOG_ERROR("WaitForFences returned %d while taking a resource memory snapshot", result);
         return result;
     }
 
@@ -1801,6 +1810,8 @@ VkResult VulkanResourcesUtil::ReadFromImageResourceStaging(VkImage              
                                                            VkSampleCountFlags     samples,
                                                            VkImageLayout          layout,
                                                            uint32_t               queue_family_index,
+                                                           bool                   external_format,
+                                                           VkDeviceSize           size,
                                                            VkImageAspectFlagBits  aspect,
                                                            std::vector<uint8_t>&  data,
                                                            std::vector<uint64_t>& subresource_offsets,
@@ -1850,17 +1861,25 @@ VkResult VulkanResourcesUtil::ReadFromImageResourceStaging(VkImage              
     subresource_offsets.clear();
     subresource_sizes.clear();
 
-    resource_size = GetImageResourceSizesOptimal(image,
-                                                 use_blit ? dst_format : format,
-                                                 type,
-                                                 use_blit ? scaled_extent : extent,
-                                                 mip_levels,
-                                                 array_layers,
-                                                 tiling,
-                                                 aspect,
-                                                 &subresource_offsets,
-                                                 &subresource_sizes,
-                                                 all_layers_per_level);
+    if (external_format)
+    {
+        resource_size = size;
+        subresource_sizes.push_back(resource_size);
+    }
+    else
+    {
+        resource_size = GetImageResourceSizesOptimal(image,
+                                                     use_blit ? dst_format : format,
+                                                     type,
+                                                     use_blit ? scaled_extent : extent,
+                                                     mip_levels,
+                                                     array_layers,
+                                                     tiling,
+                                                     aspect,
+                                                     &subresource_offsets,
+                                                     &subresource_sizes,
+                                                     all_layers_per_level);
+    }
 
     queue = GetQueue(queue_family_index, 0);
     if (queue == VK_NULL_HANDLE)
@@ -1953,16 +1972,23 @@ VkResult VulkanResourcesUtil::ReadFromImageResourceStaging(VkImage              
 
     assert(scaled_image != VK_NULL_HANDLE);
 
-    // Copy image to staging buffer
-    CopyImageBuffer(scaled_image,
-                    staging_buffer_.buffer,
-                    use_blit ? scaled_extent : extent,
-                    mip_levels,
-                    array_layers,
-                    aspect,
-                    subresource_sizes,
-                    all_layers_per_level,
-                    kImageToBuffer);
+    if (external_format)
+    {
+        // Todo
+    }
+    else
+    {
+        // Copy image to staging buffer
+        CopyImageBuffer(scaled_image,
+                        staging_buffer_.buffer,
+                        use_blit ? scaled_extent : extent,
+                        mip_levels,
+                        array_layers,
+                        aspect,
+                        subresource_sizes,
+                        all_layers_per_level,
+                        kImageToBuffer);
+    }
 
     // Cache flushing barrier. Make results visible to host
     VkBufferMemoryBarrier buffer_barrier;

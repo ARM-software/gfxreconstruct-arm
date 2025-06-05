@@ -465,8 +465,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDevice(
         manager->EndDestroyApiCallCapture<vulkan_wrappers::DeviceWrapper>(device);
     }
 
-    ScopedDestroyLock exclusive_scoped_lock;
-    vulkan_wrappers::GetDeviceTable(device)->DestroyDevice(device, pAllocator);
+    manager->OverrideDestroyDevice(device, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyDevice>::Dispatch(manager, device, pAllocator);
 
@@ -699,8 +698,7 @@ VKAPI_ATTR void VKAPI_CALL FreeMemory(
         manager->EndDestroyApiCallCapture<vulkan_wrappers::DeviceMemoryWrapper>(memory);
     }
 
-    ScopedDestroyLock exclusive_scoped_lock;
-    vulkan_wrappers::GetDeviceTable(device)->FreeMemory(device, memory, pAllocator);
+    manager->OverrideFreeMemory(device, memory, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkFreeMemory>::Dispatch(manager, device, memory, pAllocator);
 
@@ -2068,8 +2066,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyImage(
         manager->EndDestroyApiCallCapture<vulkan_wrappers::ImageWrapper>(image);
     }
 
-    ScopedDestroyLock exclusive_scoped_lock;
-    vulkan_wrappers::GetDeviceTable(device)->DestroyImage(device, image, pAllocator);
+    manager->OverrideDestroyImage(device, image, pAllocator);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDestroyImage>::Dispatch(manager, device, image, pAllocator);
 
@@ -2137,16 +2134,8 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateImageView(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateImageView>::Dispatch(manager, device, pCreateInfo, pAllocator, pView);
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkImageViewCreateInfo* pCreateInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
-
-    VkResult result = vulkan_wrappers::GetDeviceTable(device)->CreateImageView(device, pCreateInfo_unwrapped, pAllocator, pView);
-
-    if (result >= 0)
-    {
-        vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper, vulkan_wrappers::NoParentWrapper, vulkan_wrappers::ImageViewWrapper>(device, vulkan_wrappers::NoParentWrapper::kHandleValue, pView, VulkanCaptureManager::GetUniqueId);
-    }
-    else
+    VkResult result = manager->OverrideCreateImageView(device, pCreateInfo, pAllocator, pView);
+    if (result < 0)
     {
         omit_output_data = true;
     }
@@ -2626,16 +2615,8 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSampler(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCreateSampler>::Dispatch(manager, device, pCreateInfo, pAllocator, pSampler);
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkSamplerCreateInfo* pCreateInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
-
-    VkResult result = vulkan_wrappers::GetDeviceTable(device)->CreateSampler(device, pCreateInfo_unwrapped, pAllocator, pSampler);
-
-    if (result >= 0)
-    {
-        vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper, vulkan_wrappers::NoParentWrapper, vulkan_wrappers::SamplerWrapper>(device, vulkan_wrappers::NoParentWrapper::kHandleValue, pSampler, VulkanCaptureManager::GetUniqueId);
-    }
-    else
+    VkResult result = manager->OverrideCreateSampler(device, pCreateInfo, pAllocator, pSampler);
+    if (result < 0)
     {
         omit_output_data = true;
     }
@@ -8521,13 +8502,10 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingAttachmentLocations(
     {
         encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pLocationInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingAttachmentLocationsHandles, pLocationInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
     }
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkRenderingAttachmentLocationInfo* pLocationInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pLocationInfo, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocations(commandBuffer, pLocationInfo_unwrapped);
+    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocations(commandBuffer, pLocationInfo);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocations>::Dispatch(manager, commandBuffer, pLocationInfo);
 }
@@ -8557,13 +8535,10 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndices(
     {
         encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pInputAttachmentIndexInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingInputAttachmentIndicesHandles, pInputAttachmentIndexInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
     }
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkRenderingInputAttachmentIndexInfo* pInputAttachmentIndexInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInputAttachmentIndexInfo, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndices(commandBuffer, pInputAttachmentIndexInfo_unwrapped);
+    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndices(commandBuffer, pInputAttachmentIndexInfo);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndices>::Dispatch(manager, commandBuffer, pInputAttachmentIndexInfo);
 }
@@ -13380,13 +13355,10 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingAttachmentLocationsKHR(
     {
         encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pLocationInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingAttachmentLocationsKHRHandles, pLocationInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
     }
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkRenderingAttachmentLocationInfo* pLocationInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pLocationInfo, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(commandBuffer, pLocationInfo_unwrapped);
+    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingAttachmentLocationsKHR(commandBuffer, pLocationInfo);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingAttachmentLocationsKHR>::Dispatch(manager, commandBuffer, pLocationInfo);
 }
@@ -13416,13 +13388,10 @@ VKAPI_ATTR void VKAPI_CALL CmdSetRenderingInputAttachmentIndicesKHR(
     {
         encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         EncodeStructPtr(encoder, pInputAttachmentIndexInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdSetRenderingInputAttachmentIndicesKHRHandles, pInputAttachmentIndexInfo);
+        manager->EndCommandApiCallCapture(commandBuffer);
     }
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkRenderingInputAttachmentIndexInfo* pInputAttachmentIndexInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInputAttachmentIndexInfo, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pInputAttachmentIndexInfo_unwrapped);
+    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pInputAttachmentIndexInfo);
 
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdSetRenderingInputAttachmentIndicesKHR>::Dispatch(manager, commandBuffer, pInputAttachmentIndexInfo);
 }
@@ -23181,62 +23150,6 @@ VKAPI_ATTR VkResult                        VKAPI_CALL CreateNeuralEnginePipeline
     return result;
 }
 
-VKAPI_ATTR void                     VKAPI_CALL CmdDispatchNeuralEngineARM(
-    VkCommandBuffer                             commandBuffer,
-    VkOffset4DARM                               offset,
-    VkExtent4DARM                               size,
-    uint32_t                                    iteratorOuterDimension,
-    uint32_t                                    iteratorInnerDimension,
-    uint32_t                                    taskIncrementOuter,
-    uint32_t                                    taskIncrementInner,
-    uint32_t                                    iteratorWeightArrayOffset,
-    uint32_t                                    iteratorWeightArrayBehavior,
-    uint32_t                                    iteratorTraceID0,
-    uint32_t                                    iteratorTraceID1,
-    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo)
-{
-    VulkanCaptureManager* manager = VulkanCaptureManager::Get();
-    GFXRECON_ASSERT(manager != nullptr);
-    auto force_command_serialization = manager->GetForceCommandSerialization();
-    std::shared_lock<CommonCaptureManager::ApiCallMutexT> shared_api_call_lock;
-    std::unique_lock<CommonCaptureManager::ApiCallMutexT> exclusive_api_call_lock;
-    if (force_command_serialization)
-    {
-        exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
-    }
-    else
-    {
-        shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
-    }
-
-    CustomEncoderPreCall<format::ApiCallId::ApiCall_vkCmdDispatchNeuralEngineARM>::Dispatch(manager, commandBuffer, offset, size, iteratorOuterDimension, iteratorInnerDimension, taskIncrementOuter, taskIncrementInner, iteratorWeightArrayOffset, iteratorWeightArrayBehavior, iteratorTraceID0, iteratorTraceID1, pStatisticsDispatchInfo);
-
-    auto encoder = manager->BeginTrackedApiCallCapture(format::ApiCallId::ApiCall_vkCmdDispatchNeuralEngineARM);
-    if (encoder)
-    {
-        encoder->EncodeVulkanHandleValue<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
-        EncodeStruct(encoder, offset);
-        EncodeStruct(encoder, size);
-        encoder->EncodeUInt32Value(iteratorOuterDimension);
-        encoder->EncodeUInt32Value(iteratorInnerDimension);
-        encoder->EncodeUInt32Value(taskIncrementOuter);
-        encoder->EncodeUInt32Value(taskIncrementInner);
-        encoder->EncodeUInt32Value(iteratorWeightArrayOffset);
-        encoder->EncodeUInt32Value(iteratorWeightArrayBehavior);
-        encoder->EncodeUInt32Value(iteratorTraceID0);
-        encoder->EncodeUInt32Value(iteratorTraceID1);
-        EncodeStructPtr(encoder, pStatisticsDispatchInfo);
-        manager->EndCommandApiCallCapture(commandBuffer, TrackCmdDispatchNeuralEngineARMHandles, pStatisticsDispatchInfo);
-    }
-
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pStatisticsDispatchInfo, handle_unwrap_memory);
-
-    vulkan_wrappers::GetDeviceTable(commandBuffer)->CmdDispatchNeuralEngineARM(commandBuffer, offset, size, iteratorOuterDimension, iteratorInnerDimension, taskIncrementOuter, taskIncrementInner, iteratorWeightArrayOffset, iteratorWeightArrayBehavior, iteratorTraceID0, iteratorTraceID1, pStatisticsDispatchInfo_unwrapped);
-
-    CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdDispatchNeuralEngineARM>::Dispatch(manager, commandBuffer, offset, size, iteratorOuterDimension, iteratorInnerDimension, taskIncrementOuter, taskIncrementInner, iteratorWeightArrayOffset, iteratorWeightArrayBehavior, iteratorTraceID0, iteratorTraceID1, pStatisticsDispatchInfo);
-}
-
 VKAPI_ATTR VkResult VKAPI_CALL CreateWeightsARM(
     VkDevice                                    device,
     const VkWeightsCreateInfoARM*               pCreateInfo,
@@ -24896,102 +24809,6 @@ VKAPI_ATTR void VKAPI_CALL CmdCopyTensorARM(
     CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdCopyTensorARM>::Dispatch(manager, commandBuffer, pCopyTensorInfo);
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL GetTensorOpaqueCaptureDescriptorDataARM(
-    VkDevice                                    device,
-    const VkTensorCaptureDescriptorDataInfoARM* pInfo,
-    void*                                       pData)
-{
-    // VulkanCaptureManager* manager = VulkanCaptureManager::Get();
-    // GFXRECON_ASSERT(manager != nullptr);
-    // auto force_command_serialization = manager->GetForceCommandSerialization();
-    // std::shared_lock<CommonCaptureManager::ApiCallMutexT> shared_api_call_lock;
-    // std::unique_lock<CommonCaptureManager::ApiCallMutexT> exclusive_api_call_lock;
-    // if (force_command_serialization)
-    // {
-    //     exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
-    // }
-    // else
-    // {
-    //     shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
-    // }
-
-    // bool omit_output_data = false;
-
-    // CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetTensorOpaqueCaptureDescriptorDataARM>::Dispatch(manager, device, pInfo, pData);
-
-    // auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    // const VkTensorCaptureDescriptorDataInfoARM* pInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInfo, handle_unwrap_memory);
-
-    // VkResult result = vulkan_wrappers::GetDeviceTable(device)->GetTensorOpaqueCaptureDescriptorDataARM(device, pInfo_unwrapped, pData);
-    // if (result < 0)
-    // {
-    //     omit_output_data = true;
-    // }
-
-    // auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetTensorOpaqueCaptureDescriptorDataARM);
-    // if (encoder)
-    // {
-    //     encoder->EncodeVulkanHandleValue<vulkan_wrappers::DeviceWrapper>(device);
-    //     EncodeStructPtr(encoder, pInfo);
-    //     encoder->EncodeVoidPtr(pData, omit_output_data);
-    //     encoder->EncodeEnumValue(result);
-    //     manager->EndApiCallCapture();
-    // }
-
-    // CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetTensorOpaqueCaptureDescriptorDataARM>::Dispatch(manager, result, device, pInfo, pData);
-
-    // return result;
-    return VK_SUCCESS;
-}
-
-VKAPI_ATTR VkResult VKAPI_CALL GetTensorViewOpaqueCaptureDescriptorDataARM(
-    VkDevice                                    device,
-    const VkTensorViewCaptureDescriptorDataInfoARM* pInfo,
-    void*                                       pData)
-{
-    // VulkanCaptureManager* manager = VulkanCaptureManager::Get();
-    // GFXRECON_ASSERT(manager != nullptr);
-    // auto force_command_serialization = manager->GetForceCommandSerialization();
-    // std::shared_lock<CommonCaptureManager::ApiCallMutexT> shared_api_call_lock;
-    // std::unique_lock<CommonCaptureManager::ApiCallMutexT> exclusive_api_call_lock;
-    // if (force_command_serialization)
-    // {
-    //     exclusive_api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();
-    // }
-    // else
-    // {
-    //     shared_api_call_lock = VulkanCaptureManager::AcquireSharedApiCallLock();
-    // }
-
-    // bool omit_output_data = false;
-
-    // CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetTensorViewOpaqueCaptureDescriptorDataARM>::Dispatch(manager, device, pInfo, pData);
-
-    // auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    // const VkTensorViewCaptureDescriptorDataInfoARM* pInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInfo, handle_unwrap_memory);
-
-    // VkResult result = vulkan_wrappers::GetDeviceTable(device)->GetTensorViewOpaqueCaptureDescriptorDataARM(device, pInfo_unwrapped, pData);
-    // if (result < 0)
-    // {
-    //     omit_output_data = true;
-    // }
-
-    // auto encoder = manager->BeginApiCallCapture(format::ApiCallId::ApiCall_vkGetTensorViewOpaqueCaptureDescriptorDataARM);
-    // if (encoder)
-    // {
-    //     encoder->EncodeVulkanHandleValue<vulkan_wrappers::DeviceWrapper>(device);
-    //     EncodeStructPtr(encoder, pInfo);
-    //     encoder->EncodeVoidPtr(pData, omit_output_data);
-    //     encoder->EncodeEnumValue(result);
-    //     manager->EndApiCallCapture();
-    // }
-
-    // CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetTensorViewOpaqueCaptureDescriptorDataARM>::Dispatch(manager, result, device, pInfo, pData);
-
-    // return result;
-    return VK_SUCCESS;
-}
-
 VKAPI_ATTR void VKAPI_CALL GetShaderModuleIdentifierEXT(
     VkDevice                                    device,
     VkShaderModule                              shaderModule,
@@ -25089,10 +24906,7 @@ VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceOpticalFlowImageFormatsNV(
 
     CustomEncoderPreCall<format::ApiCallId::ApiCall_vkGetPhysicalDeviceOpticalFlowImageFormatsNV>::Dispatch(manager, physicalDevice, pOpticalFlowImageFormatInfo, pFormatCount, pImageFormatProperties);
 
-    auto handle_unwrap_memory = manager->GetHandleUnwrapMemory();
-    const VkOpticalFlowImageFormatInfoNV* pOpticalFlowImageFormatInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pOpticalFlowImageFormatInfo, handle_unwrap_memory);
-
-    VkResult result = vulkan_wrappers::GetInstanceTable(physicalDevice)->GetPhysicalDeviceOpticalFlowImageFormatsNV(physicalDevice, pOpticalFlowImageFormatInfo_unwrapped, pFormatCount, pImageFormatProperties);
+    VkResult result = vulkan_wrappers::GetInstanceTable(physicalDevice)->GetPhysicalDeviceOpticalFlowImageFormatsNV(physicalDevice, pOpticalFlowImageFormatInfo, pFormatCount, pImageFormatProperties);
     if (result < 0)
     {
         omit_output_data = true;

@@ -3823,21 +3823,6 @@ class VulkanCppConsumer : public VulkanCppConsumerBase
         uint32_t                                    bindInfoCount,
         StructPointerDecoder<Decoded_VkBindWeightsMemoryInfoARM>* pBindInfos) override;
 
-    virtual void Process_vkCmdDispatchNeuralEngineARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            commandBuffer,
-        Decoded_VkOffset4DARM                       offset,
-        Decoded_VkExtent4DARM                       size,
-        uint32_t                                    iteratorOuterDimension,
-        uint32_t                                    iteratorInnerDimension,
-        uint32_t                                    taskIncrementOuter,
-        uint32_t                                    taskIncrementInner,
-        uint32_t                                    iteratorWeightArrayOffset,
-        uint32_t                                    iteratorWeightArrayBehavior,
-        uint32_t                                    iteratorTraceID0,
-        uint32_t                                    iteratorTraceID1,
-        StructPointerDecoder<Decoded_VkNeuralEnginePipelineStatisticsDispatchInfoARM>* pStatisticsDispatchInfo) override;
-
     virtual void Process_vkCreateNeuralEnginePipelinesARM(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -4101,20 +4086,6 @@ class VulkanCppConsumer : public VulkanCppConsumerBase
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkTensorMemoryRequirementsInfoARM>* pInfo,
         StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) override;
-
-    virtual void Process_vkGetTensorOpaqueCaptureDescriptorDataARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkTensorCaptureDescriptorDataInfoARM>* pInfo,
-        uint64_t                                    pData) override;
-
-    virtual void Process_vkGetTensorViewOpaqueCaptureDescriptorDataARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkTensorViewCaptureDescriptorDataInfoARM>* pInfo,
-        uint64_t                                    pData) override;
     virtual void Process_vkGetShaderModuleCreateInfoIdentifierEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,

@@ -121,6 +121,8 @@
     "vkWaitForPresentKHR": "OverrideWaitForPresentKHR",
     "vkWaitSemaphores": "OverrideWaitSemaphores",
     "vkWaitSemaphoresKHR": "OverrideWaitSemaphores",
+    "vkSetDebugUtilsObjectNameEXT": "OverrideSetDebugUtilsObjectNameEXT",
+    "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
     "vkFrameBoundaryANDROID": "OverrideFrameBoundaryANDROID",
     "vkCmdBeginDebugUtilsLabelEXT": "OverrideCmdBeginDebugUtilsLabelEXT",
     "vkCmdEndDebugUtilsLabelEXT": "OverrideCmdEndDebugUtilsLabelEXT",
@@ -130,8 +132,6 @@
     "vkQueueBeginDebugUtilsLabelEXT": "OverrideQueueBeginDebugUtilsLabelEXT",
     "vkQueueEndDebugUtilsLabelEXT": "OverrideQueueEndDebugUtilsLabelEXT",
     "vkQueueInsertDebugUtilsLabelEXT": "OverrideQueueInsertDebugUtilsLabelEXT",
-    "vkSetDebugUtilsObjectNameEXT": "OverrideSetDebugUtilsObjectNameEXT",
-    "vkSetDebugUtilsObjectTagEXT": "OverrideSetDebugUtilsObjectTagEXT",
     "vkSubmitDebugUtilsMessageEXT": "OverrideSubmitDebugUtilsMessageEXT",
     "vkGetAccelerationStructureBuildSizesKHR": "OverrideGetAccelerationStructureBuildSizesKHR",
     "vkUpdateDescriptorSets": "OverrideUpdateDescriptorSets",
@@ -159,6 +159,8 @@
     "vkCmdCopyAccelerationStructureKHR": "OverrideCmdCopyAccelerationStructureKHR",
     "vkCmdWriteAccelerationStructuresPropertiesKHR": "OverrideCmdWriteAccelerationStructuresPropertiesKHR",
     "vkCmdBindPipeline": "OverrideCmdBindPipeline",
-    "vkCmdPushConstants": "OverrideCmdPushConstants"
+    "vkCmdPushConstants": "OverrideCmdPushConstants",
+    "vkGetPastPresentationTimingGOOGLE": "OverrideGetPastPresentationTimingGOOGLE",
+    "vkGetRefreshCycleDurationGOOGLE": "OverrideGetRefreshCycleDurationGOOGLE"
   }
 }

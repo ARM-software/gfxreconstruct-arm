@@ -457,6 +457,9 @@ def makeObjectType(handle_value):
     elif handle_value.endswith('FUCHSIA'):
         extension = '_FUCHSIA'
         value = handle_value[2:-7]
+    elif handle_value.endswith('ARM'):
+        extension = '_ARM'
+        value = handle_value[2:-3]
     else:
         value = handle_value[2:]
 
@@ -578,30 +581,8 @@ class VulkanCppConsumerBodyGenerator(BaseGenerator):
             'vkCreateAccelerationStructureNV'
         ]
 
-        self.stype_values = dict()
-        self.structs_with_handle_ptrs = []
-        self.structs_with_handles = dict()
-
     def writeout(self, *args, **kwargs):
         write(*args, **kwargs, file=self.outFile)
-
-    def genStruct(self, typeinfo, typename, alias):
-        """
-        Process struct information
-
-        Note: Using method from replay consumer generator
-        """
-        BaseGenerator.genStruct(self, typeinfo, typename, alias)
-
-        if not alias:
-            self.check_struct_member_handles(
-                typename, self.structs_with_handles,
-                self.structs_with_handle_ptrs
-            )
-
-            stype = self.make_structure_type_enum(typeinfo, typename)
-            if stype:
-                self.stype_values[typename] = stype
 
     def beginFile(self, gen_opts):
         """Method override."""
@@ -1014,6 +995,8 @@ class VulkanCppConsumerBodyGenerator(BaseGenerator):
 
                 callArgs.append(f'{varName}.c_str()')
                 callTempl.append('&%s')
+            elif self.is_struct(arg.base_type):
+                print(f'Argument {arg.name} in function {name} ignored because {arg.base_type} is not supported yet.')
             else:
                 # simple input argument (float, etc..)
                 valueSuffix = valueSuffixDict.get(arg.base_type, '')

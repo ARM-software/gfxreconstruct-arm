@@ -234,13 +234,15 @@ bool FileTransformer::ProcessNextBlock()
     {
         if (format::RemoveCompressedBlockBit(block_header.type) == format::BlockType::kFunctionCallBlock)
         {
-            format::ApiCallId api_call_id = format::ApiCallId::ApiCall_Unknown;
+            format::FunctionCallHeader header;
+            header.block_header = block_header;
 
-            success = ReadBytes(&api_call_id, sizeof(api_call_id));
+            success = ReadBytes(&header.api_call_id, sizeof(header.api_call_id));
+            success = success && ReadBytes(&header.thread_id, sizeof(header.thread_id));
 
             if (success)
             {
-                success = ProcessFunctionCall(block_header, api_call_id);
+                success = ProcessFunctionCall(header);
             }
             else
             {
@@ -249,60 +251,50 @@ bool FileTransformer::ProcessNextBlock()
         }
         else if (format::RemoveCompressedBlockBit(block_header.type) == format::BlockType::kMetaDataBlock)
         {
-            format::MetaDataId meta_data_id =
-                format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_None, format::MetaDataType::kUnknownMetaDataType);
+            format::MetaDataHeader header;
+            header.block_header = block_header;
 
-            success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
+            success = ReadBytes(&header.meta_data_id, sizeof(header.meta_data_id));
 
             if (success)
             {
-                success = ProcessMetaData(block_header, meta_data_id);
+                success = ProcessMetaData(header);
             }
             else
             {
                 HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read meta-data block header");
             }
         }
-        else if (block_header.type == format::BlockType::kFrameMarkerBlock)
+        else if (block_header.type == format::BlockType::kFrameMarkerBlock ||
+                 block_header.type == format::BlockType::kStateMarkerBlock)
         {
-            format::MarkerType marker_type = format::MarkerType::kUnknownMarker;
+            format::Marker marker;
+            marker.header = block_header;
 
-            success = ReadBytes(&marker_type, sizeof(marker_type));
+            success = ReadBytes(&marker.marker_type, sizeof(marker.marker_type));
+            success = success && ReadBytes(&marker.frame_number, sizeof(marker.frame_number));
 
             if (success)
             {
-                success = ProcessFrameMarker(block_header, marker_type);
+                success = ProcessMarker(marker);
             }
             else
             {
-                HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read frame marker header");
-            }
-        }
-        else if (block_header.type == format::BlockType::kStateMarkerBlock)
-        {
-            format::MarkerType marker_type  = format::MarkerType::kUnknownMarker;
-            uint64_t           frame_number = 0;
-
-            success = ReadBytes(&marker_type, sizeof(marker_type));
-
-            if (success)
-            {
-                success = ProcessStateMarker(block_header, marker_type);
-            }
-            else
-            {
-                HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read state marker header");
+                HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read marker block");
             }
         }
         else if (format::RemoveCompressedBlockBit(block_header.type) == format::BlockType::kMethodCallBlock)
         {
-            format::ApiCallId api_call_id = format::ApiCallId::ApiCall_Unknown;
+            format::MethodCallHeader header;
+            header.block_header = block_header;
 
-            success = ReadBytes(&api_call_id, sizeof(api_call_id));
+            success = ReadBytes(&header.api_call_id, sizeof(header.api_call_id));
+            success = success && ReadBytes(&header.object_id, sizeof(header.object_id));
+            success = success && ReadBytes(&header.thread_id, sizeof(header.thread_id));
 
             if (success)
             {
-                success = ProcessMethodCall(block_header, api_call_id, block_index_);
+                success = ProcessMethodCall(header, block_index_);
             }
             else
             {
@@ -311,47 +303,44 @@ bool FileTransformer::ProcessNextBlock()
         }
         else if (block_header.type == format::BlockType::kAnnotation)
         {
-            format::AnnotationType                           annotation_type = format::AnnotationType::kUnknown;
-            decltype(format::AnnotationHeader::label_length) label_length    = 0;
-            decltype(format::AnnotationHeader::data_length)  data_length     = 0;
+            format::AnnotationHeader header;
+            header.block_header = block_header;
 
-            success = ReadBytes(&annotation_type, sizeof(annotation_type));
-            success = success && ReadBytes(&label_length, sizeof(label_length));
-            success = success && ReadBytes(&data_length, sizeof(data_length));
+            success = ReadBytes(&header.annotation_type, sizeof(header.annotation_type));
+            success = success && ReadBytes(&header.label_length, sizeof(header.label_length));
+            success = success && ReadBytes(&header.data_length, sizeof(header.data_length));
 
-            if (success)
+            if (success && ((header.label_length > 0) || (header.data_length > 0)))
             {
-                if ((label_length > 0) || (data_length > 0))
+                std::string label;
+                std::string data;
+                const auto  size_sum = header.label_length + header.data_length;
+                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size_sum);
+                const size_t total_length = static_cast<size_t>(size_sum);
+
+                success = ReadParameterBuffer(total_length);
+                if (success)
                 {
-                    std::string label;
-                    std::string data;
-                    const auto  size_sum = label_length + data_length;
-                    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size_sum);
-                    const size_t total_length = static_cast<size_t>(size_sum);
-
-                    success = ReadParameterBuffer(total_length);
-                    if (success)
+                    if (header.label_length > 0)
                     {
-                        if (label_length > 0)
-                        {
-                            auto label_start = parameter_buffer_.begin();
-                            label.assign(label_start, std::next(label_start, label_length));
-                        }
-
-                        if (data_length > 0)
-                        {
-                            auto data_start = std::next(parameter_buffer_.begin(), label_length);
-                            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, data_length);
-                            data.assign(data_start, std::next(data_start, static_cast<size_t>(data_length)));
-                        }
-
-                        ProcessAnnotation(block_header, annotation_type, label, data);
+                        auto label_start = parameter_buffer_.begin();
+                        label.assign(label_start, std::next(label_start, header.label_length));
                     }
-                    else
+
+                    if (header.data_length > 0)
                     {
-                        HandleBlockReadError(kErrorReadingBlockData, "Failed to read annotation block");
+                        auto data_start = std::next(parameter_buffer_.begin(), header.label_length);
+                        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, header.data_length);
+                        data.assign(data_start, std::next(data_start, static_cast<size_t>(header.data_length)));
                     }
+
+                    ProcessAnnotation(header, label, data);
                 }
+            }
+
+            if (!success)
+            {
+                HandleBlockReadError(kErrorReadingBlockData, "Failed to read annotation block");
             }
         }
         else
@@ -404,7 +393,6 @@ bool FileTransformer::WriteBlockHeader(const format::BlockHeader& block_header)
         error_state_ = kErrorWritingBlockHeader;
         return false;
     }
-
     return true;
 }
 
@@ -564,21 +552,15 @@ bool FileTransformer::WriteFileHeader(const format::FileHeader&                 
     return success;
 }
 
-bool FileTransformer::ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id)
+bool FileTransformer::ProcessFunctionCall(const format::FunctionCallHeader& header)
 {
-    // Copy block data from old file to new file.
-    if (!WriteBlockHeader(block_header))
-    {
-        return false;
-    }
-
-    if (!WriteBytes(&call_id, sizeof(call_id)))
+    if (!WriteBytes(&header, sizeof(header)))
     {
         HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write function call block header");
         return false;
     }
 
-    if (!CopyBytes(block_header.size - sizeof(call_id)))
+    if (!CopyBytes(header.block_header.size + sizeof(header.block_header) - sizeof(header)))
     {
         HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy function call block data");
         return false;
@@ -587,23 +569,15 @@ bool FileTransformer::ProcessFunctionCall(const format::BlockHeader& block_heade
     return true;
 }
 
-bool FileTransformer::ProcessMethodCall(const format::BlockHeader& block_header,
-                                        format::ApiCallId          call_id,
-                                        uint64_t                   block_index)
+bool FileTransformer::ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index)
 {
-    // Copy block data from old file to new file.
-    if (!WriteBlockHeader(block_header))
-    {
-        return false;
-    }
-
-    if (!WriteBytes(&call_id, sizeof(call_id)))
+    if (!WriteBytes(&header, sizeof(header)))
     {
         HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write method call block header");
         return false;
     }
 
-    if (!CopyBytes(block_header.size - sizeof(call_id)))
+    if (!CopyBytes(header.block_header.size + sizeof(header.block_header) - sizeof(header)))
     {
         HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy method call block data");
         return false;
@@ -612,21 +586,617 @@ bool FileTransformer::ProcessMethodCall(const format::BlockHeader& block_header,
     return true;
 }
 
-bool FileTransformer::ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id)
+bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 {
-    // Copy block data from old file to new file.
-    if (!WriteBlockHeader(block_header))
+    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
+
+    switch (meta_data_type)
     {
+        case format::MetaDataType::kDisplayMessageCommand:
+        {
+            format::DisplayMessageCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+
+            if (success)
+            {
+                return ProcessDisplayMessageCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kFillMemoryCommand:
+        {
+            format::FillMemoryCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success      = success && ReadBytes(&header.memory_offset, sizeof(header.memory_offset));
+            success      = success && ReadBytes(&header.memory_size, sizeof(header.memory_size));
+
+            if (success)
+            {
+                return ProcessFillMemoryCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kResizeWindowCommand:
+        {
+            format::ResizeWindowCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.surface_id, sizeof(header.surface_id));
+            success      = success && ReadBytes(&header.width, sizeof(header.width));
+            success      = success && ReadBytes(&header.height, sizeof(header.height));
+
+            if (success)
+            {
+                return ProcessResizeWindowCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetSwapchainImageStateCommand:
+        {
+            format::SetSwapchainImageStateCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.swapchain_id, sizeof(header.swapchain_id));
+            success      = success && ReadBytes(&header.last_presented_image, sizeof(header.last_presented_image));
+            success      = success && ReadBytes(&header.image_info_count, sizeof(header.image_info_count));
+
+            if (success)
+            {
+                return ProcessSetSwapchainImageStateCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kBeginResourceInitCommand:
+        {
+            format::BeginResourceInitCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.max_resource_size, sizeof(header.max_resource_size));
+            success      = success && ReadBytes(&header.max_copy_size, sizeof(header.max_copy_size));
+
+            if (success)
+            {
+                return ProcessBeginResourceInitCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kEndResourceInitCommand:
+        {
+            format::EndResourceInitCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+
+            if (success)
+            {
+                return ProcessEndResourceInitCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kInitBufferCommand:
+        {
+            format::InitBufferCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+            if (success)
+            {
+                return ProcessInitBufferCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kInitImageCommand:
+        {
+            format::InitImageCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.image_id, sizeof(header.image_id));
+            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+            success      = success && ReadBytes(&header.aspect, sizeof(header.aspect));
+            success      = success && ReadBytes(&header.layout, sizeof(header.layout));
+            success      = success && ReadBytes(&header.level_count, sizeof(header.level_count));
+
+            if (success)
+            {
+                return ProcessInitImageCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kCreateHardwareBufferCommand_deprecated:
+        {
+            format::CreateHardwareBufferCommandHeader header;
+            header.meta_header = meta_header;
+
+            uint32_t usage = 0;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+            success      = success && ReadBytes(&header.format, sizeof(header.format));
+            success      = success && ReadBytes(&header.width, sizeof(header.width));
+            success      = success && ReadBytes(&header.height, sizeof(header.height));
+            success      = success && ReadBytes(&header.stride, sizeof(header.stride));
+            success      = success && ReadBytes(&usage, sizeof(usage));
+            success      = success && ReadBytes(&header.layers, sizeof(header.layers));
+            success      = success && ReadBytes(&header.planes, sizeof(header.planes));
+
+            header.usage = usage;
+
+            if (success)
+            {
+                return ProcessCreateHardwareBufferCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kDestroyHardwareBufferCommand:
+        {
+            format::DestroyHardwareBufferCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+
+            if (success)
+            {
+                return ProcessDestroyHardwareBufferCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetDevicePropertiesCommand:
+        {
+            format::SetDevicePropertiesCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.physical_device_id, sizeof(header.physical_device_id));
+            success      = success && ReadBytes(&header.api_version, sizeof(header.api_version));
+            success      = success && ReadBytes(&header.driver_version, sizeof(header.driver_version));
+            success      = success && ReadBytes(&header.vendor_id, sizeof(header.vendor_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.device_type, sizeof(header.device_type));
+            success      = success && ReadBytes(&header.pipeline_cache_uuid, sizeof(header.pipeline_cache_uuid));
+            success      = success && ReadBytes(&header.device_name_len, sizeof(header.device_name_len));
+
+            if (success)
+            {
+                return ProcessSetDevicePropertiesCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetDeviceMemoryPropertiesCommand:
+        {
+            format::SetDeviceMemoryPropertiesCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.physical_device_id, sizeof(header.physical_device_id));
+            success      = success && ReadBytes(&header.memory_type_count, sizeof(header.memory_type_count));
+            success      = success && ReadBytes(&header.memory_heap_count, sizeof(header.memory_heap_count));
+
+            if (success)
+            {
+                return ProcessSetDeviceMemoryPropertiesCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kResizeWindowCommand2:
+        {
+            format::ResizeWindowCommand2 header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.surface_id, sizeof(header.surface_id));
+            success      = success && ReadBytes(&header.width, sizeof(header.width));
+            success      = success && ReadBytes(&header.height, sizeof(header.height));
+            success      = success && ReadBytes(&header.pre_transform, sizeof(header.pre_transform));
+
+            if (success)
+            {
+                return ProcessResizeWindowCommand2(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetOpaqueAddressCommand:
+        {
+            format::SetOpaqueAddressCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.object_id, sizeof(header.object_id));
+            success      = success && ReadBytes(&header.address, sizeof(header.address));
+
+            if (success)
+            {
+                return ProcessSetOpaqueAddressCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetRayTracingShaderGroupHandlesCommand:
+        {
+            format::SetRayTracingShaderGroupHandlesCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.pipeline_id, sizeof(header.pipeline_id));
+            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+            if (success)
+            {
+                return ProcessSetRayTracingShaderGroupHandlesCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kCreateHeapAllocationCommand:
+        {
+            format::CreateHeapAllocationCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.allocation_id, sizeof(header.allocation_id));
+            success      = success && ReadBytes(&header.allocation_size, sizeof(header.allocation_size));
+
+            if (success)
+            {
+                return ProcessCreateHeapAllocationCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kInitSubresourceCommand:
+        {
+            format::InitSubresourceCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.resource_id, sizeof(header.resource_id));
+            success      = success && ReadBytes(&header.subresource, sizeof(header.subresource));
+            success      = success && ReadBytes(&header.initial_state, sizeof(header.initial_state));
+            success      = success && ReadBytes(&header.resource_state, sizeof(header.resource_state));
+            success      = success && ReadBytes(&header.barrier_flags, sizeof(header.barrier_flags));
+            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+            if (success)
+            {
+                return ProcessInitSubresourceCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kExeFileInfoCommand:
+        {
+            format::ExeFileInfoBlock header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.info_record, sizeof(header.info_record));
+
+            if (success)
+            {
+                return ProcessExeFileInfoCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kInitDx12AccelerationStructureCommand:
+        {
+            format::InitDx12AccelerationStructureCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.dest_acceleration_structure_data,
+                                           sizeof(header.dest_acceleration_structure_data));
+            success      = success && ReadBytes(&header.copy_source_gpu_va, sizeof(header.copy_source_gpu_va));
+            success      = success && ReadBytes(&header.copy_mode, sizeof(header.copy_mode));
+            success      = success && ReadBytes(&header.inputs_type, sizeof(header.inputs_type));
+            success      = success && ReadBytes(&header.inputs_flags, sizeof(header.inputs_flags));
+            success = success && ReadBytes(&header.inputs_num_instance_descs, sizeof(header.inputs_num_instance_descs));
+            success = success && ReadBytes(&header.inputs_num_geometry_descs, sizeof(header.inputs_num_geometry_descs));
+            success = success && ReadBytes(&header.inputs_data_size, sizeof(header.inputs_data_size));
+
+            if (success)
+            {
+                return ProcessInitDx12AccelerationStructureCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kFillMemoryResourceValueCommand:
+        {
+            format::FillMemoryResourceValueCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.resource_value_count, sizeof(header.resource_value_count));
+
+            if (success)
+            {
+                return ProcessFillMemoryResourceValueCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kDxgiAdapterInfoCommand:
+        {
+            format::DxgiAdapterInfoCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.adapter_desc, sizeof(header.adapter_desc));
+
+            if (success)
+            {
+                return ProcessDxgiAdapterInfoCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kDriverInfoCommand:
+        {
+            format::DriverInfoBlock header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.driver_record, sizeof(header.driver_record));
+
+            if (success)
+            {
+                return ProcessDriverInfoCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kCreateHardwareBufferCommand:
+        {
+            format::CreateHardwareBufferCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+            success      = success && ReadBytes(&header.format, sizeof(header.format));
+            success      = success && ReadBytes(&header.width, sizeof(header.width));
+            success      = success && ReadBytes(&header.height, sizeof(header.height));
+            success      = success && ReadBytes(&header.stride, sizeof(header.stride));
+            success      = success && ReadBytes(&header.usage, sizeof(header.usage));
+            success      = success && ReadBytes(&header.layers, sizeof(header.layers));
+            success      = success && ReadBytes(&header.planes, sizeof(header.planes));
+
+            if (success)
+            {
+                return ProcessCreateHardwareBufferCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kDx12RuntimeInfoCommand:
+        {
+            format::Dx12RuntimeInfoCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.runtime_info, sizeof(header.runtime_info));
+
+            if (success)
+            {
+                return ProcessDx12RuntimeInfoCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kParentToChildDependency:
+        {
+            format::ParentToChildDependencyHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.dependency_type, sizeof(header.dependency_type));
+            success      = success && ReadBytes(&header.parent_id, sizeof(header.parent_id));
+            success      = success && ReadBytes(&header.child_count, sizeof(header.child_count));
+
+            if (success)
+            {
+                return ProcessParentToChildDependency(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kVulkanBuildAccelerationStructuresCommand:
+        {
+            format::VulkanMetaBuildAccelerationStructuresHeader header;
+            header.meta_header = meta_header;
+            return ProcessVulkanBuildAccelerationStructuresCommand(header);
+        }
+        case format::MetaDataType::kVulkanCopyAccelerationStructuresCommand:
+        {
+            format::VulkanCopyAccelerationStructuresCommandHeader header;
+            header.meta_header = meta_header;
+            return ProcessVulkanCopyAccelerationStructuresCommand(header);
+        }
+        case format::MetaDataType::kVulkanWriteAccelerationStructuresPropertiesCommand:
+        {
+            format::VulkanWriteAccelerationStructuresPropertiesCommandHeader header;
+            header.meta_header = meta_header;
+            return ProcessVulkanWriteAccelerationStructuresPropertiesCommand(header);
+        }
+        case format::MetaDataType::kFixDeviceAddressCommand:
+        {
+            format::FixDeviceAddressCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
+            success      = success && ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+            if (success)
+            {
+                return ProcessFixDeviceAddressCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kSetEnvironmentVariablesCommand:
+        {
+            format::SetEnvironmentVariablesCommand header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.string_length, sizeof(header.string_length));
+
+            if (success)
+            {
+                return ProcessSetEnvironmentVariablesCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kExecuteBlocksFromFile:
+        {
+            format::ExecuteBlocksFromFile header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.n_blocks, sizeof(header.n_blocks));
+            success      = success && ReadBytes(&header.offset, sizeof(header.offset));
+            success      = success && ReadBytes(&header.filename_length, sizeof(header.filename_length));
+
+            if (success)
+            {
+                return ProcessExecuteBlocksFromFile(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kFixShaderGroupHandleCommand:
+        {
+            format::FixShaderGroupHandleCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
+            success      = success && ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+            if (success)
+            {
+                return ProcessFixShaderGroupHandleCommand(header);
+            }
+
+            return false;
+        }
+        case format::MetaDataType::kInitTensorCommand:
+        {
+            format::InitTensorCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
+            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+
+            if (success)
+            {
+                return ProcessInitTensorCommand(header);
+            }
+
+            return false;
+        }
+        default:
+        {
+            GFXRECON_LOG_ERROR("Unrecognized meta-data type %u", meta_data_type);
+            return false;
+        }
+    }
+}
+
+bool FileTransformer::ProcessMarker(const format::Marker& marker)
+{
+    if (marker.header.type == format::kStateMarkerBlock)
+    {
+        if (marker.marker_type == format::kBeginMarker)
+        {
+            loading_state_ = true;
+        }
+        else if (marker.marker_type == format::kEndMarker)
+        {
+            loading_state_ = false;
+        }
+    }
+
+    if (!WriteBytes(&marker, sizeof(marker)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockData, "Failed to write frame marker data");
         return false;
     }
 
-    if (!WriteBytes(&meta_data_id, sizeof(meta_data_id)))
+    return true;
+}
+
+bool FileTransformer::ProcessAnnotation(const format::AnnotationHeader& header,
+                                        const std::string&              label,
+                                        const std::string&              data)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write annotation block header");
+        return false;
+    }
+
+    if (!WriteBytes(label.data(), label.size()))
+    {
+        HandleBlockWriteError(kErrorWritingBlockData, "Failed to write annotation block label");
+        return false;
+    }
+
+    if (!WriteBytes(data.data(), data.size()))
+    {
+        HandleBlockWriteError(kErrorWritingBlockData, "Failed to write annotation block data");
+        return false;
+    }
+
+    return true;
+}
+
+bool FileTransformer::ProcessDisplayMessageCommand(const format::DisplayMessageCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
     {
         HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
         return false;
     }
 
-    if (!CopyBytes(block_header.size - sizeof(meta_data_id)))
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
     {
         HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
         return false;
@@ -634,88 +1204,506 @@ bool FileTransformer::ProcessMetaData(const format::BlockHeader& block_header, f
 
     return true;
 }
-
-bool FileTransformer::ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+bool FileTransformer::ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header)
 {
-    // Copy marker data from old file to new file.
-    uint64_t frame_number = 0;
-
-    if (ReadBytes(&frame_number, sizeof(frame_number)))
+    if (!WriteBytes(&header, sizeof(header)))
     {
-        format::Marker marker;
-        marker.header       = block_header;
-        marker.marker_type  = marker_type;
-        marker.frame_number = frame_number;
-
-        if (!WriteBytes(&marker, sizeof(marker)))
-        {
-            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write frame marker data");
-            return false;
-        }
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
     }
-    else
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
     {
-        HandleBlockWriteError(kErrorReadingBlockData, "Failed to read frame marker data");
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
         return false;
     }
 
     return true;
 }
-
-bool FileTransformer::ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+bool FileTransformer::ProcessResizeWindowCommand(const format::ResizeWindowCommand& header)
 {
-    // Copy marker data from old file to new file.
-    uint64_t frame_number = 0;
-
-    if (ReadBytes(&frame_number, sizeof(frame_number)))
+    if (!WriteBytes(&header, sizeof(header)))
     {
-        if (marker_type == format::kBeginMarker)
-        {
-            loading_state_ = true;
-        }
-        else if (marker_type == format::kEndMarker)
-        {
-            loading_state_ = false;
-        }
-
-        format::Marker marker;
-        marker.header       = block_header;
-        marker.marker_type  = marker_type;
-        marker.frame_number = frame_number;
-
-        if (!WriteBytes(&marker, sizeof(marker)))
-        {
-            HandleBlockWriteError(kErrorWritingBlockData, "Failed to write state marker data");
-            return false;
-        }
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
     }
-    else
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
     {
-        HandleBlockWriteError(kErrorReadingBlockData, "Failed to read state marker data");
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
         return false;
     }
 
     return true;
 }
-
-bool FileTransformer::ProcessAnnotation(const format::BlockHeader& block_header,
-                                        format::AnnotationType     annotation_type,
-                                        std::string                label,
-                                        std::string                data)
+bool FileTransformer::ProcessSetSwapchainImageStateCommand(const format::SetSwapchainImageStateCommandHeader& header)
 {
-    bool success = true;
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
 
-    format::AnnotationHeader annotation_header;
-    annotation_header.block_header    = block_header;
-    annotation_header.annotation_type = annotation_type;
-    annotation_header.data_length     = data.length();
-    annotation_header.label_length    = static_cast<uint32_t>(label.length());
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
 
-    success = WriteBytes(&annotation_header, sizeof(annotation_header));
-    success = success && WriteBytes(label.c_str(), label.length());
-    success = success && WriteBytes(data.c_str(), data.length());
+    return true;
+}
+bool FileTransformer::ProcessBeginResourceInitCommand(const format::BeginResourceInitCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
 
-    return success;
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessEndResourceInitCommand(const format::EndResourceInitCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessInitBufferCommand(const format::InitBufferCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessInitImageCommand(const format::InitImageCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessDestroyHardwareBufferCommand(const format::DestroyHardwareBufferCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessSetDevicePropertiesCommand(const format::SetDevicePropertiesCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessSetDeviceMemoryPropertiesCommand(const format::SetDeviceMemoryPropertiesCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessResizeWindowCommand2(const format::ResizeWindowCommand2& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessSetRayTracingShaderGroupHandlesCommand(
+    const format::SetRayTracingShaderGroupHandlesCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessCreateHeapAllocationCommand(const format::CreateHeapAllocationCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessExeFileInfoCommand(const format::ExeFileInfoBlock& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessInitDx12AccelerationStructureCommand(
+    const format::InitDx12AccelerationStructureCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessDxgiAdapterInfoCommand(const format::DxgiAdapterInfoCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessDriverInfoCommand(const format::DriverInfoBlock& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessCreateHardwareBufferCommand(const format::CreateHardwareBufferCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessDx12RuntimeInfoCommand(const format::Dx12RuntimeInfoCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessParentToChildDependency(const format::ParentToChildDependencyHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessVulkanBuildAccelerationStructuresCommand(
+    const format::VulkanMetaBuildAccelerationStructuresHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessVulkanCopyAccelerationStructuresCommand(
+    const format::VulkanCopyAccelerationStructuresCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
+    const format::VulkanWriteAccelerationStructuresPropertiesCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(decode)

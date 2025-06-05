@@ -1,7 +1,7 @@
-diff --git a/external/Vulkan-Headers/registry/vk.xml b/vkngp.xml
+diff --git a/external/Vulkan-Headers/registry/vk.xml b/external/Vulkan-Headers/registry/vk.xml
 index 12f5551a..5d722683 100644
 --- a/external/Vulkan-Headers/registry/vk.xml
-+++ b/vkngp.xml
++++ b/external/Vulkan-Headers/registry/vk.xml
 @@ -401,6 +401,11 @@ typedef void* <name>MTLSharedEvent_id</name>;
          <type                                             category="bitmask" name="VkPipelineCreateFlags2KHR" alias="VkPipelineCreateFlags2"/>
          <type bitvalues="VkBufferUsageFlagBits2"          category="bitmask">typedef <type>VkFlags64</type> <name>VkBufferUsageFlags2</name>;</type>

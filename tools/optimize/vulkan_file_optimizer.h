@@ -45,9 +45,18 @@ class VulkanFileOptimizer : public FileOptimizer
     {}
 
   private:
-    virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id) override;
-    virtual bool ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id) override;
-    virtual bool ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type) override;
+    virtual bool ProcessFunctionCall(const format::FunctionCallHeader& header) override;
+    virtual bool ProcessMarker(const format::Marker& marker) override;
+
+    virtual bool ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header) override;
+    virtual bool ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header) override;
+    virtual bool ProcessInitBufferCommand(const format::InitBufferCommandHeader& header) override;
+    virtual bool ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header) override;
+    virtual bool ProcessVulkanBuildAccelerationStructuresCommand(
+        const format::VulkanMetaBuildAccelerationStructuresHeader& header) override;
+    virtual bool ProcessVulkanCopyAccelerationStructuresCommand(
+        const format::VulkanCopyAccelerationStructuresCommandHeader& header) override;
+    virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
 
     void WriteFunctionCall(format::ApiCallId               call_id,
                            format::ThreadId                thread_id,

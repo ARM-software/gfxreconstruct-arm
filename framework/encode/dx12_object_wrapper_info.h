@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -479,9 +479,10 @@ struct ID3D12CommandListInfo : public DxWrapperInfo
     // Track command list dependencies.
     format::HandleId                                  create_command_allocator_id{ format::kNullHandleId };
     std::shared_ptr<const ID3D12CommandAllocatorInfo> create_command_allocator_info;
-    std::unordered_set<format::HandleId>          command_objects[D3D12GraphicsCommandObjectType::NumObjectTypes];
-    std::unordered_set<SIZE_T>                    command_cpu_descriptor_handles;
-    std::unordered_set<D3D12_GPU_VIRTUAL_ADDRESS> command_gpu_virtual_addresses;
+    format::HandleId                                  reset_command_allocator_id{ format::kNullHandleId };
+    std::unordered_set<format::HandleId>              command_objects[D3D12GraphicsCommandObjectType::NumObjectTypes];
+    std::unordered_set<SIZE_T>                        command_cpu_descriptor_handles;
+    std::unordered_set<D3D12_GPU_VIRTUAL_ADDRESS>     command_gpu_virtual_addresses;
 
     // Record for future. It's not used for now.
     std::unordered_set<UINT64> command_gpu_descriptor_handles;

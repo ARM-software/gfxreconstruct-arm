@@ -384,6 +384,7 @@ struct VulkanAndroidHardwareBufferInfo : public VulkanExternalMemoryInfo
     format::HandleId memory_id{ format::kNullHandleId };
     AHardwareBuffer* hardware_buffer{ nullptr };
     uint8_t*         data{ nullptr };
+    uint32_t         width{ 0 };
 
     std::vector<VulkanAndroidHardwareBufferPlaneInfo> plane_info{};
 };
@@ -440,6 +441,7 @@ struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
     VkImageUsageFlags     usage{ 0 };
     VkImageType           type{};
     VkFormat              format{};
+    bool                  external_format{ false };
     VkExtent3D            extent{ 0, 0, 0 };
     VkImageTiling         tiling{};
     VkSampleCountFlagBits sample_count{};
@@ -450,6 +452,8 @@ struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
 
     VkImageLayout current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
     VkImageLayout intermediate_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+
+    VkDeviceSize size{ 0 };
 };
 
 struct VulkanPipelineCacheData
@@ -664,14 +668,14 @@ struct VulkanShaderEXTInfo : VulkanObjectInfoAsync<VkShaderEXT>
 
 struct VulkanCommandBufferInfo : public VulkanPoolObjectInfo<VkCommandBuffer>
 {
-    bool                                                is_frame_boundary{ false };
-    std::string                                         frame_boundary_label;
-    std::vector<format::HandleId>                       frame_buffer_ids;
-    std::unordered_map<format::HandleId, VkImageLayout> image_layout_barriers;
-    format::HandleId                                    bound_pipeline_id = format::kNullHandleId;
-    std::vector<uint8_t>                                push_constant_data;
-    VkShaderStageFlags                                  push_constant_stage_flags     = 0;
-    VkPipelineLayout                                    push_constant_pipeline_layout = VK_NULL_HANDLE;
+    bool                                                      is_frame_boundary{ false };
+    std::string                                               frame_boundary_label;
+    std::vector<format::HandleId>                             frame_buffer_ids;
+    std::unordered_map<format::HandleId, VkImageLayout>       image_layout_barriers;
+    std::unordered_map<VkPipelineBindPoint, format::HandleId> bound_pipelines;
+    std::vector<uint8_t>                                      push_constant_data;
+    VkShaderStageFlags                                        push_constant_stage_flags     = 0;
+    VkPipelineLayout                                          push_constant_pipeline_layout = VK_NULL_HANDLE;
 };
 
 struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
@@ -698,7 +702,7 @@ struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
     std::vector<VkSubpassDependency> dependencies;
 
     // Multiview info
-    bool has_multiview;
+    bool has_multiview{ false };
 
     struct
     {

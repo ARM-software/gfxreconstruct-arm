@@ -280,6 +280,13 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
             image, memory, memory_offset, allocator_image_data, allocator_memory_data, bind_memory_properties);
     }
 
+    virtual void BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
+                                                VkImage     image,
+                                                void*       ahardwahardwarebuffer_infoarebuffer_id) override
+    {
+        return;
+    }
+
     virtual VkResult MapResourceMemoryDirect(VkDeviceSize     size,
                                              VkMemoryMapFlags flags,
                                              void**           data,
@@ -316,33 +323,34 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
                                   const VkAllocationCallbacks* allocation_callbacks,
                                   format::HandleId             capture_id,
                                   VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data)
+                                  ResourceData*                allocator_data) override
     {
         return VK_SUCCESS;
     };
 
-    virtual void
-    DestroyTensor(VkTensorARM tensor, const VkAllocationCallbacks* allocation_callbacks, ResourceData allocator_data){};
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override{};
 
     virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
                                                     const VkAllocationCallbacks*                   allocation_callbacks,
                                                     format::HandleId                               capture_id,
                                                     VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData*                                  allocator_data)
+                                                    ResourceData* allocator_data) override
     {
         return VK_SUCCESS;
     };
 
     virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
                                                  const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data){};
+                                                 ResourceData                  allocator_data) override{};
 
     virtual VkResult BindTensorMemory(VkTensorARM            tensor,
                                       VkDeviceMemory         memory,
                                       VkDeviceSize           memory_offset,
                                       ResourceData           allocator_tensor_data,
                                       MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties)
+                                      VkMemoryPropertyFlags* bind_memory_properties) override
     {
         return VK_SUCCESS;
     };
@@ -352,7 +360,7 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
                                                         VkDeviceSize                  memory_offset,
                                                         ResourceData                  allocator_session_data,
                                                         MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties)
+                                                        VkMemoryPropertyFlags*        bind_memory_properties) override
     {
         return VK_SUCCESS;
     };

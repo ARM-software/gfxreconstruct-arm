@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021-2022 LunarG, Inc.
-** Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -42,6 +42,10 @@
 #include "graphics/dx12_util.h"
 #include "application/application.h"
 
+#ifdef GFXRECON_AGS_SUPPORT
+#include "graphics/dx12_ags_marker_injector.h"
+#endif
+
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -63,6 +67,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
     }
+
+#ifdef GFXRECON_AGS_SUPPORT
+    void SetAgsMarkerInjector(AGSContext* ags_context = nullptr);
+#endif
 
     void SetFatalErrorHandler(std::function<void(const char*)> handler) { fatal_error_handler_ = handler; }
 
@@ -281,6 +289,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void SetDumpTarget(TrackDumpDrawCall& track_dump_target);
 
     IDXGIAdapter* GetAdapter();
+
+    graphics::dx12::ActiveAdapterMap& GetAdaptersMap() { return adapters_; }
 
   protected:
     void MapGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE& handle);
@@ -1168,6 +1178,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unique_ptr<ScreenshotHandlerBase>                screenshot_handler_;
     std::unordered_map<ID3D12Resource*, ResourceInitInfo> resource_init_infos_;
     uint64_t                                              frame_end_marker_count_;
+
+#ifdef GFXRECON_AGS_SUPPORT
+    graphics::Dx12AgsMarkerInjector* ags_marker_injector_{ nullptr };
+#endif
 };
 
 GFXRECON_END_NAMESPACE(decode)

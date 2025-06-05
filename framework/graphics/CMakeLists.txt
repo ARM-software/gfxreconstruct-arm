@@ -1,5 +1,6 @@
 ###############################################################################
 # Copyright (c) 2021 LunarG, Inc.
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
 # All rights reserved
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -59,11 +60,19 @@ target_sources(gfxrecon_graphics
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_struct_extract_handles.cpp
               )
 
+if (${GFXRECON_AGS_SUPPORT_FINAL})
+target_sources(gfxrecon_graphics
+               PRIVATE
+                    ${CMAKE_CURRENT_LIST_DIR}/dx12_ags_marker_injector.h
+                    ${CMAKE_CURRENT_LIST_DIR}/dx12_ags_marker_injector.cpp
+               )
+endif()
+
 target_include_directories(gfxrecon_graphics
                            PUBLIC
-                               ${CMAKE_SOURCE_DIR}/build
-                               ${CMAKE_SOURCE_DIR}/framework
-                               ${CMAKE_SOURCE_DIR}/external
+                               ${PROJECT_SOURCE_DIR}/build
+                               ${PROJECT_SOURCE_DIR}/framework
+                               ${PROJECT_SOURCE_DIR}/external
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
 target_link_libraries(gfxrecon_graphics gfxrecon_util vulkan_registry platform_specific)

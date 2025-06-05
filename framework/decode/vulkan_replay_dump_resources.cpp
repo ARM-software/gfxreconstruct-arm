@@ -23,7 +23,7 @@
 #include "decode/vulkan_object_info.h"
 #include "decode/vulkan_replay_dump_resources_compute_ray_tracing.h"
 #include "decode/vulkan_replay_options.h"
-#include "decode/vulkan_replay_dump_resources_json.h"
+#include "decode/vulkan_replay_dump_resources_delegate.h"
 #include "format/format.h"
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "generated/generated_vulkan_struct_decoders.h"
@@ -48,7 +48,8 @@ VulkanReplayDumpResourcesBase::VulkanReplayDumpResourcesBase(const VulkanReplayO
                                                              CommonObjectInfoTable*     object_info_table) :
     QueueSubmit_indices_(options.QueueSubmit_Indices),
     recording_(false), dump_resources_before_(options.dump_resources_before), object_info_table_(object_info_table),
-    output_json_per_command(options.dump_resources_json_per_command), dump_json_(options)
+    output_json_per_command(options.dump_resources_json_per_command), user_delegate_(nullptr),
+    active_delegate_(nullptr), default_delegate_(nullptr)
 {
     capture_filename = std::filesystem::path(options.capture_filename).stem().string();
 
@@ -57,9 +58,20 @@ VulkanReplayDumpResourcesBase::VulkanReplayDumpResourcesBase(const VulkanReplayO
         return;
     }
 
+    if (user_delegate_ != nullptr)
+    {
+        active_delegate_ = user_delegate_;
+    }
+    else
+    {
+        // Use a default delegate if none was provided.
+        default_delegate_ = std::make_unique<DefaultVulkanDumpResourcesDelegate>(options, capture_filename);
+        active_delegate_  = default_delegate_.get();
+    }
+
     if (!options.dump_resources_json_per_command)
     {
-        dump_json_.Open(options.capture_filename, options.dump_resources_output_dir);
+        active_delegate_->Open();
     }
 
     for (size_t i = 0; i < options.BeginCommandBuffer_Indices.size(); ++i)
@@ -75,8 +87,7 @@ VulkanReplayDumpResourcesBase::VulkanReplayDumpResourcesBase(const VulkanReplayO
                                                                options.RenderPass_Indices[i],
                                                                *object_info_table,
                                                                options,
-                                                               dump_json_,
-                                                               capture_filename));
+                                                               *active_delegate_));
         }
 
         if ((i < options.Dispatch_Indices.size() && options.Dispatch_Indices[i].size()) ||
@@ -92,8 +103,7 @@ VulkanReplayDumpResourcesBase::VulkanReplayDumpResourcesBase(const VulkanReplayO
                                                   : std::vector<uint64_t>(),
                                               *object_info_table_,
                                               options,
-                                              dump_json_,
-                                              capture_filename));
+                                              *active_delegate_));
         }
     }
 }
@@ -105,7 +115,13 @@ VulkanReplayDumpResourcesBase::~VulkanReplayDumpResourcesBase()
 
 void VulkanReplayDumpResourcesBase::Release()
 {
-    dump_json_.Close();
+    // active_delegate_ could be nullptr because constructor could return before creating delegate.
+    if (active_delegate_)
+    {
+        active_delegate_->Close();
+        active_delegate_  = nullptr;
+        default_delegate_ = nullptr;
+    }
     draw_call_contexts.clear();
     dispatch_ray_contexts.clear();
     cmd_buf_begin_map_.clear();
@@ -1847,7 +1863,7 @@ VkResult VulkanReplayDumpResourcesBase::QueueSubmit(const std::vector<VkSubmitIn
 
     if (!output_json_per_command)
     {
-        dump_json_.BlockStart();
+        active_delegate_->DumpStart();
     }
 
     for (size_t s = 0; s < submit_infos.size(); s++)
@@ -1899,6 +1915,10 @@ VkResult VulkanReplayDumpResourcesBase::QueueSubmit(const std::vector<VkSubmitIn
 
                 submitted = true;
             }
+
+            // In case we are dumping multiple command buffers from the same submission
+            modified_submit_infos[s].waitSemaphoreCount   = 0;
+            modified_submit_infos[s].signalSemaphoreCount = 0;
         }
     }
 
@@ -1906,7 +1926,7 @@ VkResult VulkanReplayDumpResourcesBase::QueueSubmit(const std::vector<VkSubmitIn
 
     if (!output_json_per_command)
     {
-        dump_json_.BlockEnd();
+        active_delegate_->DumpEnd();
     }
 
     // Looks like we didn't submit anything. Do the submission as it would have been done
@@ -1922,9 +1942,10 @@ VkResult VulkanReplayDumpResourcesBase::QueueSubmit(const std::vector<VkSubmitIn
     }
     else
     {
-        auto index_it = QueueSubmit_indices_.find(index);
-        assert(index_it != QueueSubmit_indices_.end());
-        QueueSubmit_indices_.erase(index_it);
+        QueueSubmit_indices_.erase(std::remove_if(QueueSubmit_indices_.begin(),
+                                                  QueueSubmit_indices_.end(),
+                                                  [index](uint64_t i) { return i == index; }),
+                                   QueueSubmit_indices_.end());
 
         // Once all submissions are complete release resources
         if (QueueSubmit_indices_.empty())
@@ -1994,26 +2015,14 @@ bool VulkanReplayDumpResourcesBase::UpdateRecordingStatus(VkCommandBuffer origin
 {
     assert(recording_);
 
-    const DrawCallsDumpingContext* dc_context = FindDrawCallCommandBufferContext(original_command_buffer);
-    if (dc_context != nullptr && dc_context->IsRecording())
-    {
-        return true;
-    }
+    recording_ = !QueueSubmit_indices_.empty();
 
-    const DispatchTraceRaysDumpingContext* dr_context = FindDispatchRaysCommandBufferContext(original_command_buffer);
-    if (dr_context != nullptr && dr_context->IsRecording())
-    {
-        return true;
-    }
-
-    recording_ = false;
-    return false;
+    return recording_;
 }
 
 bool VulkanReplayDumpResourcesBase::MustDumpQueueSubmitIndex(uint64_t index) const
 {
-    // Indices should be sorted
-    return QueueSubmit_indices_.find(index) != QueueSubmit_indices_.end();
+    return std::find(QueueSubmit_indices_.begin(), QueueSubmit_indices_.end(), index) != QueueSubmit_indices_.end();
 }
 
 bool VulkanReplayDumpResourcesBase::IsRecording(VkCommandBuffer original_command_buffer) const

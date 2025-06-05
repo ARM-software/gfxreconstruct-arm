@@ -49,13 +49,19 @@ class CompressionConverter : public decode::FileTransformer
     virtual bool WriteFileHeader(const format::FileHeader&                  header,
                                  const std::vector<format::FileOptionPair>& options) override;
 
-    virtual bool ProcessFunctionCall(const format::BlockHeader& block_header, format::ApiCallId call_id) override;
+    virtual bool ProcessFunctionCall(const format::FunctionCallHeader& header) override;
+    virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
+    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
 
-    virtual bool ProcessMethodCall(const format::BlockHeader& block_header,
-                                   format::ApiCallId          call_id,
-                                   uint64_t                   block_index = 0) override;
-
-    virtual bool ProcessMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id) override;
+    virtual bool ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header) override;
+    virtual bool ProcessInitBufferCommand(const format::InitBufferCommandHeader& header) override;
+    virtual bool ProcessInitImageCommand(const format::InitImageCommandHeader& header) override;
+    virtual bool ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& header) override;
+    virtual bool ProcessInitDx12AccelerationStructureCommand(
+        const format::InitDx12AccelerationStructureCommandHeader& header) override;
+    virtual bool
+    ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& header) override;
+    virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
 
   private:
     bool WriteFunctionCall(format::ApiCallId call_id, format::ThreadId thread_id, size_t buffer_size);
@@ -64,22 +70,6 @@ class CompressionConverter : public decode::FileTransformer
                          format::HandleId  object_id,
                          format::ThreadId  thread_id,
                          size_t            buffer_size);
-
-    bool WriteFillMemoryMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool WriteInitBufferMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool WriteInitImageMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool WriteInitSubresourceMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool WriteInitDx12AccelerationStructureMetaData(const format::BlockHeader& block_header,
-                                                    format::MetaDataId         meta_data_id);
-
-    bool WriteFillMemoryResourceValueMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-
-    bool WriteInitTensorMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
-    bool FilterInitTensorMetaData(const format::BlockHeader& block_header, format::MetaDataId meta_data_id);
 
     void PrepMetadataBlock(format::MetaDataHeader& meta_data_header,
                            format::MetaDataId      meta_data_id,

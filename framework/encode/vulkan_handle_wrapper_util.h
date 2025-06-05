@@ -475,36 +475,18 @@ inline void CreateWrappedHandle<DeviceWrapper,
     assert(co_parent != VK_NULL_HANDLE);
     assert(handle != nullptr);
 
-    auto          parent_wrapper = GetWrapper<SwapchainKHRWrapper>(co_parent);
-    ImageWrapper* wrapper        = nullptr;
-    // Filter duplicate display retrieval.
+    auto parent_wrapper = GetWrapper<SwapchainKHRWrapper>(co_parent);
+
+    GFXRECON_ASSERT(!parent_wrapper->retired);
+
+    // Filter duplicate image retrieval.
+    ImageWrapper* wrapper = nullptr;
     for (auto entry : parent_wrapper->child_images)
     {
         if (entry->handle == (*handle))
         {
-            return;
-        }
-    }
-
-    // Filter old swapchain images
-    if (parent_wrapper->old_swapchain)
-    {
-        auto old_swapchain_wrapper = GetWrapper<SwapchainKHRWrapper>(parent_wrapper->old_swapchain->handle);
-        if (old_swapchain_wrapper)
-        {
-            for (auto old_image : parent_wrapper->old_swapchain->child_images)
-            {
-                if ((old_image != nullptr) && (*handle == old_image->handle))
-                {
-                    wrapper = old_image;
-                    parent_wrapper->child_images.push_back(wrapper);
-                    return;
-                }
-            }
-        }
-        else
-        {
-            parent_wrapper->old_swapchain = nullptr;
+            wrapper = entry;
+            break;
         }
     }
 
@@ -513,7 +495,6 @@ inline void CreateWrappedHandle<DeviceWrapper,
         CreateWrappedNonDispatchHandle<ImageWrapper>(handle, get_id);
         wrapper                     = GetWrapper<ImageWrapper>(*handle);
         wrapper->is_swapchain_image = true;
-        wrapper->parent_swapchains.insert(co_parent);
         parent_wrapper->child_images.push_back(wrapper);
     }
 }
@@ -705,12 +686,8 @@ inline void DestroyWrappedHandle<SwapchainKHRWrapper>(VkSwapchainKHR handle)
 
         for (auto image_wrapper : wrapper->child_images)
         {
-            image_wrapper->parent_swapchains.erase(handle);
-            if (image_wrapper->parent_swapchains.empty())
-            {
-                RemoveWrapper<ImageWrapper>(image_wrapper);
-                delete image_wrapper;
-            }
+            RemoveWrapper<ImageWrapper>(image_wrapper);
+            delete image_wrapper;
         }
 
         RemoveWrapper<SwapchainKHRWrapper>(wrapper);

@@ -1310,5 +1310,13 @@ std::string GenerateStruct_VkIndirectCommandsLayoutTokenEXT(std::ostream&       
     return variable_name;
 }
 
+std::string GenerateStruct_VkDataGraphPipelineConstantARM(std::ostream&                           out,
+                                                          const VkDataGraphPipelineConstantARM*   structInfo,
+                                                          Decoded_VkDataGraphPipelineConstantARM* metaInfo,
+                                                          VulkanCppConsumerBase&                  consumer)
+{
+    return {};
+}
+
 GFXRECON_END_NAMESPACE(gfxrecon)
 GFXRECON_END_NAMESPACE(decode)

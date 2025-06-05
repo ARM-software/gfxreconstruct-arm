@@ -81,7 +81,6 @@ class VulkanInternalBufferManager
     {
         PFN_vkGetBufferDeviceAddress      get_buffer_device_address{ nullptr };
         PFN_vkGetBufferDeviceAddressKHR   get_buffer_device_address_khr{ nullptr };
-        PFN_vkGetBufferMemoryRequirements get_buffer_memory_requirements{ nullptr };
     };
 
   private:

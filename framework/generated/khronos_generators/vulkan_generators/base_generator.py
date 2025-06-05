@@ -43,7 +43,7 @@
 
 import os,re,sys,json
 from collections import OrderedDict
-from khronos_base_generator import (KhronosBaseGeneratorOptions, KhronosBaseGenerator, BitsEnumToFlagsTypedef, make_re_string, remove_suffix, ValueInfo, write)
+from khronos_base_generator import (KhronosBaseGeneratorOptions, KhronosBaseGenerator, make_re_string, ValueInfo, write)
 from generator import (OutputGenerator, noneStr, regSortFeatures)
 from vkconventions import VulkanConventions
 
@@ -245,10 +245,6 @@ class BaseGenerator(KhronosBaseGenerator):
             ['MapGpuVirtualAddress', 'MapGpuVirtualAddresses', 'gpu_va_map']
         }
 
-        self.DUPLICATE_HANDLE_TYPES = [
-            'VkDescriptorUpdateTemplateKHR', 'VkSamplerYcbcrConversionKHR', 'VkPrivateDataSlotEXT'
-        ]
-
         self.VIDEO_TREE = None
 
         self.generate_video = False
@@ -318,72 +314,59 @@ class BaseGenerator(KhronosBaseGenerator):
         """Determines if the specified struct type can reference pNext extension structs that contain handles."""
         found_handles = False
         found_handle_ptrs = False
-        type_info = self.registry.lookupElementInfo(
-            typename, self.registry.typedict
+        valid_extension_structs = self.registry.validextensionstructs.get(
+            typename
         )
-
-        valid_extension_structs = self.registry.validextensionstructs.get(typename)
-        if valid_extension_structs is None:
-            valid_extension_structs = list()
-
-        parent_structs = type_info.elem.get('structextends')
-        if parent_structs and typename != 'VkPhysicalDeviceFeatures2':
-            for parent_struct in parent_structs.split(','):
-                extension_structs = self.registry.validextensionstructs.get(parent_struct)
-                if extension_structs is not None:
-                    for struct_name in extension_structs:
-                        if struct_name not in valid_extension_structs:
-                            valid_extension_structs.append(struct_name)
-        
-        # Need to search the XML tree for pNext structures that have not been processed yet.
-        for struct_name in valid_extension_structs:
-            # Check for cached results from a previous check for this struct
-            if struct_name in self.extension_structs_with_handles:
-                if self.extension_structs_with_handles[struct_name]:
-                    found_handles = True
-                if self.extension_structs_with_handle_ptrs[struct_name]:
-                    found_handle_ptrs = True
-            else:
-                # If a pre-existing result was not found, check the XML registry for the struct
-                has_handles = False
-                hasHandlePtrs = False
-                type_info = self.registry.lookupElementInfo(
-                    struct_name, self.registry.typedict
-                )
-                if type_info:
-                    member_infos = [
-                        member for member in
-                        type_info.elem.findall('.//member/type')
-                    ]
-                    if member_infos:
-                        for member_info in member_infos:
-                            found = self.registry.tree.find(
-                                "types/type/[name='" + member_info.text
-                                + "'][@category='handle']"
-                            )
-                            if found:
-                                has_handles = True
-                                self.extension_structs_with_handles[
-                                    struct_name] = True
-                                if member_info.tail and (
-                                    '*' in member_info.tail
-                                ):
-                                    self.extension_structs_with_handle_ptrs[
-                                        struct_name] = True
-                                    hasHandlePtrs = True
-                                else:
-                                    self.extension_structs_with_handle_ptrs[
-                                        struct_name] = False
-
-                if has_handles:
-                    found_handles = True
-                    if hasHandlePtrs:
+        if valid_extension_structs:
+            # Need to search the XML tree for pNext structures that have not been processed yet.
+            for struct_name in valid_extension_structs:
+                # Check for cached results from a previous check for this struct
+                if struct_name in self.extension_structs_with_handles:
+                    if self.extension_structs_with_handles[struct_name]:
+                        found_handles = True
+                    if self.extension_structs_with_handle_ptrs[struct_name]:
                         found_handle_ptrs = True
                 else:
-                    self.extension_structs_with_handles[struct_name
-                                                        ] = False
-                    self.extension_structs_with_handle_ptrs[struct_name
+                    # If a pre-existing result was not found, check the XML registry for the struct
+                    has_handles = False
+                    hasHandlePtrs = False
+                    type_info = self.registry.lookupElementInfo(
+                        struct_name, self.registry.typedict
+                    )
+                    if type_info:
+                        member_infos = [
+                            member for member in
+                            type_info.elem.findall('.//member/type')
+                        ]
+                        if member_infos:
+                            for member_info in member_infos:
+                                found = self.registry.tree.find(
+                                    "types/type/[name='" + member_info.text
+                                    + "'][@category='handle']"
+                                )
+                                if found:
+                                    has_handles = True
+                                    self.extension_structs_with_handles[
+                                        struct_name] = True
+                                    if member_info.tail and (
+                                        '*' in member_info.tail
+                                    ):
+                                        self.extension_structs_with_handle_ptrs[
+                                            struct_name] = True
+                                        hasHandlePtrs = True
+                                    else:
+                                        self.extension_structs_with_handle_ptrs[
+                                            struct_name] = False
+
+                    if has_handles:
+                        found_handles = True
+                        if hasHandlePtrs:
+                            found_handle_ptrs = True
+                    else:
+                        self.extension_structs_with_handles[struct_name
                                                             ] = False
+                        self.extension_structs_with_handle_ptrs[struct_name
+                                                                ] = False
 
         return found_handles, found_handle_ptrs
 
@@ -614,7 +597,7 @@ class BaseGenerator(KhronosBaseGenerator):
             type_name = value.base_type
 
             if is_override:
-                prefix_from_type = self.get_prefix_from_type(value.base_type)
+                prefix_from_type = self.get_api_prefix_from_type(value.base_type)
                 info_type = prefix_from_type + value.base_type[2:] + 'Info'
                 if value.is_pointer or value.is_array:
                     count = value.pointer_count
@@ -718,18 +701,6 @@ class BaseGenerator(KhronosBaseGenerator):
             arg_list = ', '.join([v.name for v in values])
             return ['ArraySize2D<{}>({})'.format(type_list, arg_list)]
 
-    def get_api_prefix(self):
-        """Method override. Start processing in superclass."""
-        return 'Vulkan'
-
-    def get_prefix_from_type(self, type):
-        """Method override. Start processing in superclass."""
-        return self.get_api_prefix()
-
-    def get_wrapper_prefix_from_type(self):
-        """Method override. Start processing in superclass."""
-        return 'vulkan_wrappers'
-
     def make_encoder_method_call(
         self, name, value, values, prefix, omit_output_param=None
     ):
@@ -747,7 +718,7 @@ class BaseGenerator(KhronosBaseGenerator):
                 handle_type_name += self.get_generic_cmd_handle_type_value(
                     name, value.name
                 )
-            wrapper = self.get_wrapper_prefix_from_type()
+            wrapper = self.get_wrapper_prefix_from_type(name)
             arg_name = '{}::GetWrappedId({}, {})'.format(
                 wrapper, arg_name, handle_type_name
             )
@@ -807,7 +778,7 @@ class BaseGenerator(KhronosBaseGenerator):
                 method_call += 'Value'
 
         if is_handle:
-            wrapper_prefix = self.get_wrapper_prefix_from_type()
+            wrapper_prefix = self.get_wrapper_prefix_from_type(value.base_type)
             method_call += '<{}>'.format(wrapper_prefix + '::' + value.base_type[2:] + 'Wrapper')
 
         if self.is_output_parameter(value) and omit_output_param:
