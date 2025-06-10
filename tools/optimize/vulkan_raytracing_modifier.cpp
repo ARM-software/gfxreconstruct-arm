@@ -1,20 +1,14 @@
 #include "vulkan_raytracing_modifier.h"
 
-#include <functional>
-#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
 
-#include "decode/referenced_resource_table.h"
-#include "generated/generated_vulkan_consumer.h"
+#include "format/format.h"
 #include "tools/optimize/vulkan_optimize_options.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
-#include "vulkan/vulkan.h"
-#include "decode/vulkan_object_info.h"
-#include "util/vulkan_modifier_base.h"
 #include "encode/struct_pointer_encoder.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -448,15 +442,19 @@ void VulkanRayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id
 {
     if (!IsModificationPass())
     {
-        per_submit_fill_memory_index_[block_index_] = memory_id;
+        fill_memory_indices_per_submit_.push_back(block_index_);
         return;
     }
 
-    if (cmd_buffer_bind_compute_handles_.size())
+    // Find as and buffer device address values inside data parameter, and generate FixDeviceAddressCommand meta block
+    std::vector<format::AddressLocationInfo> as_address_locations =
+        GetAccelerationStructureDeviceAddressesInFillMemory(data, size);
+    std::vector<format::AddressLocationInfo> buffer_address_locations;
+    if (!fill_memory_indices_to_inspect_.empty() && block_index_ == fill_memory_indices_to_inspect_.front())
     {
-        fill_memory_find_address_entries_[block_index_] = memory_id;
+        buffer_address_locations = GetBufferDeviceAddressesInFillMemory(as_address_locations, data, size);
+        fill_memory_indices_to_inspect_.pop_front();
     }
-
     // Find shader group handle values inside data parameter, and generate FixShaderGroupHandleCommand meta block
     auto shader_handle_locations = GetShaderGroupHandlesInFillMemory(data, size);
     if (shader_handle_locations.size())
@@ -464,19 +462,6 @@ void VulkanRayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id
         WriteFixShaderGroupHandleCmd(memory_id, shader_handle_locations.size(), shader_handle_locations.data());
     }
 
-    // Find as and buffer device address values inside data parameter, and generate FixDeviceAddressCommand meta block
-    std::vector<format::AddressLocationInfo> as_address_locations =
-        GetAccelerationStructureDeviceAddressesInFillMemory(data, size);
-    std::vector<format::AddressLocationInfo> buffer_address_locations;
-    // If there is no compute pipeline in the fill memory before queueSubmit, there is no need to find device address
-    if ((fill_memory_find_address_entries_.find(block_index_) != fill_memory_find_address_entries_.end()) &&
-        (memory_binding_entries_.find(memory_id) != memory_binding_entries_.end()))
-    {
-        if (memory_id == fill_memory_find_address_entries_[block_index_])
-        {
-            buffer_address_locations = GetBufferDeviceAddressesInFillMemory(as_address_locations, data, size);
-        }
-    }
     if (as_address_locations.size() || buffer_address_locations.size())
     {
         WriteFixDeviceAddressCmd(memory_id,
@@ -497,7 +482,7 @@ void VulkanRayTracingModifier::ProcessInitBufferCommand(format::HandleId device_
         return;
     }
 
-    InitBufferObject init_buffer_object;
+    InitBufferInfo init_buffer_object;
     init_buffer_object.device_id = device_id;
     init_buffer_object.buffer_id = buffer_id;
 
@@ -673,7 +658,7 @@ void VulkanRayTracingModifier::Process_vkBindBufferMemory(const ApiCallInfo& cal
 
     if (memory_binding_entries_.find(memory) != memory_binding_entries_.end())
     {
-        memory_binding_entries_[memory].bind_memory_.push_back({ buffer, true, memory_offset });
+        memory_binding_entries_[memory].memory_binding_records_.push_back({ buffer, true, memory_offset });
     }
 }
 
@@ -691,7 +676,7 @@ void VulkanRayTracingModifier::Process_vkBindImageMemory(const ApiCallInfo& call
 
     if (memory_binding_entries_.find(memory) != memory_binding_entries_.end())
     {
-        memory_binding_entries_[memory].bind_memory_.push_back({ image, false, memory_offset });
+        memory_binding_entries_[memory].memory_binding_records_.push_back({ image, false, memory_offset });
     }
 }
 
@@ -714,7 +699,7 @@ void VulkanRayTracingModifier::Process_vkBindBufferMemory2(
     {
         if (memory_binding_entries_.find(bind_meta_infos[i].memory) != memory_binding_entries_.end())
         {
-            memory_binding_entries_[bind_meta_infos[i].memory].bind_memory_.push_back(
+            memory_binding_entries_[bind_meta_infos[i].memory].memory_binding_records_.push_back(
                 { bind_meta_infos[i].buffer, true, bind_infos[i].memoryOffset });
         }
     }
@@ -739,7 +724,7 @@ void VulkanRayTracingModifier::Process_vkBindImageMemory2(
     {
         if (memory_binding_entries_.find(bind_meta_infos[i].memory) != memory_binding_entries_.end())
         {
-            memory_binding_entries_[bind_meta_infos[i].memory].bind_memory_.push_back(
+            memory_binding_entries_[bind_meta_infos[i].memory].memory_binding_records_.push_back(
                 { bind_meta_infos[i].image, false, bind_infos[i].memoryOffset });
         }
     }
@@ -1020,6 +1005,11 @@ void VulkanRayTracingModifier::Process_vkCmdBuildAccelerationStructuresKHR(
                 }
                 case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 {
+                    auto result = buffer_device_addresses_.find(geometry_data.geometry.instances.data.deviceAddress);
+                    if (result != buffer_device_addresses_.end())
+                    {
+                        instance_buffers_.insert(result->second);
+                    }
                     break;
                 }
                 case VK_GEOMETRY_TYPE_AABBS_KHR:
@@ -1313,11 +1303,7 @@ void VulkanRayTracingModifier::Process_vkCreateComputePipelines(
 
     for (uint32_t i = 0; i < createInfoCount; i++)
     {
-        format::HandleId handle                             = pPipelines->GetPointer()[i];
-        compute_pipeline_entries_[handle].handle            = handle;
-        compute_pipeline_entries_[handle].sType             = pCreateInfos->GetPointer()->sType;
-        compute_pipeline_entries_[handle].creation_index    = call_info.index;
-        compute_pipeline_entries_[handle].destruction_index = UINT64_MAX;
+        format::HandleId handle = pPipelines->GetPointer()[i];
     }
 }
 
@@ -1330,11 +1316,6 @@ void VulkanRayTracingModifier::Process_vkDestroyPipeline(
     if (IsModificationPass())
     {
         return;
-    }
-
-    if (compute_pipeline_entries_.find(pipeline) != compute_pipeline_entries_.end())
-    {
-        compute_pipeline_entries_[pipeline].destruction_index = call_info.index;
     }
 }
 
@@ -1353,13 +1334,8 @@ void VulkanRayTracingModifier::Process_vkAllocateCommandBuffers(
     const VkCommandBufferAllocateInfo* allocate_info = pAllocateInfo->GetPointer();
     for (uint32_t i = 0; i < allocate_info->commandBufferCount; i++)
     {
-        format::HandleId handle                           = pCommandBuffers->GetPointer()[i];
-        command_buffer_entries_[handle].handle            = handle;
-        command_buffer_entries_[handle].device_id         = device;
-        command_buffer_entries_[handle].level             = allocate_info->level;
-        command_buffer_entries_[handle].usage             = 0;
-        command_buffer_entries_[handle].creation_index    = call_info.index;
-        command_buffer_entries_[handle].destruction_index = UINT64_MAX;
+        format::HandleId handle = pCommandBuffers->GetPointer()[i];
+        command_buffer_entries_.try_emplace(handle, handle, device, allocate_info->level, 0, call_info.index);
     }
 }
 
@@ -1374,11 +1350,8 @@ void VulkanRayTracingModifier::Process_vkBeginCommandBuffer(
         return;
     }
 
-    const VkCommandBufferBeginInfo* begin_info = pBeginInfo->GetPointer();
-    if (command_buffer_entries_.find(commandBuffer) != command_buffer_entries_.end())
-    {
-        command_buffer_entries_[commandBuffer].usage = begin_info->flags;
-    }
+    const VkCommandBufferBeginInfo* begin_info       = pBeginInfo->GetPointer();
+    command_buffer_entries_.at(commandBuffer).usage_ = begin_info->flags;
 }
 
 void VulkanRayTracingModifier::Process_vkCmdBindPipeline(const ApiCallInfo&  call_info,
@@ -1393,7 +1366,7 @@ void VulkanRayTracingModifier::Process_vkCmdBindPipeline(const ApiCallInfo&  cal
 
     if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
     {
-        cmd_buffer_bind_compute_handles_[commandBuffer].push_back(pipeline);
+        command_buffers_with_compute_.insert(commandBuffer);
     }
 }
 
@@ -1418,12 +1391,6 @@ void VulkanRayTracingModifier::Process_vkUpdateDescriptorSets(
 
         for (uint32_t index = 0; index < write.descriptorCount; index++)
         {
-            if (write.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER && write.pBufferInfo)
-            {
-                auto buffer_id = meta_write.pBufferInfo->GetMetaStructPointer()[index].buffer;
-                descriptor_bind_buffers_[meta_write.dstSet].push_back(buffer_id);
-            }
-
             if (write.descriptorType == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR && write.pNext)
             {
                 const auto* meta_structure =
@@ -1471,14 +1438,6 @@ void VulkanRayTracingModifier::Process_vkCmdBindDescriptorSets(const ApiCallInfo
     for (uint32_t i = 0; i < descriptorSetCount; i++)
     {
         format::HandleId handle = pDescriptorSets->GetPointer()[i];
-        if (descriptor_bind_buffers_.find(handle) != descriptor_bind_buffers_.end())
-        {
-            auto& buffers = descriptor_bind_buffers_[handle];
-            for (auto& buffer : buffers)
-            {
-                compute_pipeline_buffer_bind_descriptors_[buffer].push_back(handle);
-            }
-        }
     }
 }
 
@@ -1488,38 +1447,19 @@ void VulkanRayTracingModifier::Process_vkCmdCopyBuffer(const ApiCallInfo&       
                                                        format::HandleId                            dstBuffer,
                                                        uint32_t                                    regionCount,
                                                        StructPointerDecoder<Decoded_VkBufferCopy>* pRegions)
-{
-    if (compute_pipeline_buffer_bind_descriptors_.find(dstBuffer) != compute_pipeline_buffer_bind_descriptors_.end())
-    {
-        cmd_buffer_bind_compute_handles_[commandBuffer].push_back(dstBuffer);
-    }
-}
+{}
 
 void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2(
     const ApiCallInfo&                               call_info,
     format::HandleId                                 commandBuffer,
     StructPointerDecoder<Decoded_VkCopyBufferInfo2>* pCopyBufferInfo)
-{
-    const auto&      buffer_info = pCopyBufferInfo->GetMetaStructPointer();
-    format::HandleId buffer_id   = buffer_info->dstBuffer;
-    if (compute_pipeline_buffer_bind_descriptors_.find(buffer_id) != compute_pipeline_buffer_bind_descriptors_.end())
-    {
-        cmd_buffer_bind_compute_handles_[commandBuffer].push_back(buffer_id);
-    }
-}
+{}
 
 void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2KHR(
     const ApiCallInfo&                               call_info,
     format::HandleId                                 commandBuffer,
     StructPointerDecoder<Decoded_VkCopyBufferInfo2>* pCopyBufferInfo)
-{
-    const auto&      buffer_info = pCopyBufferInfo->GetMetaStructPointer();
-    format::HandleId buffer_id   = buffer_info->dstBuffer;
-    if (compute_pipeline_buffer_bind_descriptors_.find(buffer_id) != compute_pipeline_buffer_bind_descriptors_.end())
-    {
-        cmd_buffer_bind_compute_handles_[commandBuffer].push_back(buffer_id);
-    }
-}
+{}
 
 void VulkanRayTracingModifier::Process_vkCmdExecuteCommands(const ApiCallInfo&                     call_info,
                                                             format::HandleId                       commandBuffer,
@@ -1531,18 +1471,9 @@ void VulkanRayTracingModifier::Process_vkCmdExecuteCommands(const ApiCallInfo&  
         return;
     }
 
-    if (command_buffer_entries_.find(commandBuffer) != command_buffer_entries_.end())
+    for (uint32_t i = 0; i < commandBufferCount; i++)
     {
-        for (uint32_t i = 0; i < commandBufferCount; i++)
-        {
-            format::HandleId handle = pCommandBuffers->GetPointer()[i];
-            if (cmd_buffer_bind_compute_handles_.find(handle) != cmd_buffer_bind_compute_handles_.end())
-            {
-                auto& pipelines = cmd_buffer_bind_compute_handles_[handle];
-                cmd_buffer_bind_compute_handles_[commandBuffer].insert(
-                    cmd_buffer_bind_compute_handles_[commandBuffer].end(), pipelines.begin(), pipelines.end());
-            }
-        }
+        format::HandleId handle = pCommandBuffers->GetPointer()[i];
     }
 }
 
@@ -1559,15 +1490,9 @@ void VulkanRayTracingModifier::Process_vkFreeCommandBuffers(const ApiCallInfo&  
 
     for (uint32_t i = 0; i < commandBufferCount; i++)
     {
-        format::HandleId handle = pCommandBuffers->GetPointer()[i];
-        if (command_buffer_entries_.find(handle) != command_buffer_entries_.end())
-        {
-            command_buffer_entries_[handle].destruction_index = call_info.index;
-        }
-        if (cmd_buffer_bind_compute_handles_.find(handle) != cmd_buffer_bind_compute_handles_.end())
-        {
-            cmd_buffer_bind_compute_handles_.erase(handle);
-        }
+        format::HandleId handle                               = pCommandBuffers->GetPointer()[i];
+        command_buffer_entries_.at(handle).destruction_index_ = call_info.index;
+        command_buffers_with_compute_.erase(handle);
     }
 }
 
@@ -1583,12 +1508,9 @@ void VulkanRayTracingModifier::Process_vkCmdUpdateBuffer(const ApiCallInfo&     
         return;
     }
 
-    if (command_buffer_entries_.find(commandBuffer) == command_buffer_entries_.end())
-    {
-        return;
-    }
+    const CommandBufferInfo& command_buffer_info = command_buffer_entries_.at(commandBuffer);
 
-    format::HandleId device_id = command_buffer_entries_[commandBuffer].device_id;
+    format::HandleId device_id = command_buffer_info.device_id_;
     auto             data      = pData->GetPointer();
     // Find shader group handle values inside data parameter, and generate FixShaderGroupHandleCommand meta block
     auto shader_handle_locations = GetShaderGroupHandlesInFillMemory(data, dataSize);
@@ -1624,13 +1546,9 @@ void VulkanRayTracingModifier::Process_vkCmdPushConstants(const ApiCallInfo&    
     {
         return;
     }
+    const CommandBufferInfo& command_buffer_info = command_buffer_entries_.at(commandBuffer);
 
-    if (command_buffer_entries_.find(commandBuffer) == command_buffer_entries_.end())
-    {
-        return;
-    }
-
-    format::HandleId device_id = command_buffer_entries_[commandBuffer].device_id;
+    format::HandleId device_id = command_buffer_info.device_id_;
     auto             data      = pValues->GetPointer();
     // Find shader group handle values inside data parameter, and generate FixShaderGroupHandleCommand meta block
     auto shader_handle_locations = GetShaderGroupHandlesInFillMemory(data, size);
@@ -1663,7 +1581,18 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit(const ApiCallInfo&         
 {
     if (IsModificationPass())
     {
-        cmd_buffer_bind_compute_handles_.clear();
+        for (uint32_t info_index = 0; info_index < submitCount; info_index++)
+        {
+            const auto& submit_info      = pSubmits->GetPointer()[info_index];
+            const auto& submit_meta_info = pSubmits->GetMetaStructPointer()[info_index];
+
+            for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submit_info.commandBufferCount; cmd_buffer_index++)
+            {
+
+                const format::HandleId command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
+                command_buffers_with_compute_.erase(command_buffer);
+            }
+        }
         return;
     }
 
@@ -1672,32 +1601,25 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit(const ApiCallInfo&         
         const auto& submit_info      = pSubmits->GetPointer()[info_index];
         const auto& submit_meta_info = pSubmits->GetMetaStructPointer()[info_index];
 
+        bool should_inspect = false;
         for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submit_info.commandBufferCount; cmd_buffer_index++)
         {
-            const auto& command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
-            if (command_buffer_entries_.find(command_buffer) == command_buffer_entries_.end())
-            {
-                continue;
-            }
 
-            if (cmd_buffer_bind_compute_handles_.find(command_buffer) != cmd_buffer_bind_compute_handles_.end())
-            {
-                if (cmd_buffer_bind_compute_handles_[command_buffer].size() && per_submit_fill_memory_index_.size())
-                {
-                    fill_memory_find_address_entries_.insert(per_submit_fill_memory_index_.begin(),
-                                                             per_submit_fill_memory_index_.end());
-                }
+            const format::HandleId command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
+            should_inspect                        = should_inspect || HeuristicCheckCompute(command_buffer);
+            command_buffers_with_compute_.erase(command_buffer);
+        }
 
-                if (command_buffer_entries_[command_buffer].level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
-                    command_buffer_entries_[command_buffer].usage != VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)
-                {
-                    cmd_buffer_bind_compute_handles_.erase(command_buffer);
-                }
-            }
+        // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
+        // Store all the indices of FillMemory tied to this submit so we can process it on the modification pass
+        if (should_inspect)
+        {
+            fill_memory_indices_to_inspect_.insert(fill_memory_indices_to_inspect_.end(),
+                                                   fill_memory_indices_per_submit_.begin(),
+                                                   fill_memory_indices_per_submit_.end());
         }
     }
-
-    per_submit_fill_memory_index_.clear();
+    fill_memory_indices_per_submit_.clear();
 }
 
 void VulkanRayTracingModifier::Process_vkQueueSubmit2(const ApiCallInfo&                           call_info,
@@ -1709,7 +1631,6 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2(const ApiCallInfo&        
 {
     if (IsModificationPass())
     {
-        cmd_buffer_bind_compute_handles_.clear();
         return;
     }
 
@@ -1718,34 +1639,26 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2(const ApiCallInfo&        
         auto& submit_info      = pSubmits->GetPointer()[info_index];
         auto& submit_meta_info = pSubmits->GetMetaStructPointer()[info_index];
 
+        bool should_inspect = false;
         for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submit_info.commandBufferInfoCount; cmd_buffer_index++)
         {
-            const auto& command_buffer_infos =
-                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()[cmd_buffer_index];
-            const auto& command_buffer = command_buffer_infos.commandBuffer;
-            if (command_buffer_entries_.find(command_buffer) == command_buffer_entries_.end())
-            {
-                continue;
-            }
 
-            if (cmd_buffer_bind_compute_handles_.find(command_buffer) != cmd_buffer_bind_compute_handles_.end())
-            {
-                if (cmd_buffer_bind_compute_handles_[command_buffer].size() && per_submit_fill_memory_index_.size())
-                {
-                    fill_memory_find_address_entries_.insert(per_submit_fill_memory_index_.begin(),
-                                                             per_submit_fill_memory_index_.end());
-                }
+            const format::HandleId command_buffer =
+                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
+            should_inspect = should_inspect || HeuristicCheckCompute(command_buffer);
+            command_buffers_with_compute_.erase(command_buffer);
+        }
 
-                if (command_buffer_entries_[command_buffer].level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
-                    command_buffer_entries_[command_buffer].usage != VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)
-                {
-                    cmd_buffer_bind_compute_handles_.erase(command_buffer);
-                }
-            }
+        // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
+        // Store all the indices of FillMemory tied to this submit so we can process it on the modification pass
+        if (should_inspect)
+        {
+            fill_memory_indices_to_inspect_.insert(fill_memory_indices_to_inspect_.end(),
+                                                   fill_memory_indices_per_submit_.begin(),
+                                                   fill_memory_indices_per_submit_.end());
         }
     }
-
-    per_submit_fill_memory_index_.clear();
+    fill_memory_indices_per_submit_.clear();
 }
 
 void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&                           call_info,
@@ -1757,7 +1670,6 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&     
 {
     if (IsModificationPass())
     {
-        cmd_buffer_bind_compute_handles_.clear();
         return;
     }
 
@@ -1766,34 +1678,26 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&     
         auto& submit_info      = pSubmits->GetPointer()[info_index];
         auto& submit_meta_info = pSubmits->GetMetaStructPointer()[info_index];
 
+        bool should_inspect = false;
         for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submit_info.commandBufferInfoCount; cmd_buffer_index++)
         {
-            const auto& command_buffer_infos =
-                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()[cmd_buffer_index];
-            const auto& command_buffer = command_buffer_infos.commandBuffer;
-            if (command_buffer_entries_.find(command_buffer) == command_buffer_entries_.end())
-            {
-                continue;
-            }
 
-            if (cmd_buffer_bind_compute_handles_.find(command_buffer) != cmd_buffer_bind_compute_handles_.end())
-            {
-                if (cmd_buffer_bind_compute_handles_[command_buffer].size() && per_submit_fill_memory_index_.size())
-                {
-                    fill_memory_find_address_entries_.insert(per_submit_fill_memory_index_.begin(),
-                                                             per_submit_fill_memory_index_.end());
-                }
+            const format::HandleId command_buffer =
+                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
+            should_inspect = should_inspect || HeuristicCheckCompute(command_buffer);
+            command_buffers_with_compute_.erase(command_buffer);
+        }
 
-                if (command_buffer_entries_[command_buffer].level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
-                    command_buffer_entries_[command_buffer].usage != VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)
-                {
-                    cmd_buffer_bind_compute_handles_.erase(command_buffer);
-                }
-            }
+        // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
+        // Store all the indices of FillMemory tied to this submit so we can process it on the modification pass
+        if (should_inspect)
+        {
+            fill_memory_indices_to_inspect_.insert(fill_memory_indices_to_inspect_.end(),
+                                                   fill_memory_indices_per_submit_.begin(),
+                                                   fill_memory_indices_per_submit_.end());
         }
     }
-
-    per_submit_fill_memory_index_.clear();
+    fill_memory_indices_per_submit_.clear();
 }
 
 void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertiesKHR(
@@ -1814,6 +1718,15 @@ void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertie
         }
         return;
     }
+}
+
+bool VulkanRayTracingModifier::HeuristicCheckCompute(format::HandleId command_buffer)
+{
+    if (command_buffers_with_compute_.count(command_buffer) > 0)
+    {
+        return true;
+    }
+    return false;
 }
 
 GFXRECON_END_NAMESPACE(decode)
