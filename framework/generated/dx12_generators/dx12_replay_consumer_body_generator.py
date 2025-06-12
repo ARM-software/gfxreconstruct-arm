@@ -333,8 +333,13 @@ class Dx12ReplayConsumerBodyGenerator(
 
                     elif value.pointer_count == 1:
                         if is_override:
-                            code += '    auto in_{0} = GetObjectInfo({0});\n'.format(
-                                value.name
+                            if  name == "ID3D12CommandQueue_UpdateTileMappings":
+                                code += '    auto in_{0} = {0};\n'.format(
+                                    value.name
+                                )
+                            else:
+                                code += '    auto in_{0} = GetObjectInfo({0});\n'.format(
+                                    value.name
                             )
                         else:
                             code += '    auto in_{0} = MapObject<{1}>({0});\n'.format(

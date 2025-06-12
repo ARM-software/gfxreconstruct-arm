@@ -31,6 +31,7 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/dx12_descriptor_map.h"
+#include "decode/dx12_resource_allocator.h"
 
 #include <d3d12.h>
 
@@ -63,7 +64,9 @@ enum class DxObjectInfoType : uint32_t
     kID3D12CommandSignatureInfo,
     kID3D12CommandListInfo,
     kID3D12RootSignatureInfo,
-    kID3D12StateObjectInfo
+    kID3D12StateObjectInfo,
+    kID3D12PipelineLibraryInfo,
+    kID3D12StateObjectPropertiesInfo
 };
 
 //
@@ -207,6 +210,7 @@ struct DxObjectExtraInfo
     virtual ~DxObjectExtraInfo() {}
 
     const DxObjectInfoType extra_info_type;
+    format::HandleId       parent_id{ format::kNullHandleId };
 };
 
 struct DxObjectInfo
@@ -257,6 +261,8 @@ struct D3D12CommandQueueInfo : DxObjectExtraInfo
     uint64_t                          resource_value_map_fence_value{ 0 };
     DxObjectInfo                      resource_value_map_fence_info;
     HANDLE                            resource_value_map_event{ nullptr };
+
+    Dx12ResourceAllocator* allocator;
 };
 
 struct D3D12DeviceInfo : DxObjectExtraInfo
@@ -277,8 +283,9 @@ struct D3D12DeviceInfo : DxObjectExtraInfo
     IDXGIAdapter3* adapter3{ nullptr };
     uint32_t       adapter_node_index{ 0 };
 
-    std::shared_ptr<DescriptorIncrements> capture_increments{ std::make_shared<DescriptorIncrements>() };
-    std::shared_ptr<DescriptorIncrements> replay_increments{ std::make_shared<DescriptorIncrements>() };
+    std::unique_ptr<Dx12ResourceAllocator> allocator;
+    std::shared_ptr<DescriptorIncrements>  capture_increments{ std::make_shared<DescriptorIncrements>() };
+    std::shared_ptr<DescriptorIncrements>  replay_increments{ std::make_shared<DescriptorIncrements>() };
 
     // Cache features of the device to avoid repeated queries
     bool is_uma{ false };
@@ -459,6 +466,24 @@ struct D3D12StateObjectInfo : DxObjectExtraInfo
 
     std::map<std::wstring, format::HandleId>                              export_name_lrs_map;
     std::map<graphics::Dx12ShaderIdentifier, std::set<ResourceValueInfo>> shader_id_lrs_map;
+};
+
+struct D3D12PipelineLibraryInfo : DxObjectExtraInfo
+{
+    static constexpr DxObjectInfoType kType         = DxObjectInfoType::kID3D12PipelineLibraryInfo;
+    static constexpr char             kObjectType[] = "ID3D12PipelineLibraryInfo";
+    D3D12PipelineLibraryInfo() : DxObjectExtraInfo(kType) {}
+
+    SIZE_T serialized_size{ 0 };
+};
+
+struct D3D12StateObjectPropertiesInfo : DxObjectExtraInfo
+{
+    static constexpr DxObjectInfoType kType         = DxObjectInfoType::kID3D12StateObjectPropertiesInfo;
+    static constexpr char             kObjectType[] = "ID3D12StateObjectPropertiesInfo";
+    D3D12StateObjectPropertiesInfo() : DxObjectExtraInfo(kType) {}
+
+    UINT64 stack_size_delta{ 0 };
 };
 
 GFXRECON_END_NAMESPACE(decode)

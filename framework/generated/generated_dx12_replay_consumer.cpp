@@ -8717,18 +8717,19 @@ void Dx12ReplayConsumer::Process_ID3D12CommandQueue_UpdateTileMappings(
             pHeapRangeStartOffsets,
             pRangeTileCounts,
             Flags);
-        auto in_pResource = MapObject<ID3D12Resource>(pResource);
-        auto in_pHeap = MapObject<ID3D12Heap>(pHeap);
-        reinterpret_cast<ID3D12CommandQueue*>(replay_object->object)->UpdateTileMappings(in_pResource,
-                                                                                         NumResourceRegions,
-                                                                                         pResourceRegionStartCoordinates->GetPointer(),
-                                                                                         pResourceRegionSizes->GetPointer(),
-                                                                                         in_pHeap,
-                                                                                         NumRanges,
-                                                                                         pRangeFlags->GetPointer(),
-                                                                                         pHeapRangeStartOffsets->GetPointer(),
-                                                                                         pRangeTileCounts->GetPointer(),
-                                                                                         Flags);
+        auto in_pResource = pResource;
+        auto in_pHeap = pHeap;
+        OverrideUpdateTileMappings(replay_object,
+                                   in_pResource,
+                                   NumResourceRegions,
+                                   pResourceRegionStartCoordinates,
+                                   pResourceRegionSizes,
+                                   in_pHeap,
+                                   NumRanges,
+                                   pRangeFlags,
+                                   pHeapRangeStartOffsets,
+                                   pRangeTileCounts,
+                                   Flags);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12CommandQueue_UpdateTileMappings>::Dispatch(
             this,
             call_info,
@@ -10447,7 +10448,7 @@ void Dx12ReplayConsumer::Process_ID3D12Device_GetResourceTiling(
             pNumSubresourceTilings,
             FirstSubresourceTilingToGet,
             pSubresourceTilingsForNonPackedMips);
-        auto in_pTiledResource = MapObject<ID3D12Resource>(pTiledResource);
+        auto in_pTiledResource = GetObjectInfo(pTiledResource);
         if(!pNumTilesForEntireResource->IsNull())
         {
             pNumTilesForEntireResource->AllocateOutputData(1);
@@ -10468,13 +10469,14 @@ void Dx12ReplayConsumer::Process_ID3D12Device_GetResourceTiling(
         {
             pSubresourceTilingsForNonPackedMips->AllocateOutputData(!pNumSubresourceTilings->IsNull() ? *pNumSubresourceTilings->GetPointer() : 0);
         }
-        reinterpret_cast<ID3D12Device*>(replay_object->object)->GetResourceTiling(in_pTiledResource,
-                                                                                  pNumTilesForEntireResource->GetOutputPointer(),
-                                                                                  pPackedMipDesc->GetOutputPointer(),
-                                                                                  pStandardTileShapeForNonPackedMips->GetOutputPointer(),
-                                                                                  pNumSubresourceTilings->GetOutputPointer(),
-                                                                                  FirstSubresourceTilingToGet,
-                                                                                  pSubresourceTilingsForNonPackedMips->GetOutputPointer());
+        OverrideGetResourceTiling(replay_object,
+                                  in_pTiledResource,
+                                  pNumTilesForEntireResource,
+                                  pPackedMipDesc,
+                                  pStandardTileShapeForNonPackedMips,
+                                  pNumSubresourceTilings,
+                                  FirstSubresourceTilingToGet,
+                                  pSubresourceTilingsForNonPackedMips);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_GetResourceTiling>::Dispatch(
             this,
             call_info,
@@ -10680,8 +10682,10 @@ void Dx12ReplayConsumer::Process_ID3D12PipelineLibrary_Serialize(
         {
             pData->AllocateOutputData(DataSizeInBytes);
         }
-        auto replay_result = reinterpret_cast<ID3D12PipelineLibrary*>(replay_object->object)->Serialize(pData->GetOutputPointer(),
-                                                                                                        DataSizeInBytes);
+        auto replay_result = OverrideSerialize(replay_object,
+                                               return_value,
+                                               pData,
+                                               DataSizeInBytes);
         CheckReplayResult("ID3D12PipelineLibrary_Serialize", return_value, replay_result);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12PipelineLibrary_Serialize>::Dispatch(
             this,
@@ -10851,10 +10855,12 @@ void Dx12ReplayConsumer::Process_ID3D12Device1_SetResidencyPriority(
             NumObjects,
             ppObjects,
             pPriorities);
-        auto in_ppObjects = MapObjects<ID3D12Pageable>(ppObjects, NumObjects);
-        auto replay_result = reinterpret_cast<ID3D12Device1*>(replay_object->object)->SetResidencyPriority(NumObjects,
-                                                                                                           in_ppObjects,
-                                                                                                           pPriorities->GetPointer());
+        MapObjects<ID3D12Pageable>(ppObjects, NumObjects);
+        auto replay_result = OverrideSetResidencyPriority(replay_object,
+                                                          return_value,
+                                                          NumObjects,
+                                                          ppObjects,
+                                                          pPriorities);
         CheckReplayResult("ID3D12Device1_SetResidencyPriority", return_value, replay_result);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device1_SetResidencyPriority>::Dispatch(
             this,
@@ -11648,7 +11654,9 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_GetShaderStackSize(
             call_info,
             replay_object,
             pExportName);
-        auto replay_result = reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->GetShaderStackSize(pExportName->GetPointer());
+        auto replay_result = OverrideGetShaderStackSize(replay_object,
+                                                        return_value,
+                                                        pExportName);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_GetShaderStackSize>::Dispatch(
             this,
             call_info,
@@ -11671,7 +11679,8 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_GetPipelineStackSiz
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->GetPipelineStackSize();
+        auto replay_result = OverrideGetPipelineStackSize(replay_object,
+                                                          return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_GetPipelineStackSize>::Dispatch(
             this,
             call_info,
@@ -11694,7 +11703,8 @@ void Dx12ReplayConsumer::Process_ID3D12StateObjectProperties_SetPipelineStackSiz
             call_info,
             replay_object,
             PipelineStackSizeInBytes);
-        reinterpret_cast<ID3D12StateObjectProperties*>(replay_object->object)->SetPipelineStackSize(PipelineStackSizeInBytes);
+        OverrideSetPipelineStackSize(replay_object,
+                                     PipelineStackSizeInBytes);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12StateObjectProperties_SetPipelineStackSize>::Dispatch(
             this,
             call_info,
@@ -12879,8 +12889,10 @@ void Dx12ReplayConsumer::Process_ID3D12MetaCommand_GetRequiredParameterResourceS
             replay_object,
             Stage,
             ParameterIndex);
-        auto replay_result = reinterpret_cast<ID3D12MetaCommand*>(replay_object->object)->GetRequiredParameterResourceSize(Stage,
-                                                                                                                           ParameterIndex);
+        auto replay_result = OverrideGetRequiredParameterResourceSize(replay_object,
+                                                                      return_value,
+                                                                      Stage,
+                                                                      ParameterIndex);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12MetaCommand_GetRequiredParameterResourceSize>::Dispatch(
             this,
             call_info,
@@ -14720,7 +14732,8 @@ void Dx12ReplayConsumer::Process_ID3D10Blob_GetBufferPointer(
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D10Blob*>(replay_object->object)->GetBufferPointer();
+        auto replay_result = OverrideGetBufferPointer(replay_object,
+                                                      return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D10Blob_GetBufferPointer>::Dispatch(
             this,
             call_info,
@@ -14742,7 +14755,8 @@ void Dx12ReplayConsumer::Process_ID3D10Blob_GetBufferSize(
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<ID3D10Blob*>(replay_object->object)->GetBufferSize();
+        auto replay_result = OverrideGetBufferSize(replay_object,
+                                                   return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D10Blob_GetBufferSize>::Dispatch(
             this,
             call_info,

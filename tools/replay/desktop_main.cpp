@@ -280,6 +280,10 @@ int main(int argc, const char** argv)
             }
 #endif // D3D12_SUPPORT
 
+#if defined(WIN32)
+            SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+#endif
+
             // Warn if the capture layer is active.
             CheckActiveLayers(gfxrecon::util::platform::GetEnv(kLayerEnvVar));
 

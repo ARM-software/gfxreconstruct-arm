@@ -155,6 +155,8 @@ class Dx12AddEntriesHeaderGenerator(Dx12BaseGenerator):
         for name in self.class_names:
             if name not in self.class_parent_names:
                 final_class_names.append(name)
+            if name in self.PARENT_CLASSES_EXECPTION:
+                final_class_names.append(name)
 
         return final_class_names
 

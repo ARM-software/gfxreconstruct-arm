@@ -353,5 +353,169 @@ void Dx12AccelerationStructureBuilder::ExecuteCopy(D3D12_GPU_VIRTUAL_ADDRESS    
     GFXRECON_ASSERT(SUCCEEDED(hr));
 }
 
+const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO Dx12AccelerationStructureBuilder::GetLastPrebuildInfo()
+{
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = prebuild_info_;
+    prebuild_info_                                                      = { 0, 0, 0 };
+
+    return prebuild_info;
+}
+
+void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
+    const format::HandleId command_list, const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* pDesc)
+{
+    bool        recreated_scratch = false;
+    const auto& inputs_desc       = pDesc->Inputs;
+
+    // Get required sizes for scratch buffer.
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info;
+    device5_->GetRaytracingAccelerationStructurePrebuildInfo(&inputs_desc, &prebuild_info);
+    UINT64                    scratch_size            = prebuild_info.ScratchDataSizeInBytes;
+    D3D12_GPU_VIRTUAL_ADDRESS capture_scratch_address = pDesc->ScratchAccelerationStructureData;
+
+    auto scratch_entries = command_lis_recorded_scratches_.find(command_list);
+    if (scratch_entries != command_lis_recorded_scratches_.end())
+    {
+        auto scratch_entry = std::find_if(scratch_entries->second.begin(),
+                                          scratch_entries->second.end(),
+                                          [scratch_size, capture_scratch_address](const ScratchBufferData& entry) {
+                                              return ((entry.build_size >= scratch_size) &&
+                                                      (entry.capture_scratch_address == capture_scratch_address));
+                                          });
+        if (scratch_entry != scratch_entries->second.end())
+        {
+            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
+                (*scratch_entry).replay_scratch_address;
+        }
+        else
+        {
+            recreated_scratch = true;
+        }
+    }
+    else
+    {
+        recreated_scratch = true;
+    }
+
+    // Update scratch buffer.
+    if (recreated_scratch)
+    {
+        graphics::dx12::ID3D12ResourceComPtr scratch_buffer;
+        uint64_t                             scratch_buffer_size = 0;
+        UpdateBufferSize(device5_,
+                         scratch_buffer,
+                         scratch_buffer_size,
+                         prebuild_info.ScratchDataSizeInBytes,
+                         D3D12_HEAP_TYPE_DEFAULT,
+                         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+        if (scratch_buffer && scratch_buffer_size > 0)
+        {
+            D3D12_GPU_VIRTUAL_ADDRESS replay_scratch_address = scratch_buffer->GetGPUVirtualAddress();
+            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
+                replay_scratch_address;
+
+            ScratchBufferData scratch_data{};
+            scratch_data.scratch_buffer          = std::move(scratch_buffer);
+            scratch_data.build_size              = prebuild_info.ScratchDataSizeInBytes;
+            scratch_data.capture_scratch_address = capture_scratch_address;
+            scratch_data.replay_scratch_address  = replay_scratch_address;
+
+            command_lis_recorded_scratches_[command_list].push_back(std::move(scratch_data));
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to recreate scratch buffer for BuildRaytracingAccelerationStructure");
+        }
+    }
+}
+
+void Dx12AccelerationStructureBuilder::ReleaseScratchBuffer(const format::HandleId command_list)
+{
+    if (command_lis_recorded_scratches_.find(command_list) != command_lis_recorded_scratches_.end())
+    {
+        // The scratch_buffer in command_lis_recorded_scratches_[command_list] will be automatically released.
+        command_lis_recorded_scratches_.erase(command_list);
+    }
+}
+
+void Dx12AccelerationStructureBuilder::PostExecuteCommandLists(const format::HandleId  queue,
+                                                               const UINT              num_command_lists,
+                                                               const format::HandleId* command_lists)
+{
+    CommandQueueData cmd_queue_data;
+    for (UINT i = 0; i < num_command_lists; i++)
+    {
+        if (command_lis_recorded_scratches_.find(command_lists[i]) != command_lis_recorded_scratches_.end())
+        {
+            cmd_queue_data.command_lists.push_back(command_lists[i]);
+        }
+    }
+
+    if (cmd_queue_data.command_lists.size())
+    {
+        command_queue_data_[queue] = std::move(cmd_queue_data);
+    }
+}
+
+void Dx12AccelerationStructureBuilder::PostCommandQueueSignal(const format::HandleId queue,
+                                                              const format::HandleId fence,
+                                                              const UINT64           value)
+{
+    if (command_queue_data_.find(queue) != command_queue_data_.end())
+    {
+        command_queue_data_[queue].wait_fences_value.emplace(fence, value);
+    }
+}
+
+void Dx12AccelerationStructureBuilder::PostGetCompletedValue(const format::HandleId fence, const UINT64 value)
+{
+    for (auto it = command_queue_data_.begin(); it != command_queue_data_.end();)
+    {
+        auto& wait_fence_value = it->second.wait_fences_value;
+        if (wait_fence_value.find(fence) != wait_fence_value.end())
+        {
+            if (value >= wait_fence_value[fence])
+            {
+                for (auto& command_list : it->second.command_lists)
+                {
+                    ReleaseScratchBuffer(command_list);
+                }
+                it = command_queue_data_.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void Dx12AccelerationStructureBuilder::PostCommandQueueWait(const format::HandleId queue,
+                                                            const format::HandleId fence,
+                                                            const UINT64           value)
+{
+    if (command_queue_data_.find(queue) != command_queue_data_.end())
+    {
+        auto& wait_fence_value = command_queue_data_[queue].wait_fences_value;
+        if (wait_fence_value.find(fence) != wait_fence_value.end())
+        {
+            if (value >= wait_fence_value[fence])
+            {
+                for (auto& command_list : command_queue_data_[queue].command_lists)
+                {
+                    ReleaseScratchBuffer(command_list);
+                }
+                command_queue_data_.erase(queue);
+            }
+        }
+    }
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
