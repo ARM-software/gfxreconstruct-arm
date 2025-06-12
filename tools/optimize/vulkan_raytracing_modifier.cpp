@@ -1719,6 +1719,19 @@ void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertie
         return;
     }
 }
+void VulkanRayTracingModifier::ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+{
+    if (IsModificationPass())
+    {
+        if (options_.remove_rt)
+        {
+            SetDeleteCurrentCall();
+            return;
+        }
+        return;
+    }
+}
 
 bool VulkanRayTracingModifier::HeuristicCheckCompute(format::HandleId command_buffer)
 {
