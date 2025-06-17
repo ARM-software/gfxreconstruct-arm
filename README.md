@@ -1,3 +1,8 @@
+> ⚠️ **Important notice**  
+> This repository is **an Arm-maintained fork** of [LunarG/gfxreconstruct](https://github.com/LunarG/gfxreconstruct).  
+> If you are looking for the **official upstream project**, please visit the LunarG repository.  
+> General issues or pull requests that are **not Arm-specific** should be opened upstream.
+
 # Project Components
 
 The GFXReconstruct project provides tools for the capture and replay of graphics

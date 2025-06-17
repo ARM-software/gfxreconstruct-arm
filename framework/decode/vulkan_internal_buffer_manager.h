@@ -1,5 +1,6 @@
 /*
-** Copyright (c) 2023 LunarG, Inc.
+** Copyright (c) 2024-2025 LunarG, Inc.
+** Copyright (c) 2024-2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -79,8 +80,8 @@ class VulkanInternalBufferManager
     void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
     struct Functions
     {
-        PFN_vkGetBufferDeviceAddress      get_buffer_device_address{ nullptr };
-        PFN_vkGetBufferDeviceAddressKHR   get_buffer_device_address_khr{ nullptr };
+        PFN_vkGetBufferDeviceAddress    get_buffer_device_address{ nullptr };
+        PFN_vkGetBufferDeviceAddressKHR get_buffer_device_address_khr{ nullptr };
     };
 
   private:

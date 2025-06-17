@@ -4186,6 +4186,24 @@ class VulkanCppConsumer : public VulkanCppConsumerBase
         format::HandleId                            framebuffer,
         PointerDecoder<uint32_t>*                   pPropertiesCount,
         StructPointerDecoder<Decoded_VkTilePropertiesQCOM>* pProperties) override;
+    virtual void Process_vkCmdConvertCooperativeVectorMatrixNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        uint32_t                                    infoCount,
+        StructPointerDecoder<Decoded_VkConvertCooperativeVectorMatrixInfoNV>* pInfos) override;
+
+    virtual void Process_vkConvertCooperativeVectorMatrixNV(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkConvertCooperativeVectorMatrixInfoNV>* pInfo) override;
+
+    virtual void Process_vkGetPhysicalDeviceCooperativeVectorPropertiesNV(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            physicalDevice,
+        PointerDecoder<uint32_t>*                   pPropertyCount,
+        StructPointerDecoder<Decoded_VkCooperativeVectorPropertiesNV>* pProperties) override;
     virtual void Process_vkGetLatencyTimingsNV(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
@@ -4285,6 +4303,16 @@ class VulkanCppConsumer : public VulkanCppConsumerBase
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
         VkImageAspectFlags                          aspectMask) override;
+    virtual void Process_vkCmdBuildPartitionedAccelerationStructuresNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkBuildPartitionedAccelerationStructureInfoNV>* pBuildInfo) override;
+
+    virtual void Process_vkGetPartitionedAccelerationStructuresBuildSizesNV(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkPartitionedAccelerationStructureInstancesInputNV>* pInfo,
+        StructPointerDecoder<Decoded_VkAccelerationStructureBuildSizesInfoKHR>* pSizeInfo) override;
     virtual void Process_vkCmdExecuteGeneratedCommandsEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -4350,6 +4378,20 @@ class VulkanCppConsumer : public VulkanCppConsumerBase
         format::HandleId                            physicalDevice,
         PointerDecoder<uint32_t>*                   pPropertyCount,
         StructPointerDecoder<Decoded_VkCooperativeMatrixFlexibleDimensionsPropertiesNV>* pProperties) override;
+    virtual void Process_vkGetMemoryMetalHandleEXT(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkMemoryGetMetalHandleInfoEXT>* pGetMetalHandleInfo,
+        PointerDecoder<uint64_t, void*>*            pHandle) override;
+
+    virtual void Process_vkGetMemoryMetalHandlePropertiesEXT(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        VkExternalMemoryHandleTypeFlagBits          handleType,
+        uint64_t                                    pHandle,
+        StructPointerDecoder<Decoded_VkMemoryMetalHandlePropertiesEXT>* pMemoryMetalHandleProperties) override;
     virtual void Process_vkCmdBuildAccelerationStructuresIndirectKHR(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
