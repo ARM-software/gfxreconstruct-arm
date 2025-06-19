@@ -93,6 +93,8 @@ struct DxWrapperInfo
 
     std::unordered_map<const GUID, std::vector<uint8_t>, GUID_Hash, GUID_Equal> private_datas;
 
+    std::wstring object_name{ L"" };
+
   private:
     // A pointer to the wrapper that owns/created this info struct, or nullptr if the wrapper no longer exists.
     const IUnknown_Wrapper* wrapper_ = nullptr;
@@ -253,6 +255,15 @@ struct IDXGISwapChainInfo : public DxgiWrapperInfo
     UINT                   hdr_metadata_size{ 0 };
     void*                  hdr_metadata{ nullptr };
 };
+
+struct ID3D12ObjectInfo : public DxgiWrapperInfo
+{};
+
+struct ID3D12DeviceChildInfo : public DxgiWrapperInfo
+{};
+
+struct ID3D12PageableInfo : public DxgiWrapperInfo
+{};
 
 struct IDXGIDeviceInfo : public DxgiWrapperInfo
 {};

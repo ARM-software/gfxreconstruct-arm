@@ -52,9 +52,12 @@ class Dx12StateTable : public Dx12StateTableBase
     bool InsertWrapper(format::HandleId id, IDXGIAdapter_Wrapper* wrapper) { return InsertEntry(id, wrapper, IDXGIAdapter_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, IDXGIOutput_Wrapper* wrapper) { return InsertEntry(id, wrapper, IDXGIOutput_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, IDXGIFactory_Wrapper* wrapper) { return InsertEntry(id, wrapper, IDXGIFactory_Wrapper_map_); }
+    bool InsertWrapper(format::HandleId id, ID3D12Object_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12Object_Wrapper_map_); }
+    bool InsertWrapper(format::HandleId id, ID3D12DeviceChild_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12DeviceChild_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12RootSignature_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12RootSignature_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12RootSignatureDeserializer_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12RootSignatureDeserializer_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12VersionedRootSignatureDeserializer_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12VersionedRootSignatureDeserializer_Wrapper_map_); }
+    bool InsertWrapper(format::HandleId id, ID3D12Pageable_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12Pageable_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12CommandAllocator_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12CommandAllocator_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12Fence_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12Fence_Wrapper_map_); }
     bool InsertWrapper(format::HandleId id, ID3D12PipelineState_Wrapper* wrapper) { return InsertEntry(id, wrapper, ID3D12PipelineState_Wrapper_map_); }
@@ -110,9 +113,12 @@ class Dx12StateTable : public Dx12StateTableBase
     bool RemoveWrapper(const IDXGIAdapter_Wrapper* wrapper) { return RemoveEntry(wrapper, IDXGIAdapter_Wrapper_map_); }
     bool RemoveWrapper(const IDXGIOutput_Wrapper* wrapper) { return RemoveEntry(wrapper, IDXGIOutput_Wrapper_map_); }
     bool RemoveWrapper(const IDXGIFactory_Wrapper* wrapper) { return RemoveEntry(wrapper, IDXGIFactory_Wrapper_map_); }
+    bool RemoveWrapper(const ID3D12Object_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12Object_Wrapper_map_); }
+    bool RemoveWrapper(const ID3D12DeviceChild_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12DeviceChild_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12RootSignature_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12RootSignature_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12RootSignatureDeserializer_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12RootSignatureDeserializer_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12VersionedRootSignatureDeserializer_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12VersionedRootSignatureDeserializer_Wrapper_map_); }
+    bool RemoveWrapper(const ID3D12Pageable_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12Pageable_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12CommandAllocator_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12CommandAllocator_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12Fence_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12Fence_Wrapper_map_); }
     bool RemoveWrapper(const ID3D12PipelineState_Wrapper* wrapper) { return RemoveEntry(wrapper, ID3D12PipelineState_Wrapper_map_); }
@@ -168,9 +174,12 @@ class Dx12StateTable : public Dx12StateTableBase
     void VisitWrappers(std::function<void(IDXGIAdapter_Wrapper*)> visitor) const { for (auto entry : IDXGIAdapter_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(IDXGIOutput_Wrapper*)> visitor) const { for (auto entry : IDXGIOutput_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(IDXGIFactory_Wrapper*)> visitor) const { for (auto entry : IDXGIFactory_Wrapper_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(ID3D12Object_Wrapper*)> visitor) const { for (auto entry : ID3D12Object_Wrapper_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(ID3D12DeviceChild_Wrapper*)> visitor) const { for (auto entry : ID3D12DeviceChild_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12RootSignature_Wrapper*)> visitor) const { for (auto entry : ID3D12RootSignature_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12RootSignatureDeserializer_Wrapper*)> visitor) const { for (auto entry : ID3D12RootSignatureDeserializer_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12VersionedRootSignatureDeserializer_Wrapper*)> visitor) const { for (auto entry : ID3D12VersionedRootSignatureDeserializer_Wrapper_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(ID3D12Pageable_Wrapper*)> visitor) const { for (auto entry : ID3D12Pageable_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12CommandAllocator_Wrapper*)> visitor) const { for (auto entry : ID3D12CommandAllocator_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12Fence_Wrapper*)> visitor) const { for (auto entry : ID3D12Fence_Wrapper_map_) { visitor(entry.second); } }
     void VisitWrappers(std::function<void(ID3D12PipelineState_Wrapper*)> visitor) const { for (auto entry : ID3D12PipelineState_Wrapper_map_) { visitor(entry.second); } }
@@ -256,6 +265,12 @@ class Dx12StateTable : public Dx12StateTableBase
     IDXGIFactory_Wrapper* GetIDXGIFactory_Wrapper(format::HandleId id) { return GetWrapper<IDXGIFactory_Wrapper>(id, IDXGIFactory_Wrapper_map_); }
     const IDXGIFactory_Wrapper* GetIDXGIFactory_Wrapper(format::HandleId id) const { return GetWrapper<IDXGIFactory_Wrapper>(id, IDXGIFactory_Wrapper_map_); }
 
+    ID3D12Object_Wrapper* GetID3D12Object_Wrapper(format::HandleId id) { return GetWrapper<ID3D12Object_Wrapper>(id, ID3D12Object_Wrapper_map_); }
+    const ID3D12Object_Wrapper* GetID3D12Object_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12Object_Wrapper>(id, ID3D12Object_Wrapper_map_); }
+
+    ID3D12DeviceChild_Wrapper* GetID3D12DeviceChild_Wrapper(format::HandleId id) { return GetWrapper<ID3D12DeviceChild_Wrapper>(id, ID3D12DeviceChild_Wrapper_map_); }
+    const ID3D12DeviceChild_Wrapper* GetID3D12DeviceChild_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12DeviceChild_Wrapper>(id, ID3D12DeviceChild_Wrapper_map_); }
+
     ID3D12RootSignature_Wrapper* GetID3D12RootSignature_Wrapper(format::HandleId id) { return GetWrapper<ID3D12RootSignature_Wrapper>(id, ID3D12RootSignature_Wrapper_map_); }
     const ID3D12RootSignature_Wrapper* GetID3D12RootSignature_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12RootSignature_Wrapper>(id, ID3D12RootSignature_Wrapper_map_); }
 
@@ -264,6 +279,9 @@ class Dx12StateTable : public Dx12StateTableBase
 
     ID3D12VersionedRootSignatureDeserializer_Wrapper* GetID3D12VersionedRootSignatureDeserializer_Wrapper(format::HandleId id) { return GetWrapper<ID3D12VersionedRootSignatureDeserializer_Wrapper>(id, ID3D12VersionedRootSignatureDeserializer_Wrapper_map_); }
     const ID3D12VersionedRootSignatureDeserializer_Wrapper* GetID3D12VersionedRootSignatureDeserializer_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12VersionedRootSignatureDeserializer_Wrapper>(id, ID3D12VersionedRootSignatureDeserializer_Wrapper_map_); }
+
+    ID3D12Pageable_Wrapper* GetID3D12Pageable_Wrapper(format::HandleId id) { return GetWrapper<ID3D12Pageable_Wrapper>(id, ID3D12Pageable_Wrapper_map_); }
+    const ID3D12Pageable_Wrapper* GetID3D12Pageable_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12Pageable_Wrapper>(id, ID3D12Pageable_Wrapper_map_); }
 
     ID3D12CommandAllocator_Wrapper* GetID3D12CommandAllocator_Wrapper(format::HandleId id) { return GetWrapper<ID3D12CommandAllocator_Wrapper>(id, ID3D12CommandAllocator_Wrapper_map_); }
     const ID3D12CommandAllocator_Wrapper* GetID3D12CommandAllocator_Wrapper(format::HandleId id) const { return GetWrapper<ID3D12CommandAllocator_Wrapper>(id, ID3D12CommandAllocator_Wrapper_map_); }
@@ -403,9 +421,12 @@ class Dx12StateTable : public Dx12StateTableBase
     std::map<format::HandleId, IDXGIAdapter_Wrapper*> IDXGIAdapter_Wrapper_map_;
     std::map<format::HandleId, IDXGIOutput_Wrapper*> IDXGIOutput_Wrapper_map_;
     std::map<format::HandleId, IDXGIFactory_Wrapper*> IDXGIFactory_Wrapper_map_;
+    std::map<format::HandleId, ID3D12Object_Wrapper*> ID3D12Object_Wrapper_map_;
+    std::map<format::HandleId, ID3D12DeviceChild_Wrapper*> ID3D12DeviceChild_Wrapper_map_;
     std::map<format::HandleId, ID3D12RootSignature_Wrapper*> ID3D12RootSignature_Wrapper_map_;
     std::map<format::HandleId, ID3D12RootSignatureDeserializer_Wrapper*> ID3D12RootSignatureDeserializer_Wrapper_map_;
     std::map<format::HandleId, ID3D12VersionedRootSignatureDeserializer_Wrapper*> ID3D12VersionedRootSignatureDeserializer_Wrapper_map_;
+    std::map<format::HandleId, ID3D12Pageable_Wrapper*> ID3D12Pageable_Wrapper_map_;
     std::map<format::HandleId, ID3D12CommandAllocator_Wrapper*> ID3D12CommandAllocator_Wrapper_map_;
     std::map<format::HandleId, ID3D12Fence_Wrapper*> ID3D12Fence_Wrapper_map_;
     std::map<format::HandleId, ID3D12PipelineState_Wrapper*> ID3D12PipelineState_Wrapper_map_;

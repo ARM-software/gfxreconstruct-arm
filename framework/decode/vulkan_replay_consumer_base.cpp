@@ -1524,8 +1524,10 @@ void VulkanReplayConsumerBase::ProcessInitImageCommand(format::HandleId         
 void VulkanReplayConsumerBase::SetFatalErrorHandler(std::function<void(const char*)> handler)
 {
     fatal_error_handler_ = handler;
-    assert(resource_dumper_);
-    resource_dumper_->DumpResourcesSetFatalErrorHandler(handler);
+    if (resource_dumper_)
+    {
+        resource_dumper_->DumpResourcesSetFatalErrorHandler(handler);
+    }
 }
 
 void VulkanReplayConsumerBase::RaiseFatalError(const char* message) const
@@ -3157,17 +3159,17 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
                 {
                     modified_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-                    messenger_create_info.sType       = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-                    messenger_create_info.pNext       = modified_create_info.pNext;
-                    messenger_create_info.flags       = 0;
-                    messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-                    messenger_create_info.messageSeverity =
+                    create_state.messenger_create_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+                    create_state.messenger_create_info.pNext       = modified_create_info.pNext;
+                    create_state.messenger_create_info.flags       = 0;
+                    create_state.messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                    create_state.messenger_create_info.messageSeverity =
                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-                    messenger_create_info.pfnUserCallback = DebugUtilsCallback;
-                    messenger_create_info.pUserData       = nullptr;
+                    create_state.messenger_create_info.pfnUserCallback = DebugUtilsCallback;
+                    create_state.messenger_create_info.pUserData       = nullptr;
 
-                    modified_create_info.pNext = &messenger_create_info;
+                    modified_create_info.pNext = &create_state.messenger_create_info;
                 }
                 else
                 {
@@ -6169,7 +6171,8 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     auto                                  capture_id           = (*pImage->GetPointer());
     auto                                  modified_create_info = *pCreateInfo->GetPointer();
 
-    if (replaying_trimmed_capture_ || options_.dumping_resources)
+    if ((replaying_trimmed_capture_ || options_.dumping_resources) &&
+        (modified_create_info.usage & VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT) == 0)
     {
         // The GFXR trimmed capture process sets VK_IMAGE_USAGE_TRANSFER_SRC_BIT flag for image VkImageCreateInfo.
         // Since image memory requirements can differ when VK_IMAGE_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
@@ -6177,7 +6180,11 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         // VK_IMAGE_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
         // We also need to add VK_IMAGE_USAGE_TRANSFER_DST_BIT to be able to restore image and copy to it
         modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        if (loading_trim_state_)
+        {
+            // ensure image-initialization can copy
+            modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        }
     }
 
     // Modify external memory extensions depending on device support
@@ -6240,22 +6247,22 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         assert(image_info != nullptr);
 
         image_info->allocator_data = allocator_data;
-        image_info->usage          = replay_create_info->usage;
-        image_info->type           = replay_create_info->imageType;
-        image_info->format         = replay_create_info->format;
-        image_info->extent         = replay_create_info->extent;
-        image_info->tiling         = replay_create_info->tiling;
-        image_info->sample_count   = replay_create_info->samples;
-        image_info->initial_layout = replay_create_info->initialLayout;
-        image_info->layer_count    = replay_create_info->arrayLayers;
-        image_info->level_count    = replay_create_info->mipLevels;
+        image_info->usage          = modified_create_info.usage;
+        image_info->type           = modified_create_info.imageType;
+        image_info->format         = modified_create_info.format;
+        image_info->extent         = modified_create_info.extent;
+        image_info->tiling         = modified_create_info.tiling;
+        image_info->sample_count   = modified_create_info.samples;
+        image_info->initial_layout = modified_create_info.initialLayout;
+        image_info->layer_count    = modified_create_info.arrayLayers;
+        image_info->level_count    = modified_create_info.mipLevels;
 
-        image_info->current_layout = replay_create_info->initialLayout;
+        image_info->current_layout = modified_create_info.initialLayout;
 
-        if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
-            (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))
+        if ((modified_create_info.sharingMode == VK_SHARING_MODE_CONCURRENT) &&
+            (modified_create_info.queueFamilyIndexCount > 0) && (modified_create_info.pQueueFamilyIndices != nullptr))
         {
-            image_info->queue_family_index = replay_create_info->pQueueFamilyIndices[0];
+            image_info->queue_family_index = modified_create_info.pQueueFamilyIndices[0];
         }
         else
         {

@@ -41,6 +41,7 @@
 #endif
 #include <windows.h>
 #include <direct.h>
+#include "undefined_guid.h"
 #else // WIN32
 #include <dlfcn.h>
 #include <errno.h>

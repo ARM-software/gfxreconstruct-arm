@@ -34,10 +34,12 @@
       "CreateComputePipelineState": "OverrideCreateComputePipelineState",
       "CreateCommandSignature": "OverrideCreateCommandSignature",
       "CreateCommandList": "OverrideCreateCommandList",
-      "CreateRootSignature": "OverrideCreateRootSignature"
+      "CreateRootSignature": "OverrideCreateRootSignature",
+      "GetResourceTiling": "OverrideGetResourceTiling"
     },
     "ID3D12Device1": {
-      "CreatePipelineLibrary": "OverrideCreatePipelineLibrary"
+      "CreatePipelineLibrary": "OverrideCreatePipelineLibrary",
+      "SetResidencyPriority": "OverrideSetResidencyPriority"
     },
     "ID3D12Device2": {
       "CreatePipelineState": "OverrideCreatePipelineState"
@@ -84,7 +86,11 @@
     "ID3D12CommandQueue": {
       "ExecuteCommandLists": "OverrideExecuteCommandLists",
       "Signal": "OverrideCommandQueueSignal",
-      "Wait": "OverrideCommandQueueWait"
+      "Wait": "OverrideCommandQueueWait",
+      "UpdateTileMappings": "OverrideUpdateTileMappings"
+    },
+    "ID3D12MetaCommand": {
+      "GetRequiredParameterResourceSize": "OverrideGetRequiredParameterResourceSize"
     },
     "ID3D12Fence": {
       "GetCompletedValue": "OverrideGetCompletedValue",
@@ -93,13 +99,17 @@
     },
     "ID3D12PipelineLibrary": {
       "LoadComputePipeline": "OverrideLoadComputePipeline",
-      "LoadGraphicsPipeline": "OverrideLoadGraphicsPipeline"
+      "LoadGraphicsPipeline": "OverrideLoadGraphicsPipeline",
+      "Serialize": "OverrideSerialize"
     },
     "ID3D12PipelineLibrary1": {
       "LoadPipeline": "OverrideLoadPipeline"
     },
     "ID3D12StateObjectProperties": {
-      "GetShaderIdentifier": "OverrideGetShaderIdentifier"
+      "GetShaderIdentifier": "OverrideGetShaderIdentifier",
+      "GetShaderStackSize": "OverrideGetShaderStackSize",
+      "GetPipelineStackSize": "OverrideGetPipelineStackSize",
+      "SetPipelineStackSize": "OverrideSetPipelineStackSize"
     },
     "ID3D12GraphicsCommandList": {
       "CopyBufferRegion": "OverrideCopyBufferRegion",
@@ -140,6 +150,10 @@
     },
     "IDXGISwapChain3": {
       "ResizeBuffers1": "OverrideResizeBuffers1"
+    },
+    "ID3D10Blob": {
+      "GetBufferPointer": "OverrideGetBufferPointer",
+      "GetBufferSize": "OverrideGetBufferSize"
     },
     "ID3D12Object": {
       "SetName": "OverrideSetName"

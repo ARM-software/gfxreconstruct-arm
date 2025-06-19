@@ -72,12 +72,13 @@ extern "C"
 #endif
 
 const char kOptions[] =
-    "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--dxr,--dxr-experimental,--vk-remove-rt";
+    "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--dxr,--dxr-offline,--dxr-experimental,--vk-remove-rt";
 const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options,--remove-device-instance,--remove-thread";
 
 const char kD3d12PsoRemoval[]             = "--d3d12-pso-removal";
 const char kDx12OptimizeDxr[]             = "--dxr";
 const char kDx12OptimizeDxrExperimental[] = "--dxr-experimental";
+const char kDx12OptimizeDxrOffline[]      = "--dxr-offline";
 const char kReplayOptions[]               = "--set-replay-options";
 const char kVulkanDevInsRemoval[]         = "--remove-device-instance";
 const char kThreadRemoval[]               = "--remove-thread";
@@ -102,10 +103,11 @@ static void PrintUsage(const char* exe_name)
         "\t\t\tFor D3D12, the optimizer will improve DXR replay performance and remove unused PSOs (for all captures)");
     GFXRECON_WRITE_CONSOLE("");
     GFXRECON_WRITE_CONSOLE("Usage:");
-    GFXRECON_WRITE_CONSOLE("  %s [-h | --help] [--version] [--d3d12-pso-removal] [--dxr] [--gpu <index>] "
-                           "[--set-replay-options] [--remove-device-instance] "
-                           "<input-file> <output-file>",
-                           app_name.c_str());
+    GFXRECON_WRITE_CONSOLE(
+        "  %s [-h | --help] [--version] [--d3d12-pso-removal] [--dxr] [--dxr-offline] [--gpu <index>] "
+        "[--set-replay-options] [--remove-device-instance] "
+        "<input-file> <output-file>",
+        app_name.c_str());
     GFXRECON_WRITE_CONSOLE("");
     GFXRECON_WRITE_CONSOLE("Required arguments:");
     GFXRECON_WRITE_CONSOLE("  <input-file>\t\tThe path to input GFXReconstruct capture file to be processed.");
@@ -129,6 +131,7 @@ static void PrintUsage(const char* exe_name)
 #endif
     GFXRECON_WRITE_CONSOLE("  --d3d12-pso-removal\tD3D12-only: Remove creation of unreferenced PSOs.");
     GFXRECON_WRITE_CONSOLE("  --dxr\t\t\tD3D12-only: Optimize for DXR and ExecuteIndirect replay.");
+    GFXRECON_WRITE_CONSOLE("  --dxr-offline\t\t\tD3D12-only: Optimize for ray tracing with offline.");
     GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\tUse the specified device for the optimizer replay, where index");
     GFXRECON_WRITE_CONSOLE("          \t\tis the zero-based index to the array of physical devices");
     GFXRECON_WRITE_CONSOLE("          \t\treturned by vkEnumeratePhysicalDevices or IDXGIFactory1::EnumAdapters1.");
@@ -311,6 +314,7 @@ int main(int argc, const char** argv)
         gfxrecon::decode::Dx12OptimizationOptions dx12_options;
         dx12_options.optimize_resource_values              = arg_parser.IsOptionSet(kDx12OptimizeDxr);
         dx12_options.optimize_resource_values_experimental = arg_parser.IsOptionSet(kDx12OptimizeDxrExperimental);
+        dx12_options.optimize_resource_values_offline      = arg_parser.IsOptionSet(kDx12OptimizeDxrOffline);
         dx12_options.remove_redundant_psos                 = arg_parser.IsOptionSet(kD3d12PsoRemoval);
         const auto& override_gpu                           = arg_parser.GetArgumentValue(kOverrideGpuArgument);
 
@@ -321,7 +325,8 @@ int main(int argc, const char** argv)
         if (set_replay_options)
         {
             if (dx12_options.optimize_resource_values || dx12_options.optimize_resource_values_experimental ||
-                dx12_options.remove_redundant_psos || !override_gpu.empty())
+                dx12_options.remove_redundant_psos || dx12_options.optimize_resource_values_offline ||
+                !override_gpu.empty())
             {
                 throw std::runtime_error("Option --set-replay-options cannot be used with any other option. Exiting.");
             }
@@ -365,7 +370,8 @@ int main(int argc, const char** argv)
             SetReplayOptions(input_filename, output_filename, replay_options);
         }
         // Perform user selected DX12 optimizations
-        else if (dx12_options.optimize_resource_values || dx12_options.remove_redundant_psos || !override_gpu.empty())
+        else if (dx12_options.optimize_resource_values || dx12_options.optimize_resource_values_offline ||
+                 dx12_options.remove_redundant_psos || !override_gpu.empty())
         {
             RunDx12Optimizations(input_filename, output_filename, dx12_options);
         }
@@ -388,8 +394,9 @@ int main(int argc, const char** argv)
 
             if (detected_d3d12)
             {
-                dx12_options.optimize_resource_values = true;
-                dx12_options.remove_redundant_psos    = true;
+                dx12_options.optimize_resource_values         = true;
+                dx12_options.remove_redundant_psos            = true;
+                dx12_options.optimize_resource_values_offline = true;
                 RunDx12Optimizations(input_filename, output_filename, dx12_options);
             }
             else if (detected_vulkan)

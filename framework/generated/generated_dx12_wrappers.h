@@ -1249,6 +1249,14 @@ class ID3D12Object_Wrapper : public IUnknown_Wrapper
   public:
     ID3D12Object_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources = nullptr, const std::function<void(IUnknown_Wrapper*)>& destructor = [](IUnknown_Wrapper* u){ delete reinterpret_cast<ID3D12Object_Wrapper*>(u); });
 
+    ~ID3D12Object_Wrapper();
+
+    static ID3D12Object_Wrapper* GetExistingWrapper(IUnknown* object);
+
+    std::shared_ptr<const ID3D12ObjectInfo> GetObjectInfo() const { return info_; }
+
+    std::shared_ptr<ID3D12ObjectInfo> GetObjectInfo() { return info_; }
+
     virtual HRESULT STDMETHODCALLTYPE GetPrivateData(
         REFGUID guid,
         UINT* pDataSize,
@@ -1266,6 +1274,13 @@ class ID3D12Object_Wrapper : public IUnknown_Wrapper
     virtual HRESULT STDMETHODCALLTYPE SetName(
         LPCWSTR Name);
 
+  private:
+    // Map to prevent creation of more than one interface wrapper per object.
+    typedef std::unordered_map<IUnknown*, ID3D12Object_Wrapper*> ObjectMap;
+    static ObjectMap  object_map_;
+    static std::mutex object_map_lock_;
+
+    std::shared_ptr<ID3D12ObjectInfo> info_;
 };
 
 class ID3D12DeviceChild_Wrapper : public ID3D12Object_Wrapper
@@ -1273,10 +1288,25 @@ class ID3D12DeviceChild_Wrapper : public ID3D12Object_Wrapper
   public:
     ID3D12DeviceChild_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources = nullptr, const std::function<void(IUnknown_Wrapper*)>& destructor = [](IUnknown_Wrapper* u){ delete reinterpret_cast<ID3D12DeviceChild_Wrapper*>(u); });
 
+    ~ID3D12DeviceChild_Wrapper();
+
+    static ID3D12DeviceChild_Wrapper* GetExistingWrapper(IUnknown* object);
+
+    std::shared_ptr<const ID3D12DeviceChildInfo> GetObjectInfo() const { return info_; }
+
+    std::shared_ptr<ID3D12DeviceChildInfo> GetObjectInfo() { return info_; }
+
     virtual HRESULT STDMETHODCALLTYPE GetDevice(
         REFIID riid,
         void** ppvDevice);
 
+  private:
+    // Map to prevent creation of more than one interface wrapper per object.
+    typedef std::unordered_map<IUnknown*, ID3D12DeviceChild_Wrapper*> ObjectMap;
+    static ObjectMap  object_map_;
+    static std::mutex object_map_lock_;
+
+    std::shared_ptr<ID3D12DeviceChildInfo> info_;
 };
 
 class ID3D12RootSignature_Wrapper : public ID3D12DeviceChild_Wrapper
@@ -1358,6 +1388,21 @@ class ID3D12Pageable_Wrapper : public ID3D12DeviceChild_Wrapper
   public:
     ID3D12Pageable_Wrapper(REFIID riid, IUnknown* object, DxWrapperResources* resources = nullptr, const std::function<void(IUnknown_Wrapper*)>& destructor = [](IUnknown_Wrapper* u){ delete reinterpret_cast<ID3D12Pageable_Wrapper*>(u); });
 
+    ~ID3D12Pageable_Wrapper();
+
+    static ID3D12Pageable_Wrapper* GetExistingWrapper(IUnknown* object);
+
+    std::shared_ptr<const ID3D12PageableInfo> GetObjectInfo() const { return info_; }
+
+    std::shared_ptr<ID3D12PageableInfo> GetObjectInfo() { return info_; }
+
+  private:
+    // Map to prevent creation of more than one interface wrapper per object.
+    typedef std::unordered_map<IUnknown*, ID3D12Pageable_Wrapper*> ObjectMap;
+    static ObjectMap  object_map_;
+    static std::mutex object_map_lock_;
+
+    std::shared_ptr<ID3D12PageableInfo> info_;
 };
 
 class ID3D12Heap_Wrapper : public ID3D12Pageable_Wrapper

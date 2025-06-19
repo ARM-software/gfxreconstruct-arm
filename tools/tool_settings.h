@@ -26,6 +26,8 @@
 #if defined(D3D12_SUPPORT)
 #include "decode/dx_replay_options.h"
 #include <initguid.h>
+#include "decode/dx12_default_allocator.h"
+#include "decode/dx12_rebind_allocator.h"
 #include "generated/generated_dx12_decoder.h"
 #endif
 #include "decode/file_processor.h"
@@ -152,6 +154,7 @@ const char kDumpResourcesImageFormat[]            = "--dump-resources-image-form
 const char kDumpResourcesScaleArgument[]          = "--dump-resources-scale";
 const char kDumpResourcesDepth[]                  = "--dump-resources-dump-depth-attachment";
 const char kDumpResourcesDirArgument[]            = "--dump-resources-dir";
+const char kDumpResourcesModifiableStateOnly[]    = "--dump-resources-modifiable-state-only";
 const char kDumpResourcesColorAttIdxArg[]         = "--dump-resources-dump-color-attachment-index";
 const char kDumpResourcesDumpVertexIndexBuffers[] = "--dump-resources-dump-vertex-index-buffers";
 const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-output-per-command";
@@ -206,8 +209,9 @@ const char kScreenshotFormatPng[] = "png";
 const char kDefaultScreenshotDir[]    = "/sdcard";
 const char kDefaultDumpResourcesDir[] = "/sdcard";
 #else
-const char kDefaultScreenshotDir[]    = "";
-const char kDefaultDumpResourcesDir[] = "";
+const char kDefaultScreenshotDir[]                  = "";
+const char kDefaultDumpResourcesDir[]               = "";
+const bool kDefaultDumpResourcesModifiableStateOnly = false;
 #endif
 
 static void ProcessDisableDebugPopup(const gfxrecon::util::ArgumentParser& arg_parser)
@@ -1271,14 +1275,50 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
 }
 
 #if defined(D3D12_SUPPORT)
+static gfxrecon::decode::Dx12ResourceAllocator* CreateDxDefaultAllocator()
+{
+    return new gfxrecon::decode::Dx12DefaultAllocator(
+        "Try replay with the '-m rebind' options to enable memory translation.");
+}
+
+static gfxrecon::decode::Dx12ResourceAllocator* CreateDxRebindAllocator()
+{
+    return new gfxrecon::decode::Dx12RebindAllocator();
+}
+
+static gfxrecon::decode::CreateDx12ResourceAllocator
+GetCreateResourceAllocatorFunc(const gfxrecon::util::ArgumentParser&    arg_parser,
+                               const std::string&                       filename,
+                               const gfxrecon::decode::DxReplayOptions& replay_options)
+{
+    gfxrecon::decode::CreateDx12ResourceAllocator func  = CreateDxDefaultAllocator;
+    const auto&                                   value = arg_parser.GetArgumentValue(kMemoryPortabilityShortOption);
+
+    if (!value.empty())
+    {
+        if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationRebind, value.c_str()) == 0)
+        {
+            func = CreateDxRebindAllocator;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase(kMemoryTranslationNone, value.c_str()) != 0)
+        {
+            GFXRECON_LOG_FATAL("Unrecognized memory translation option \"%s\"", value.c_str());
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    return func;
+}
+
 static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util::ArgumentParser& arg_parser,
                                                             const std::string&                    filename)
 {
     gfxrecon::decode::DxReplayOptions replay_options;
     GetReplayOptions(replay_options, arg_parser, filename);
 
-    replay_options.DeniedDebugMessages  = GetFilteredMsgs(arg_parser, kDeniedMessages);
-    replay_options.AllowedDebugMessages = GetFilteredMsgs(arg_parser, kAllowedMessages);
+    replay_options.DeniedDebugMessages       = GetFilteredMsgs(arg_parser, kDeniedMessages);
+    replay_options.AllowedDebugMessages      = GetFilteredMsgs(arg_parser, kAllowedMessages);
+    replay_options.create_resource_allocator = GetCreateResourceAllocatorFunc(arg_parser, filename, replay_options);
 
     if (arg_parser.IsOptionSet(kDxTwoPassReplay))
     {
@@ -1324,8 +1364,9 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         }
     }
 
-    replay_options.dump_resources_output_dir = GetDumpResourcesDir(arg_parser);
-    replay_options.dump_resources_before     = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
+    replay_options.dump_resources_output_dir            = GetDumpResourcesDir(arg_parser);
+    replay_options.dump_resources_before                = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
+    replay_options.dump_resources_modifiable_state_only = arg_parser.IsOptionSet(kDumpResourcesModifiableStateOnly);
 
     const std::string& memory_usage = arg_parser.GetArgumentValue(kBatchingMemoryUsageArgument);
     if (!memory_usage.empty())
