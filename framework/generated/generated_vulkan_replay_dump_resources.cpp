@@ -6172,6 +6172,33 @@ void VulkanReplayDumpResources::Process_vkCmdSetDepthClampRangeEXT(
     }
 }
 
+void VulkanReplayDumpResources::Process_vkCmdConvertCooperativeVectorMatrixNV(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdConvertCooperativeVectorMatrixNV   func,
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    infoCount,
+    const VkConvertCooperativeVectorMatrixInfoNV* pInfos)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, infoCount, pInfos);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, infoCount, pInfos);
+        }
+    }
+}
+
 void VulkanReplayDumpResources::Process_vkCmdDispatchDataGraphARM(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDispatchDataGraphARM               func,
@@ -6220,6 +6247,32 @@ void VulkanReplayDumpResources::Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
         if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
         {
              func(dispatch_rays_command_buffer, aspectMask);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdBuildPartitionedAccelerationStructuresNV(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBuildPartitionedAccelerationStructuresNV func,
+    VkCommandBuffer                             commandBuffer,
+    const VkBuildPartitionedAccelerationStructureInfoNV* pBuildInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pBuildInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pBuildInfo);
         }
     }
 }

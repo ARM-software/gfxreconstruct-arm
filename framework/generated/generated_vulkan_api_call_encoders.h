@@ -3429,6 +3429,20 @@ VKAPI_ATTR VkResult VKAPI_CALL GetDynamicRenderingTilePropertiesQCOM(
     const VkRenderingInfo*                      pRenderingInfo,
     VkTilePropertiesQCOM*                       pProperties);
 
+VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCooperativeVectorPropertiesNV(
+    VkPhysicalDevice                            physicalDevice,
+    uint32_t*                                   pPropertyCount,
+    VkCooperativeVectorPropertiesNV*            pProperties);
+
+VKAPI_ATTR VkResult VKAPI_CALL ConvertCooperativeVectorMatrixNV(
+    VkDevice                                    device,
+    const VkConvertCooperativeVectorMatrixInfoNV* pInfo);
+
+VKAPI_ATTR void VKAPI_CALL CmdConvertCooperativeVectorMatrixNV(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    infoCount,
+    const VkConvertCooperativeVectorMatrixInfoNV* pInfos);
+
 VKAPI_ATTR VkResult VKAPI_CALL SetLatencySleepModeNV(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
@@ -3508,6 +3522,15 @@ VKAPI_ATTR void VKAPI_CALL CmdSetAttachmentFeedbackLoopEnableEXT(
     VkCommandBuffer                             commandBuffer,
     VkImageAspectFlags                          aspectMask);
 
+VKAPI_ATTR void VKAPI_CALL GetPartitionedAccelerationStructuresBuildSizesNV(
+    VkDevice                                    device,
+    const VkPartitionedAccelerationStructureInstancesInputNV* pInfo,
+    VkAccelerationStructureBuildSizesInfoKHR*   pSizeInfo);
+
+VKAPI_ATTR void VKAPI_CALL CmdBuildPartitionedAccelerationStructuresNV(
+    VkCommandBuffer                             commandBuffer,
+    const VkBuildPartitionedAccelerationStructureInfoNV* pBuildInfo);
+
 VKAPI_ATTR void VKAPI_CALL GetGeneratedCommandsMemoryRequirementsEXT(
     VkDevice                                    device,
     const VkGeneratedCommandsMemoryRequirementsInfoEXT* pInfo,
@@ -3561,6 +3584,17 @@ VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceCooperativeMatrixFlexibleDimensi
     VkPhysicalDevice                            physicalDevice,
     uint32_t*                                   pPropertyCount,
     VkCooperativeMatrixFlexibleDimensionsPropertiesNV* pProperties);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetMemoryMetalHandleEXT(
+    VkDevice                                    device,
+    const VkMemoryGetMetalHandleInfoEXT*        pGetMetalHandleInfo,
+    void**                                      pHandle);
+
+VKAPI_ATTR VkResult VKAPI_CALL GetMemoryMetalHandlePropertiesEXT(
+    VkDevice                                    device,
+    VkExternalMemoryHandleTypeFlagBits          handleType,
+    const void*                                 pHandle,
+    VkMemoryMetalHandlePropertiesEXT*           pMemoryMetalHandleProperties);
 
 VKAPI_ATTR VkResult VKAPI_CALL CreateAccelerationStructureKHR(
     VkDevice                                    device,
