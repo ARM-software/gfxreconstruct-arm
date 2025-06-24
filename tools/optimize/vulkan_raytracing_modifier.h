@@ -178,6 +178,9 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         format::HandleId                                  queryPool,
         uint32_t                                          firstQuery) override;
 
+    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
+        format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
+
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
         uint32_t                                                                   info_count,

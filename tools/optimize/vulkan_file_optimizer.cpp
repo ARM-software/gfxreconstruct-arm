@@ -1015,4 +1015,89 @@ bool VulkanFileOptimizer::ProcessMarker(const format::Marker& marker)
     return true;
 }
 
+bool VulkanFileOptimizer::ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
+    const format::VulkanWriteAccelerationStructuresPropertiesCommandHeader& header)
+{
+    uint64_t                                                          index                 = GetCurrentBlockIndex();
+    uint64_t                                                          parameter_buffer_size = 0;
+    encode::ParameterBuffer                                           buffer;
+    bool                                                              delete_current_call = false;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetCurrentBlockIndex(index);
+    }
+
+    size_t parameter_size =
+        static_cast<size_t>(header.meta_header.block_header.size) - sizeof(header.meta_header.meta_data_id);
+    bool success = ReadParameterBuffer(parameter_size);
+
+    if (success)
+    {
+        parameter_buffer_size = parameter_size;
+        for (auto& modifier : optimization_data_->modifiers)
+        {
+            modifier->SetParameterBuffer(&buffer);
+            decoder.AddConsumer(modifier.get());
+            decode::DecodeAllocator::Begin();
+            decoder.DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(GetParameterBuffer().data(),
+                                                                                   parameter_size);
+            decode::DecodeAllocator::End();
+            decoder.RemoveConsumer(modifier.get());
+        }
+    }
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        delete_current_call |= modifier->GetDeleteCurrentCall();
+    }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (!delete_current_call)
+    {
+        WriteBytes(&header, sizeof(header));
+        if (format::IsBlockCompressed(header.meta_header.block_header.type))
+        {
+            WriteBytes(GetCompressedParameterBuffer().data(), parameter_buffer_size);
+        }
+        else
+        {
+            WriteBytes(GetParameterBuffer().data(), parameter_buffer_size);
+        }
+    }
+
+    for (auto& new_call : new_post_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    return true;
+}
+
 GFXRECON_END_NAMESPACE(gfxrecon)
