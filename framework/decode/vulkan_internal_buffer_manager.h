@@ -25,8 +25,8 @@
 #define GFXRECON_DECODE_VULKAN_INTERNAL_BUFFER_MANAGER_H
 
 #include "decode/vulkan_resource_allocator.h"
-#include "decode/descriptor_update_template_decoder.h"
-#include "decode/vulkan_object_info_table.h"
+#include "util/vulkan_device_table_dispatcher.h"
+
 #include "util/defines.h"
 #include "util/marking_layers.h"
 
@@ -77,20 +77,12 @@ class VulkanInternalBufferManager
     VkDeviceAddress GetBufferDeviceAddress(VkBuffer buffer);
 
   private:
-    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
-    struct Functions
-    {
-        PFN_vkGetBufferDeviceAddress    get_buffer_device_address{ nullptr };
-        PFN_vkGetBufferDeviceAddressKHR get_buffer_device_address_khr{ nullptr };
-    };
-
-  private:
-    Functions                                       functions_;
     VkDevice                                        device_;
     VulkanResourceAllocator*                        allocator_;
     VkPhysicalDeviceMemoryProperties                physical_device_memory_properties_;
     const VulkanPhysicalDeviceInfo*                 physical_device_info_;
     std::vector<std::unique_ptr<BufferInfoWrapper>> buffers_;
+    util::VulkanDeviceTableDispatcher               dispatcher_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

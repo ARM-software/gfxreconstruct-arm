@@ -212,9 +212,9 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     // retrieved from allocator/GetASBuildSizes query. Assume all these sizes should satisfy the above condition.
     auto target_storage_buffer_allocated_size = allocator->GetBufferSize(target_storage_buffer->allocator_data);
     GFXRECON_ASSERT(target_storage_buffer_allocated_size > info->size + info->offset);
-    GFXRECON_ASSERT(target_storage_buffer->size > info->size + info->offset);
+    GFXRECON_ASSERT(target_storage_buffer->replay_size > info->size + info->offset);
     GFXRECON_ASSERT(target_storage_buffer_allocated_size > build_sizes.accelerationStructureSize + info->offset);
-    GFXRECON_ASSERT(target_storage_buffer->size > build_sizes.accelerationStructureSize + info->offset);
+    GFXRECON_ASSERT(target_storage_buffer->replay_size > build_sizes.accelerationStructureSize + info->offset);
 
     info->buffer    = target_storage_buffer->handle;
     VkResult result = functions_.create_acceleration_structure(device_info->handle, info, pAllocator, handle);

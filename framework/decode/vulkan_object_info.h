@@ -415,7 +415,9 @@ struct VulkanBufferInfo : public VulkanObjectInfo<VkBuffer>
     VkMemoryPropertyFlags memory_property_flags{ 0 };
 
     VkBufferUsageFlags usage{ 0 };
-    VkDeviceSize       size{ 0 };
+    VkDeviceSize       replay_size{ 0 };
+    VkDeviceSize       capture_size{ 0 };
+
     uint32_t           queue_family_index{ 0 };
 };
 

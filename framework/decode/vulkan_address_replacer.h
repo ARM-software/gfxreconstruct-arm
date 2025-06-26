@@ -27,7 +27,7 @@
 #include "decode/common_object_info_table.h"
 #include "decode/vulkan_device_address_tracker.h"
 #include "graphics/vulkan_shader_group_handle.h"
-#include "format/platform_types.h"
+#include "util/vulkan_device_table_dispatcher.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -198,9 +198,7 @@ class VulkanAddressReplacer
     std::unordered_map<VkQueryPool, std::unordered_map<VkAccelerationStructureKHR, uint32_t>> as_compact_queries_;
     std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize>                              as_compact_sizes_;
 
-    // required function pointers
-    PFN_vkGetBufferDeviceAddress       get_device_address_fn_             = nullptr;
-    PFN_vkGetPhysicalDeviceProperties2 get_physical_device_properties_fn_ = nullptr;
+    util::VulkanDeviceTableDispatcher dispatcher_;
 };
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

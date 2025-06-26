@@ -32,6 +32,7 @@
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "custom_vulkan_array_size_2d.h"
+#include "util/vulkan_device_table_dispatcher.h"
 
 #include <algorithm>
 #include <array>
@@ -1370,7 +1371,7 @@ void VulkanStateWriter::WriteDeviceMemoryState(const VulkanStateTable& state_tab
     // Write AHB creation commands.
     for (auto hardware_buffer : hardware_buffers)
     {
-        const vulkan_wrappers::DeviceMemoryWrapper* wrapper = hardware_buffer.second;
+        const vulkan_wrappers::DeviceMemoryWrapper* wrapper            = hardware_buffer.second;
         bool                                        is_standard_format = false;
         CommonProcessHardwareBuffer(thread_data_->thread_id_,
                                     wrapper->hardware_buffer_memory_id,
@@ -2407,8 +2408,9 @@ void VulkanStateWriter::WriteBufferDeviceAddressCalls(const VulkanStateTable& st
     for (const BufferWrapper* wrapper : buffers_to_query)
     {
         VkBufferDeviceAddressInfo info{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, wrapper->handle };
+        VkDevice                  device = wrapper->bind_device->handle;
         VkDeviceAddress           address =
-            GetDeviceTable(wrapper->bind_device->handle)->GetBufferDeviceAddress(wrapper->bind_device->handle, &info);
+            util::VulkanDeviceTableDispatcher(GetDeviceTable(device)).GetBufferDeviceAddress(device, &info);
 
         auto physical_device_wrapper = wrapper->bind_device->physical_device;
         auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)

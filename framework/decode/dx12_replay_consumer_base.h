@@ -75,9 +75,15 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void SetAgsMarkerInjector(AGSContext* ags_context = nullptr);
 #endif
 
-    void SetFatalErrorHandler(std::function<void(const char*)> handler) { fatal_error_handler_ = handler; }
+    void SetFatalErrorHandler(std::function<void(const char*)> handler)
+    {
+        fatal_error_handler_ = handler;
+    }
 
-    void SetFpsInfo(graphics::FpsInfo* fps_info) { fps_info_ = fps_info; }
+    void SetFpsInfo(graphics::FpsInfo* fps_info)
+    {
+        fps_info_ = fps_info;
+    }
 
     void PostReplay();
 
@@ -308,7 +314,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     IDXGIAdapter* GetAdapter();
 
-    graphics::dx12::ActiveAdapterMap& GetAdaptersMap() { return adapters_; }
+    graphics::dx12::ActiveAdapterMap& GetAdaptersMap()
+    {
+        return adapters_;
+    }
 
   protected:
     void MapGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE& handle);
@@ -980,9 +989,15 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     SIZE_T OverrideGetBufferSize(DxObjectInfo* replay_object, UINT64 original_result);
 
-    const Dx12ObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
+    const Dx12ObjectInfoTable& GetObjectInfoTable() const
+    {
+        return object_info_table_;
+    }
 
-    Dx12ObjectInfoTable& GetObjectInfoTable() { return object_info_table_; }
+    Dx12ObjectInfoTable& GetObjectInfoTable()
+    {
+        return object_info_table_;
+    }
 
     DxObjectInfo* GetObjectInfo(format::HandleId id)
     {
@@ -995,13 +1010,25 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         return nullptr;
     }
 
-    const Dx12DescriptorMap& GetDescriptorMap() const { return descriptor_map_; }
+    const Dx12DescriptorMap& GetDescriptorMap() const
+    {
+        return descriptor_map_;
+    }
 
-    Dx12DescriptorMap& GetDescriptorMap() { return descriptor_map_; }
+    Dx12DescriptorMap& GetDescriptorMap()
+    {
+        return descriptor_map_;
+    }
 
-    const graphics::Dx12GpuVaMap& GetGpuVaTable() const { return gpu_va_map_; }
+    const graphics::Dx12GpuVaMap& GetGpuVaTable() const
+    {
+        return gpu_va_map_;
+    }
 
-    graphics::Dx12GpuVaMap& GetGpuVaTable() { return gpu_va_map_; }
+    graphics::Dx12GpuVaMap& GetGpuVaTable()
+    {
+        return gpu_va_map_;
+    }
 
     void ReplaceWindowedResolution(uint32_t& width, uint32_t& height)
     {
@@ -1021,7 +1048,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         }
     }
 
-    Dx12ResourceValueMapper* GetResourceValueMapper() { return resource_value_mapper_.get(); }
+    Dx12ResourceValueMapper* GetResourceValueMapper()
+    {
+        return resource_value_mapper_.get();
+    }
 
     template <typename CountT>
     void SetOutputArrayCount(format::HandleId object_id, VariableLengthArrayIndices index, CountT count)

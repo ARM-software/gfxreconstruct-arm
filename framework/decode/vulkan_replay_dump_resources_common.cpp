@@ -243,13 +243,13 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
     assert(device_table);
     assert(new_buffer);
     assert(buffer_info);
-    assert(buffer_info->size || override_size);
+    assert(buffer_info->replay_size || override_size);
 
     VkBufferCreateInfo ci;
     ci.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     ci.pNext                 = nullptr;
     ci.flags                 = VkBufferCreateFlags(0);
-    ci.size                  = override_size ? override_size : buffer_info->size;
+    ci.size                  = override_size ? override_size : buffer_info->replay_size;
     ci.usage                 = buffer_info->usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     ci.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
     ci.queueFamilyIndexCount = buffer_info->queue_family_index;

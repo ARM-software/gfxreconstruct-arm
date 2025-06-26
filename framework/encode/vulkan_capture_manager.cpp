@@ -48,6 +48,7 @@
 #include "util/page_guard_manager.h"
 #include "util/platform.h"
 #include "util/spirv_parsing_util.h"
+#include "util/vulkan_device_table_dispatcher.h"
 
 #include <cassert>
 #include <unordered_set>
@@ -1255,8 +1256,9 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
             VkBufferDeviceAddressInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
                                                       nullptr,
                                                       pCreateInfo->buffer };
-            VkDeviceAddress           address =
-                device_table->GetBufferDeviceAddress(device_unwrapped, &buffer_info) + pCreateInfo->offset;
+            VkDeviceAddress           address     = util::VulkanDeviceTableDispatcher(GetDeviceTable(device_unwrapped))
+                                          .GetBufferDeviceAddress(device_unwrapped, &buffer_info) +
+                                      pCreateInfo->offset;
 
             micromap_wrapper->device = device_wrapper;
             micromap_wrapper->type_  = pCreateInfo_unwrapped->type;

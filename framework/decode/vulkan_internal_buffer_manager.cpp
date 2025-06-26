@@ -33,10 +33,9 @@ VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDev
                                                          VulkanResourceAllocator*                allocator,
                                                          const VkPhysicalDeviceMemoryProperties& memory_properties) :
     physical_device_info_(physical_device_info),
-    device_(device), allocator_(allocator), physical_device_memory_properties_(memory_properties)
-{
-    InitializeFunctionPointers(device_table);
-}
+    device_(device), allocator_(allocator), physical_device_memory_properties_(memory_properties),
+    dispatcher_(device_table)
+{}
 
 VulkanInternalBufferManager::~VulkanInternalBufferManager()
 {
@@ -71,10 +70,8 @@ VkDeviceAddress VulkanInternalBufferManager::GetBufferDeviceAddress(VkBuffer buf
 
     VkDeviceAddress result = 0;
 
-    assert(functions_.get_buffer_device_address != gfxrecon::encode::noop::GetBufferDeviceAddress);
-
     util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
-    result = functions_.get_buffer_device_address(device_, &info);
+    result = dispatcher_.GetBufferDeviceAddress(device_, &info);
     util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
 
     return result;
@@ -126,7 +123,7 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
         VulkanBufferInfo(), VulkanDeviceMemoryInfo(), allocator_, physical_device_info_);
     entry->info_.allocator_data        = buffer_allocator_data;
     entry->info_.handle                = buffer;
-    entry->info_.size                  = size;
+    entry->info_.replay_size           = size;
     entry->memory_info_.handle         = memory;
     entry->memory_info_.allocator_data = memory_allocator_data;
 
@@ -137,14 +134,5 @@ std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> VulkanInternalBu
 
     return entry;
 }
-
-void VulkanInternalBufferManager::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
-{
-    functions_.get_buffer_device_address =
-        (device_table->GetBufferDeviceAddress != gfxrecon::encode::noop::GetBufferDeviceAddress)
-            ? device_table->GetBufferDeviceAddress
-            : device_table->GetBufferDeviceAddressKHR;
-}
-
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
