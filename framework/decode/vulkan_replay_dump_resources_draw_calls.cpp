@@ -297,7 +297,7 @@ VkResult DrawCallsDumpingContext::CopyDrawIndirectParameters(uint64_t index)
         const uint32_t     param_buffer_stride = ic_params.stride;
         VkDeviceSize       param_buffer_offset = ic_params.params_buffer_offset;
         const VkDeviceSize copy_buffer_size    = param_buffer_stride * (max_draw_count - 1) + draw_call_params_size;
-        assert(copy_buffer_size <= ic_params.params_buffer_info->size + param_buffer_offset);
+        assert(copy_buffer_size <= ic_params.params_buffer_info->replay_size + param_buffer_offset);
 
         ic_params.new_params_buffer_size = copy_buffer_size;
 
@@ -371,7 +371,7 @@ VkResult DrawCallsDumpingContext::CopyDrawIndirectParameters(uint64_t index)
 
         // Create a buffer to copy the draw count parameter
         const VkDeviceSize count_buffer_size = sizeof(uint32_t);
-        assert(count_buffer_size <= ic_params.count_buffer_info->size);
+        assert(count_buffer_size <= ic_params.count_buffer_info->replay_size);
         res = CloneBuffer(object_info_table,
                           device_table,
                           replay_device_phys_mem_props,
@@ -443,7 +443,7 @@ VkResult DrawCallsDumpingContext::CopyDrawIndirectParameters(uint64_t index)
         const uint32_t     param_buffer_offset = i_params.params_buffer_offset;
         const VkDeviceSize copy_buffer_size =
             (draw_count > 1) ? (param_buffer_stride * (draw_count - 1) + draw_call_params_size) : draw_call_params_size;
-        assert(copy_buffer_size <= i_params.params_buffer_info->size + param_buffer_offset);
+        assert(copy_buffer_size <= i_params.params_buffer_info->replay_size + param_buffer_offset);
 
         i_params.new_params_buffer_size = copy_buffer_size;
 
@@ -1263,7 +1263,7 @@ DrawCallsDumpingContext::DumpImmutableDescriptors(uint64_t qs_index, uint64_t bc
         res_info.buffer_info            = buf.first;
         const VkDeviceSize offset       = buf.second.offset;
         const VkDeviceSize range        = buf.second.range;
-        const VkDeviceSize size         = range == VK_WHOLE_SIZE ? res_info.buffer_info->size - offset : range;
+        const VkDeviceSize size         = range == VK_WHOLE_SIZE ? res_info.buffer_info->replay_size - offset : range;
 
         VkResult res = resource_util.ReadFromBufferResource(
             res_info.buffer_info->handle, size, offset, res_info.buffer_info->queue_family_index, res_info.data);
@@ -1584,10 +1584,10 @@ VkResult DrawCallsDumpingContext::DumpVertexIndexBuffers(uint64_t qs_index, uint
                                       : (abs_index_count * index_size);
 
             // There is something wrong with the calculations if this is true
-            assert(total_size <= dc_params.referenced_index_buffer.buffer_info->size - offset);
-            if (total_size > dc_params.referenced_index_buffer.buffer_info->size - offset)
+            assert(total_size <= dc_params.referenced_index_buffer.buffer_info->replay_size - offset);
+            if (total_size > dc_params.referenced_index_buffer.buffer_info->replay_size - offset)
             {
-                total_size = dc_params.referenced_index_buffer.buffer_info->size - offset;
+                total_size = dc_params.referenced_index_buffer.buffer_info->replay_size - offset;
             }
 
             dc_params.referenced_index_buffer.actual_size = total_size;
@@ -1819,11 +1819,11 @@ VkResult DrawCallsDumpingContext::DumpVertexIndexBuffers(uint64_t qs_index, uint
                 // Calculate offset including vertexOffset
                 const uint32_t offset = vb_entry->second.offset + (min_max_vertex_indices.first * binding_stride);
 
-                assert(total_size <= vb_entry->second.buffer_info->size - offset);
+                assert(total_size <= vb_entry->second.buffer_info->replay_size - offset);
                 // There is something wrong with the calculations if this is true
-                if (total_size > vb_entry->second.buffer_info->size - offset)
+                if (total_size > vb_entry->second.buffer_info->replay_size - offset)
                 {
-                    total_size = vb_entry->second.buffer_info->size - offset;
+                    total_size = vb_entry->second.buffer_info->replay_size - offset;
                 }
 
                 vb_entry->second.actual_size    = total_size;
@@ -2474,8 +2474,8 @@ void DrawCallsDumpingContext::BindVertexBuffers2(uint64_t                       
         {
             if (pSizes[i] == VK_WHOLE_SIZE)
             {
-                assert(buffer_infos[i]->size > pOffsets[i]);
-                buffer_size = buffer_infos[i]->size - pOffsets[i];
+                assert(buffer_infos[i]->replay_size > pOffsets[i]);
+                buffer_size = buffer_infos[i]->replay_size - pOffsets[i];
             }
             else
             {
@@ -2526,8 +2526,8 @@ void DrawCallsDumpingContext::BindIndexBuffer(
     {
         if (size == VK_WHOLE_SIZE && buffer_info != nullptr)
         {
-            assert(buffer_info->size > offset);
-            index_buffer_size = buffer_info->size - offset;
+            assert(buffer_info->replay_size > offset);
+            index_buffer_size = buffer_info->replay_size - offset;
         }
         else
         {

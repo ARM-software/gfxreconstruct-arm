@@ -97,7 +97,7 @@ VulkanDeviceAddressTracker::GetBufferInfo(VkDeviceAddress                       
 
         if (found_buffer != nullptr)
         {
-            if (device_address < found_address + found_buffer->size)
+            if (device_address < found_address + found_buffer->capture_size)
             {
                 return found_buffer;
             }

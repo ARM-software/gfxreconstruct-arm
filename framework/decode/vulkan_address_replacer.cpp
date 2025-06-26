@@ -101,15 +101,12 @@ VulkanAddressReplacer::VulkanAddressReplacer(const VulkanDeviceInfo*            
                                              const encode::VulkanDeviceTable*     device_table,
                                              const decode::CommonObjectInfoTable& object_table) :
     device_table_(device_table),
-    device_info_(device_info), object_table_(&object_table)
+    device_info_(device_info), object_table_(&object_table), dispatcher_(device_table)
 {
     GFXRECON_ASSERT(device_info != nullptr && device_table != nullptr)
 
     const VulkanPhysicalDeviceInfo* physical_device_info =
         object_table.GetVkPhysicalDeviceInfo(device_info_->parent_id);
-    get_device_address_fn_ = physical_device_info->parent_api_version >= VK_API_VERSION_1_2
-                                 ? device_table->GetBufferDeviceAddress
-                                 : device_table->GetBufferDeviceAddressKHR;
 
     if (physical_device_info != nullptr && physical_device_info->capture_raytracing_properties &&
         physical_device_info->replay_device_info->raytracing_properties)
@@ -1199,7 +1196,7 @@ bool VulkanAddressReplacer::create_buffer(size_t                                
     VkBufferDeviceAddressInfo address_info = {};
     address_info.sType                     = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     address_info.buffer                    = buffer_context.buffer;
-    buffer_context.device_address          = get_device_address_fn_(device_info_->handle, &address_info);
+    buffer_context.device_address          = dispatcher_.GetBufferDeviceAddress(device_info_->handle, &address_info);
 
     // map buffer
     result = buffer_context.resource_allocator->MapResourceMemoryDirect(
@@ -1235,7 +1232,6 @@ void swap(VulkanAddressReplacer& lhs, VulkanAddressReplacer& rhs) noexcept
     std::swap(lhs.replay_ray_properties_, rhs.replay_ray_properties_);
     std::swap(lhs.valid_sbt_alignment_, rhs.valid_sbt_alignment_);
     std::swap(lhs.device_info_, rhs.device_info_);
-    std::swap(lhs.get_device_address_fn_, rhs.get_device_address_fn_);
     std::swap(lhs.pipeline_layout_, rhs.pipeline_layout_);
     std::swap(lhs.pipeline_sbt_, rhs.pipeline_sbt_);
     std::swap(lhs.pipeline_bda_, rhs.pipeline_bda_);
@@ -1244,6 +1240,7 @@ void swap(VulkanAddressReplacer& lhs, VulkanAddressReplacer& rhs) noexcept
     std::swap(lhs.hashmap_sbt_, rhs.hashmap_sbt_);
     std::swap(lhs.hashmap_bda_, rhs.hashmap_bda_);
     std::swap(lhs.shadow_sbt_map_, rhs.shadow_sbt_map_);
+    std::swap(lhs.dispatcher_, rhs.dispatcher_);
 }
 
 GFXRECON_END_NAMESPACE(decode)

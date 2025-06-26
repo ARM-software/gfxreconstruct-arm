@@ -338,6 +338,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     CommonObjectInfoTable& GetObjectInfoTable() { return *object_info_table_; }
 
+    void UpdateBufferAddressInfo(const VulkanDeviceInfo*       device_info,
+                                 VulkanBufferInfo*             buffer_info,
+                                 const VulkanDeviceMemoryInfo* memory_info,
+                                 VkDeviceSize                  memoryOffset);
+
     void* PreProcessExternalObject(uint64_t object_id, format::ApiCallId call_id, const char* call_name);
 
     void PostProcessExternalObject(

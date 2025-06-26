@@ -290,7 +290,7 @@ void DispatchTraceRaysDumpingContext::CopyBufferResource(const VulkanBufferInfo*
     assert(range);
     assert(dst_buffer != VK_NULL_HANDLE);
 
-    const VkDeviceSize size = (range == VK_WHOLE_SIZE ? src_buffer_info->size - offset : range);
+    const VkDeviceSize size = (range == VK_WHOLE_SIZE ? src_buffer_info->replay_size - offset : range);
 
     VkBufferMemoryBarrier buf_barrier;
     buf_barrier.sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1031,7 +1031,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
 
             VulkanDumpResourceInfo res_info = res_info_base;
             VkResult res = resource_util.ReadFromBufferResource(mutable_resources_clones_before.buffers[i].buffer,
-                                                                buffer_info->size,
+                                                                buffer_info->replay_size,
                                                                 0,
                                                                 buffer_info->queue_family_index,
                                                                 res_info.data);
@@ -1089,7 +1089,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
 
         VulkanDumpResourceInfo res_info = res_info_base;
         VkResult               res = resource_util.ReadFromBufferResource(mutable_resources_clones.buffers[i].buffer,
-                                                            buffer_info->size,
+                                                            buffer_info->replay_size,
                                                             0,
                                                             buffer_info->queue_family_index,
                                                             res_info.data);
@@ -1464,7 +1464,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
         res_info.buffer_info            = buf.first;
         const VkDeviceSize offset       = buf.second.offset;
         const VkDeviceSize range        = buf.second.range;
-        const VkDeviceSize size         = range == VK_WHOLE_SIZE ? res_info.buffer_info->size - offset : range;
+        const VkDeviceSize size         = range == VK_WHOLE_SIZE ? res_info.buffer_info->replay_size - offset : range;
 
         VkResult res = resource_util.ReadFromBufferResource(
             res_info.buffer_info->handle, size, offset, res_info.buffer_info->queue_family_index, res_info.data);

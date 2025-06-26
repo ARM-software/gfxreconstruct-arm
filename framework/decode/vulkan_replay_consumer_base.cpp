@@ -53,6 +53,7 @@
 #include "util/marking_layers.h"
 #include "format/format.h"
 #include "util/spirv_parsing_util.h"
+#include "util/vulkan_device_table_dispatcher.h"
 
 #include "spirv_reflect.h"
 #include "util/linear_hashmap.h"
@@ -1247,6 +1248,16 @@ void VulkanReplayConsumerBase::ProcessInitBufferCommand(format::HandleId device_
 
         for (format::AddressLocationInfo& location : other_address_locations)
         {
+#ifdef GFXRECON_DEBUG_BUILD
+            if (data_size < location.offset_in_memory)
+            {
+                GFXRECON_LOG_ERROR("InitBufferCommand: Invalid location provided in FixDeviceAddress call: data_size "
+                                   "(%d) < location.offset_in_memory (%d)",
+                                   data_size,
+                                   location.offset_in_memory);
+                continue;
+            }
+#endif
             uint64_t* old_value_ptr =
                 reinterpret_cast<uint64_t*>(const_cast<uint8_t*>(data) + location.offset_in_memory);
             if (*old_value_ptr == location.adjusted_address)
@@ -5636,6 +5647,37 @@ void VulkanReplayConsumerBase::OverrideFreeMemory(PFN_vkFreeMemory        func,
     allocator->FreeMemory(memory, GetAllocationCallbacks(pAllocator), allocator_data);
 }
 
+void VulkanReplayConsumerBase::UpdateBufferAddressInfo(const VulkanDeviceInfo*       device_info,
+                                                       VulkanBufferInfo*             buffer_info,
+                                                       const VulkanDeviceMemoryInfo* memory_info,
+                                                       VkDeviceSize                  memoryOffset)
+{
+    auto device_table = GetDeviceTable(device_info->handle);
+
+    // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
+    // Fill out this data based on original memory device address and binding offset
+    if (!buffer_info->capture_address)
+    {
+        auto memory_opaque_address_entry = device_info->opaque_addresses.find(memory_info->capture_id);
+        if (memory_opaque_address_entry != device_info->opaque_addresses.end())
+        {
+            const auto memory_device_address  = memory_opaque_address_entry->second;
+            auto       buffer_capture_address = memory_device_address + memoryOffset;
+            buffer_info->capture_address      = buffer_capture_address;
+        }
+    }
+    // Retrieve replay time device address
+    if (!buffer_info->replay_address)
+    {
+        VkBufferDeviceAddressInfo info = {};
+        info.sType                     = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        info.pNext                     = nullptr;
+        info.buffer                    = buffer_info->handle;
+        buffer_info->replay_address =
+            util::VulkanDeviceTableDispatcher(device_table).GetBufferDeviceAddress(device_info->handle, &info);
+    }
+}
+
 VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemory  func,
                                                             VkResult                original_result,
                                                             const VulkanDeviceInfo* device_info,
@@ -5669,28 +5711,11 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory(PFN_vkBindBufferMemo
     if ((result == VK_SUCCESS) && (!allocator->SupportsOpaqueDeviceAddresses()) &&
         ((buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
     {
-        auto device_table = GetDeviceTable(device_info->handle);
-
-        // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
-        // Fill out this data based on original memory device address and binding offset
-        auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
-        if (entry != device_info->opaque_addresses.end())
-        {
-            auto                      memory_device_address  = entry->second;
-            auto                      buffer_capture_address = memory_device_address + memoryOffset;
-            VkBufferDeviceAddressInfo info                   = {};
-            info.sType                                       = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            info.pNext                                       = nullptr;
-            info.buffer                                      = buffer_info->handle;
-
-            buffer_info->capture_address = buffer_capture_address;
-            buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
-            buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
-
-            // track buffer-addresses
-            GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
-        }
+        UpdateBufferAddressInfo(device_info, buffer_info, memory_info, memoryOffset);
     }
+    // Retrieve buffer size
+    buffer_info->replay_size = allocator->GetBufferSize(buffer_info->allocator_data);
+    GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
     return result;
 }
 
@@ -5780,26 +5805,11 @@ VkResult VulkanReplayConsumerBase::OverrideBindBufferMemory2(
             ((buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) ==
              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
         {
-            // On fast-forwarded traces buffer device addresses might be missing (no GetBufferDeviceAddress calls)
-            // Fill out this data based on original memory device address and binding offset
-            auto entry = device_info->opaque_addresses.find(memory_info->capture_id);
-            if (entry != device_info->opaque_addresses.end())
-            {
-                auto                      memory_device_address  = entry->second;
-                auto                      buffer_capture_address = memory_device_address + memoryOffset;
-                VkBufferDeviceAddressInfo info                   = {};
-                info.sType                                       = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-                info.pNext                                       = nullptr;
-                info.buffer                                      = buffer_info->handle;
-
-                buffer_info->capture_address = buffer_capture_address;
-                buffer_info->replay_address  = device_table->GetBufferDeviceAddress(device_info->handle, &info);
-                buffer_info->size            = allocator->GetBufferSize(buffer_info->allocator_data);
-
-                // track buffer-addresses
-                GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
-            }
+            UpdateBufferAddressInfo(device_info, buffer_info, memory_info, memoryOffset);
         }
+        // Retrieve buffer size
+        buffer_info->replay_size = allocator->GetBufferSize(buffer_info->allocator_data);
+        GetDeviceAddressTracker(device_info).TrackBuffer(buffer_info);
     }
 
     return result;
@@ -6099,7 +6109,8 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
 
         buffer_info->allocator_data = allocator_data;
         buffer_info->usage          = replay_create_info->usage;
-        buffer_info->size           = replay_create_info->size;
+        buffer_info->replay_size    = replay_create_info->size;
+        buffer_info->capture_size   = replay_create_info->size;
 
         if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
             (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))

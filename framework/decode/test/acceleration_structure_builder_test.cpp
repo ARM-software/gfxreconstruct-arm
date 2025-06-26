@@ -143,7 +143,7 @@ SCENARIO_METHOD(TestFixture, "Create single AS object with valid sizes")
             };
             // ASB will check the original captured size of AS
             acceleration_structure_create_info.size = scenario.captured_as_size;
-            storage_buffer_info.size                = scenario.storage_size;
+            storage_buffer_info.replay_size         = scenario.storage_size;
             storage_buffer_info.allocator_data      = kInputStorageAllocatorData;
 
             asb.OnCreateAccelerationStructure(&device_info,
