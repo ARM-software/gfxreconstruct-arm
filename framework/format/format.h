@@ -159,12 +159,11 @@ enum class MetaDataType : uint16_t
     kViewRelativeLocation                               = 33,
     kExecuteBlocksFromFile                              = 34,
     kCreateHardwareBufferCommand                        = 35,
-    kReserved36                                         = 36, // will be kInitializeMetaCommand - awaiting upstream merge
+    kInitializeMetaCommand                              = 36,
     kInitTensorCommand                                  = 37,
     kFixDescriptorDataCommand                           = 38,
     kFixShadowMemoryCommand                             = 39,
     kFixShaderGroupHandleCommand                        = 40,
-    kInitializeMetaCommand                              = 41,
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
