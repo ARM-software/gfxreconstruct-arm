@@ -94,7 +94,6 @@ struct JsonOptions
     bool        expand_flags     = false;
     bool        hex_handles      = false;
     bool        verbose          = false;
-    bool        bare             = false;
     bool        checksum         = false;
     uint32_t    checksum_trigger = 0;
 };
@@ -192,6 +191,10 @@ void FieldToJson(nlohmann::ordered_json&  jdata,
 void FieldToJson(nlohmann::ordered_json&  jdata,
                  const uint64_t           data[4],
                  const util::JsonOptions& options = util::JsonOptions());
+
+void FieldToJson(nlohmann::ordered_json& jdata, const LARGE_INTEGER& value, const JsonOptions& options = JsonOptions());
+
+void FieldToJson(nlohmann::ordered_json& jdata, const LUID& value, const JsonOptions& options = JsonOptions());
 
 void HandleToJson(nlohmann::ordered_json&  jdata,
                   const format::HandleId*  data,

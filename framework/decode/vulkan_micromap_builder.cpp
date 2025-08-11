@@ -6,7 +6,7 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanMicromapBuilder::VulkanMicromapBuilder(const encode::VulkanDeviceTable*        device_table,
+VulkanMicromapBuilder::VulkanMicromapBuilder(const graphics::VulkanDeviceTable*      device_table,
                                              const VulkanPhysicalDeviceInfo*         physical_device_info,
                                              VkDevice                                device,
                                              VulkanResourceAllocator*                allocator,
@@ -414,7 +414,7 @@ void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    dev
     compacted_sizes_unprocessed_.erase(query_pool_info->handle);
 }
 
-void VulkanMicromapBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
+void VulkanMicromapBuilder::InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table)
 {
     functions_.get_micromap_build_sizes    = device_table->GetMicromapBuildSizesEXT;
     functions_.create_micromap             = device_table->CreateMicromapEXT;

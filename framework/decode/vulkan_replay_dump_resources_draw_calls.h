@@ -65,9 +65,9 @@ class DrawCallsDumpingContext
 
     void BindPipeline(VkPipelineBindPoint bind_point, const VulkanPipelineInfo* pipeline);
 
-    VkResult CloneCommandBuffer(VulkanCommandBufferInfo*           orig_cmd_buf_info,
-                                const encode::VulkanDeviceTable*   dev_table,
-                                const encode::VulkanInstanceTable* inst_table);
+    VkResult CloneCommandBuffer(VulkanCommandBufferInfo*             orig_cmd_buf_info,
+                                const graphics::VulkanDeviceTable*   dev_table,
+                                const graphics::VulkanInstanceTable* inst_table);
 
     VkResult CloneRenderPass(const VulkanRenderPassInfo* original_render_pass, const VulkanFramebufferInfo* fb_info);
 
@@ -175,12 +175,6 @@ class DrawCallsDumpingContext
                                                         uint32_t                max_draw_count,
                                                         uint32_t                stride);
 
-    void CopyVertexInputStateInfo(uint64_t dc_index);
-
-    VkResult CopyDrawIndirectParameters(uint64_t index);
-
-    void SnapshotBoundDescriptors(uint64_t index);
-
     void Release();
 
   private:
@@ -215,7 +209,7 @@ class DrawCallsDumpingContext
     std::vector<std::vector<uint64_t>> RP_indices;
     const VulkanRenderPassInfo*        active_renderpass;
     const VulkanFramebufferInfo*       active_framebuffer;
-    const VulkanPipelineInfo*          bound_pipelines[kBindPoint_count];
+    const VulkanPipelineInfo*          bound_gr_pipeline;
     uint32_t                           current_renderpass;
     uint32_t                           current_subpass;
     uint32_t                           n_subpasses;
@@ -629,14 +623,35 @@ class DrawCallsDumpingContext
         BoundIndexBuffer referenced_index_buffer;
 
         // Keep copies of the descriptor bindings referenced by each draw call
-        std::unordered_map<VkShaderStageFlagBits,
-                           std::unordered_map<uint32_t, VulkanDescriptorSetInfo::VulkanDescriptorBindingsInfo>>
-            referenced_descriptors;
+        std::unordered_map<uint32_t, VulkanDescriptorSetInfo::VulkanDescriptorBindingsInfo> referenced_descriptors;
+
+        // These are used to store information calculated when dumping vertex and index buffers.
+        // This information is latter used when writting the output json file.
+        struct
+        {
+            struct
+            {
+                bool   dumped{ false };
+                size_t offset{ 0 };
+            } index_buffer_info;
+
+            struct VertexBufferBindingInfo
+            {
+                size_t offset{ 0 };
+            };
+            std::unordered_map<uint32_t, VertexBufferBindingInfo> vertex_bindings_info;
+        } json_output_info;
     };
 
   private:
     // One entry for each draw call
     std::unordered_map<uint64_t, DrawCallParameters> draw_call_params;
+
+    void SnapshotState(DrawCallParameters& dc_params);
+
+    void CopyVertexInputStateInfo(DrawCallParameters& dc_params);
+
+    VkResult CopyDrawIndirectParameters(DrawCallParameters& dc_params);
 
     struct
     {
@@ -665,8 +680,8 @@ class DrawCallsDumpingContext
     VkFence         aux_fence;
     bool            must_backup_resources;
 
-    const encode::VulkanDeviceTable*        device_table;
-    const encode::VulkanInstanceTable*      instance_table;
+    const graphics::VulkanDeviceTable*      device_table;
+    const graphics::VulkanInstanceTable*    instance_table;
     CommonObjectInfoTable&                  object_info_table;
     const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props;
 };

@@ -69,6 +69,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define LOG_FILE_KEEP_OPEN_UPPER                             "LOG_FILE_KEEP_OPEN"
 #define LOG_LEVEL_LOWER                                      "log_level"
 #define LOG_LEVEL_UPPER                                      "LOG_LEVEL"
+#define LOG_TIMESTAMPS_LOWER                                 "log_timestamps"
+#define LOG_TIMESTAMPS_UPPER                                 "LOG_TIMESTAMPS"
 #define LOG_OUTPUT_TO_CONSOLE_LOWER                          "log_output_to_console"
 #define LOG_OUTPUT_TO_CONSOLE_UPPER                          "LOG_OUTPUT_TO_CONSOLE"
 #define LOG_OUTPUT_TO_OS_DEBUG_STRING_LOWER                  "log_output_to_os_debug_string"
@@ -131,6 +133,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define DISABLE_DXR_UPPER                                    "DISABLE_DXR"
 #define ACCEL_STRUCT_PADDING_LOWER                           "accel_struct_padding"
 #define ACCEL_STRUCT_PADDING_UPPER                           "ACCEL_STRUCT_PADDING"
+#define DISABLE_META_COMMAND_LOWER                           "disable_meta_command"
+#define DISABLE_META_COMMAND_UPPER                           "DISABLE_META_COMMAND"
 #define FORCE_COMMAND_SERIALIZATION_LOWER                    "force_command_serialization"
 #define FORCE_COMMAND_SERIALIZATION_UPPER                    "FORCE_COMMAND_SERIALIZATION"
 #define QUEUE_ZERO_ONLY_LOWER                                "queue_zero_only"
@@ -159,6 +163,10 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define CAPTURE_PACKAGE_NAME_UPPER                           "CAPTURE_PACKAGE_NAME"
 #define FORCE_FIFO_PRESENT_MODE_LOWER                        "force_fifo_present_mode"
 #define FORCE_FIFO_PRESENT_MODE_UPPER                        "FORCE_FIFO_PRESENT_MODE"
+#define IGNORE_FRAME_BOUNDARY_ANDROID_LOWER                  "ignore_frame_boundary_android"
+#define IGNORE_FRAME_BOUNDARY_ANDROID_UPPER                  "IGNORE_FRAME_BOUNDARY_ANDROID"
+#define SKIP_THREADS_WITH_INVALID_DATA_LOWER                 "skip_threads_with_invalid_data"
+#define SKIP_THREADS_WITH_INVALID_DATA_UPPER                 "SKIP_THREADS_WITH_INVALID_DATA"
 
 #if defined(__ANDROID__)
 #define GFXRECON_ENV_VAR_PREFIX "debug.gfxrecon."
@@ -175,10 +183,12 @@ const char CaptureSettings::kDefaultCaptureFileName[] = "gfxrecon_capture" GFXRE
 
 #define GFXRECON_OPTION_STR(OPTION) GFXRECON_ENV_VAR_PREFIX GFXRECON_EVALUATOR(OPTION, GFXRECON_POSTFIX)
 
+// Common capture settings
 const char kCaptureCompressionTypeEnvVar[]                   = GFXRECON_OPTION_STR(CAPTURE_COMPRESSION_TYPE);
 const char kCaptureFileFlushEnvVar[]                         = GFXRECON_OPTION_STR(CAPTURE_FILE_FLUSH);
 const char kCaptureFileNameEnvVar[]                          = GFXRECON_OPTION_STR(CAPTURE_FILE_NAME);
 const char kCaptureFileUseTimestampEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_FILE_USE_TIMESTAMP);
+const char kCaptureUseAssetFileEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_USE_ASSET_FILE);
 const char kLogAllowIndentsEnvVar[]                          = GFXRECON_OPTION_STR(LOG_ALLOW_INDENTS);
 const char kLogBreakOnErrorEnvVar[]                          = GFXRECON_OPTION_STR(LOG_BREAK_ON_ERROR);
 const char kLogDetailedEnvVar[]                              = GFXRECON_OPTION_STR(LOG_DETAILED);
@@ -188,6 +198,7 @@ const char kLogFileCreateNewEnvVar[]                         = GFXRECON_OPTION_S
 const char kLogFileFlushAfterWriteEnvVar[]                   = GFXRECON_OPTION_STR(LOG_FILE_FLUSH_AFTER_WRITE);
 const char kLogFileKeepFileOpenEnvVar[]                      = GFXRECON_OPTION_STR(LOG_FILE_KEEP_OPEN);
 const char kLogLevelEnvVar[]                                 = GFXRECON_OPTION_STR(LOG_LEVEL);
+const char kLogTimestampsEnvVar[]                            = GFXRECON_OPTION_STR(LOG_TIMESTAMPS);
 const char kLogOutputToConsoleEnvVar[]                       = GFXRECON_OPTION_STR(LOG_OUTPUT_TO_CONSOLE);
 const char kLogOutputToOsDebugStringEnvVar[]                 = GFXRECON_OPTION_STR(LOG_OUTPUT_TO_OS_DEBUG_STRING);
 const char kMemoryTrackingModeEnvVar[]                       = GFXRECON_OPTION_STR(MEMORY_TRACKING_MODE);
@@ -198,11 +209,6 @@ const char kScreenshotIntervalEnvVar[]                       = GFXRECON_OPTION_S
 const char kCaptureFramesEnvVar[]                            = GFXRECON_OPTION_STR(CAPTURE_FRAMES);
 const char kCaptureDrawCallsEnvVar[]                         = GFXRECON_OPTION_STR(CAPTURE_DRAW_CALLS);
 const char kQuitAfterFramesEnvVar[]                          = GFXRECON_OPTION_STR(QUIT_AFTER_CAPTURE_FRAMES);
-const char kCaptureTriggerEnvVar[]                           = GFXRECON_OPTION_STR(CAPTURE_TRIGGER);
-const char kCaptureTriggerFramesEnvVar[]                     = GFXRECON_OPTION_STR(CAPTURE_TRIGGER_FRAMES);
-const char kCaptureIUnknownWrappingEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_IUNKNOWN_WRAPPING);
-const char kCaptureQueueSubmitsEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_QUEUE_SUBMITS);
-const char kCaptureUseAssetFileEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_USE_ASSET_FILE);
 const char kPageGuardCopyOnMapEnvVar[]                       = GFXRECON_OPTION_STR(PAGE_GUARD_COPY_ON_MAP);
 const char kPageGuardSeparateReadEnvVar[]                    = GFXRECON_OPTION_STR(PAGE_GUARD_SEPARATE_READ);
 const char kPageGuardPersistentMemoryEnvVar[]                = GFXRECON_OPTION_STR(PAGE_GUARD_PERSISTENT_MEMORY);
@@ -212,11 +218,16 @@ const char kPageGuardExternalMemoryEnvVar[]                  = GFXRECON_OPTION_S
 const char kPageGuardUnblockSIGSEGVEnvVar[]                  = GFXRECON_OPTION_STR(PAGE_GUARD_UNBLOCK_SIGSEGV);
 const char kPageGuardSignalHandlerWatcherEnvVar[]            = GFXRECON_OPTION_STR(PAGE_GUARD_SIGNAL_HANDLER_WATCHER);
 const char kPageGuardSignalHandlerWatcherMaxRestoresEnvVar[] = GFXRECON_OPTION_STR(PAGE_GUARD_SIGNAL_HANDLER_WATCHER_MAX_RESTORES);
+const char kCaptureTriggerEnvVar[]                           = GFXRECON_OPTION_STR(CAPTURE_TRIGGER);
+const char kCaptureTriggerFramesEnvVar[]                     = GFXRECON_OPTION_STR(CAPTURE_TRIGGER_FRAMES);
+const char kCaptureIUnknownWrappingEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_IUNKNOWN_WRAPPING);
+const char kCaptureQueueSubmitsEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_QUEUE_SUBMITS);
 const char kDebugLayerEnvVar[]                               = GFXRECON_OPTION_STR(DEBUG_LAYER);
 const char kDebugDeviceLostEnvVar[]                          = GFXRECON_OPTION_STR(DEBUG_DEVICE_LOST);
 const char kDebugSetObjectsNameEnvVar[]                      = GFXRECON_OPTION_STR(DEBUG_SET_OBJECTS_NAME);
 const char kDisableDxrEnvVar[]                               = GFXRECON_OPTION_STR(DISABLE_DXR);
 const char kAccelStructPaddingEnvVar[]                       = GFXRECON_OPTION_STR(ACCEL_STRUCT_PADDING);
+const char kDisableMetaCommandEnvVar[]                       = GFXRECON_OPTION_STR(DISABLE_META_COMMAND);
 const char kForceCommandSerializationEnvVar[]                = GFXRECON_OPTION_STR(FORCE_COMMAND_SERIALIZATION);
 const char kQueueZeroOnlyEnvVar[]                            = GFXRECON_OPTION_STR(QUEUE_ZERO_ONLY);
 const char kAllowPipelineCompileRequiredEnvVar[]             = GFXRECON_OPTION_STR(ALLOW_PIPELINE_COMPILE_REQUIRED);
@@ -231,8 +242,11 @@ const char kFenceQueryDelayLimitEnvVar[]                     = GFXRECON_OPTION_S
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
 const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
 const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
+const char kIgnoreFrameBoundaryAndroidEnvVar[]               = GFXRECON_OPTION_STR(IGNORE_FRAME_BOUNDARY_ANDROID);
+const char kSkipThreadsWithInvalidDataEnvVar[]               = GFXRECON_OPTION_STR(SKIP_THREADS_WITH_INVALID_DATA);
 
 #if defined(__ANDROID__)
+// Android-specific capture options
 const char kCaptureAndroidTriggerEnvVar[]                    = GFXRECON_OPTION_STR(CAPTURE_ANDROID_TRIGGER);
 const char kCaptureAndroidDumpAssetsEnvVar[]                 = GFXRECON_OPTION_STR(CAPTURE_ANDROID_DUMP_ASSETS);
 #endif
@@ -253,6 +267,7 @@ const std::string kOptionKeyLogFileCreateNew                         = std::stri
 const std::string kOptionKeyLogFileFlushAfterWrite                   = std::string(kSettingsFilter) + std::string(LOG_FILE_FLUSH_AFTER_WRITE_LOWER);
 const std::string kOptionKeyLogFileKeepOpen                          = std::string(kSettingsFilter) + std::string(LOG_FILE_KEEP_OPEN_LOWER);
 const std::string kOptionKeyLogLevel                                 = std::string(kSettingsFilter) + std::string(LOG_LEVEL_LOWER);
+const std::string kOptionKeyLogTimestamps                            = std::string(kSettingsFilter) + std::string(LOG_TIMESTAMPS_LOWER);
 const std::string kOptionKeyLogOutputToConsole                       = std::string(kSettingsFilter) + std::string(LOG_OUTPUT_TO_CONSOLE_LOWER);
 const std::string kOptionKeyLogOutputToOsDebugString                 = std::string(kSettingsFilter) + std::string(LOG_OUTPUT_TO_OS_DEBUG_STRING_LOWER);
 const std::string kOptionKeyMemoryTrackingMode                       = std::string(kSettingsFilter) + std::string(MEMORY_TRACKING_MODE_LOWER);
@@ -282,6 +297,7 @@ const std::string kDebugDeviceLost                                   = std::stri
 const std::string kDebugSetObjectsName                               = std::string(kSettingsFilter) + std::string(DEBUG_SET_OBJECTS_NAME_LOWER);
 const std::string kOptionDisableDxr                                  = std::string(kSettingsFilter) + std::string(DISABLE_DXR_LOWER);
 const std::string kOptionAccelStructPadding                          = std::string(kSettingsFilter) + std::string(ACCEL_STRUCT_PADDING_LOWER);
+const std::string kOptionDisableMetaCommand                          = std::string(kSettingsFilter) + std::string(DISABLE_META_COMMAND_LOWER);
 const std::string kOptionForceCommandSerialization                   = std::string(kSettingsFilter) + std::string(FORCE_COMMAND_SERIALIZATION_LOWER);
 const std::string kOptionQueueZeroOnly                               = std::string(kSettingsFilter) + std::string(QUEUE_ZERO_ONLY_LOWER);
 const std::string kOptionAllowPipelineCompileRequired                = std::string(kSettingsFilter) + std::string(ALLOW_PIPELINE_COMPILE_REQUIRED_LOWER);
@@ -296,6 +312,8 @@ const std::string kOptionFenceQueryDelayLimit                        = std::stri
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
 const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
 const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
+const std::string kOptionIgnoreFrameBoundaryAndroid                  = std::string(kSettingsFilter) + std::string(IGNORE_FRAME_BOUNDARY_ANDROID_LOWER);
+const std::string kOptionSkipThreadsWithInvalidData                  = std::string(kSettingsFilter) + std::string(SKIP_THREADS_WITH_INVALID_DATA_LOWER);
 
 #if defined(GFXRECON_ENABLE_LZ4_COMPRESSION)
 const format::CompressionType kDefaultCompressionType = format::CompressionType::kLz4;
@@ -412,6 +430,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kLogFileFlushAfterWriteEnvVar, kOptionKeyLogFileFlushAfterWrite);
     LoadSingleOptionEnvVar(options, kLogFileKeepFileOpenEnvVar, kOptionKeyLogFileKeepOpen);
     LoadSingleOptionEnvVar(options, kLogLevelEnvVar, kOptionKeyLogLevel);
+    LoadSingleOptionEnvVar(options, kLogTimestampsEnvVar, kOptionKeyLogTimestamps);
     LoadSingleOptionEnvVar(options, kLogOutputToConsoleEnvVar, kOptionKeyLogOutputToConsole);
     LoadSingleOptionEnvVar(options, kLogOutputToOsDebugStringEnvVar, kOptionKeyLogOutputToOsDebugString);
 
@@ -453,6 +472,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     // DirectX environment variables
     LoadSingleOptionEnvVar(options, kDisableDxrEnvVar, kOptionDisableDxr);
     LoadSingleOptionEnvVar(options, kAccelStructPaddingEnvVar, kOptionAccelStructPadding);
+    LoadSingleOptionEnvVar(options, kDisableMetaCommandEnvVar, kOptionDisableMetaCommand);
 
     // IUnknown wrapping environment variable
     LoadSingleOptionEnvVar(options, kCaptureIUnknownWrappingEnvVar, kOptionKeyCaptureIUnknownWrapping);
@@ -477,6 +497,10 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     LoadSingleOptionEnvVar(options, kCapturePackageNameEnvVar, kOptionCapturePackageName);
 
     LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentModeEnvVar);
+
+    LoadSingleOptionEnvVar(options, kIgnoreFrameBoundaryAndroidEnvVar, kOptionIgnoreFrameBoundaryAndroid);
+
+    LoadSingleOptionEnvVar(options, kSkipThreadsWithInvalidDataEnvVar, kOptionSkipThreadsWithInvalidData);
 }
 
 void CaptureSettings::LoadOptionsFile(OptionsMap* options)
@@ -526,7 +550,7 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     std::string trim_frames = FindOption(options, kOptionKeyCaptureFrames);
     if (!trim_frames.empty())
     {
-        ParseUintRangeList(trim_frames, &settings->trace_settings_.trim_ranges, "capture frames");
+        ParseUintRangeList(trim_frames, &settings->trace_settings_.trim_ranges, "capture frames", true, false);
         if (!settings->trace_settings_.trim_ranges.empty())
         {
             settings->trace_settings_.trim_boundary = TrimBoundary::kFrames;
@@ -655,7 +679,9 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         FindOption(options, kOptionKeyScreenshotDir, settings->trace_settings_.screenshot_dir);
     ParseUintRangeList(FindOption(options, kOptionKeyScreenshotFrames),
                        &settings->trace_settings_.screenshot_ranges,
-                       "screenshot frames");
+                       "screenshot frames",
+                       true,
+                       false);
     settings->trace_settings_.screenshot_interval = ParseIntegerString(
         FindOption(options, kOptionKeyScreenshotInterval), settings->trace_settings_.screenshot_interval);
     if (settings->trace_settings_.screenshot_interval == 0)
@@ -672,6 +698,10 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         ParseBoolString(FindOption(options, kOptionDisableDxr), settings->trace_settings_.disable_dxr);
     settings->trace_settings_.accel_struct_padding = gfxrecon::util::ParseUintString(
         FindOption(options, kOptionAccelStructPadding), settings->trace_settings_.accel_struct_padding);
+
+    // Meta command options
+    settings->trace_settings_.disable_meta_command = gfxrecon::util::ParseUintString(
+        FindOption(options, kOptionDisableMetaCommand), settings->trace_settings_.disable_meta_command);
 
     // IUnknown wrapping option
     settings->trace_settings_.iunknown_wrapping = ParseBoolString(
@@ -717,6 +747,15 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
 
     settings->trace_settings_.force_fifo_present_mode = ParseBoolString(
         FindOption(options, kOptionForceFifoPresentModeEnvVar), settings->trace_settings_.force_fifo_present_mode);
+
+    settings->trace_settings_.ignore_frame_boundary_android =
+        ParseBoolString(FindOption(options, kOptionIgnoreFrameBoundaryAndroid),
+                        settings->trace_settings_.ignore_frame_boundary_android);
+
+    // Skip threads with invalid data
+    settings->trace_settings_.skip_threads_with_invalid_data =
+        ParseBoolString(FindOption(options, kOptionSkipThreadsWithInvalidData),
+                        settings->trace_settings_.skip_threads_with_invalid_data);
 }
 
 void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* settings)
@@ -743,6 +782,8 @@ void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* se
         FindOption(options, kOptionKeyLogOutputToOsDebugString), settings->log_settings_.output_to_os_debug_string);
     settings->log_settings_.min_severity =
         ParseLogLevelString(FindOption(options, kOptionKeyLogLevel), settings->log_settings_.min_severity);
+    settings->log_settings_.output_timestamps =
+        ParseBoolString(FindOption(options, kOptionKeyLogTimestamps), settings->log_settings_.output_timestamps);
 }
 
 std::string CaptureSettings::FindOption(OptionsMap* options, const std::string& key, const std::string& default_value)

@@ -58,18 +58,13 @@
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "util/platform.h"
+#include "graphics/vulkan_util.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 
 #include "generated/generated_vulkan_enum_to_string.h"
 
 #include <algorithm>
 #include <cassert>
-
-#if VK_USE_64_BIT_PTR_DEFINES == 1
-#define VK_HANDLE_TO_UINT64(value) reinterpret_cast<uint64_t>(value)
-#else
-#define VK_HANDLE_TO_UINT64(value) (value)
-#endif
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -1896,9 +1891,15 @@ bool VulkanRebindAllocator::TranslateMemoryRange(const ResourceAllocInfo* resour
     assert((src_offset != nullptr) && (dst_offset != nullptr) && (data_size));
 
     VkDeviceSize resource_start = resource_alloc_info->original_offset;
+
+    // This should correspond to the offset to the end of the resource at capture time.
+    //
+    // However, if the rebind size is smaller than the original size, we don't want data_size to be big enough to cause
+    // an overflow, so the original size is artifically clamped to the rebind size.
     VkDeviceSize resource_end =
-        resource_start + (resource_alloc_info->original_size != 0 ? resource_alloc_info->original_size
-                                                                  : resource_alloc_info->rebind_size);
+        resource_start + (resource_alloc_info->original_size != 0
+                              ? std::min(resource_alloc_info->original_size, resource_alloc_info->rebind_size)
+                              : resource_alloc_info->rebind_size);
 
     // Range ends are exclusive.
     if ((resource_end <= original_start) || (original_end <= resource_start))
@@ -2135,7 +2136,7 @@ VmaMemoryUsage VulkanRebindAllocator::GetImageMemoryUsage(VkImageUsageFlags     
     capture_properties &= ~(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD | VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD);
 
     if (((capture_properties & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) == VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) &&
-        ((image_usage & VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT) == VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT))
+        graphics::ImageHasUsage(image_usage, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT))
     {
         // If the resource was bound to memory with the LAZILY_ALLOCATED property, and had TRANSIENT_ATTACHMENT
         // usage, attempt to make it LAZILY_ALLOCATED.
@@ -2371,55 +2372,6 @@ void VulkanRebindAllocator::SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo
 
         functions_.set_debug_utils_object_tag(device_, &tag_info);
     }
-}
-
-VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                             const VkAllocationCallbacks* allocation_callbacks,
-                                             format::HandleId             capture_id,
-                                             VkTensorARM*                 tensor,
-                                             ResourceData*                allocator_data)
-{
-    return VK_SUCCESS;
-}
-
-void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
-                                          const VkAllocationCallbacks* allocation_callbacks,
-                                          ResourceData                 allocator_data)
-{}
-
-VkResult
-VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                      const VkAllocationCallbacks*   allocation_callbacks,
-                                                      format::HandleId               capture_id,
-                                                      VkDataGraphPipelineSessionARM* session,
-                                                      ResourceData*                  allocator_data)
-{
-    return VK_SUCCESS;
-}
-
-void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                            const VkAllocationCallbacks*  allocation_callbacks,
-                                                            ResourceData                  allocator_data)
-{}
-
-VkResult VulkanRebindAllocator::BindTensorMemory(VkTensorARM            tensor,
-                                                 VkDeviceMemory         memory,
-                                                 VkDeviceSize           memory_offset,
-                                                 ResourceData           allocator_tensor_data,
-                                                 MemoryData             allocator_memory_data,
-                                                 VkMemoryPropertyFlags* bind_memory_properties)
-{
-    return VK_SUCCESS;
-}
-
-VkResult VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                                   VkDeviceMemory                memory,
-                                                                   VkDeviceSize                  memory_offset,
-                                                                   ResourceData                  allocator_session_data,
-                                                                   MemoryData                    allocator_memory_data,
-                                                                   VkMemoryPropertyFlags*        bind_memory_properties)
-{
-    return VK_SUCCESS;
 }
 
 GFXRECON_END_NAMESPACE(decode)

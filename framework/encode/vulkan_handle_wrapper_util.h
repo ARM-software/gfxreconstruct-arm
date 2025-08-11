@@ -33,6 +33,7 @@
 #include "generated/generated_vulkan_state_table.h"
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "util/defines.h"
+#include "graphics/vulkan_util.h"
 
 #include <algorithm>
 #include <iterator>
@@ -42,12 +43,6 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 GFXRECON_BEGIN_NAMESPACE(vulkan_wrappers)
-
-#if VK_USE_64_BIT_PTR_DEFINES == 1
-#define UINT64_TO_VK_HANDLE(handle_type, value) reinterpret_cast<handle_type>(value)
-#else
-#define UINT64_TO_VK_HANDLE(handle_type, value) static_cast<handle_type>(value)
-#endif
 
 // Temporary resource IDs for state processing.
 static const format::HandleId kTempQueueId = std::numeric_limits<format::HandleId>::max() - 1;
@@ -151,14 +146,14 @@ uint64_t GetWrappedId(uint64_t, VkObjectType object_type);
 
 uint64_t GetWrappedId(uint64_t object, VkDebugReportObjectTypeEXT object_type);
 
-inline const VulkanInstanceTable* GetInstanceTable(VkInstance handle)
+inline const graphics::VulkanInstanceTable* GetInstanceTable(VkInstance handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<InstanceWrapper>(handle);
     return &wrapper->layer_table;
 }
 
-inline const VulkanInstanceTable* GetInstanceTable(VkPhysicalDevice handle)
+inline const graphics::VulkanInstanceTable* GetInstanceTable(VkPhysicalDevice handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<PhysicalDeviceWrapper>(handle);
@@ -166,14 +161,14 @@ inline const VulkanInstanceTable* GetInstanceTable(VkPhysicalDevice handle)
     return wrapper->layer_table_ref;
 }
 
-inline const VulkanDeviceTable* GetDeviceTable(VkDevice handle)
+inline const graphics::VulkanDeviceTable* GetDeviceTable(VkDevice handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<DeviceWrapper>(handle);
     return &wrapper->layer_table;
 }
 
-inline const VulkanDeviceTable* GetDeviceTable(VkQueue handle)
+inline const graphics::VulkanDeviceTable* GetDeviceTable(VkQueue handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<QueueWrapper>(handle);
@@ -181,7 +176,7 @@ inline const VulkanDeviceTable* GetDeviceTable(VkQueue handle)
     return wrapper->layer_table_ref;
 }
 
-inline const VulkanDeviceTable* GetDeviceTable(VkCommandBuffer handle)
+inline const graphics::VulkanDeviceTable* GetDeviceTable(VkCommandBuffer handle)
 {
     assert(handle != VK_NULL_HANDLE);
     auto wrapper = GetWrapper<CommandBufferWrapper>(handle);

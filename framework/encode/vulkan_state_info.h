@@ -139,7 +139,6 @@ enum CommandHandleType : uint32_t
     IndirectExecutionSetEXTHandle,
     DeviceMemoryHandle,
     TensorARMHandle,
-    WeightsARMHandle,
     TensorViewARMHandle,
     DataGraphPipelineSessionARMHandle,
 

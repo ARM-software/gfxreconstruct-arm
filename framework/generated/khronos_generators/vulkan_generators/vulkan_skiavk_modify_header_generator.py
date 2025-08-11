@@ -23,10 +23,10 @@
 #
 
 import sys
-from base_generator import BaseGenerator, BaseGeneratorOptions, write
+from vulkan_base_generator import *
 
 
-class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
+class VulkanSkiavkModifierHeaderGeneratorOptions(VulkanBaseGeneratorOptions):
     """Adds the following new option:
     is_override - Specify whether the member function declarations are
                   virtual function overrides or pure virtual functions.
@@ -48,7 +48,7 @@ class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
         protect_feature=True,
         extra_headers=[]
     ):
-        BaseGeneratorOptions.__init__(
+        VulkanBaseGeneratorOptions.__init__(
             self,
             blacklists,
             platform_types,
@@ -64,8 +64,18 @@ class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
         self.is_override = is_override
         self.constructor_args = constructor_args
 
+        self.begin_end_file_data.specific_headers.extend((
+            'util/vulkan_modifier_base.h',
+        ))
+        self.begin_end_file_data.namespaces.extend(('gfxrecon', 'decode'))
+        self.begin_end_file_data.common_api_headers = []
+        self.begin_end_file_data.system_headers = [
+            'unordered_map',
+            'unordered_set'
+        ]
 
-class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
+
+class VulkanSkiavkModifierHeaderGenerator(VulkanBaseGenerator):
     """VulkanConsumerHeaderGenerator - subclass of BaseGenerator.
     Generates C++ member declarations for the VulkanConsumer class responsible for processing
     Vulkan API call parameter data.
@@ -75,7 +85,7 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
-        BaseGenerator.__init__(
+        VulkanBaseGenerator.__init__(
             self,
             err_file=err_file,
             warn_file=warn_file,
@@ -108,15 +118,8 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         ]
 
         gen_opts.prefix_text = arm_copyright_text + gen_opts.prefix_text
-        BaseGenerator.beginFile(self, gen_opts)
+        VulkanBaseGenerator.beginFile(self, gen_opts)
 
-        write('#include "util/vulkan_modifier_base.h"', file=self.outFile)
-        write('#include <unordered_map>', file=self.outFile)
-        write('#include <unordered_set>', file=self.outFile)
-        self.newline()
-
-        write('GFXRECON_BEGIN_NAMESPACE(gfxrecon)', file=self.outFile)
-        write('GFXRECON_BEGIN_NAMESPACE(decode)', file=self.outFile)
         self.newline()
         write(
             'class {class_name} : public util::VulkanModifierBase'.format(
@@ -261,11 +264,9 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         write('    std::unordered_map<format::HandleId, std::vector<format::HandleId>> skia_device2buffer;', file=self.outFile)
         write('};', file=self.outFile)
         self.newline()
-        write('GFXRECON_END_NAMESPACE(decode)', file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
 
         # Finish processing in superclass
-        BaseGenerator.endFile(self)
+        VulkanBaseGenerator.endFile(self)
 
     #
     # Indicates that the current feature has C++ code to generate.

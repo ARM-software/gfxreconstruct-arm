@@ -89,7 +89,10 @@ HRESULT IUnknown_Wrapper::QueryInterface(REFIID riid, void** object)
 
         if (SUCCEEDED(result))
         {
-            WrapObject(target_interface_id, object, resources_);
+            if ((riid != IID_ID3D12Object) && (riid != IID_ID3D12DeviceChild) && (riid != IID_ID3D12Pageable))
+            {
+                WrapObject(target_interface_id, object, resources_);
+            }
         }
 
         Encode_IUnknown_QueryInterface(this, result, target_interface_id, object);

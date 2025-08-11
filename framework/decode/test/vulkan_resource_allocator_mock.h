@@ -96,52 +96,6 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
                                               VkMemoryRequirements2*                 memory_requirements,
                                               ResourceData                           allocator_data)
     {}
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData*                                  allocator_data)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual void
-    DestroyTensor(VkTensorARM tensor, const VkAllocationCallbacks* allocation_callbacks, ResourceData allocator_data)
-    {}
-
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data)
-    {}
-
-    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_tensor_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                        VkDeviceMemory                memory,
-                                                        VkDeviceSize                  memory_offset,
-                                                        ResourceData                  allocator_session_data,
-                                                        MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties)
-    {
-        return VK_SUCCESS;
-    }
 
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,

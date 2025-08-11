@@ -161,6 +161,15 @@
     "vkCmdBindPipeline": "OverrideCmdBindPipeline",
     "vkCmdPushConstants": "OverrideCmdPushConstants",
     "vkGetPastPresentationTimingGOOGLE": "OverrideGetPastPresentationTimingGOOGLE",
-    "vkGetRefreshCycleDurationGOOGLE": "OverrideGetRefreshCycleDurationGOOGLE"
+    "vkGetRefreshCycleDurationGOOGLE": "OverrideGetRefreshCycleDurationGOOGLE",
+    "vkCmdBindDescriptorSets" : "OverrideCmdBindDescriptorSets",
+    "vkCmdBindDescriptorSets2KHR" : "OverrideCmdBindDescriptorSets2",
+    "vkCmdBindDescriptorSets2" : "OverrideCmdBindDescriptorSets2",
+    "vkCmdExecuteCommands" : "OverrideCmdExecuteCommands",
+    "vkGetDescriptorEXT": "OverrideGetDescriptorEXT",
+    "vkCmdBindDescriptorBuffersEXT": "OverrideCmdBindDescriptorBuffersEXT",
+    "vkCreateSamplerYcbcrConversion": "OverrideCreateSamplerYcbcrConversion",
+    "vkCreateSamplerYcbcrConversionKHR": "OverrideCreateSamplerYcbcrConversionKHR",
+    "vkCreatePipelineLayout" : "OverrideCreatePipelineLayout"
   }
 }

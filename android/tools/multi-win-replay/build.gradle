@@ -1,0 +1,82 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 33
+    namespace 'com.lunarg.gfxreconstruct.replay'
+    ndkVersion '22.1.7171670'
+    defaultConfig {
+        applicationId "com.lunarg.gfxreconstruct.replay"
+        minSdkVersion 26
+        targetSdkVersion 33
+        versionCode 1
+        versionName "${System.env.GFXRECON_INTERNAL_VERSION}"
+        ndk {
+            if (project.hasProperty("armeabi-v7a")) {
+                abiFilters 'armeabi-v7a'
+            } else if (project.hasProperty("arm64-v8a")) {
+                abiFilters 'arm64-v8a'
+            } else if (project.hasProperty("x86")) {
+                abiFilters 'x86'
+            } else if (project.hasProperty("x86_64")) {
+                abiFilters 'x86_64'
+            } else {
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            }
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags "-fexceptions", "-std=c++17", "-Wno-nullability-completeness"
+                arguments "-DANDROID_TOOLCHAIN=clang",
+                          "-DANDROID_STL=c++_static",
+                          "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}",
+                          "-DCMAKE_C_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}",
+                          "-DCMAKE_CXX_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}"
+            }
+        }
+    }
+    signingConfigs {
+        debug {
+            storeFile file('../../keystore')
+            storePassword 'GfxReconKey'
+            keyAlias 'key-gfxrecon'
+            keyPassword 'GfxReconKey'
+        }
+        release {
+            storeFile file('../../keystore')
+            storePassword 'GfxReconKey'
+            keyPassword 'GfxReconKey'
+            keyAlias 'key-gfxrecon'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            debuggable true
+            signingConfig signingConfigs.release
+        }
+    }
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+    androidResources {
+        ignoreAssetsPattern "XrLayer_gfxreconstruct.json"
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.0'
+    implementation project(':layer')
+    implementation fileTree(dir: "libs", include: ["libVkLayer_*.so"])
+}

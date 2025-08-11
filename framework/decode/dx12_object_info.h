@@ -44,6 +44,7 @@
 #include <map>
 #include <set>
 #include <unordered_map>
+#include <optional>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -185,18 +186,21 @@ struct ResourceValueInfo
     uint64_t                size{ 0 };
     D3D12StateObjectInfo*   state_object{ nullptr }; ///< Used to map values in shader records.
     ArgumentBufferExtraInfo arg_buffer_extra_info;
+    uint32_t                max_command_count{ 0 };
 
     ResourceValueInfo(uint64_t                in_offset,
                       ResourceValueType       in_type,
                       uint64_t                in_size,
                       D3D12StateObjectInfo*   in_state_object,
-                      ArgumentBufferExtraInfo in_arg_buffer_extra_info)
+                      ArgumentBufferExtraInfo in_arg_buffer_extra_info,
+                      uint32_t                in_max_command_count)
     {
         offset                = in_offset;
         type                  = in_type;
         size                  = in_size;
         state_object          = in_state_object;
         arg_buffer_extra_info = in_arg_buffer_extra_info;
+        max_command_count     = in_max_command_count;
     }
 
     bool operator<(const ResourceValueInfo& other) const { return offset < other.offset; }
@@ -242,6 +246,7 @@ struct DxgiSwapchainInfo : DxObjectExtraInfo
         nullptr
     };                           ///< The command queue that was used to create the swapchain.
     bool is_fullscreen{ false }; ///< Swapchain full screen flag.
+    bool is_headless{ false };
 };
 
 struct D3D12CommandQueueInfo : DxObjectExtraInfo
@@ -482,8 +487,6 @@ struct D3D12StateObjectPropertiesInfo : DxObjectExtraInfo
     static constexpr DxObjectInfoType kType         = DxObjectInfoType::kID3D12StateObjectPropertiesInfo;
     static constexpr char             kObjectType[] = "ID3D12StateObjectPropertiesInfo";
     D3D12StateObjectPropertiesInfo() : DxObjectExtraInfo(kType) {}
-
-    UINT64 stack_size_delta{ 0 };
 };
 
 GFXRECON_END_NAMESPACE(decode)

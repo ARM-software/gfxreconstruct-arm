@@ -84,7 +84,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     // the appropriate resource cleanup.
     static void CheckVkCreateInstanceStatus(VkResult result);
 
-    static const VulkanLayerTable* GetLayerTable() { return &vulkan_layer_table_; }
+    static const graphics::VulkanLayerTable* GetLayerTable() { return &vulkan_layer_table_; }
 
     void InitVkInstance(VkInstance* instance, PFN_vkGetInstanceProcAddr gpa);
 
@@ -417,6 +417,12 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                 VkQueryType          queryType,
                                                 VkQueryPool          queryPool,
                                                 uint32_t             firstQuery);
+
+    VkResult OverrideAllocateCommandBuffers(VkDevice                           device,
+                                            const VkCommandBufferAllocateInfo* pAllocateInfo,
+                                            VkCommandBuffer*                   pCommandBuffers);
+
+    VkResult OverrideBeginCommandBuffer(VkCommandBuffer commandBuffer, const VkCommandBufferBeginInfo* pBeginInfo);
 
     void PostProcess_vkEnumeratePhysicalDevices(VkResult          result,
                                                 VkInstance        instance,
@@ -1350,6 +1356,14 @@ class VulkanCaptureManager : public ApiCaptureManager
     void
     PreProcess_vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindImageMemoryInfo* pBindInfos);
 
+#ifdef ENABLE_OPENXR_SUPPORT
+    void PreProcess_vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks* pAllocator);
+    void PreProcess_vkResetFences(VkDevice device, uint32_t fenceCount, const VkFence* pFences);
+    void PreProcess_vkGetFenceStatus(VkDevice device, VkFence fence);
+    void PreProcess_vkWaitForFences(
+        VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout);
+#endif
+
     void PostProcess_vkSetPrivateData(VkResult          result,
                                       VkDevice          device,
                                       VkObjectType      objectType,
@@ -1376,7 +1390,8 @@ class VulkanCaptureManager : public ApiCaptureManager
     void PostProcess_vkAllocateCommandBuffers(VkDevice                           device,
                                               const VkCommandBufferAllocateInfo* pAllocateInfo,
                                               VkCommandBuffer*                   pCommandBuffers);
-    void PostProcess_vkCreateFence(VkDevice                     device,
+    void PostProcess_vkCreateFence(VkResult                     result,
+                                   VkDevice                     device,
                                    const VkFenceCreateInfo*     pCreateInfo,
                                    const VkAllocationCallbacks* pAllocator,
                                    VkFence*                     pFence);
@@ -1449,7 +1464,10 @@ class VulkanCaptureManager : public ApiCaptureManager
                                             VkSemaphore                                            semaphore,
                                             VkImage                                                image)
     {
-        EndFrame(current_lock);
+        if (!common_manager_->GetIgnoreFrameBoundaryAndroid())
+        {
+            EndFrame(current_lock);
+        }
     }
 
     void PostProcess_vkCreateShaderModule(VkResult                        result,
@@ -1746,6 +1764,54 @@ class VulkanCaptureManager : public ApiCaptureManager
     void PostProcess_vkSetDebugUtilsObjectTagEXT(VkResult                            result,
                                                  VkDevice                            device,
                                                  const VkDebugUtilsObjectTagInfoEXT* pTagInfo);
+
+#if ENABLE_OPENXR_SUPPORT
+    void PostProcess_vkImportFenceWin32HandleKHR(VkResult                               result,
+                                                 VkDevice                               device,
+                                                 const VkImportFenceWin32HandleInfoKHR* pImportFenceWin32HandleInfo);
+    void
+    PostProcess_vkImportFenceFdKHR(VkResult result, VkDevice device, const VkImportFenceFdInfoKHR* pImportFenceFdInfo);
+
+    void AddValidFence(VkFence fence);
+    void RemoveValidFence(VkFence fence);
+    bool IsValidFence(VkFence fence);
+#endif
+
+#if defined(__ANDROID__)
+    void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
+#endif
+    vulkan_wrappers::DeviceMemoryWrapper* GetMemory(format::HandleId id)
+    {
+        std::lock_guard<std::mutex> lock(mapped_memory_lock_);
+        return memories[id];
+    }
+
+  protected:
+    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
+
+    virtual ~VulkanCaptureManager() {}
+
+    virtual void CreateStateTracker() override
+    {
+        state_tracker_ = std::make_unique<VulkanStateTracker>();
+    }
+
+    virtual void DestroyStateTracker() override
+    {
+        state_tracker_ = nullptr;
+    }
+
+    virtual void WriteTrackedState(util::FileOutputStream* file_stream, util::ThreadData* thread_data) override;
+
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                util::ThreadData*       thread_data,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name) override;
+
+    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
+                             const std::string*      asset_file_name,
+                             util::ThreadData*       thread_data) override;
+
     void
     PostProcess_vkBindDataGraphPipelineSessionMemoryARM(VkResult,
                                                         VkDevice device,
@@ -1791,41 +1857,6 @@ class VulkanCaptureManager : public ApiCaptureManager
         tensor->tensor_views.insert(view);
         view->tensor = tensor;
     }
-
-#if defined(__ANDROID__)
-    void OverrideGetPhysicalDeviceSurfacePresentModesKHR(uint32_t* pPresentModeCount, VkPresentModeKHR* pPresentModes);
-#endif
-    vulkan_wrappers::DeviceMemoryWrapper* GetMemory(format::HandleId id)
-    {
-        std::lock_guard<std::mutex> lock(mapped_memory_lock_);
-        return memories[id];
-    }
-
-  protected:
-    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
-
-    virtual ~VulkanCaptureManager() {}
-
-    virtual void CreateStateTracker() override
-    {
-        state_tracker_ = std::make_unique<VulkanStateTracker>();
-    }
-
-    virtual void DestroyStateTracker() override
-    {
-        state_tracker_ = nullptr;
-    }
-
-    virtual void WriteTrackedState(util::FileOutputStream* file_stream, util::ThreadData* thread_data) override;
-
-    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
-                                                util::ThreadData*       thread_data,
-                                                util::FileOutputStream* asset_file_stream,
-                                                const std::string*      asset_file_name) override;
-
-    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
-                             const std::string*      asset_file_name,
-                             util::ThreadData*       thread_data) override;
 
   private:
     struct HardwareBufferInfo
@@ -1893,9 +1924,10 @@ class VulkanCaptureManager : public ApiCaptureManager
 
   private:
     void QueueSubmitWriteFillMemoryCmd();
+    void MapMemoryWriteFixShadowMemoryCmd(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory);
 
     static VulkanCaptureManager*                    singleton_;
-    static VulkanLayerTable                         vulkan_layer_table_;
+    static graphics::VulkanLayerTable               vulkan_layer_table_;
     std::set<vulkan_wrappers::DeviceMemoryWrapper*> mapped_memory_; // Track mapped memory for unassisted tracking mode.
     std::unique_ptr<VulkanStateTracker>             state_tracker_;
     std::vector<const char*>                        faked_extensions_;
@@ -1908,6 +1940,10 @@ class VulkanCaptureManager : public ApiCaptureManager
     bool enable_hardwarebuffer_format_conversion_ = false;
     // format conversion is bound to a specific device instance
     std::unordered_map<VkDevice, std::unique_ptr<util::AHardwareBufferFormatConverter>> ahb_format_converter_;
+#endif
+
+#if ENABLE_OPENXR_SUPPORT
+    std::set<VkFence> valid_fences_;
 #endif
 };
 

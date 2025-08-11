@@ -41,9 +41,9 @@
 
 #include <map>
 
-void PrintUsage(const char*) {}
-
 extern std::unordered_set<gfxrecon::format::ThreadId> removed_threads_ids;
+
+void PrintUsage(const char*) {}
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
@@ -449,8 +449,8 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
         if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
         {
             file_optimizer.SetUnreferencedBlocks(info.unreferenced_blocks);
-            file_optimizer.SetPrebuildInfoResourceValues(&info.prebuild_Info_resource_values);
             file_optimizer.SetRemovedThreads(removed_threads_ids);
+            file_optimizer.SetPrebuildInfoResourceValues(&info.prebuild_Info_resource_values);
             file_optimizer.SetFillCommandResourceValues(&info.fill_command_resource_values,
                                                         info.inject_noop_resource_value_optimization);
 

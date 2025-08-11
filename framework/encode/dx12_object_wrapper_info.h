@@ -256,15 +256,6 @@ struct IDXGISwapChainInfo : public DxgiWrapperInfo
     void*                  hdr_metadata{ nullptr };
 };
 
-struct ID3D12ObjectInfo : public DxgiWrapperInfo
-{};
-
-struct ID3D12DeviceChildInfo : public DxgiWrapperInfo
-{};
-
-struct ID3D12PageableInfo : public DxgiWrapperInfo
-{};
-
 struct IDXGIDeviceInfo : public DxgiWrapperInfo
 {};
 
@@ -435,6 +426,7 @@ struct ID3D12ResourceInfo : public DxWrapperInfo
 
     ID3D12Heap_Wrapper* heap_wrapper{ nullptr };
     uint64_t            heap_offset;
+    uint64_t            heap_id{ format::kNullHandleId };
 
     IDXGISwapChain_Wrapper* swapchain_wrapper{ nullptr };
 };
@@ -447,12 +439,16 @@ struct ID3D12HeapInfo : public DxWrapperInfo
     D3D12_MEMORY_POOL         memory_pool{};
     uint64_t                  heap_size{ 0 };
     D3D12_GPU_VIRTUAL_ADDRESS gpu_va{ 0 };
+    D3D12_HEAP_FLAGS          heap_flags{ D3D12_HEAP_FLAG_NONE };
 
     const void* open_existing_address{ nullptr }; ///< Address used to create heap with OpenExistingHeapFromAddress.
 };
 
 struct ID3D12MetaCommandInfo : public DxWrapperInfo
-{};
+{
+    bool                                      was_initialized{ false };
+    std::unique_ptr<util::MemoryOutputStream> initialize_parameters;
+};
 
 struct ID3D12ShaderCacheSessionInfo : public DxWrapperInfo
 {};
@@ -560,6 +556,18 @@ struct ID3D12DSRDeviceFactoryInfo : public DxWrapperInfo
 {};
 
 struct ID3D12ManualWriteTrackingResourceInfo : public DxWrapperInfo
+{};
+
+struct ID3D12WorkGraphPropertiesInfo : public DxWrapperInfo
+{};
+
+struct ID3D12PageableToolsInfo : public DxWrapperInfo
+{};
+
+struct ID3D12DeviceToolsInfo : public DxWrapperInfo
+{};
+
+struct ID3D12GBVDiagnosticsInfo : public DxWrapperInfo
 {};
 
 struct AgsContextInfo : public DxWrapperInfo

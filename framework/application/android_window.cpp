@@ -36,6 +36,7 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(application)
 ANativeWindow* tmp_window = nullptr;
+
 AndroidWindow::AndroidWindow(AndroidContext* android_context, ANativeWindow* window) :
     android_context_(android_context), window_(window), width_(0), height_(0), pre_transform_(0)
 {
@@ -122,10 +123,10 @@ VkExtent2D AndroidWindow::GetSize() const
     return { width_, height_ };
 }
 
-VkResult AndroidWindow::CreateSurface(const encode::VulkanInstanceTable* table,
-                                      VkInstance                         instance,
-                                      VkFlags                            flags,
-                                      VkSurfaceKHR*                      pSurface)
+VkResult AndroidWindow::CreateSurface(const graphics::VulkanInstanceTable* table,
+                                      VkInstance                           instance,
+                                      VkFlags                              flags,
+                                      VkSurfaceKHR*                        pSurface)
 {
     if (table != nullptr)
     {
@@ -139,7 +140,9 @@ VkResult AndroidWindow::CreateSurface(const encode::VulkanInstanceTable* table,
     return VK_ERROR_INITIALIZATION_FAILED;
 }
 
-void AndroidWindow::DestroySurface(const encode::VulkanInstanceTable* table, VkInstance instance, VkSurfaceKHR surface)
+void AndroidWindow::DestroySurface(const graphics::VulkanInstanceTable* table,
+                                   VkInstance                           instance,
+                                   VkSurfaceKHR                         surface)
 {
     if (table != nullptr)
     {
@@ -162,24 +165,29 @@ decode::Window* AndroidWindowFactory::Create(
     GFXRECON_UNREFERENCED_PARAMETER(width);
     GFXRECON_UNREFERENCED_PARAMETER(height);
     GFXRECON_UNREFERENCED_PARAMETER(force_windowed);
+
+#ifdef GFXR_MULTI_WINDOW_REPLAY
     tmp_window = nullptr;
     android_context_->requestNativeWindow(width, height);
-
     AndroidWindow* tmpwin = nullptr;
     if (tmp_window != nullptr)
     {
         tmpwin = new AndroidWindow(android_context_, tmp_window);
-        GFXRECON_LOG_INFO("Got android window %p\n", tmp_window);
+        GFXRECON_LOG_INFO("Got android window %p", tmp_window);
     }
     else
     {
         GFXRECON_LOG_WARNING("Get android window failed");
     }
     return tmpwin;
+#else // !GFXR_MULTI_WINDOW_REPLAY
+    return android_context_->GetWindow();
+#endif
 }
 
 void AndroidWindowFactory::Destroy(decode::Window* window)
 {
+#ifdef GFXR_MULTI_WINDOW_REPLAY
     if (window)
     {
         ANativeWindow* native_window = nullptr;
@@ -192,14 +200,18 @@ void AndroidWindowFactory::Destroy(decode::Window* window)
             GFXRECON_LOG_ERROR("Couldn't release Android native window %p from window %p", native_window, window)
         }
 
-        int32_t window_index = created_window_.at(window) - 1;
+        int32_t window_index = created_window_.at(window);
         android_context_->destroyNativeWindow(window_index);
     }
+#else // !GFXR_MULTI_WINDOW_REPLAY
+    // Standard replay app only has a single window whose lifetime is managed by AndroidContext.
+    GFXRECON_UNREFERENCED_PARAMETER(window);
+#endif
 }
 
-VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const encode::VulkanInstanceTable* table,
-                                                                    VkPhysicalDevice                   physical_device,
-                                                                    uint32_t queue_family_index)
+VkBool32 AndroidWindowFactory::GetPhysicalDevicePresentationSupport(const graphics::VulkanInstanceTable* table,
+                                                                    VkPhysicalDevice physical_device,
+                                                                    uint32_t         queue_family_index)
 {
     GFXRECON_UNREFERENCED_PARAMETER(table);
     GFXRECON_UNREFERENCED_PARAMETER(physical_device);

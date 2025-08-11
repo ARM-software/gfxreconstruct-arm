@@ -818,6 +818,7 @@ class VulkanStateTracker
                 // If it is a duplicate handle add, make sure that creation parameters are updated
                 else
                 {
+                    wrapper->create_call_id    = create_call_id;
                     wrapper->create_parameters = create_parameters;
                 }
             }

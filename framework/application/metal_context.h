@@ -37,6 +37,8 @@ class MetalContext : public WsiContext
     MetalContext(Application* application);
 
     virtual void ProcessEvents(bool wait_for_input) override;
+
+    virtual const char* GetWsiName() override { return "METAL"; }
 };
 
 GFXRECON_END_NAMESPACE(application)

@@ -30,6 +30,7 @@
 #include "format/format.h"
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "graphics/vulkan_device_util.h"
+#include "graphics/vulkan_instance_util.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "util/page_guard_manager.h"
@@ -126,9 +127,9 @@ struct DisplayKHRWrapper : public HandleWrapper<VkDisplayKHR>
 // handle wrapper, which will filter duplicate handle retrievals and ensure that the wrapper is destroyed.
 struct PhysicalDeviceWrapper : public HandleWrapper<VkPhysicalDevice>
 {
-    VulkanInstanceTable*            layer_table_ref{ nullptr };
-    std::vector<DisplayKHRWrapper*> child_displays;
-    uint32_t                        instance_api_version{ 0 };
+    graphics::VulkanInstanceTable*   layer_table_ref{ nullptr };
+    std::vector<DisplayKHRWrapper*>  child_displays;
+    graphics::VulkanInstanceUtilInfo instance_info{};
 
     // Track memory types for use when creating snapshots of buffer and image resource memory content.
     VkPhysicalDeviceMemoryProperties memory_properties{};
@@ -147,7 +148,7 @@ struct PhysicalDeviceWrapper : public HandleWrapper<VkPhysicalDevice>
 
 struct InstanceWrapper : public HandleWrapper<VkInstance>
 {
-    VulkanInstanceTable                 layer_table;
+    graphics::VulkanInstanceTable       layer_table;
     std::vector<PhysicalDeviceWrapper*> child_physical_devices;
     bool                                have_device_properties{ false };
     uint32_t                            api_version{ VK_MAKE_VERSION(1, 0, 0) };
@@ -155,18 +156,19 @@ struct InstanceWrapper : public HandleWrapper<VkInstance>
 
 struct QueueWrapper : public HandleWrapper<VkQueue>
 {
-    VulkanDeviceTable* layer_table_ref{ nullptr };
+    graphics::VulkanDeviceTable* layer_table_ref{ nullptr };
 };
 
 struct DeviceWrapper : public HandleWrapper<VkDevice>
 {
-    VulkanDeviceTable          layer_table;
+    graphics::VulkanDeviceTable layer_table;
     PhysicalDeviceWrapper*     physical_device{ nullptr };
     std::vector<QueueWrapper*> child_queues;
 
     // Physical device property & feature state at device creation
     graphics::VulkanDevicePropertyFeatureInfo              property_feature_info;
     std::unordered_map<uint32_t, VkDeviceQueueCreateFlags> queue_family_creation_flags;
+    std::vector<uint32_t>                                  queue_family_indices;
 };
 
 struct FenceWrapper : public HandleWrapper<VkFence>
@@ -223,6 +225,7 @@ struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
     VkImageType           image_type{ VK_IMAGE_TYPE_2D };
     VkFormat              format{ VK_FORMAT_UNDEFINED };
     bool                  external_format{ false };
+    bool                  external_memory_android{ false };
     VkExtent3D            extent{ 0, 0, 0 };
     uint32_t              mip_levels{ 0 };
     uint32_t              array_layers{ 0 };
@@ -396,7 +399,7 @@ struct MicromapEXTWrapper;
 struct CommandPoolWrapper;
 struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
 {
-    VulkanDeviceTable* layer_table_ref{ nullptr };
+    graphics::VulkanDeviceTable* layer_table_ref{ nullptr };
 
     // Members for general wrapper support.
     // Pool from which command buffer was allocated. The command buffer must be removed from the pool's allocation list
@@ -674,14 +677,6 @@ struct DebugUtilsObjectNameInfoWrapper
     std::string      name;
 };
 
-struct PipelineCacheWrapper : public HandleWrapper<VkPipelineCache>
-{
-    DeviceWrapper*            device{ nullptr };
-    VkPipelineCacheCreateInfo create_info;
-    std::vector<uint8_t>      cache_data;
-};
-struct WeightsARMWrapper : public HandleWrapper<VkWeightsARM>
-{};
 struct TensorViewARMWrapper;
 struct TensorARMWrapper : public HandleWrapper<VkTensorARM>, AssetWrapperBase
 {
@@ -690,17 +685,26 @@ struct TensorARMWrapper : public HandleWrapper<VkTensorARM>, AssetWrapperBase
     VkFormat                        format{};
     uint32_t                        dimensionCount{};
     VkTensorUsageFlagsARM           usage{};
-    std::vector<uint64_t>           pDimensions{};
+    std::vector<int64_t>            pDimensions{};
     std::vector<int64_t>            pStrides{};
 };
+
 struct TensorViewARMWrapper : public HandleWrapper<VkTensorViewARM>
 {
     TensorARMWrapper* tensor;
 };
+
 struct DataGraphPipelineSessionARMWrapper : public HandleWrapper<VkDataGraphPipelineSessionARM>, AssetWrapperBase
 {
     VkDataGraphPipelineSessionBindPointARM bindPoint;
     uint32_t                               objectIndex;
+};
+
+struct PipelineCacheWrapper : public HandleWrapper<VkPipelineCache>
+{
+    DeviceWrapper*            device{ nullptr };
+    VkPipelineCacheCreateInfo create_info;
+    std::vector<uint8_t>      cache_data;
 };
 
 // Handle alias types for extension handle types that have been promoted to core types.

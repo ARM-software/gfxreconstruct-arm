@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -117,6 +117,8 @@ class Dx12StateWriter
     // Returns true if memory information was successfully retrieved and written and false otherwise.
     bool WriteCreateHeapAllocationCmd(const void* address);
 
+    void WriteHeapMakeResidentCmd(const ID3D12Heap_Wrapper* wrapper);
+
     void WriteDescriptorState(const Dx12StateTable& state_table);
 
     void WriteAddRefAndReleaseCommands(const IUnknown_Wrapper* wrapper);
@@ -133,6 +135,8 @@ class Dx12StateWriter
         const Dx12StateTable&                                                    state_table,
         std::unordered_map<format::HandleId, std::vector<ResourceSnapshotInfo>>& resource_snapshots,
         std::unordered_map<format::HandleId, uint64_t>&                          max_resource_sizes);
+
+    void WriteMetaCommandCreationState(const Dx12StateTable& state_table);
 
     void WriteTileMappings(const Dx12StateTable& state_table, ID3D12ResourceInfo* resource_info);
 
@@ -165,6 +169,8 @@ class Dx12StateWriter
     bool CheckGpuVa(D3D12_GPU_VIRTUAL_ADDRESS address);
 
     bool CheckDescriptorObjects(const DxDescriptorInfo& descriptor_info, const Dx12StateTable& state_table);
+
+    bool CheckResourceObject(const ID3D12ResourceInfo* resource_info, const Dx12StateTable& state_table);
 
     void WriteSwapChainState(const Dx12StateTable& state_table);
 

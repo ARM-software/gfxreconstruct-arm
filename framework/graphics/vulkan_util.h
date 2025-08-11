@@ -29,6 +29,14 @@
 
 #include "vulkan/vulkan.h"
 
+#if VK_USE_64_BIT_PTR_DEFINES == 1
+#define VK_HANDLE_TO_UINT64(value) reinterpret_cast<uint64_t>(value)
+#define UINT64_TO_VK_HANDLE(handle_type, value) reinterpret_cast<handle_type>(value)
+#else
+#define VK_HANDLE_TO_UINT64(value) (value)
+#define UINT64_TO_VK_HANDLE(handle_type, value) static_cast<handle_type>(value)
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(graphics)
 
@@ -46,23 +54,7 @@ util::platform::LibraryHandle InitializeLoader();
 
 void ReleaseLoader(util::platform::LibraryHandle loader_handle);
 
-// Search through the parent's pNext chain for the first struct with the requested struct_type. parent's struct type is
-// not checked and parent won't be returned as a result. T and Parent_T must be Vulkan struct pointer types. Return
-// nullptr if no matching struct found.
-template <typename T, typename Parent_T>
-static T* GetPNextStruct(const Parent_T* parent, VkStructureType struct_type)
-{
-    VkBaseOutStructure* current_struct = reinterpret_cast<const VkBaseOutStructure*>(parent)->pNext;
-    while (current_struct != nullptr)
-    {
-        if (current_struct->sType == struct_type)
-        {
-            return reinterpret_cast<T*>(current_struct);
-        }
-        current_struct = current_struct->pNext;
-    }
-    return nullptr;
-}
+bool ImageHasUsage(VkImageUsageFlags usage_flags, VkImageUsageFlagBits bit);
 
 [[maybe_unused]] static const char* kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
 

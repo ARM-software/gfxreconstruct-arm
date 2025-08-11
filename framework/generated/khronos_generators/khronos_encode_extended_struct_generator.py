@@ -30,37 +30,34 @@ class KhronosEncodeExtendedStructGenerator():
     Generates C++ code for a Khronos API's extended structure encoding.
     """
 
-    def write_common_headers(self, gen_opts):
+    @staticmethod
+    def update_begin_end_file_data(lower_api_name, begin_end):
         # Get the current API and generate the items relavent to that
-        current_api_data = self.get_api_data()
-        lower_api_name = current_api_data.api_name.lower()
+        begin_end.specific_headers.extend((
+            'generated/generated_{}_struct_encoders.h'.format(lower_api_name),
+            '',
+            'encode/parameter_encoder.h',
+            'encode/struct_pointer_encoder.h',
+            'encode/{}_capture_manager.h'.format(lower_api_name),
+            'util/defines.h',
+        ))
 
-        write(
-            '#include "generated/generated_{}_struct_encoders.h"'.
-            format(lower_api_name),
-            file=self.outFile
-        )
-        self.newline()
-        write('#include "encode/parameter_encoder.h"', file=self.outFile)
-        write('#include "encode/struct_pointer_encoder.h"', file=self.outFile)
-        write(
-            '#include "encode/{}_capture_manager.h"'.format(lower_api_name),
-            file=self.outFile
-        )
-        write('#include "util/defines.h"', file=self.outFile)
-        self.newline()
-        self.write_includes_of_common_api_headers(gen_opts)
-        self.newline()
-        write('#include <cassert>', file=self.outFile)
-        write('#include <cstdio>', file=self.outFile)
-        write('#include <memory>', file=self.outFile)
+        begin_end.system_headers.extend((
+            'cassert',
+            'cstdio',
+            'memory',
+        ))
 
-    def write_encode_struct_while_loop_statement(self, current_api_data):
+        begin_end.namespaces.extend(('gfxrecon', 'encode'))
+
+    def get_encode_struct_while_loop_statement(self, current_api_data):
         """
         Method intended to be overridden.
         This is because some of the loop determination is API-specific
+        or may not be needed at all
         """
-        write('    while (base != nullptr)', file=self.outFile)
+        return ''
+
 
     def write_encode_struct_definition_prefix(self):
         # Get the current API and generate the items relavent to that
@@ -81,21 +78,25 @@ class KhronosEncodeExtendedStructGenerator():
             file=self.outFile
         )
         self.newline()
-        write(
-            '    // Ignore the structures added to the {} chain by the loader.'
-            .format(current_api_data.extended_struct_variable),
-            file=self.outFile
-        )
-        self.write_encode_struct_while_loop_statement(current_api_data)
-        write('    {', file=self.outFile)
-        write(
-            '        base = base->{};'.format(
-                current_api_data.extended_struct_variable
-            ),
-            file=self.outFile
-        )
-        write('    }', file=self.outFile)
-        self.newline()
+
+        loop_statement = self.get_encode_struct_while_loop_statement(current_api_data)
+        if loop_statement:
+            write(
+                '    // Ignore the structures added to the {} chain by the loader.'
+                .format(current_api_data.extended_struct_variable),
+                file=self.outFile
+            )
+            write(loop_statement, file=self.outFile)
+            write('    {', file=self.outFile)
+            write(
+                '        base = base->{};'.format(
+                    current_api_data.extended_struct_variable
+                ),
+                file=self.outFile
+            )
+            write('    }', file=self.outFile)
+            self.newline()
+
         write('    if (base != nullptr)', file=self.outFile)
         write('    {', file=self.outFile)
         write(

@@ -135,6 +135,7 @@ class CaptureSettings
         bool                         debug_set_objects_name{ false };
         bool                         disable_dxr{ false };
         uint32_t                     accel_struct_padding{ 0 };
+        bool                         disable_meta_command{ true };
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
         FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };
@@ -145,6 +146,8 @@ class CaptureSettings
         bool                         quit_after_frame_ranges{ false };
         bool                         force_fifo_present_mode{ true };
         bool                         use_asset_file{ false };
+        bool                         ignore_frame_boundary_android{ false };
+        bool                         skip_threads_with_invalid_data{ false };
 
         // An optimization for the page_guard memory tracking mode that eliminates the need for shadow memory by
         // overriding vkAllocateMemory so that all host visible allocations use the external memory extension with a
@@ -216,8 +219,8 @@ class CaptureSettings
     static void ParseUintRangeList(const std::string&            value_string,
                                    std::vector<util::UintRange>* frames,
                                    const char*                   option_name,
-                                   bool                          check_overlap_range = true,
-                                   bool                          allow_zero          = false);
+                                   bool                          check_overlap_range,
+                                   bool                          allow_zero);
 
     static std::string ParseTrimKeyString(const std::string& value_string);
 

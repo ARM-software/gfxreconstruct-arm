@@ -75,12 +75,12 @@ class KhronosEnumToJsonBodyGenerator():
         processedEnums = set()
 
         for enum in sorted(self.enum_names):
-            if enum in self.processedEnums or enum in self.enumAliases or enum in self.SKIP_ENUM or self.skip_generating_enum_to_json_for_type(
+            if enum in processedEnums or enum in self.enumAliases or self.skip_generating_enum_to_json_for_type(
                 enum
             ):
                 continue
 
-            self.processedEnums.add(enum)
+            processedEnums.add(enum)
 
             if self.is_flags_enum_64bit(enum):
                 body = 'void FieldToJson({0}_t, nlohmann::ordered_json& jdata, const {0}& value, const JsonOptions& options)\n'
@@ -112,7 +112,7 @@ class KhronosEnumToJsonBodyGenerator():
             write(body, file=self.outFile)
 
         for flag in sorted(self.flags_types):
-            if flag in self.flags_type_aliases:
+            if flag in self.flags_type_aliases or self.skip_generating_enum_to_json_for_type(flag):
                 continue
 
             bittype = None

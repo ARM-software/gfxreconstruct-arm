@@ -1,5 +1,6 @@
 /*
-** Copyright (c) 2022 LunarG, Inc.
+** Copyright (c) 2022-2025 LunarG, Inc.
+** Copyright (c) 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -48,6 +49,8 @@ class Dx12FileOptimizer : public FileOptimizer
   private:
     bool AddFillMemoryResourceValueCommand();
 
+    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
+
     bool AddPrebuildInfoResourceValueCommand(const format::BlockHeader& block_header, format::ApiCallId call_id);
 
     void WriteMethodCall(format::ApiCallId               call_id,
@@ -56,8 +59,6 @@ class Dx12FileOptimizer : public FileOptimizer
                          const util::MemoryOutputStream* parameter_buffer);
 
     virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
-
-    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
 
     const decode::Dx12FillCommandResourceValueMap*          fill_command_resource_values_;
     decode::Dx12FillCommandResourceValueMap::const_iterator resource_values_iter_;

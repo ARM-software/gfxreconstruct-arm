@@ -22,30 +22,6 @@
 */
 
 /*
-** Copyright (c) 2018-2023 Valve Corporation
-** Copyright (c) 2018-2023 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc.
-**
-** Permission is hereby granted, free of charge, to any person obtaining a
-** copy of this software and associated documentation files (the "Software"),
-** to deal in the Software without restriction, including without limitation
-** the rights to use, copy, modify, merge, publish, distribute, sublicense,
-** and/or sell copies of the Software, and to permit persons to whom the
-** Software is furnished to do so, subject to the following conditions:
-**
-** The above copyright notice and this permission notice shall be included in
-** all copies or substantial portions of the Software.
-**
-** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-** IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-** FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-** AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-** DEALINGS IN THE SOFTWARE.
-*/
-
-/*
 ** This file is generated from the Khronos Vulkan XML API Registry.
 **
 */
@@ -54,6 +30,7 @@
 #define  GFXRECON_GENERATED_VULKAN_SKIAVK_MODIFIER_H
 
 #include "util/vulkan_modifier_base.h"
+
 #include <unordered_map>
 #include <unordered_set>
 
@@ -2546,6 +2523,12 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         format::HandleId                            image,
         StructPointerDecoder<Decoded_VkImageSubresource2>* pSubresource,
         StructPointerDecoder<Decoded_VkSubresourceLayout2>* pLayout){ CheckSkiavk(device);}
+    virtual void Process_vkWaitForPresent2KHR(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkPresentWait2InfoKHR>* pPresentWait2Info){ CheckSkiavk(device);}
     virtual void Process_vkCreatePipelineBinariesKHR(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -2582,6 +2565,11 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkReleaseCapturedPipelineDataInfoKHR>* pInfo,
         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator){ CheckSkiavk(device);}
+    virtual void Process_vkReleaseSwapchainImagesKHR(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo){ CheckSkiavk(device);}
     virtual void Process_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -3088,7 +3076,7 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkAccelerationStructureMemoryRequirementsInfoNV>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2KHR>* pMemoryRequirements){ CheckSkiavk(device);}
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements){ CheckSkiavk(device);}
 
     virtual void Process_vkBindAccelerationStructureMemoryNV(
         const ApiCallInfo&                          call_info,
@@ -3520,7 +3508,7 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
         format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoEXT>* pReleaseInfo){ CheckSkiavk(device);}
+        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo){ CheckSkiavk(device);}
     virtual void Process_vkGetGeneratedCommandsMemoryRequirementsNV(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
@@ -3606,6 +3594,62 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         uint64_t                                    objectHandle,
         format::HandleId                            privateDataSlot,
         PointerDecoder<uint64_t>*                   pData){ CheckSkiavk(device);}
+    virtual void Process_vkCmdDispatchTileQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkDispatchTileInfoQCOM>* pDispatchTileInfo){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkCmdBeginPerTileExecutionQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkPerTileBeginInfoQCOM>* pPerTileBeginInfo){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkCmdEndPerTileExecutionQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkPerTileEndInfoQCOM>* pPerTileEndInfo){ CheckSkiavk(commandBuffer);}
+    virtual void Process_vkGetDescriptorSetLayoutSizeEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            layout,
+        PointerDecoder<VkDeviceSize>*               pLayoutSizeInBytes){ CheckSkiavk(device);}
+
+    virtual void Process_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            layout,
+        uint32_t                                    binding,
+        PointerDecoder<VkDeviceSize>*               pOffset){ CheckSkiavk(device);}
+
+    virtual void Process_vkGetDescriptorEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDescriptorGetInfoEXT>* pDescriptorInfo,
+        size_t                                      dataSize,
+        PointerDecoder<uint8_t>*                    pDescriptor){ CheckSkiavk(device);}
+
+    virtual void Process_vkCmdBindDescriptorBuffersEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        uint32_t                                    bufferCount,
+        StructPointerDecoder<Decoded_VkDescriptorBufferBindingInfoEXT>* pBindingInfos){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkCmdSetDescriptorBufferOffsetsEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        VkPipelineBindPoint                         pipelineBindPoint,
+        format::HandleId                            layout,
+        uint32_t                                    firstSet,
+        uint32_t                                    setCount,
+        PointerDecoder<uint32_t>*                   pBufferIndices,
+        PointerDecoder<VkDeviceSize>*               pOffsets){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        VkPipelineBindPoint                         pipelineBindPoint,
+        format::HandleId                            layout,
+        uint32_t                                    set){ CheckSkiavk(commandBuffer);}
     virtual void Process_vkCmdSetFragmentShadingRateEnumNV(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -3889,59 +3933,6 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         VkDeviceAddress                             returnValue,
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkPipelineIndirectDeviceAddressInfoNV>* pInfo){ CheckSkiavk(device);}
-    virtual void Process_vkCreateNeuralEnginePipelinesARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        uint32_t                                    createInfoCount,
-        StructPointerDecoder<Decoded_VkNeuralEnginePipelineCreateInfoARM>* pCreateInfos,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-        HandlePointerDecoder<VkPipeline>*           pPipelines){ CheckSkiavk(device);}
-
-    virtual void Process_vkCreateWeightsARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsCreateInfoARM>* pCreateInfo,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-        HandlePointerDecoder<VkWeightsARM>*         pWeights){ CheckSkiavk(device);}
-
-    virtual void Process_vkDestroyWeightsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        format::HandleId                            weights,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator){ CheckSkiavk(device);}
-
-    virtual void Process_vkGetWeightsMemoryRequirementsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsMemoryRequirementsInfoARM>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements){ CheckSkiavk(device);}
-
-    virtual void Process_vkGetDeviceWeightsMemoryRequirementsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkDeviceWeightsMemoryRequirementsARM>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements){ CheckSkiavk(device);}
-
-    virtual void Process_vkBindWeightsMemoryARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        uint32_t                                    bindInfoCount,
-        StructPointerDecoder<Decoded_VkBindWeightsMemoryInfoARM>* pBindInfos){ CheckSkiavk(device);}
-
-    virtual void Process_vkGetWeightsDeviceAddressARM(
-        const ApiCallInfo&                          call_info,
-        VkDeviceAddress                             returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsDeviceAddressInfoARM>* pInfo){ CheckSkiavk(device);}
-
-    virtual void Process_vkGetTensorDeviceAddressARM(
-        const ApiCallInfo&                          call_info,
-        VkDeviceAddress                             returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkTensorDeviceAddressInfoARM>* pInfo){ CheckSkiavk(device);}
     virtual void Process_vkCmdSetDepthClampEnableEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -4159,6 +4150,12 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
         StructPointerDecoder<Decoded_VkCopyTensorInfoARM>* pCopyTensorInfo){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkGetPhysicalDeviceExternalTensorPropertiesARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceExternalTensorInfoARM>* pExternalTensorInfo,
+        StructPointerDecoder<Decoded_VkExternalTensorPropertiesARM>* pExternalTensorProperties){ CheckSkiavk(physicalDevice);}
     virtual void Process_vkGetShaderModuleIdentifierEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
@@ -4307,13 +4304,6 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         const ApiCallInfo&                          call_info,
         format::HandleId                            queue,
         StructPointerDecoder<Decoded_VkOutOfBandQueueTypeInfoNV>* pQueueTypeInfo){ CheckSkiavk(queue);}
-    virtual void Process_vkGetPhysicalDeviceDataGraphInstructionSetsARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            physicalDevice,
-        PointerDecoder<uint32_t>*                   pSetCount,
-        StructPointerDecoder<Decoded_VkPhysicalDeviceDataGraphInstructionSetARM>* pSets){ CheckSkiavk(physicalDevice);}
-
     virtual void Process_vkCreateDataGraphPipelinesARM(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -4363,19 +4353,46 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
     virtual void Process_vkCmdDispatchDataGraphARM(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
-        format::HandleId                            session){ CheckSkiavk(commandBuffer);}
+        format::HandleId                            session,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineDispatchInfoARM>* pInfo){ CheckSkiavk(commandBuffer);}
+
+    virtual void Process_vkGetDataGraphPipelineAvailablePropertiesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
+        PointerDecoder<uint32_t>*                   pPropertiesCount,
+        PointerDecoder<VkDataGraphPipelinePropertyARM>* pProperties){ CheckSkiavk(device);}
 
     virtual void Process_vkGetDataGraphPipelinePropertiesARM(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
-        PointerDecoder<uint32_t>*                   pPropertiesCount,
+        uint32_t                                    propertiesCount,
         StructPointerDecoder<Decoded_VkDataGraphPipelinePropertyQueryResultARM>* pProperties){ CheckSkiavk(device);}
+
+    virtual void Process_vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            physicalDevice,
+        uint32_t                                    queueFamilyIndex,
+        PointerDecoder<uint32_t>*                   pQueueFamilyDataGraphPropertyCount,
+        StructPointerDecoder<Decoded_VkQueueFamilyDataGraphPropertiesARM>* pQueueFamilyDataGraphProperties){ CheckSkiavk(physicalDevice);}
+
+    virtual void Process_vkGetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceQueueFamilyDataGraphProcessingEngineInfoARM>* pQueueFamilyDataGraphProcessingEngineInfo,
+        StructPointerDecoder<Decoded_VkQueueFamilyDataGraphProcessingEnginePropertiesARM>* pQueueFamilyDataGraphProcessingEngineProperties){ CheckSkiavk(physicalDevice);}
     virtual void Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
         VkImageAspectFlags                          aspectMask){ CheckSkiavk(commandBuffer);}
+    virtual void Process_vkCmdBindTileMemoryQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkTileMemoryBindInfoQCOM>* pTileMemoryBindInfo){ CheckSkiavk(commandBuffer);}
     virtual void Process_vkGetPartitionedAccelerationStructuresBuildSizesNV(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
@@ -4465,6 +4482,10 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         VkExternalMemoryHandleTypeFlagBits          handleType,
         uint64_t                                    pHandle,
         StructPointerDecoder<Decoded_VkMemoryMetalHandlePropertiesEXT>* pMemoryMetalHandleProperties){ CheckSkiavk(device);}
+    virtual void Process_vkCmdEndRendering2EXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkRenderingEndInfoEXT>* pRenderingEndInfo){ CheckSkiavk(commandBuffer);}
     virtual void Process_vkCreateAccelerationStructureKHR(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -4720,4 +4741,4 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif
+#endif // GFXRECON_GENERATED_VULKAN_SKIAVK_MODIFIER_H

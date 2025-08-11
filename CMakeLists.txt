@@ -129,6 +129,20 @@ include("Lint")
 include("Test")
 include("FindVulkanVersion")
 
+set(OPENXR_SUPPORT_ENABLED FALSE)
+
+option(GFXRECON_ENABLE_OPENXR "Enable OpenXR support." ON)
+if (GFXRECON_ENABLE_OPENXR)
+    include("FindOpenXRVersion")
+
+    if ((NOT XR_VERSION_MAJOR STREQUAL "") AND (NOT XR_VERSION_MINOR STREQUAL ""))
+        set(OPENXR_SUPPORT_ENABLED TRUE)
+    else()
+        message(FATAL_ERROR "Failed to find OpenXR headers for support!")
+    endif()
+
+endif()
+
 # Apply misc build directives to the given target
 macro(common_build_directives TARGET)
     target_code_style_build_directives(${TARGET})
@@ -188,7 +202,7 @@ if (MSVC)
     add_definitions(-D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 
     if (${D3D12_SUPPORT})
-        set(D3D12_INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/external/AgilitySDK/inc")
+        set(D3D12_INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/external/AgilitySDK/include")
         add_definitions(-DD3D12_SUPPORT)
 
         # Check Windows SDK version and print warning if there is a mismatch.
@@ -268,10 +282,6 @@ if(ANDROID)
     add_link_options(-Wl,-z,max-page-size=16384)
 endif()
 
-if(ANDROID)
-    add_link_options(-Wl,-z,max-page-size=16384)
-endif()
-
 # GFXReconstruct provided find modules
 if (WIN32)
     find_package(Detours)
@@ -290,9 +300,9 @@ endif ()# NOT LZ4_FOUND
 
 find_package(ZSTD)
 
-if (MSVC)
-    find_package(jsoncpp)
-endif () # MSVC
+# Find and use nlohmann_json
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/nlohmann-json")
+find_package(nlohmann_json REQUIRED)
 
 if (UNIX AND NOT APPLE)
     option(BUILD_WSI_XCB_SUPPORT "Build XCB WSI support" ON)
@@ -327,6 +337,8 @@ target_compile_definitions(windows_specific INTERFACE
         WIN32_LEAN_AND_MEAN
         NOMINMAX
         VK_USE_PLATFORM_WIN32_KHR
+        XR_USE_PLATFORM_WIN32
+        XR_USE_GRAPHICS_API_VULKAN
         $<$<BOOL:${HEADLESS}>:VK_USE_PLATFORM_HEADLESS>
         $<$<BOOL:${BUILD_LAUNCHER_AND_INTERCEPTOR}>:"GFXR_INTERCEPTOR_PATH=\"$<TARGET_FILE:gfxrecon_interceptor>\"">
         $<$<BOOL:${D3D12_SUPPORT}>:"GFXR_D3D12_CAPTURE_PATH=\"$<TARGET_FILE:d3d12_capture>\"">
@@ -336,15 +348,17 @@ target_compile_definitions(windows_specific INTERFACE
 
 add_library(linux_specific INTERFACE)
 target_compile_definitions(linux_specific INTERFACE _FILE_OFFSET_BITS=64 PAGE_GUARD_ENABLE_UCONTEXT_WRITE_DETECTION
-        $<$<BOOL:${X11_FOUND}>:VK_USE_PLATFORM_XLIB_KHR>
+        XR_USE_GRAPHICS_API_VULKAN
+        $<$<BOOL:${X11_FOUND}>:VK_USE_PLATFORM_XLIB_KHR XR_USE_PLATFORM_XLIB>
         $<$<BOOL:${X11_Xrandr_FOUND}>:VK_USE_PLATFORM_XLIB_XRANDR_EXT>
-        $<$<BOOL:${XCB_FOUND}>:VK_USE_PLATFORM_XCB_KHR>
-        $<$<BOOL:${WAYLAND_FOUND}>:VK_USE_PLATFORM_WAYLAND_KHR>
+        $<$<BOOL:${XCB_FOUND}>:VK_USE_PLATFORM_XCB_KHR XR_USE_PLATFORM_XCB>
+        $<$<BOOL:${WAYLAND_FOUND}>:VK_USE_PLATFORM_WAYLAND_KHR XR_USE_PLATFORM_WAYLAND>
         $<$<BOOL:${BUILD_WSI_DISPLAY_SUPPORT}>:VK_USE_PLATFORM_DISPLAY_KHR>
         $<$<BOOL:${HEADLESS}>:VK_USE_PLATFORM_HEADLESS>)
 
 add_library(macos_specific INTERFACE)
 target_compile_definitions(macos_specific INTERFACE
+        XR_USE_GRAPHICS_API_VULKAN
         VK_USE_PLATFORM_METAL_EXT
         $<$<BOOL:${HEADLESS}>:VK_USE_PLATFORM_HEADLESS>)
 
@@ -362,12 +376,23 @@ if (BUILD_WERROR)
     endif ()
 endif ()
 
+if(MSVC)
+    target_compile_options(platform_specific INTERFACE /MP)
+endif()
+
 add_library(vulkan_registry INTERFACE)
 target_include_directories(vulkan_registry SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/external/Vulkan-Headers/include)
 target_compile_definitions(vulkan_registry INTERFACE VK_NO_PROTOTYPES VK_ENABLE_BETA_EXTENSIONS)
 
 add_library(spirv_registry INTERFACE)
 target_include_directories(spirv_registry SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/external/SPIRV-Headers/include)
+
+add_library(OpenXR INTERFACE)
+if (OPENXR_SUPPORT_ENABLED)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/external/OpenXR-SDK)
+    target_include_directories(OpenXR INTERFACE ${PROJECT_SOURCE_DIR}/external/OpenXR-SDK/include)
+    target_compile_definitions(OpenXR INTERFACE XR_NO_PROTOTYPES ENABLE_OPENXR_SUPPORT=1)
+endif()
 
 add_library(vulkan_memory_allocator INTERFACE)
 target_compile_options(vulkan_memory_allocator INTERFACE
@@ -392,7 +417,6 @@ if (${RUN_TESTS})
     target_include_directories(catch2 SYSTEM INTERFACE external)
 endif ()
 
-add_subdirectory(external/nlohmann)
 add_subdirectory(framework)
 if (NOT BUILD_STATIC)
     add_subdirectory(layer)

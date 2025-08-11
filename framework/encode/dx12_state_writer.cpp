@@ -145,7 +145,7 @@ void Dx12StateWriter::WriteState(const Dx12StateTable& state_table, uint64_t fra
     StandardCreateWrite<ID3D12DeviceRemovedExtendedData_Wrapper>(state_table);
     StandardCreateWrite<ID3D12LifetimeOwner_Wrapper>(state_table);
     StandardCreateWrite<ID3D12LifetimeTracker_Wrapper>(state_table);
-    StandardCreateWrite<ID3D12MetaCommand_Wrapper>(state_table);
+    WriteMetaCommandCreationState(state_table);
     StandardCreateWrite<ID3D12ProtectedResourceSession_Wrapper>(state_table);
     StandardCreateWrite<ID3D12QueryHeap_Wrapper>(state_table);
     StandardCreateWrite<ID3D12Tools_Wrapper>(state_table);
@@ -382,7 +382,31 @@ void Dx12StateWriter::WriteHeapState(const Dx12StateTable& state_table)
         }
 
         StandardCreateWrite(wrapper);
+        if (wrapper_info->heap_flags & D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT)
+        {
+            WriteHeapMakeResidentCmd(wrapper);
+        }
     });
+}
+
+void Dx12StateWriter::WriteHeapMakeResidentCmd(const ID3D12Heap_Wrapper* wrapper)
+{
+    GFXRECON_ASSERT(wrapper != nullptr);
+    GFXRECON_ASSERT(wrapper->GetObjectInfo() != nullptr);
+
+    auto wrapper_info = wrapper->GetObjectInfo();
+
+    UINT                  num_objects  = 1;
+    HRESULT               return_value = S_OK;
+    const ID3D12Pageable* ppObjects[1];
+    ppObjects[0] = reinterpret_cast<const ID3D12Pageable*>(wrapper);
+
+    encoder_.EncodeUInt32Value(num_objects);
+    encoder_.EncodeObjectArray(ppObjects, num_objects);
+    encoder_.EncodeInt32Value(return_value);
+    WriteMethodCall(
+        format::ApiCallId::ApiCall_ID3D12Device_MakeResident, wrapper_info->create_object_id, &parameter_stream_);
+    parameter_stream_.Clear();
 }
 
 bool Dx12StateWriter::WriteCreateHeapAllocationCmd(const void* address)
@@ -574,12 +598,18 @@ void Dx12StateWriter::WriteResourceCreationState(
         assert(resource_wrapper->GetWrappedObject() != nullptr);
         assert(resource_wrapper->GetObjectInfo() != nullptr);
         assert(resource_wrapper->GetObjectInfo()->create_parameters != nullptr);
+        assert(resource_wrapper->GetObjectInfo()->create_object_id != format::kNullHandleId);
 
         auto        resource      = resource_wrapper->GetWrappedObjectAs<ID3D12Resource>();
         auto        resource_info = resource_wrapper->GetObjectInfo();
         const auto& resource_desc = resource->GetDesc();
 
-        assert(resource_info->create_object_id != format::kNullHandleId);
+        if (!CheckResourceObject(resource_info.get(), state_table))
+        {
+            // Skipping invalid resource data capture.
+            GFXRECON_LOG_WARNING_ONCE("Encountered invalid resource during state write");
+            return;
+        }
 
         // Write the resource creation call to capture file.
         StandardCreateWrite(resource_wrapper);
@@ -688,6 +718,56 @@ void Dx12StateWriter::WriteResourceCreationState(
         mappable_resource->Unmap(map_info.subresource, &graphics::dx12::kZeroRange);
 
         parameter_stream_.Clear();
+    }
+}
+
+void Dx12StateWriter::WriteMetaCommandCreationState(const Dx12StateTable& state_table)
+{
+    std::set<util::MemoryOutputStream*>     processed;
+    std::vector<ID3D12MetaCommand_Wrapper*> metacommand_wrappers;
+    state_table.VisitWrappers([&](ID3D12MetaCommand_Wrapper* wrapper) {
+        assert(wrapper != nullptr);
+        assert(wrapper->GetObjectInfo() != nullptr);
+        assert(wrapper->GetObjectInfo()->create_parameters != nullptr);
+
+        // Filter duplicate entries for calls that create multiple objects, where objects created by the same call
+        // all reference the same parameter buffer.
+        auto wrapper_info = wrapper->GetObjectInfo();
+        if (processed.find(wrapper_info->create_parameters.get()) == processed.end())
+        {
+            StandardCreateWrite(wrapper);
+            metacommand_wrappers.push_back(wrapper);
+            processed.insert(wrapper_info->create_parameters.get());
+        }
+    });
+
+    if (metacommand_wrappers.size() > 0)
+    {
+        uint32_t block_index = 0;
+        for (auto wrapper : metacommand_wrappers)
+        {
+            // Write the meta command init call.
+            auto wrapper_info = wrapper->GetObjectInfo();
+            if (wrapper_info->was_initialized == true)
+            {
+                format::InitializeMetaCommand init_meta_command;
+                init_meta_command.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(init_meta_command) +
+                                                                  wrapper_info->initialize_parameters->GetDataSize();
+                init_meta_command.meta_header.block_header.type = format::kMetaDataBlock;
+                init_meta_command.meta_header.meta_data_id      = format::MakeMetaDataId(
+                    format::ApiFamilyId::ApiFamily_D3D12, format::MetaDataType::kInitializeMetaCommand);
+                init_meta_command.thread_id  = thread_id_;
+                init_meta_command.capture_id = wrapper->GetCaptureId();
+                init_meta_command.initialization_parameters_data_size =
+                    wrapper_info->initialize_parameters->GetDataSize();
+                init_meta_command.total_number_of_initializemetacommand = metacommand_wrappers.size();
+                init_meta_command.block_index                           = ++block_index;
+
+                output_stream_->Write(&init_meta_command, sizeof(init_meta_command));
+                output_stream_->Write(wrapper_info->initialize_parameters->GetData(),
+                                      wrapper_info->initialize_parameters->GetDataSize());
+            }
+        }
     }
 }
 
@@ -1306,6 +1386,20 @@ bool Dx12StateWriter::CheckDescriptorObjects(const DxDescriptorInfo& descriptor_
     }
 
     return true;
+}
+
+bool Dx12StateWriter::CheckResourceObject(const ID3D12ResourceInfo* resource_info, const Dx12StateTable& state_table)
+{
+    switch (resource_info->create_call_id)
+    {
+        case format::ApiCall_ID3D12Device_CreatePlacedResource:
+        case format::ApiCall_ID3D12Device8_CreatePlacedResource1:
+        case format::ApiCall_ID3D12Device10_CreatePlacedResource2:
+            // Placed resource have to have valid Heap object.
+            return (state_table.GetID3D12Heap_Wrapper(resource_info->heap_id) != nullptr);
+        default:
+            return true;
+    }
 }
 
 void Dx12StateWriter::WriteSwapChainState(const Dx12StateTable& state_table)

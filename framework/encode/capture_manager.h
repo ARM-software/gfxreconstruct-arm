@@ -42,7 +42,10 @@
 #include <atomic>
 #include <cassert>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <shared_mutex>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -70,9 +73,32 @@ class CommonCaptureManager
 
     static format::HandleId GetUniqueId() { return ++unique_id_counter_; }
 
-    static auto AcquireSharedApiCallLock() { return std::move(std::shared_lock<ApiCallMutexT>(api_call_mutex_)); }
+    using ApiSharedLockT    = std::shared_lock<ApiCallMutexT>;
+    using ApiExclusiveLockT = std::unique_lock<ApiCallMutexT>;
+    static auto AcquireSharedApiCallLock() { return std::move(ApiSharedLockT(api_call_mutex_)); }
+    static auto AcquireExclusiveApiCallLock() { return std::move(ApiExclusiveLockT(api_call_mutex_)); }
 
-    static auto AcquireExclusiveApiCallLock() { return std::move(std::unique_lock<ApiCallMutexT>(api_call_mutex_)); }
+    class ApiCallLock
+    {
+      public:
+        enum class Type
+        {
+            kExclusive,
+            kShared
+        };
+
+        ApiCallLock(Type type, ApiCallMutexT& mutex);
+        bool            IsShared() const { return shared.has_value(); }
+        ApiSharedLockT& GetSharedRef() { return shared.value(); }
+
+      private:
+        std::optional<ApiExclusiveLockT> exclusive;
+        std::optional<ApiSharedLockT>    shared;
+    };
+
+    // This method returns the composite with the apropos Lock initialized
+    ApiCallLock AcquireCallLock() const;
+
     static bool IsCaptureApp()
     {
         int32_t pid = -1;
@@ -108,7 +134,51 @@ class CommonCaptureManager
     {
         if ((capture_mode_ & kModeWrite) == kModeWrite)
         {
-            return InitApiCallCapture(call_id);
+#if ENABLE_OPENXR_SUPPORT
+            if (IsCaptureSkippingCurrentThread())
+            {
+                uint32_t            call_id_uint = static_cast<uint32_t>(call_id);
+                format::ApiFamilyId family  = static_cast<format::ApiFamilyId>(format::GetApiCallFamily(call_id_uint));
+                std::string         message = "Skipping ";
+
+                switch (family)
+                {
+                    default:
+                        break;
+                    case format::ApiFamily_Vulkan:
+                        message += "Vulkan ";
+                        break;
+                    case format::ApiFamily_Dxgi:
+                        message += "Dxgi ";
+                        break;
+                    case format::ApiFamily_D3D12:
+                        message += "D3D12 ";
+                        break;
+                    case format::ApiFamily_AGS:
+                        message += "AGS ";
+                        break;
+                    case format::ApiFamily_D3D11:
+                        message += "D3D11 ";
+                        break;
+                    case format::ApiFamily_D3D11On12:
+                        message += "D3D11On12 ";
+                        break;
+                    case format::ApiFamily_OpenXR:
+                        message += "OpenXR ";
+                        break;
+                }
+                std::stringstream stream;
+                stream << std::hex << call_id_uint;
+                message += "ApiCall ID 0x";
+                message += stream.str();
+                message += " because it occurred in a thread with invalid data";
+                WriteDisplayMessageCmd(family, message.c_str());
+            }
+            else
+#endif // ENABLE_OPENXR_SUPPORT
+            {
+                return InitApiCallCapture(call_id);
+            }
         }
 
         return nullptr;
@@ -220,10 +290,14 @@ class CommonCaptureManager
         return rv_annotation_info_.shaderid_mask;
     }
 
+    auto GetSkipThreadsWithInvalidData() const
+    {
+        return skip_threads_with_invalid_data_;
+    }
+
     uint64_t GetBlockIndex()
     {
-        auto thread_data = GetThreadData();
-        return thread_data->block_index_ == 0 ? 0 : thread_data->block_index_ - 1;
+        return block_index_ == 0 ? 0 : block_index_ - 1;
     }
 
     uint32_t GetFenceQueryDelay() const
@@ -243,7 +317,6 @@ class CommonCaptureManager
         return fence_query_delay_limit_;
     }
 
-  public:
     static int32_t GetPidFromPackageName(const char* progress_name);
 
     static bool CreateInstance(ApiCaptureManager* api_instance_, const std::function<void()>& destroyer);
@@ -276,6 +349,8 @@ class CommonCaptureManager
     util::ThreadData* GetThreadData();
     bool              IsCaptureModeTrack() const;
     bool              IsCaptureModeWrite() const;
+    bool              IsCaptureModeDisabled() const;
+    bool              IsCaptureSkippingCurrentThread() const;
 
     void DestroyInstance(ApiCaptureManager* singleton);
 
@@ -345,6 +420,10 @@ class CommonCaptureManager
     {
         return accel_struct_padding_;
     }
+    bool GetDisableMetaCommandSetting() const
+    {
+        return disable_meta_command_;
+    }
     bool GetForceFifoPresentModeSetting() const
     {
         return force_fifo_present_mode_;
@@ -364,6 +443,10 @@ class CommonCaptureManager
     bool GetUseAssetFile() const
     {
         return use_asset_file_;
+    }
+    bool GetIgnoreFrameBoundaryAndroid() const
+    {
+        return ignore_frame_boundary_android_;
     }
 
     util::Compressor* GetCompressor()
@@ -430,6 +513,11 @@ class CommonCaptureManager
 
     void WriteCreateHeapAllocationCmd(format::ApiFamilyId api_family, uint64_t allocation_id, uint64_t allocation_size);
 
+    void WriteFixShadowMemoryCmd(format::ApiFamilyId api_family,
+                                 format::HandleId    memory_id,
+                                 uint64_t            map_memory,
+                                 uint64_t            shadow_memory);
+
     bool OutputStreamWrite(const void* data, size_t len)
     {
         WriteToFile(data, len);
@@ -444,12 +532,14 @@ class CommonCaptureManager
     {
         file_stream ? file_stream->CombineAndWrite<N>(buffers, GetThreadData()->GetScratchBuffer())
                     : file_stream_->CombineAndWrite<N>(buffers, GetThreadData()->GetScratchBuffer());
+
+        // Increment block index
+        ++block_index_;
     }
 
     void IncrementBlockIndex(uint64_t blocks)
     {
         block_index_ += blocks;
-        GetThreadData()->block_index_ = block_index_;
     }
 
     uint64_t GetGlobalBlockIndex()
@@ -542,6 +632,7 @@ class CommonCaptureManager
     std::vector<uint32_t>                   screenshot_indices_;
     bool                                    disable_dxr_;
     uint32_t                                accel_struct_padding_;
+    bool                                    disable_meta_command_;
     bool                                    iunknown_wrapping_;
     bool                                    force_command_serialization_;
     bool                                    queue_zero_only_;
@@ -558,6 +649,8 @@ class CommonCaptureManager
     bool                                    write_assets_;
     bool                                    previous_write_assets_;
     bool                                    write_state_files_;
+    bool                                    ignore_frame_boundary_android_;
+    bool                                    skip_threads_with_invalid_data_;
 
     struct
     {

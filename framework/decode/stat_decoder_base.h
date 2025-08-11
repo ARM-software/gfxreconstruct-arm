@@ -89,6 +89,16 @@ class StatDecoderBase : public ApiDecoder
                                                   const format::ShaderHandleLocationInfo*          infos) override
     {}
 
+    virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                  const format::DescriptorDataLocationInfo*     info) override
+    {}
+
+    virtual void DispatchFixShadowMemoryCommand(format::ThreadId thread_id,
+                                                format::HandleId memory_id,
+                                                uint64_t         map_memory,
+                                                uint64_t         shadow_memory) override
+    {}
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override
@@ -109,6 +119,7 @@ class StatDecoderBase : public ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -177,13 +188,6 @@ class StatDecoderBase : public ApiDecoder
     virtual void DispatchInitBufferCommand(format::ThreadId thread_id,
                                            format::HandleId device_id,
                                            format::HandleId buffer_id,
-                                           uint64_t         data_size,
-                                           const uint8_t*   data) override
-    {}
-
-    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
-                                           format::HandleId device_id,
-                                           format::HandleId tensor_id,
                                            uint64_t         data_size,
                                            const uint8_t*   data) override
     {}

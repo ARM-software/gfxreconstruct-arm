@@ -74,7 +74,8 @@ CommonCaptureManager::CommonCaptureManager() :
     debug_device_lost_(false), screenshot_prefix_(""), screenshots_enabled_(false), disable_dxr_(false),
     accel_struct_padding_(0), iunknown_wrapping_(false), force_command_serialization_(false), queue_zero_only_(false),
     allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false), use_asset_file_(false), block_index_(0),
-    write_assets_(false), previous_write_assets_(false)
+    write_assets_(false), previous_write_assets_(false), skip_threads_with_invalid_data_(false),
+    disable_meta_command_(false)
 {}
 
 CommonCaptureManager::~CommonCaptureManager()
@@ -169,7 +170,7 @@ bool CommonCaptureManager::LockedCreateInstance(ApiCaptureManager*           api
         // NOTE: moved here from CaptureTracker::Initialize... DRY'r than putting it into the API specific
         //       CreateInstances. For actual multiple simulatenous API support we need to ensure all API capture manager
         //       state trackers are in the correct state given the differing settings that may be present.
-        if ((capture_mode_ & kModeTrack) == kModeTrack)
+        if (IsCaptureModeTrack())
         {
             api_capture_singleton->CreateStateTracker();
         }
@@ -346,6 +347,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     screenshot_prefix_    = PrepScreenshotPrefix(trace_settings.screenshot_dir);
     disable_dxr_          = trace_settings.disable_dxr;
     accel_struct_padding_ = trace_settings.accel_struct_padding;
+    disable_meta_command_   = trace_settings.disable_meta_command;
     iunknown_wrapping_    = trace_settings.iunknown_wrapping;
     force_command_serialization_         = trace_settings.force_command_serialization;
     queue_zero_only_                     = trace_settings.queue_zero_only;
@@ -357,6 +359,8 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     buffer_usages_to_ignore_             = trace_settings.buffer_usages_to_ignore;
     force_fifo_present_mode_             = trace_settings.force_fifo_present_mode;
     use_asset_file_                      = trace_settings.use_asset_file;
+    ignore_frame_boundary_android_       = trace_settings.ignore_frame_boundary_android;
+    skip_threads_with_invalid_data_      = trace_settings.skip_threads_with_invalid_data;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;
@@ -552,13 +556,27 @@ util::ThreadData* CommonCaptureManager::GetThreadData()
     return thread_data_.get();
 }
 
+bool CommonCaptureManager::IsCaptureSkippingCurrentThread() const
+{
+#if ENABLE_OPENXR_SUPPORT
+    return GetSkipThreadsWithInvalidData() && thread_data_->SkipCurrentThread();
+#endif
+    return false;
+}
+
 bool CommonCaptureManager::IsCaptureModeTrack() const
 {
     return (GetCaptureMode() & kModeTrack) == kModeTrack;
 }
+
 bool CommonCaptureManager::IsCaptureModeWrite() const
 {
     return (GetCaptureMode() & kModeWrite) == kModeWrite;
+}
+
+bool CommonCaptureManager::IsCaptureModeDisabled() const
+{
+    return GetCaptureMode() == kModeDisabled;
 }
 
 ParameterEncoder* CommonCaptureManager::InitApiCallCapture(format::ApiCallId call_id)
@@ -584,9 +602,21 @@ ParameterEncoder* CommonCaptureManager::InitMethodCallCapture(format::ApiCallId 
     return thread_data->parameter_encoder_.get();
 }
 
+CommonCaptureManager::ApiCallLock CommonCaptureManager::AcquireCallLock() const
+{
+    if (force_command_serialization_)
+    {
+        return ApiCallLock(ApiCallLock::Type::kExclusive, api_call_mutex_);
+    }
+    else
+    {
+        return ApiCallLock(ApiCallLock::Type::kShared, api_call_mutex_);
+    }
+}
+
 void CommonCaptureManager::EndApiCallCapture()
 {
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    if (IsCaptureModeWrite())
     {
         auto thread_data = GetThreadData();
         assert(thread_data != nullptr);
@@ -642,7 +672,7 @@ void CommonCaptureManager::EndApiCallCapture()
 
 void CommonCaptureManager::EndMethodCallCapture()
 {
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    if (IsCaptureModeWrite())
     {
         auto thread_data = GetThreadData();
         assert(thread_data != nullptr);
@@ -950,8 +980,11 @@ bool CommonCaptureManager::ShouldTriggerScreenshot()
 void CommonCaptureManager::WriteFrameMarker(format::MarkerType marker_type)
 {
     if (!IsCaptureApp())
+    {
         return;
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    }
+
+    if (IsCaptureModeWrite())
     {
         format::Marker marker_cmd;
         uint64_t       header_size = sizeof(format::Marker);
@@ -972,13 +1005,13 @@ void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family, std::shared_
 
     if (trim_enabled_ && (trim_boundary_ == CaptureSettings::TrimBoundary::kFrames))
     {
-        if ((capture_mode_ & kModeWrite) == kModeWrite)
+        if (IsCaptureModeWrite())
         {
             // Currently capturing a frame range.
             // Check for end of range or hotkey trigger to stop capture.
             CheckContinueCaptureForWriteMode(api_family, current_frame_, current_lock);
         }
-        else if ((capture_mode_ & kModeTrack) == kModeTrack)
+        else if (IsCaptureModeTrack())
         {
             // Capture is not active.
             // Check for start of capture frame range or hotkey trigger to start capture
@@ -993,7 +1026,7 @@ void CommonCaptureManager::EndFrame(format::ApiFamilyId api_family, std::shared_
     }
 
     // Terminate process if this was the last trim range and the user has asked to do so
-    if (kModeDisabled == capture_mode_ && quit_after_frame_ranges_)
+    if (IsCaptureModeDisabled() && quit_after_frame_ranges_)
     {
         GFXRECON_LOG_INFO("All trim ranges have been captured. Quitting.");
         exit(EXIT_SUCCESS);
@@ -1005,7 +1038,7 @@ void CommonCaptureManager::PreQueueSubmit(format::ApiFamilyId api_family, std::s
 
     if (trim_enabled_ && (trim_boundary_ == CaptureSettings::TrimBoundary::kQueueSubmits))
     {
-        if (((capture_mode_ & kModeWrite) != kModeWrite) && ((capture_mode_ & kModeTrack) == kModeTrack))
+        if (!IsCaptureModeWrite() && IsCaptureModeTrack())
         {
             // Capture is not active, check for start of capture frame range.
             CheckStartCaptureForTrackMode(api_family, queue_submit_count_, current_lock);
@@ -1021,7 +1054,7 @@ void CommonCaptureManager::PostQueueSubmit(format::ApiFamilyId              api_
 
     if (trim_enabled_ && (trim_boundary_ == CaptureSettings::TrimBoundary::kQueueSubmits))
     {
-        if ((capture_mode_ & kModeWrite) == kModeWrite)
+        if (IsCaptureModeWrite())
         {
             // Currently capturing a queue submit range, check for end of range.
             // It checks the boundary count with +1. That is for trim frames.
@@ -1344,12 +1377,9 @@ void CommonCaptureManager::WriteFileHeader(util::FileOutputStream* file_stream)
                             { option_list.data(), option_list.size() * sizeof(format::FileOptionPair) } },
                           file_stream);
 
-    // File header does not count as a block
-    assert(block_index_ > 0);
+    // File header does not count as a block when replaying
+    GFXRECON_ASSERT(block_index_ > 0);
     --block_index_;
-
-    auto thread_data          = GetThreadData();
-    thread_data->block_index_ = block_index_.load();
 }
 
 void CommonCaptureManager::BuildOptionList(const format::EnabledOptions&        enabled_options,
@@ -1363,8 +1393,11 @@ void CommonCaptureManager::BuildOptionList(const format::EnabledOptions&        
 void CommonCaptureManager::WriteDisplayMessageCmd(format::ApiFamilyId api_family, const char* message)
 {
     if (!IsCaptureApp())
+    {
         return;
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    }
+
+    if (IsCaptureModeWrite())
     {
         auto                                thread_data    = GetThreadData();
         size_t                              message_length = util::platform::StringLength(message);
@@ -1422,8 +1455,11 @@ void CommonCaptureManager::ForcedWriteAnnotation(const format::AnnotationType ty
 void CommonCaptureManager::WriteAnnotation(const format::AnnotationType type, const char* label, const char* data)
 {
     if (!IsCaptureApp())
+    {
         return;
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    }
+
+    if (IsCaptureModeWrite())
     {
         ForcedWriteAnnotation(type, label, data);
     }
@@ -1435,8 +1471,11 @@ void CommonCaptureManager::WriteResizeWindowCmd(format::ApiFamilyId api_family,
                                                 uint32_t            height)
 {
     if (!IsCaptureApp())
+    {
         return;
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    }
+
+    if (IsCaptureModeWrite())
     {
         auto                        thread_data = GetThreadData();
         format::ResizeWindowCommand resize_cmd;
@@ -1458,8 +1497,11 @@ void CommonCaptureManager::WriteFillMemoryCmd(
     format::ApiFamilyId api_family, format::HandleId memory_id, uint64_t offset, uint64_t size, const void* data)
 {
     if (!IsCaptureApp())
+    {
         return;
-    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    }
+
+    if (IsCaptureModeWrite())
     {
         GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, size);
 
@@ -1614,12 +1656,43 @@ void CommonCaptureManager::WriteCreateHeapAllocationCmd(format::ApiFamilyId api_
     }
 }
 
+void CommonCaptureManager::WriteFixShadowMemoryCmd(format::ApiFamilyId api_family,
+                                                   format::HandleId    memory_id,
+                                                   uint64_t            map_memory,
+                                                   uint64_t            shadow_memory)
+{
+    if (!IsCaptureApp())
+        return;
+
+    if ((capture_mode_ & kModeWrite) == kModeWrite)
+    {
+        format::FixShadowMemoryCommand fix_cmd;
+
+        auto thread_data = GetThreadData();
+        assert(thread_data != nullptr);
+
+        fix_cmd.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        fix_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(fix_cmd);
+        fix_cmd.meta_header.meta_data_id =
+            format::MakeMetaDataId(api_family, format::MetaDataType::kFixShadowMemoryCommand);
+        fix_cmd.thread_id     = thread_data->thread_id_;
+        fix_cmd.memory_id     = memory_id;
+        fix_cmd.map_memory    = map_memory;
+        fix_cmd.shadow_memory = shadow_memory;
+
+        WriteToFile(&fix_cmd, sizeof(fix_cmd));
+    }
+}
+
 void CommonCaptureManager::WriteToFile(const void* data, size_t size, util::FileOutputStream* file_stream)
 {
     if (!IsCaptureApp())
         return;
 
     file_stream ? file_stream->Write(data, size) : file_stream_->Write(data, size);
+
+    // Increment block index
+    ++block_index_;
 }
 
 void CommonCaptureManager::AtExit()
@@ -1794,9 +1867,19 @@ bool CaptureFileOutputStream::Write(const void* data, size_t len)
         }
     }
 
-    capture_manager_->IncrementBlockIndex(1);
-
     return ret;
+}
+
+CommonCaptureManager::ApiCallLock::ApiCallLock(Type type, ApiCallMutexT& mutex)
+{
+    if (type == Type::kExclusive)
+    {
+        exclusive.emplace(mutex);
+    }
+    else
+    {
+        shared.emplace(mutex);
+    }
 }
 
 GFXRECON_END_NAMESPACE(encode)

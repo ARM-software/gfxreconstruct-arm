@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -120,6 +121,20 @@ class Dx12DecoderBase : public ApiDecoder
         GFXRECON_ASSERT(false); // Not implemented for DX12
     };
 
+    virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                  const format::DescriptorDataLocationInfo*     infos) override
+    {
+        GFXRECON_ASSERT(false); // Not implemented for DX12
+    }
+
+    virtual void DispatchFixShadowMemoryCommand(format::ThreadId thread_id,
+                                                format::HandleId memory_id,
+                                                uint64_t         map_memory,
+                                                uint64_t         shadow_memory) override
+    {
+        GFXRECON_ASSERT(false); // Not implemented for DX12
+    }
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;
@@ -137,6 +152,7 @@ class Dx12DecoderBase : public ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -200,12 +216,6 @@ class Dx12DecoderBase : public ApiDecoder
                                            uint64_t         data_size,
                                            const uint8_t*   data) override;
 
-    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
-                                           format::HandleId device_id,
-                                           format::HandleId tensor_id,
-                                           uint64_t         data_size,
-                                           const uint8_t*   data) override;
-
     virtual void DispatchInitImageCommand(format::ThreadId             thread_id,
                                           format::HandleId             device_id,
                                           format::HandleId             image_id,
@@ -234,6 +244,9 @@ class Dx12DecoderBase : public ApiDecoder
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;
 
     virtual void SetCurrentApiCallId(format::ApiCallId api_call_id) override;
+
+    virtual void DispatchInitializeMetaCommand(format::InitializeMetaCommand& header,
+                                               const uint8_t*                 initialization_parameters_data) override;
 
   protected:
     const std::vector<Dx12Consumer*>& GetConsumers() const { return consumers_; }

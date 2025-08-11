@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2023 Valve Corporation
 ** Copyright (c) 2022-2023 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -121,6 +122,45 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    virtual void ProcessFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                 const format::DescriptorDataLocationInfo*     infos) override
+    {
+        using namespace util;
+        const JsonOptions& json_options = GetOptions();
+        auto&              jdata        = WriteMetaCommandStart("FixDescriptorDataCommand");
+        HandleToJson(jdata["memory_id"], header.memory_id, json_options);
+        if (json_options.verbose)
+        {
+            for (int i = 0; i < header.num_of_locations; i++)
+            {
+                FieldToJson(jdata["location"][i]["offset_in_mapped_memory"],
+                            infos[i].descriptor_offset_in_mapped_memory,
+                            json_options);
+                FieldToJson(
+                    jdata["location"][i]["offset_in_buffer"], infos[i].descriptor_offset_in_buffer, json_options);
+                FieldToJson(
+                    jdata["location"][i]["offset_in_memory"], infos[i].descriptor_offset_in_memory, json_options);
+                FieldToJson(jdata["location"][i]["descriptor_address"], infos[i].descriptor_addr, json_options);
+                FieldToJson(jdata["location"][i]["orig_size"], infos[i].orig_size, json_options);
+                FieldToJson(jdata["location"][i]["is_descriptor_buffer"], infos[i].is_descriptor_buffer, json_options);
+            }
+        }
+        WriteBlockEnd();
+    }
+
+    virtual void
+    ProcessFixShadowMemoryCommand(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory) override
+    {
+        using namespace util;
+        const JsonOptions& json_options = GetOptions();
+        auto&              jdata        = WriteMetaCommandStart("FixShadowMemoryCommand");
+        HandleToJson(jdata["memory_id"], memory_id, json_options);
+        FieldToJsonAsHex(jdata["map_memory"], map_memory, json_options);
+        FieldToJsonAsHex(jdata["shadow_memory"], shadow_memory, json_options);
+
+        WriteBlockEnd();
+    }
+
     virtual void Process_ExeFileInfo(gfxrecon::util::filepath::FileInfo& info) override
     {
         const util::JsonOptions& json_options = GetOptions();
@@ -128,12 +168,12 @@ class MetadataJsonConsumer : public Base
         FieldToJson(jdata["product_version"], info.ProductVersion, json_options);
         FieldToJson(jdata["file_version"], info.FileVersion, json_options);
         FieldToJson(jdata["app_version"], info.AppVersion, json_options);
-        FieldToJson(jdata["app_name"], info.AppName, json_options);
-        FieldToJson(jdata["company_name"], info.CompanyName, json_options);
-        FieldToJson(jdata["file_description"], info.FileDescription, json_options);
-        FieldToJson(jdata["internal_name"], info.InternalName, json_options);
-        FieldToJson(jdata["original_filename"], info.OriginalFilename, json_options);
-        FieldToJson(jdata["product_name"], info.ProductName, json_options);
+        FieldToJson(jdata["app_name"], util::NormalizeUtf8(info.AppName), json_options);
+        FieldToJson(jdata["company_name"], util::NormalizeUtf8(info.CompanyName), json_options);
+        FieldToJson(jdata["file_description"], util::NormalizeUtf8(info.FileDescription), json_options);
+        FieldToJson(jdata["internal_name"], util::NormalizeUtf8(info.InternalName), json_options);
+        FieldToJson(jdata["original_filename"], util::NormalizeUtf8(info.OriginalFilename), json_options);
+        FieldToJson(jdata["product_name"], util::NormalizeUtf8(info.ProductName), json_options);
         WriteBlockEnd();
     }
 
@@ -163,7 +203,8 @@ class MetadataJsonConsumer : public Base
     }
 
     virtual void
-    ProcessCreateHardwareBufferCommand(format::HandleId                                    memory_id,
+    ProcessCreateHardwareBufferCommand(format::HandleId                                    device_id,
+                                       format::HandleId                                    memory_id,
                                        uint64_t                                            buffer_id,
                                        uint32_t                                            format,
                                        uint32_t                                            width,
@@ -175,6 +216,7 @@ class MetadataJsonConsumer : public Base
     {
         const util::JsonOptions& json_options = GetOptions();
         auto&                    jdata        = WriteMetaCommandStart("CreateHardwareBufferCommand");
+        HandleToJson(jdata["device_id"], device_id, json_options);
         HandleToJson(jdata["memory_id"], memory_id, json_options);
         HandleToJson(jdata["buffer_id"], buffer_id, json_options);
         FieldToJson(jdata["format"], format, json_options);
@@ -258,6 +300,18 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
+    virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,
+                                              const uint8_t*                       parameters_data) override
+    {
+        const util::JsonOptions& json_options = GetJsonOptions();
+        auto&                    jdata        = WriteMetaCommandStart("InitializeMetaCommand");
+        HandleToJson(jdata["MetaCommand_id"], command_header.capture_id, json_options);
+        FieldToJson(jdata["InitializationParametersDataSizeInBytes"],
+                    command_header.initialization_parameters_data_size,
+                    json_options);
+        WriteBlockEnd();
+    }
+
     virtual void ProcessBeginResourceInitCommand(format::HandleId device_id,
                                                  uint64_t         max_resource_size,
                                                  uint64_t         max_copy_size) override
@@ -289,21 +343,6 @@ class MetadataJsonConsumer : public Base
         FieldToJson(jdata["data_size"], data_size, json_options);
         WriteChecksumToJson(jdata, data, data_size, json_options);
         RepresentBinaryFile(*(this->writer_), jdata[format::kNameData], "init_buffer.bin", data_size, data);
-        WriteBlockEnd();
-    }
-
-    virtual void ProcessInitTensorCommand(format::HandleId device_id,
-                                          format::HandleId tensor_id,
-                                          uint64_t         data_size,
-                                          const uint8_t*   data) override
-    {
-        const JsonOptions& json_options = GetJsonOptions();
-        auto&              jdata        = WriteMetaCommandStart("InitTensorCommand");
-        HandleToJson(jdata["device_id"], device_id, json_options);
-        HandleToJson(jdata["tensor_id"], tensor_id, json_options);
-        FieldToJson(jdata["data_size"], data_size, json_options);
-        WriteChecksumToJson(jdata, data, data_size, json_options);
-        RepresentBinaryFile(*(this->writer_), jdata[format::kNameData], "init_tensor.bin", data_size, data);
         WriteBlockEnd();
     }
 
@@ -403,6 +442,21 @@ class MetadataJsonConsumer : public Base
         HandleToJson(jdata["device"], device_id, json_options);
         FieldToJson(jdata["query_type"], query_type, json_options);
         FieldToJson(jdata["acceleration_structure"], acceleration_structure_id, json_options);
+        WriteBlockEnd();
+    }
+
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data) override
+    {
+        const JsonOptions& json_options = GetJsonOptions();
+        auto&              jdata        = WriteMetaCommandStart("InitTensorCommand");
+        HandleToJson(jdata["device_id"], device_id, json_options);
+        HandleToJson(jdata["tensor_id"], tensor_id, json_options);
+        FieldToJson(jdata["data_size"], data_size, json_options);
+        WriteChecksumToJson(jdata, data, data_size, json_options);
+        RepresentBinaryFile(*(this->writer_), jdata[format::kNameData], "init_tensor.bin", data_size, data);
         WriteBlockEnd();
     }
 

@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -412,7 +413,7 @@ HRESULT Dx12ResourceDataUtil::ReadFromResource(ID3D12Resource*                  
     // If the resource can be mapped, map it, copy the data, and return success.
     if (try_map_and_copy && IsResourceCpuAccessible(target_resource, kCopyTypeRead))
     {
-        data.resize(static_cast<size_t>(required_data_size));
+        data.resize(static_cast<size_t>(required_data_size), 0);
         if (CopyMappableResource(
                 target_resource, kCopyTypeRead, &data, nullptr, subresource_offsets, subresource_sizes))
         {
@@ -448,7 +449,7 @@ HRESULT Dx12ResourceDataUtil::ReadFromResource(ID3D12Resource*                  
     // After the command list has completed, map the copy resource and read its data.
     if (!batching && SUCCEEDED(result))
     {
-        data.resize(static_cast<size_t>(required_data_size));
+        data.resize(static_cast<size_t>(required_data_size), 0);
         result = MapSubresourceAndReadData(staging_resource, 0, static_cast<size_t>(required_data_size), data.data());
     }
 
@@ -837,6 +838,14 @@ Dx12ResourceDataUtil::ExecuteCopyCommandList(ID3D12Resource*                    
     }
 
     return result;
+}
+
+void Dx12ResourceDataUtil::InitializeMetaCommand(ID3D12MetaCommand* pMetaCommand,
+                                                 const void*        pInitializationParametersData,
+                                                 SIZE_T             InitializationParametersDataSizeInBytes)
+{
+    command_list_->InitializeMetaCommand(
+        pMetaCommand, pInitializationParametersData, InitializationParametersDataSizeInBytes);
 }
 
 HRESULT

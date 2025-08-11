@@ -61,7 +61,7 @@ class VulkanInternalBufferManager
         }
     };
 
-    VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
+    VulkanInternalBufferManager(const graphics::VulkanDeviceTable*      device_table,
                                 const VulkanPhysicalDeviceInfo*         physical_device_info,
                                 VkDevice                                device,
                                 VulkanResourceAllocator*                allocator,

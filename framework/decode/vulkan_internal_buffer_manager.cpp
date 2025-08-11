@@ -27,7 +27,7 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanInternalBufferManager::VulkanInternalBufferManager(const encode::VulkanDeviceTable*        device_table,
+VulkanInternalBufferManager::VulkanInternalBufferManager(const graphics::VulkanDeviceTable*      device_table,
                                                          const VulkanPhysicalDeviceInfo*         physical_device_info,
                                                          VkDevice                                device,
                                                          VulkanResourceAllocator*                allocator,

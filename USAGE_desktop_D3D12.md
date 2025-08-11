@@ -143,6 +143,7 @@ Enable Debug Layer | GFXRECON_DEBUG_LAYER | BOOL | Direct3D 12 only option. Enab
  Debug Device Lost                 | GFXRECON_DEBUG_DEVICE_LOST             | BOOL   | Direct3D 12 only option. Enables automatic injection of breadcrumbs into command buffers and page fault reporting.                  Used to debug device removed problems. 
  Disable DXR Support               | GFXRECON_DISABLE_DXR                   | BOOL   | Direct3D 12 only option. Override the result of `CheckFeatureSupport` to report the `RaytracingTier` as `D3D12_RAYTRACING_TIER_NOT_SUPPORTED`. Default is `false` 
 Acceleration Struct Size Padding | GFXRECON_ACCEL_STRUCT_PADDING | UINT | Direct3D 12 only option. Increase the required acceleration structure size that is reported to the application by calls to `GetRaytracingAccelerationStructurePrebuildInfo`. This can enable replay in environments with increased acceleration structure size requirements. The value should be specified as a percent of size increase. For example, a value of `5` would increase the reported acceleration structure sizes by `5%`. Default is `0` 
+Disable meta command | GFXRECON_DISABLE_META_COMMAND | BOOL | Direct3D 12 only option. Override the result of `CheckFeatureSupport` to report the `QueryOutputDataSizeInBytes` as `0` and `pQueryOutputData` as `nullptr`. Default is `true`
 Force Command Serialization | GFXRECON_FORCE_COMMAND_SERIALIZATION | BOOL | Sets exclusive locks(unique_lock) for every ApiCall. It can avoid external multi-thread to cause captured issue.
 Enable Experimental RV Search | GFXRECON_RV_ANNOTATION_EXPERIMENTAL | BOOL | Direct3D 12 only option. Experimental feature to help enable replay of certain DXR/ExecuteIndirect workloads. RV annotation is a capture mode which attempts to detect when applications write Resource Values (RVs) to memory. Conceptually, RVs represent different types of GPU pointers that applications write as resource data. This capture mode writes GFXR-specific identifier values into unoccupied bits of application-facing RVs and then searches for the identifier values when the application performs a memory write. This allows GFXR to better track RV locations and eventually produce an RV-optimized capture file that may be replayed. Enabling this feature introduces performance overhead during capture, and may result in unstable capture and/or replay.
 Use random RV annotation | GFXRECON_RV_ANNOTATION_RAND | BOOL | Option for GFXRECON_RV_ANNOTATION_EXPERIMENTAL. By default, the 2-byte identifier values are hard-coded. This option generates random identifier values used for annotating GPUVAs and GPU descriptors. Use this if capture-time crashes are observed.
@@ -238,6 +239,7 @@ Optional arguments:
   --version             Print version information and exit.
   --log-level <level>   Specify highest level message to log. Options are:
                         debug, info, warning, error, and fatal. Default is info.
+  --log-timestamps      Output a timestamp in front of each log message.
   --log-file <file>     Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled).
   --log-debugview       Log messages with OutputDebugStringA.
@@ -290,9 +292,10 @@ Optional arguments:
                         Direct3D 12 capture.
   --cpu-mask <binary-mask>
                         Set of CPU cores used by the replayer.
-                        `binary-mask` is a succession of '0' and '1' that specifies
-                        used/unused cores. For example '1010' activates the first and
-                        third cores and deactivate all other cores.
+                        `binary-mask` is a succession of '0' and '1' read from left
+                        to right that specifies used/unused cores.
+                        For example '10010' activates the first and
+                        fourth cores and deactivate all other cores.
                         If the option is not set, all cores can be used. If the option
                         is set only for some cores, the other cores are not used.
   --gpu <index>         Use the specified device for replay, where index

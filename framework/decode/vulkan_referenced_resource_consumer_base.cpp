@@ -21,7 +21,6 @@
 */
 
 #include "decode/vulkan_referenced_resource_consumer_base.h"
-#include "graphics/vulkan_util.h"
 
 #include "util/logging.h"
 
@@ -795,30 +794,6 @@ void VulkanReferencedResourceConsumerBase::ProcessSetTlasToBlasRelationCommand(
     }
 }
 
-void VulkanReferencedResourceConsumerBase::ProcessMicromapCompactionDependencyCommand(
-    format::HandleId parent, const std::vector<format::HandleId>& children)
-{
-    if (children.size())
-    {
-        for (const auto& child : children)
-        {
-            table_.AddResource(parent, child, true);
-        }
-    }
-}
-
-void VulkanReferencedResourceConsumerBase::ProcessAccelerationStructureCompactionDependencyCommand(
-    format::HandleId parent, const std::vector<format::HandleId>& children)
-{
-    if (children.size())
-    {
-        for (const auto& child : children)
-        {
-            table_.AddResource(parent, child, true);
-        }
-    }
-}
-
 uint32_t VulkanReferencedResourceConsumerBase::GetBindingCount(format::HandleId container_id, uint32_t binding) const
 {
     const auto layout_entry = set_layouts_.find(container_id);
@@ -1183,22 +1158,29 @@ void VulkanReferencedResourceConsumerBase::PushDescriptorSetWithTemplate(format:
     }
 }
 
-void VulkanReferencedResourceConsumerBase::Process_vkGetBufferDeviceAddressKHR(
-    const ApiCallInfo&                                       call_info,
-    VkDeviceAddress                                          returnValue,
-    format::HandleId                                         device,
-    StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
-{
-    ProcessGetBufferDeviceAddress(call_info, returnValue, device, pInfo);
-}
-
 void VulkanReferencedResourceConsumerBase::Process_vkGetBufferDeviceAddress(
     const ApiCallInfo&                                       call_info,
     VkDeviceAddress                                          returnValue,
     format::HandleId                                         device,
     StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
 {
-    ProcessGetBufferDeviceAddress(call_info, returnValue, device, pInfo);
+    if (pInfo != nullptr && pInfo->GetMetaStructPointer() != nullptr)
+    {
+        const auto* buffer_device_address = pInfo->GetMetaStructPointer();
+        if (buffer_device_address != nullptr)
+        {
+            table_.MarkResourceAsUsed(buffer_device_address->buffer);
+        }
+    }
+}
+
+void VulkanReferencedResourceConsumerBase::Process_vkGetBufferDeviceAddressKHR(
+    const ApiCallInfo&                                       call_info,
+    VkDeviceAddress                                          returnValue,
+    format::HandleId                                         device,
+    StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
+{
+    Process_vkGetBufferDeviceAddress(call_info, returnValue, device, pInfo);
 }
 
 void VulkanReferencedResourceConsumerBase::Process_vkGetBufferDeviceAddressEXT(
@@ -1207,145 +1189,7 @@ void VulkanReferencedResourceConsumerBase::Process_vkGetBufferDeviceAddressEXT(
     format::HandleId                                         device,
     StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
 {
-    ProcessGetBufferDeviceAddress(call_info, returnValue, device, pInfo);
-}
-
-void VulkanReferencedResourceConsumerBase::ProcessGetBufferDeviceAddress(
-    const ApiCallInfo&                                       call_info,
-    VkDeviceAddress                                          returnValue,
-    format::HandleId                                         device,
-    StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(call_info);
-    if (!pInfo->HasData())
-    {
-        return;
-    }
-
-    dev_address_to_buffers_map[returnValue] = pInfo->GetMetaStructPointer()->buffer;
-}
-
-void VulkanReferencedResourceConsumerBase::Process_vkCmdBuildMicromapsEXT(
-    const ApiCallInfo&                                    call_info,
-    format::HandleId                                      commandBuffer,
-    uint32_t                                              infoCount,
-    StructPointerDecoder<Decoded_VkMicromapBuildInfoEXT>* pInfos)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(call_info);
-
-    if (!pInfos->HasData())
-    {
-        return;
-    }
-
-    VkMicromapBuildInfoEXT* infos = pInfos->GetPointer();
-
-    for (uint32_t info = 0; info < infoCount; ++info)
-    {
-        auto data_result = dev_address_to_buffers_map.find(infos[info].data.deviceAddress);
-        if (data_result != dev_address_to_buffers_map.end())
-        {
-            table_.AddResourceToUser(commandBuffer, data_result->second);
-        }
-        auto triangle_array_result = dev_address_to_buffers_map.find(infos[info].triangleArray.deviceAddress);
-        if (triangle_array_result != dev_address_to_buffers_map.end())
-        {
-            table_.AddResourceToUser(commandBuffer, triangle_array_result->second);
-        }
-    }
-}
-
-void VulkanReferencedResourceConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaCommand(
-    format::HandleId                                                           device_id,
-    uint32_t                                                                   info_count,
-    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* geometry_infos,
-    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,
-    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(device_id);
-    GFXRECON_UNREFERENCED_PARAMETER(range_infos);
-    GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
-
-    if (!geometry_infos->HasData())
-    {
-        return;
-    }
-
-    VkAccelerationStructureBuildGeometryInfoKHR*         infos = geometry_infos->GetPointer();
-    Decoded_VkAccelerationStructureBuildGeometryInfoKHR* meta  = geometry_infos->GetMetaStructPointer();
-
-    for (uint32_t info = 0; info < info_count; ++info)
-    {
-        for (uint32_t g = 0; g < infos[info].geometryCount; ++g)
-        {
-            const VkAccelerationStructureGeometryKHR& geometry = infos[info].pGeometries[g];
-            switch (geometry.geometryType)
-            {
-                case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
-                {
-                    auto vertex_result =
-                        dev_address_to_buffers_map.find(geometry.geometry.triangles.vertexData.deviceAddress);
-                    if (vertex_result != dev_address_to_buffers_map.end())
-                    {
-                        table_.AddPreservedResource(vertex_result->second);
-                    }
-                    auto index_result =
-                        dev_address_to_buffers_map.find(geometry.geometry.triangles.indexData.deviceAddress);
-                    if (index_result != dev_address_to_buffers_map.end())
-                    {
-                        table_.AddPreservedResource(index_result->second);
-                    }
-                    auto transfrom_result =
-                        dev_address_to_buffers_map.find(geometry.geometry.triangles.transformData.deviceAddress);
-                    if (transfrom_result != dev_address_to_buffers_map.end())
-                    {
-                        table_.AddPreservedResource(transfrom_result->second);
-                    }
-                    VkBaseOutStructure* pNextStruct =
-                        reinterpret_cast<VkBaseOutStructure*>(const_cast<void*>(geometry.geometry.triangles.pNext));
-
-                    VkAccelerationStructureTrianglesOpacityMicromapEXT* micromap_struct =
-                        graphics::GetPNextStruct<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
-                            &(geometry.geometry.triangles),
-                            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT);
-                    if (micromap_struct != nullptr)
-                    {
-                        auto micromap_result =
-                            dev_address_to_buffers_map.find(micromap_struct->indexBuffer.deviceAddress);
-                        if (micromap_result != dev_address_to_buffers_map.end())
-                        {
-                            table_.AddPreservedResource(micromap_result->second);
-                        }
-                    }
-
-                    break;
-                }
-
-                case VK_GEOMETRY_TYPE_AABBS_KHR:
-                {
-                    auto aabbs_result = dev_address_to_buffers_map.find(geometry.geometry.aabbs.data.deviceAddress);
-                    if (aabbs_result != dev_address_to_buffers_map.end())
-                    {
-                        table_.AddPreservedResource(aabbs_result->second);
-                    }
-                    break;
-                }
-
-                case VK_GEOMETRY_TYPE_INSTANCES_KHR:
-                {
-                    auto instances_result =
-                        dev_address_to_buffers_map.find(geometry.geometry.instances.data.deviceAddress);
-                    if (instances_result != dev_address_to_buffers_map.end())
-                    {
-                        table_.AddPreservedResource(instances_result->second);
-                    }
-                    break;
-                }
-                default:
-                    break;
-            }
-        }
-    }
+    Process_vkGetBufferDeviceAddress(call_info, returnValue, device, pInfo);
 }
 
 GFXRECON_END_NAMESPACE(decode)

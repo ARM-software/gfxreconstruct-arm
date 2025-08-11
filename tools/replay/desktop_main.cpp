@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
-** Copyright (c) 2018-2020 LunarG, Inc.
+** Copyright (c) 2018-2025 LunarG, Inc.
 ** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
@@ -32,6 +32,13 @@
 #include "decode/vulkan_pre_process_consumer.h"
 #include "generated/generated_vulkan_decoder.h"
 #include "generated/generated_vulkan_replay_consumer.h"
+
+#ifdef ENABLE_OPENXR_SUPPORT
+#include "decode/openxr_tracked_object_info_table.h"
+#include "generated/generated_openxr_decoder.h"
+#include "generated/generated_openxr_replay_consumer.h"
+#endif
+
 #include "graphics/fps_info.h"
 #include "util/argument_parser.h"
 #include "util/logging.h"
@@ -60,7 +67,7 @@
 
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 615;
 }
 extern "C"
 {
@@ -100,7 +107,8 @@ int main(int argc, const char** argv)
     gfxrecon::util::Log::Init(gfxrecon::decode::kDefaultLogLevel);
     PrintVersion(argv[0]);
 
-    gfxrecon::util::ArgumentParser arg_parser(argc, argv, kOptions, kArguments);
+    gfxrecon::util::ArgumentParser arg_parser(
+        argc, argv, GetArmOptionString(kOptions), GetArmArgumentsString(kArguments));
 
     if (arg_parser.IsOptionSet(kVersionOption) || CheckOptionPrintUsage(argv[0], arg_parser))
     {
@@ -157,11 +165,11 @@ int main(int argc, const char** argv)
             gfxrecon::decode::VulkanReplayOptions          vulkan_replay_options =
                 GetVulkanReplayOptions(arg_parser, filename, &tracked_object_info_table);
 
-            uint32_t measurement_start_frame = 0;
-            uint32_t measurement_end_frame   = 0;
-
             bool     quit_after_frame = false;
             uint32_t quit_frame       = std::numeric_limits<uint32_t>::max();
+
+            uint32_t measurement_start_frame = 0;
+            uint32_t measurement_end_frame   = 0;
 
             bool        quit_after_measurement_frame_range = false;
             bool        flush_measurement_frame_range      = false;
@@ -282,6 +290,15 @@ int main(int argc, const char** argv)
 
 #if defined(WIN32)
             SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+#endif
+
+#if ENABLE_OPENXR_SUPPORT
+            gfxrecon::decode::OpenXrReplayOptions  openxr_replay_options = {};
+            gfxrecon::decode::OpenXrDecoder        openxr_decoder;
+            gfxrecon::decode::OpenXrReplayConsumer openxr_replay_consumer(application, openxr_replay_options);
+            openxr_replay_consumer.SetVulkanReplayConsumer(&vulkan_replay_consumer);
+            openxr_decoder.AddConsumer(&openxr_replay_consumer);
+            file_processor->AddDecoder(&openxr_decoder);
 #endif
 
             // Warn if the capture layer is active.

@@ -962,7 +962,7 @@ def make_gen_opts(args):
             directory=directory,
             blacklists=blacklists,
             platform_types=platform_types,
-            prefix_text=prefix_strings + vk_prefix_strings,
+            prefix_text=vk_prefix_strings,
             protect_file=True,
             protect_feature=False,
             extra_headers=extra_headers

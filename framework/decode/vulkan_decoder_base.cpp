@@ -102,6 +102,27 @@ void VulkanDecoderBase::DispatchShaderGroupHandleCommand(const format::FixShader
     }
 }
 
+void VulkanDecoderBase::DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                         const format::DescriptorDataLocationInfo*     infos)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessFixDescriptorDataCommand(header, infos);
+    }
+}
+
+void VulkanDecoderBase::DispatchFixShadowMemoryCommand(format::ThreadId thread_id,
+                                                       format::HandleId memory_id,
+                                                       uint64_t         map_memory,
+                                                       uint64_t         shadow_memory)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(thread_id);
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessFixShadowMemoryCommand(memory_id, map_memory, shadow_memory);
+    }
+}
+
 void VulkanDecoderBase::DispatchExeFileInfo(format::ThreadId thread_id, format::ExeFileInfoBlock& info)
 {
     for (auto consumer : consumers_)
@@ -145,6 +166,7 @@ void VulkanDecoderBase::DispatchResizeWindowCommand2(
 
 void VulkanDecoderBase::DispatchCreateHardwareBufferCommand(
     format::ThreadId                                    thread_id,
+    format::HandleId                                    device_id,
     format::HandleId                                    memory_id,
     uint64_t                                            buffer_id,
     uint32_t                                            format,
@@ -160,7 +182,7 @@ void VulkanDecoderBase::DispatchCreateHardwareBufferCommand(
     for (auto consumer : consumers_)
     {
         consumer->ProcessCreateHardwareBufferCommand(
-            memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
+            device_id, memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
     }
 }
 
@@ -304,20 +326,6 @@ void VulkanDecoderBase::DispatchInitBufferCommand(format::ThreadId thread_id,
     }
 }
 
-void VulkanDecoderBase::DispatchInitTensorCommand(format::ThreadId thread_id,
-                                                  format::HandleId device_id,
-                                                  format::HandleId tensor_id,
-                                                  uint64_t         data_size,
-                                                  const uint8_t*   data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(thread_id);
-
-    for (auto consumer : consumers_)
-    {
-        consumer->ProcessInitTensorCommand(device_id, tensor_id, data_size, data);
-    }
-}
-
 void VulkanDecoderBase::DispatchInitImageCommand(format::ThreadId             thread_id,
                                                  format::HandleId             device_id,
                                                  format::HandleId             image_id,
@@ -332,6 +340,20 @@ void VulkanDecoderBase::DispatchInitImageCommand(format::ThreadId             th
     for (auto consumer : consumers_)
     {
         consumer->ProcessInitImageCommand(device_id, image_id, data_size, aspect, layout, level_sizes, data);
+    }
+}
+
+void VulkanDecoderBase::DispatchInitTensorCommand(format::ThreadId thread_id,
+                                                  format::HandleId device_id,
+                                                  format::HandleId tensor_id,
+                                                  uint64_t         data_size,
+                                                  const uint8_t*   data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(thread_id);
+
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessInitTensorCommand(device_id, tensor_id, data_size, data);
     }
 }
 

@@ -1,7 +1,8 @@
 {
   "functions": {
     "CreateDXGIFactory2": "OverrideCreateDXGIFactory2",
-    "D3D12CreateDevice": "OverrideD3D12CreateDevice"
+    "D3D12CreateDevice": "OverrideD3D12CreateDevice",
+    "D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary": "OverrideD3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary"
   },
   "classmethods": {
     "IUnknown": {
@@ -56,7 +57,8 @@
     },
     "ID3D12Device5": {
       "CreateStateObject": "OverrideCreateStateObject",
-      "GetRaytracingAccelerationStructurePrebuildInfo": "OverrideGetRaytracingAccelerationStructurePrebuildInfo"
+      "GetRaytracingAccelerationStructurePrebuildInfo": "OverrideGetRaytracingAccelerationStructurePrebuildInfo",
+      "CreateMetaCommand": "OverrideCreateMetaCommand"
     },
     "ID3D12Device7": {
       "AddToStateObject": "OverrideAddToStateObject"
@@ -107,8 +109,6 @@
     },
     "ID3D12StateObjectProperties": {
       "GetShaderIdentifier": "OverrideGetShaderIdentifier",
-      "GetShaderStackSize": "OverrideGetShaderStackSize",
-      "GetPipelineStackSize": "OverrideGetPipelineStackSize",
       "SetPipelineStackSize": "OverrideSetPipelineStackSize"
     },
     "ID3D12GraphicsCommandList": {
@@ -125,8 +125,14 @@
       "BuildRaytracingAccelerationStructure": "OverrideBuildRaytracingAccelerationStructure",
       "DispatchRays": "OverrideDispatchRays",
       "SetPipelineState1": "OverrideSetPipelineState1",
-      "BeginRenderPass": "OverrideBeginRenderPass"
+      "BeginRenderPass": "OverrideBeginRenderPass",
+      "InitializeMetaCommand": "OverrideInitializeMetaCommand",
+      "ExecuteMetaCommand": "OverrideExecuteMetaCommand"
     },
+    "ID3D12GraphicsCommandList10": {
+      "SetProgram": "OverrideSetProgram",
+      "DispatchGraph": "OverrideDispatchGraph"
+    },    
     "IDXGIFactory": {
       "CreateSwapChain": "OverrideCreateSwapChain"
     },
@@ -143,10 +149,13 @@
       "GetBuffer": "OverrideGetBuffer",
       "ResizeBuffers": "OverrideResizeBuffers",
       "Present": "OverridePresent",
-      "SetFullscreenState": "OverrideSetFullscreenState"
+      "SetFullscreenState": "OverrideSetFullscreenState",
+      "GetContainingOutput": "OverrideGetContainingOutput"
     },
     "IDXGISwapChain1": {
-      "Present1": "OverridePresent1"
+      "Present1": "OverridePresent1",
+      "GetFullscreenDesc":"OverrideGetFullscreenDesc",
+      "GetHwnd": "OverrideGetHwnd"
     },
     "IDXGISwapChain3": {
       "ResizeBuffers1": "OverrideResizeBuffers1"

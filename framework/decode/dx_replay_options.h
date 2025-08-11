@@ -53,6 +53,7 @@ struct DxReplayOptions : public ReplayOptions
     bool                 override_object_names{ false };
     bool                 ags_inject_markers{ false };
     int32_t              memory_usage{ kDefaultBatchingMemoryUsage };
+    bool                 headless{ false };
 
     CreateDx12ResourceAllocator create_resource_allocator;
 };

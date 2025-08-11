@@ -31,7 +31,7 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
-    const encode::VulkanDeviceTable*        device_table,
+    const graphics::VulkanDeviceTable*      device_table,
     const VulkanPhysicalDeviceInfo*         physical_device_info,
     VkDevice                                device,
     VulkanResourceAllocator*                allocator,
@@ -300,7 +300,7 @@ void VulkanAccelerationStructureBuilder::OnDestroyBuffer(const VulkanBufferInfo*
     }
 }
 
-void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table)
+void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table)
 {
     functions_.get_acceleration_structure_build_sizes       = device_table->GetAccelerationStructureBuildSizesKHR,
     functions_.create_acceleration_structure                = device_table->CreateAccelerationStructureKHR,

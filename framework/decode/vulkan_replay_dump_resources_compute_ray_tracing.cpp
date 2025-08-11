@@ -54,12 +54,12 @@ DispatchTraceRaysDumpingContext::DispatchTraceRaysDumpingContext(const std::vect
                                                                  const VulkanReplayOptions&   options,
                                                                  VulkanDumpResourcesDelegate& delegate) :
     original_command_buffer_info(nullptr),
-    DR_command_buffer(VK_NULL_HANDLE), dispatch_indices(dispatch_indices),
-    trace_rays_indices(trace_rays_indices), bound_pipelines{ nullptr },
-    dump_resources_before(options.dump_resources_before), device_table(nullptr), parent_device(VK_NULL_HANDLE),
-    instance_table(nullptr), object_info_table(object_info_table), replay_device_phys_mem_props(nullptr),
-    current_dispatch_index(0), current_trace_rays_index(0), delegate_(delegate),
-    dump_immutable_resources(options.dump_resources_dump_immutable_resources), reached_end_command_buffer(false)
+    DR_command_buffer(VK_NULL_HANDLE), dispatch_indices(dispatch_indices), trace_rays_indices(trace_rays_indices),
+    dump_resources_before(options.dump_resources_before), delegate_(delegate),
+    dump_immutable_resources(options.dump_resources_dump_immutable_resources), bound_pipeline_compute(nullptr),
+    bound_pipeline_trace_rays(nullptr), device_table(nullptr), parent_device(VK_NULL_HANDLE), instance_table(nullptr),
+    object_info_table(object_info_table), replay_device_phys_mem_props(nullptr), current_dispatch_index(0),
+    current_trace_rays_index(0), reached_end_command_buffer(false)
 {}
 
 DispatchTraceRaysDumpingContext::~DispatchTraceRaysDumpingContext()
@@ -105,9 +105,9 @@ void DispatchTraceRaysDumpingContext::Release()
     trace_rays_params.clear();
 }
 
-VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(VulkanCommandBufferInfo*           orig_cmd_buf_info,
-                                                             const encode::VulkanDeviceTable*   dev_table,
-                                                             const encode::VulkanInstanceTable* inst_table)
+VkResult DispatchTraceRaysDumpingContext::CloneCommandBuffer(VulkanCommandBufferInfo*             orig_cmd_buf_info,
+                                                             const graphics::VulkanDeviceTable*   dev_table,
+                                                             const graphics::VulkanInstanceTable* inst_table)
 {
     assert(orig_cmd_buf_info);
     assert(dev_table);
@@ -168,12 +168,6 @@ void DispatchTraceRaysDumpingContext::FinalizeCommandBuffer(bool is_dispatch)
     }
 }
 
-void DispatchTraceRaysDumpingContext::BindPipeline(VkPipelineBindPoint bind_point, const VulkanPipelineInfo* pipeline)
-{
-    PipelineBindPoints point = VkPipelineBindPointToPipelineBindPoint(bind_point);
-    bound_pipelines[point]   = pipeline;
-}
-
 void DispatchTraceRaysDumpingContext::BindDescriptorSets(
     VkPipelineBindPoint                                pipeline_bind_point,
     uint32_t                                           first_set,
@@ -181,9 +175,8 @@ void DispatchTraceRaysDumpingContext::BindDescriptorSets(
     uint32_t                                           dynamicOffsetCount,
     const uint32_t*                                    pDynamicOffsets)
 {
-    PipelineBindPoints bind_point = VkPipelineBindPointToPipelineBindPoint(pipeline_bind_point);
-
-    if (bind_point != kBindPoint_compute && bind_point != kBindPoint_ray_tracing)
+    if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE &&
+        pipeline_bind_point != VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR)
     {
         return;
     }
@@ -194,13 +187,12 @@ void DispatchTraceRaysDumpingContext::BindDescriptorSets(
         uint32_t set_index = first_set + i;
 
         VulkanDescriptorSetInfo* bound_descriptor_sets;
-        if (bind_point == kBindPoint_compute)
+        if (pipeline_bind_point == VK_PIPELINE_BIND_POINT_COMPUTE)
         {
             bound_descriptor_sets = &bound_descriptor_sets_compute[set_index];
         }
         else
         {
-            assert(bind_point == kBindPoint_ray_tracing);
             bound_descriptor_sets = &bound_descriptor_sets_ray_tracing[set_index];
         }
 
@@ -458,18 +450,18 @@ VkResult DispatchTraceRaysDumpingContext::CloneTraceRaysMutableResources(uint64_
         cloning_before_cmd ? params.mutable_resources_clones_before : params.mutable_resources_clones, false);
 }
 
-void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptorsDispatch(uint64_t index)
+void DispatchTraceRaysDumpingContext::SnapshotDispatchState(uint64_t index)
 {
     auto params_entry = dispatch_params.find(index);
     assert(params_entry != dispatch_params.end());
-    SnapshotBoundDescriptors(params_entry->second);
+    SnapshotDispatchState(params_entry->second);
 }
 
-void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptorsTraceRays(uint64_t index)
+void DispatchTraceRaysDumpingContext::SnapshotTraceRaysState(uint64_t index)
 {
     auto params_entry = trace_rays_params.find(index);
     assert(params_entry != trace_rays_params.end());
-    SnapshotBoundDescriptors(params_entry->second);
+    SnapshotTraceRaysState(params_entry->second);
 }
 
 VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResourcesBackupContext& resource_backup_context,
@@ -477,138 +469,116 @@ VkResult DispatchTraceRaysDumpingContext::CloneMutableResources(MutableResources
 {
     assert(IsRecording());
 
-    // Scan for mutable resources in the bound pipeline
-    const uint32_t bind_point = static_cast<uint32_t>(is_dispatch ? kBindPoint_compute : kBindPoint_ray_tracing);
-    const VulkanPipelineInfo* pipeline = bound_pipelines[bind_point];
-    assert(pipeline != nullptr);
-
-    for (const auto& shader : pipeline->shaders)
+    auto& bound_descriptor_sets = is_dispatch ? bound_descriptor_sets_compute : bound_descriptor_sets_ray_tracing;
+    for (const auto& desc_set : bound_descriptor_sets)
     {
-        for (const auto& shader_desc_set : shader.second.used_descriptors_info)
+        const uint32_t desc_set_index = desc_set.first;
+        for (const auto& desc : desc_set.second.descriptors)
         {
-            const uint32_t desc_set_index = shader_desc_set.first;
-
-            for (const auto& shader_desc_binding : shader_desc_set.second)
+            const uint32_t           binding_index = desc.first;
+            const VkDescriptorType   desc_type     = desc.second.desc_type;
+            const VkShaderStageFlags stage_flags   = desc.second.stage_flags;
+            switch (desc_type)
             {
-                // Search for resources that are not marked as read only
-                if (shader_desc_binding.second.accessed && !shader_desc_binding.second.readonly)
+                case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                 {
-                    const uint32_t binding_index = shader_desc_binding.first;
-
-                    const VulkanDescriptorSetInfo* bound_descriptor_sets =
-                        is_dispatch ? &bound_descriptor_sets_compute[desc_set_index]
-                                    : &bound_descriptor_sets_ray_tracing[desc_set_index];
-                    assert(bound_descriptor_sets != nullptr);
-
-                    const auto& bound_desc_binding = bound_descriptor_sets->descriptors.find(binding_index);
-                    assert(bound_desc_binding != bound_descriptor_sets->descriptors.end());
-                    assert(CheckDescriptorCompatibility(bound_desc_binding->second.desc_type,
-                                                        shader_desc_binding.second.type));
-
-                    switch (shader_desc_binding.second.type)
+                    uint32_t array_index = 0;
+                    for (const auto& img_desc : desc.second.image_info)
                     {
-                        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                        if (img_desc.second.image_view_info == nullptr)
                         {
-                            uint32_t array_index = 0;
-                            for (const auto& img_desc : bound_desc_binding->second.image_info)
-                            {
-                                if (img_desc.image_view_info == nullptr)
-                                {
-                                    continue;
-                                }
-
-                                const VulkanImageInfo* img_info =
-                                    object_info_table.GetVkImageInfo(img_desc.image_view_info->image_id);
-                                assert(img_info);
-
-                                auto& new_entry          = resource_backup_context.images.emplace_back();
-                                new_entry.original_image = img_info;
-                                new_entry.stage          = shader.first;
-                                new_entry.desc_type      = shader_desc_binding.second.type;
-                                new_entry.desc_set       = desc_set_index;
-                                new_entry.desc_binding   = binding_index;
-                                new_entry.array_index    = array_index++;
-
-                                VkResult res = CloneImage(object_info_table,
-                                                          device_table,
-                                                          replay_device_phys_mem_props,
-                                                          img_info,
-                                                          &new_entry.image,
-                                                          &new_entry.image_memory);
-                                if (res != VK_SUCCESS)
-                                {
-                                    GFXRECON_LOG_ERROR("Cloning image resource %" PRIu64 " failed (%s)",
-                                                       img_info->capture_id,
-                                                       util::ToString<VkResult>(res).c_str())
-                                    return res;
-                                }
-
-                                CopyImageResource(img_info, new_entry.image);
-                            }
+                            continue;
                         }
-                        break;
 
-                        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                        const VulkanImageInfo* img_info =
+                            object_info_table.GetVkImageInfo(img_desc.second.image_view_info->image_id);
+                        assert(img_info);
+
+                        auto& new_entry          = resource_backup_context.images.emplace_back();
+                        new_entry.original_image = img_info;
+                        new_entry.stages         = stage_flags;
+                        new_entry.desc_type      = desc_type;
+                        new_entry.desc_set       = desc_set_index;
+                        new_entry.desc_binding   = binding_index;
+                        new_entry.array_index    = array_index++;
+
+                        VkResult res = CloneImage(object_info_table,
+                                                  device_table,
+                                                  replay_device_phys_mem_props,
+                                                  img_info,
+                                                  &new_entry.image,
+                                                  &new_entry.image_memory);
+                        if (res != VK_SUCCESS)
                         {
-                            uint32_t array_index = 0;
-                            for (const auto& buf_desc : bound_desc_binding->second.buffer_info)
-                            {
-                                const VulkanBufferInfo* buf_info = buf_desc.buffer_info;
-                                if (buf_info == nullptr)
-                                {
-                                    continue;
-                                }
-
-                                auto& new_entry           = resource_backup_context.buffers.emplace_back();
-                                new_entry.original_buffer = buf_info;
-                                new_entry.stage           = shader.first;
-                                new_entry.desc_type       = shader_desc_binding.second.type;
-                                new_entry.desc_set        = desc_set_index;
-                                new_entry.desc_binding    = binding_index;
-                                new_entry.array_index     = array_index++;
-
-                                VkResult res = CloneBuffer(object_info_table,
-                                                           device_table,
-                                                           replay_device_phys_mem_props,
-                                                           buf_info,
-                                                           &new_entry.buffer,
-                                                           &new_entry.buffer_memory);
-
-                                if (res != VK_SUCCESS)
-                                {
-                                    GFXRECON_LOG_ERROR("Cloning buffer resource %" PRIu64 " failed (%s)",
-                                                       buf_info->capture_id,
-                                                       util::ToString<VkResult>(res).c_str())
-                                    return res;
-                                }
-
-                                CopyBufferResource(buf_info, buf_desc.offset, buf_desc.range, new_entry.buffer);
-                            }
+                            GFXRECON_LOG_ERROR("Cloning image resource %" PRIu64 " failed (%s)",
+                                               img_info->capture_id,
+                                               util::ToString<VkResult>(res).c_str())
+                            return res;
                         }
-                        break;
 
-                        case VK_DESCRIPTOR_TYPE_SAMPLER:
-                        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-                        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-                        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-                        case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
-                        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
-                            // These are read only resources
-                            break;
-
-                        default:
-                            GFXRECON_LOG_WARNING_ONCE(
-                                "%s(): Descriptor type (%s) not handled",
-                                __func__,
-                                util::ToString<VkDescriptorType>(shader_desc_binding.second.type).c_str());
-                            break;
+                        CopyImageResource(img_info, new_entry.image);
                     }
                 }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+                case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                {
+                    uint32_t array_index = 0;
+                    for (const auto& buf_desc : desc.second.buffer_info)
+                    {
+                        const VulkanBufferInfo* buf_info = buf_desc.second.buffer_info;
+                        if (buf_info == nullptr)
+                        {
+                            continue;
+                        }
+
+                        auto& new_entry           = resource_backup_context.buffers.emplace_back();
+                        new_entry.original_buffer = buf_info;
+                        new_entry.stages          = stage_flags;
+                        new_entry.desc_type       = desc_type;
+                        new_entry.desc_set        = desc_set_index;
+                        new_entry.desc_binding    = binding_index;
+                        new_entry.array_index     = array_index++;
+
+                        VkResult res = CloneBuffer(object_info_table,
+                                                   device_table,
+                                                   replay_device_phys_mem_props,
+                                                   buf_info,
+                                                   &new_entry.buffer,
+                                                   &new_entry.buffer_memory);
+
+                        if (res != VK_SUCCESS)
+                        {
+                            GFXRECON_LOG_ERROR("Cloning buffer resource %" PRIu64 " failed (%s)",
+                                               buf_info->capture_id,
+                                               util::ToString<VkResult>(res).c_str())
+                            return res;
+                        }
+
+                        CopyBufferResource(buf_info, buf_desc.second.offset, buf_desc.second.range, new_entry.buffer);
+                    }
+                }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_SAMPLER:
+                case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+                case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+                case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+                    // These are read only resources
+                    break;
+
+                default:
+                    GFXRECON_LOG_WARNING_ONCE("%s(): Descriptor type (%s) not handled",
+                                              __func__,
+                                              util::ToString<VkDescriptorType>(desc_type).c_str());
+                    break;
             }
         }
     }
@@ -882,7 +852,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpDispatchTraceRays(
         GFXRECON_ASSERT(dispatch_param_entry != dispatch_params.end());
         draw_call_info.disp_param = &dispatch_param_entry->second;
 
-        delegate_.DumpDrawCallInfo(draw_call_info);
+        delegate_.DumpDrawCallInfo(draw_call_info, instance_table);
     }
 
     for (size_t i = 0; i < trace_rays_indices.size(); ++i)
@@ -924,7 +894,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpDispatchTraceRays(
         GFXRECON_ASSERT(trace_rays_param_entry != trace_rays_params.end());
         draw_call_info.tr_param = &trace_rays_param_entry->second;
 
-        delegate_.DumpDrawCallInfo(draw_call_info);
+        delegate_.DumpDrawCallInfo(draw_call_info, instance_table);
     }
 
     // Clean up references to dumped descriptors in case this command buffer is submitted again
@@ -1014,7 +984,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
             res_info.set                    = mutable_resources_clones_before.images[i].desc_set;
             res_info.binding                = mutable_resources_clones_before.images[i].desc_binding;
             res_info.array_index            = mutable_resources_clones_before.images[i].array_index;
-            res_info.stage                  = mutable_resources_clones_before.images[i].stage;
+            res_info.stages                 = mutable_resources_clones_before.images[i].stages;
             auto res                        = delegate_.DumpResource(res_info);
             if (res != VK_SUCCESS)
             {
@@ -1047,7 +1017,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
             res_info.set         = mutable_resources_clones_before.buffers[i].desc_set;
             res_info.binding     = mutable_resources_clones_before.buffers[i].desc_binding;
             res_info.array_index = mutable_resources_clones_before.buffers[i].array_index;
-            res_info.stage       = mutable_resources_clones_before.buffers[i].stage;
+            res_info.stages      = mutable_resources_clones_before.buffers[i].stages;
             res                  = delegate_.DumpResource(res_info);
             if (res != VK_SUCCESS)
             {
@@ -1072,7 +1042,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
         res_info.set                    = mutable_resources_clones.images[i].desc_set;
         res_info.binding                = mutable_resources_clones.images[i].desc_binding;
         res_info.array_index            = mutable_resources_clones.images[i].array_index;
-        res_info.stage                  = mutable_resources_clones.images[i].stage;
+        res_info.stages                 = mutable_resources_clones.images[i].stages;
         auto res                        = delegate_.DumpResource(res_info);
         if (res != VK_SUCCESS)
         {
@@ -1105,7 +1075,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
         res_info.set         = mutable_resources_clones.buffers[i].desc_set;
         res_info.binding     = mutable_resources_clones.buffers[i].desc_binding;
         res_info.array_index = mutable_resources_clones.buffers[i].array_index;
-        res_info.stage       = mutable_resources_clones.buffers[i].stage;
+        res_info.stages      = mutable_resources_clones.buffers[i].stages;
         res                  = delegate_.DumpResource(res_info);
         if (res != VK_SUCCESS)
         {
@@ -1121,96 +1091,182 @@ bool DispatchTraceRaysDumpingContext::IsRecording() const
     return !reached_end_command_buffer;
 }
 
-void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(DispatchParameters& disp_params)
+void DispatchTraceRaysDumpingContext::SnapshotDispatchState(DispatchParameters& disp_params)
 {
-    const VulkanPipelineInfo* compute_ppl = bound_pipelines[kBindPoint_compute];
-    if (compute_ppl == nullptr)
+    // Copy descriptors that are compatible with the current pipeline layout
+    if (bound_pipeline_compute != nullptr)
     {
-        return;
-    }
-
-    assert(compute_ppl->shaders.size() == 1);
-
-    const auto shader_stage_entry = compute_ppl->shaders.find(VK_SHADER_STAGE_COMPUTE_BIT);
-    if (shader_stage_entry == compute_ppl->shaders.end())
-    {
-        return;
-    }
-
-    const VulkanShaderModuleInfo& compute_shader = shader_stage_entry->second;
-    for (const auto& shader_desc_set : compute_shader.used_descriptors_info)
-    {
-        const uint32_t desc_set_index             = shader_desc_set.first;
-        const auto&    bound_descriptor_set_entry = bound_descriptor_sets_compute.find(desc_set_index);
-        if (bound_descriptor_set_entry == bound_descriptor_sets_compute.end())
+        for (const auto& [desc_set_index, set_info] : bound_descriptor_sets_compute)
         {
-            continue;
-        }
-
-        const VulkanDescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
-
-        for (const auto& shader_desc_binding : shader_desc_set.second)
-        {
-            // if (!shader_desc_binding.second.accessed)
-            // {
-            //     continue;
-            // }
-
-            const uint32_t desc_binding_index = shader_desc_binding.first;
-
-            const auto& bound_descriptor_entry = bound_descriptor_set->descriptors.find(desc_binding_index);
-            if (bound_descriptor_entry == bound_descriptor_set->descriptors.end())
+            // Check against pipeline layout
+            if (bound_pipeline_compute->desc_set_layouts.size() <= desc_set_index)
             {
                 continue;
             }
 
-            disp_params.referenced_descriptors[desc_set_index][desc_binding_index] = bound_descriptor_entry->second;
-        }
-    }
-}
-
-void DispatchTraceRaysDumpingContext::SnapshotBoundDescriptors(TraceRaysParameters& tr_params)
-{
-    const VulkanPipelineInfo* ray_tracing_ppl = bound_pipelines[kBindPoint_ray_tracing];
-    if (ray_tracing_ppl == nullptr)
-    {
-        return;
-    }
-
-    for (const auto& shader_stage_entry : ray_tracing_ppl->shaders)
-    {
-        const VulkanShaderModuleInfo& rt_stage_shader_info = shader_stage_entry.second;
-        for (const auto& shader_desc_set : rt_stage_shader_info.used_descriptors_info)
-        {
-            const uint32_t desc_set_index             = shader_desc_set.first;
-            const auto&    bound_descriptor_set_entry = bound_descriptor_sets_ray_tracing.find(desc_set_index);
-            if (bound_descriptor_set_entry == bound_descriptor_sets_ray_tracing.end())
+            for (const auto& [desc_binding_index, binding_info] : set_info.descriptors)
             {
-                continue;
-            }
-
-            const VulkanDescriptorSetInfo* bound_descriptor_set = &bound_descriptor_set_entry->second;
-
-            for (const auto& shader_desc_binding : shader_desc_set.second)
-            {
-                // if (!shader_desc_binding.second.accessed)
-                // {
-                //     continue;
-                // }
-
-                const uint32_t desc_binding_index = shader_desc_binding.first;
-
-                const auto& bound_descriptor_entry = bound_descriptor_set->descriptors.find(desc_binding_index);
-                if (bound_descriptor_entry == bound_descriptor_set->descriptors.end())
+                // Check against pipeline layout
+                const auto layout_entry =
+                    bound_pipeline_compute->desc_set_layouts[desc_set_index].find(desc_binding_index);
+                if (layout_entry == bound_pipeline_compute->desc_set_layouts[desc_set_index].end())
                 {
                     continue;
                 }
 
-                tr_params.referenced_descriptors[shader_stage_entry.first][desc_set_index][desc_binding_index] =
-                    bound_descriptor_entry->second;
+                disp_params.referenced_descriptors[desc_set_index][desc_binding_index].desc_type =
+                    binding_info.desc_type;
+                disp_params.referenced_descriptors[desc_set_index][desc_binding_index].stage_flags =
+                    binding_info.stage_flags;
+
+                switch (binding_info.desc_type)
+                {
+                    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                    {
+                        for (const auto& [array_idx, img_info] : binding_info.image_info)
+                        {
+                            // Check against pipeline layout
+                            if (layout_entry->second.count <= array_idx)
+                            {
+                                continue;
+                            }
+
+                            disp_params.referenced_descriptors[desc_set_index][desc_binding_index]
+                                .image_info[array_idx] = img_info;
+                        }
+                    }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+                    {
+                        for (const auto& [array_idx, buf_info] : binding_info.buffer_info)
+                        {
+                            // Check against pipeline layout
+                            if (layout_entry->second.count <= array_idx)
+                            {
+                                continue;
+                            }
+
+                            disp_params.referenced_descriptors[desc_set_index][desc_binding_index]
+                                .buffer_info[array_idx] = buf_info;
+                        }
+                    }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+                    {
+                        disp_params.referenced_descriptors[desc_set_index][desc_binding_index].inline_uniform_block =
+                            binding_info.inline_uniform_block;
+                    }
+                    break;
+
+                    default:
+                        break;
+                }
             }
         }
     }
+
+    // Copy indirect params
+    if (IsDispatchIndirect(disp_params.type))
+    {
+        CopyDispatchIndirectParameters(disp_params);
+    }
+}
+
+void DispatchTraceRaysDumpingContext::SnapshotTraceRaysState(TraceRaysParameters& tr_params)
+{
+    // Copy descriptors that are compatible with the current pipeline layout
+    if (bound_pipeline_trace_rays != nullptr)
+    {
+        for (const auto& [desc_set_index, set_info] : bound_descriptor_sets_ray_tracing)
+        {
+            // Check against pipeline layout
+            if (bound_pipeline_trace_rays->desc_set_layouts.size() <= desc_set_index)
+            {
+                continue;
+            }
+
+            for (const auto& [desc_binding_index, binding_info] : set_info.descriptors)
+            {
+                // Check against pipeline layout
+                const auto layout_entry =
+                    bound_pipeline_trace_rays->desc_set_layouts[desc_set_index].find(desc_binding_index);
+                if (layout_entry == bound_pipeline_trace_rays->desc_set_layouts[desc_set_index].end())
+                {
+                    continue;
+                }
+
+                tr_params.referenced_descriptors[desc_set_index][desc_binding_index].desc_type = binding_info.desc_type;
+                tr_params.referenced_descriptors[desc_set_index][desc_binding_index].stage_flags =
+                    binding_info.stage_flags;
+
+                switch (binding_info.desc_type)
+                {
+                    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                    {
+                        for (const auto& [array_idx, img_info] : binding_info.image_info)
+                        {
+                            // Check against pipeline layout
+                            if (layout_entry->second.count <= array_idx)
+                            {
+                                continue;
+                            }
+
+                            tr_params.referenced_descriptors[desc_set_index][desc_binding_index].image_info[array_idx] =
+                                img_info;
+                        }
+                    }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+                    {
+                        for (const auto& [array_idx, buf_info] : binding_info.buffer_info)
+                        {
+                            // Check against pipeline layout
+                            if (layout_entry->second.count <= array_idx)
+                            {
+                                continue;
+                            }
+
+                            tr_params.referenced_descriptors[desc_set_index][desc_binding_index]
+                                .buffer_info[array_idx] = buf_info;
+                        }
+                    }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+                    {
+                        tr_params.referenced_descriptors[desc_set_index][desc_binding_index].inline_uniform_block =
+                            binding_info.inline_uniform_block;
+                    }
+                    break;
+
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    // Copy indirect params
+    CopyTraceRaysIndirectParameters(tr_params);
 }
 
 VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_index,
@@ -1240,16 +1296,16 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
 
     if (is_dispatch)
     {
-        const auto disp_params = dispatch_params.find(cmd_index);
-        assert(disp_params != dispatch_params.end());
-        for (const auto& desc_set : disp_params->second.referenced_descriptors)
+        const auto disp_params_entry = dispatch_params.find(cmd_index);
+        GFXRECON_ASSERT(disp_params_entry != dispatch_params.end());
+
+        const DispatchParameters* disp_params = &disp_params_entry->second;
+        for (const auto& desc_set : disp_params->referenced_descriptors)
         {
             const uint32_t desc_set_index = desc_set.first;
-
             for (const auto& desc_binding : desc_set.second)
             {
                 const uint32_t desc_binding_index = desc_binding.first;
-
                 switch (desc_binding.second.desc_type)
                 {
                     case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
@@ -1257,12 +1313,12 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                     case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
                     {
-                        for (size_t i = 0; i < desc_binding.second.image_info.size(); ++i)
+                        for (const auto& img_desc : desc_binding.second.image_info)
                         {
-                            if (desc_binding.second.image_info[i].image_view_info != nullptr)
+                            if (img_desc.second.image_view_info != nullptr)
                             {
-                                const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
-                                    desc_binding.second.image_info[i].image_view_info->image_id);
+                                const VulkanImageInfo* img_info =
+                                    object_info_table.GetVkImageInfo(img_desc.second.image_view_info->image_id);
                                 if (img_info != nullptr && dumped_descriptors.image_descriptors.find(img_info) ==
                                                                dumped_descriptors.image_descriptors.end())
                                 {
@@ -1281,17 +1337,16 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
                     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
                     case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
                     {
-                        for (size_t i = 0; i < desc_binding.second.buffer_info.size(); ++i)
+                        for (const auto& buf_desc : desc_binding.second.buffer_info)
                         {
-                            const VulkanBufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
+                            const VulkanBufferInfo* buffer_info = buf_desc.second.buffer_info;
                             if (buffer_info != nullptr && dumped_descriptors.buffer_descriptors.find(buffer_info) ==
                                                               dumped_descriptors.buffer_descriptors.end())
                             {
                                 buffer_descriptors.emplace(std::piecewise_construct,
                                                            std::forward_as_tuple(buffer_info),
                                                            std::forward_as_tuple(buffer_descriptor_info{
-                                                               desc_binding.second.buffer_info[i].offset,
-                                                               desc_binding.second.buffer_info[i].range }));
+                                                               buf_desc.second.offset, buf_desc.second.range }));
                                 dumped_descriptors.buffer_descriptors.insert(buffer_info);
                             }
                         }
@@ -1329,93 +1384,88 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
     }
     else
     {
-        const auto tr_params = trace_rays_params.find(cmd_index);
-        assert(tr_params != trace_rays_params.end());
-        for (const auto& shader_stage : tr_params->second.referenced_descriptors)
+        const auto tr_params_entry = trace_rays_params.find(cmd_index);
+        GFXRECON_ASSERT(tr_params_entry != trace_rays_params.end());
+
+        const TraceRaysParameters* tr_params = &tr_params_entry->second;
+        for (const auto& desc_set : tr_params->referenced_descriptors)
         {
-            for (const auto& desc_set : shader_stage.second)
+            const uint32_t desc_set_index = desc_set.first;
+            for (const auto& desc_binding : desc_set.second)
             {
-                const uint32_t desc_set_index = desc_set.first;
-
-                for (const auto& desc_binding : desc_set.second)
+                const uint32_t desc_binding_index = desc_binding.first;
+                switch (desc_binding.second.desc_type)
                 {
-                    const uint32_t desc_binding_index = desc_binding.first;
-
-                    switch (desc_binding.second.desc_type)
+                    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
                     {
-                        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-                        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-                        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                        for (const auto& img_desc : desc_binding.second.image_info)
                         {
-                            for (size_t i = 0; i < desc_binding.second.image_info.size(); ++i)
+                            if (img_desc.second.image_view_info != nullptr)
                             {
-                                if (desc_binding.second.image_info[i].image_view_info != nullptr)
+                                const VulkanImageInfo* img_info =
+                                    object_info_table.GetVkImageInfo(img_desc.second.image_view_info->image_id);
+                                if (img_info != nullptr && dumped_descriptors.image_descriptors.find(img_info) ==
+                                                               dumped_descriptors.image_descriptors.end())
                                 {
-                                    const VulkanImageInfo* img_info = object_info_table.GetVkImageInfo(
-                                        desc_binding.second.image_info[i].image_view_info->image_id);
-                                    if (img_info != nullptr && dumped_descriptors.image_descriptors.find(img_info) ==
-                                                                   dumped_descriptors.image_descriptors.end())
-                                    {
-                                        image_descriptors.insert(img_info);
-                                        dumped_descriptors.image_descriptors.insert(img_info);
-                                    }
+                                    image_descriptors.insert(img_info);
+                                    dumped_descriptors.image_descriptors.insert(img_info);
                                 }
                             }
                         }
-                        break;
-
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-                        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-                        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-                        {
-                            for (size_t i = 0; i < desc_binding.second.buffer_info.size(); ++i)
-                            {
-                                const VulkanBufferInfo* buffer_info = desc_binding.second.buffer_info[i].buffer_info;
-                                if (buffer_info != nullptr && dumped_descriptors.buffer_descriptors.find(buffer_info) ==
-                                                                  dumped_descriptors.buffer_descriptors.end())
-                                {
-                                    buffer_descriptors.emplace(
-                                        std::piecewise_construct,
-                                        std::forward_as_tuple(desc_binding.second.buffer_info[i].buffer_info),
-                                        std::forward_as_tuple(
-                                            buffer_descriptor_info{ desc_binding.second.buffer_info[i].offset,
-                                                                    desc_binding.second.buffer_info[i].range }));
-                                    dumped_descriptors.buffer_descriptors.insert(buffer_info);
-                                }
-                            }
-                        }
-                        break;
-
-                        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
-                        case VK_DESCRIPTOR_TYPE_SAMPLER:
-                            break;
-
-                        case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
-                        {
-                            if (dumped_descriptors.inline_uniform_blocks.find(
-                                    &(desc_binding.second.inline_uniform_block)) ==
-                                dumped_descriptors.inline_uniform_blocks.end())
-                            {
-                                inline_uniform_blocks[&(desc_binding.second.inline_uniform_block)] = {
-                                    desc_set_index, desc_binding_index, &(desc_binding.second.inline_uniform_block)
-                                };
-                                dumped_descriptors.inline_uniform_blocks.insert(
-                                    &(desc_binding.second.inline_uniform_block));
-                            }
-                        }
-                        break;
-
-                        default:
-                            GFXRECON_LOG_WARNING_ONCE(
-                                "%s(): Descriptor type (%s) not handled",
-                                __func__,
-                                util::ToString<VkDescriptorType>(desc_binding.second.desc_type).c_str());
-                            break;
                     }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+                    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+                    {
+                        for (const auto& buf_desc : desc_binding.second.buffer_info)
+                        {
+                            const VulkanBufferInfo* buffer_info = buf_desc.second.buffer_info;
+                            if (buffer_info != nullptr && dumped_descriptors.buffer_descriptors.find(buffer_info) ==
+                                                              dumped_descriptors.buffer_descriptors.end())
+                            {
+                                buffer_descriptors.emplace(std::piecewise_construct,
+                                                           std::forward_as_tuple(buf_desc.second.buffer_info),
+                                                           std::forward_as_tuple(buffer_descriptor_info{
+                                                               buf_desc.second.offset, buf_desc.second.range }));
+                                dumped_descriptors.buffer_descriptors.insert(buffer_info);
+                            }
+                        }
+                    }
+                    break;
+
+                    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+                    case VK_DESCRIPTOR_TYPE_SAMPLER:
+                        break;
+
+                    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+                    {
+                        if (dumped_descriptors.inline_uniform_blocks.find(
+                                &(desc_binding.second.inline_uniform_block)) ==
+                            dumped_descriptors.inline_uniform_blocks.end())
+                        {
+                            inline_uniform_blocks[&(desc_binding.second.inline_uniform_block)] = {
+                                desc_set_index, desc_binding_index, &(desc_binding.second.inline_uniform_block)
+                            };
+                            dumped_descriptors.inline_uniform_blocks.insert(
+                                &(desc_binding.second.inline_uniform_block));
+                        }
+                    }
+                    break;
+
+                    default:
+                        GFXRECON_LOG_WARNING_ONCE(
+                            "%s(): Descriptor type (%s) not handled",
+                            __func__,
+                            util::ToString<VkDescriptorType>(desc_binding.second.desc_type).c_str());
+                        break;
                 }
             }
         }
@@ -1499,12 +1549,8 @@ VkResult DispatchTraceRaysDumpingContext::DumpImmutableDescriptors(uint64_t qs_i
     return VK_SUCCESS;
 }
 
-VkResult DispatchTraceRaysDumpingContext::CopyDispatchIndirectParameters(uint64_t index)
+VkResult DispatchTraceRaysDumpingContext::CopyDispatchIndirectParameters(DispatchParameters& disp_params)
 {
-    auto entry = dispatch_params.find(index);
-    assert(entry != dispatch_params.end());
-    DispatchParameters& disp_params = entry->second;
-
     assert(disp_params.type == kDispatchIndirect);
     assert(disp_params.dispatch_params_union.dispatch_indirect.params_buffer_info != nullptr);
     assert(disp_params.dispatch_params_union.dispatch_indirect.params_buffer_info->handle != VK_NULL_HANDLE);
@@ -1560,12 +1606,8 @@ VkResult DispatchTraceRaysDumpingContext::CopyDispatchIndirectParameters(uint64_
     return VK_SUCCESS;
 }
 
-VkResult DispatchTraceRaysDumpingContext::CopyTraceRaysIndirectParameters(uint64_t index)
+VkResult DispatchTraceRaysDumpingContext::CopyTraceRaysIndirectParameters(TraceRaysParameters& params)
 {
-    auto entry = trace_rays_params.find(index);
-    assert(entry != trace_rays_params.end());
-    TraceRaysParameters& params = entry->second;
-
     assert(params.type == kTraceRaysIndirect || params.type == kTraceRaysIndirect2);
     if (params.trace_rays_params_union.trace_rays_indirect.indirect_device_address == 0)
     {
@@ -1819,6 +1861,23 @@ void DispatchTraceRaysDumpingContext::EndCommandBuffer()
 {
     reached_end_command_buffer = true;
     device_table->EndCommandBuffer(DR_command_buffer);
+}
+
+void DispatchTraceRaysDumpingContext::BindPipeline(VkPipelineBindPoint bind_point, const VulkanPipelineInfo* pipeline)
+{
+    switch (bind_point)
+    {
+        case VK_PIPELINE_BIND_POINT_COMPUTE:
+            bound_pipeline_compute = pipeline;
+            break;
+
+        case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
+            bound_pipeline_trace_rays = pipeline;
+            break;
+
+        default:
+            break;
+    }
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

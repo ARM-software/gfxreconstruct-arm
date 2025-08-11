@@ -46,7 +46,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanAccelerationStructureBuilder
 {
   public:
-    VulkanAccelerationStructureBuilder(const encode::VulkanDeviceTable*        device_table,
+    VulkanAccelerationStructureBuilder(const graphics::VulkanDeviceTable*      device_table,
                                        const VulkanPhysicalDeviceInfo*         physical_device_info,
                                        VkDevice                                device,
                                        VulkanResourceAllocator*                allocator,
@@ -121,7 +121,7 @@ class VulkanAccelerationStructureBuilder
     VkDeviceAddress GetActualDeviceAddress(VkAccelerationStructureKHR handle);
 
   private:
-    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
+    void InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };

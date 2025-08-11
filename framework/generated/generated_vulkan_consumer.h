@@ -44,7 +44,6 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
 class VulkanConsumer : public VulkanConsumerBase
 {
   public:
@@ -2568,6 +2567,13 @@ class VulkanConsumer : public VulkanConsumerBase
         StructPointerDecoder<Decoded_VkImageSubresource2>* pSubresource,
         StructPointerDecoder<Decoded_VkSubresourceLayout2>* pLayout) {}
 
+    virtual void Process_vkWaitForPresent2KHR(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        format::HandleId                            swapchain,
+        StructPointerDecoder<Decoded_VkPresentWait2InfoKHR>* pPresentWait2Info) {}
+
     virtual void Process_vkCreatePipelineBinariesKHR(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -2604,6 +2610,12 @@ class VulkanConsumer : public VulkanConsumerBase
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkReleaseCapturedPipelineDataInfoKHR>* pInfo,
         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
+
+    virtual void Process_vkReleaseSwapchainImagesKHR(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo) {}
 
     virtual void Process_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(
         const ApiCallInfo&                          call_info,
@@ -3143,7 +3155,7 @@ class VulkanConsumer : public VulkanConsumerBase
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkAccelerationStructureMemoryRequirementsInfoNV>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2KHR>* pMemoryRequirements) {}
+        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
 
     virtual void Process_vkBindAccelerationStructureMemoryNV(
         const ApiCallInfo&                          call_info,
@@ -3596,7 +3608,7 @@ class VulkanConsumer : public VulkanConsumerBase
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
         format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoEXT>* pReleaseInfo) {}
+        StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo) {}
 
     virtual void Process_vkGetGeneratedCommandsMemoryRequirementsNV(
         const ApiCallInfo&                          call_info,
@@ -3686,6 +3698,64 @@ class VulkanConsumer : public VulkanConsumerBase
         uint64_t                                    objectHandle,
         format::HandleId                            privateDataSlot,
         PointerDecoder<uint64_t>*                   pData) {}
+
+    virtual void Process_vkCmdDispatchTileQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkDispatchTileInfoQCOM>* pDispatchTileInfo) {}
+
+    virtual void Process_vkCmdBeginPerTileExecutionQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkPerTileBeginInfoQCOM>* pPerTileBeginInfo) {}
+
+    virtual void Process_vkCmdEndPerTileExecutionQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkPerTileEndInfoQCOM>* pPerTileEndInfo) {}
+
+    virtual void Process_vkGetDescriptorSetLayoutSizeEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            layout,
+        PointerDecoder<VkDeviceSize>*               pLayoutSizeInBytes) {}
+
+    virtual void Process_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        format::HandleId                            layout,
+        uint32_t                                    binding,
+        PointerDecoder<VkDeviceSize>*               pOffset) {}
+
+    virtual void Process_vkGetDescriptorEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDescriptorGetInfoEXT>* pDescriptorInfo,
+        size_t                                      dataSize,
+        PointerDecoder<uint8_t>*                    pDescriptor) {}
+
+    virtual void Process_vkCmdBindDescriptorBuffersEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        uint32_t                                    bufferCount,
+        StructPointerDecoder<Decoded_VkDescriptorBufferBindingInfoEXT>* pBindingInfos) {}
+
+    virtual void Process_vkCmdSetDescriptorBufferOffsetsEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        VkPipelineBindPoint                         pipelineBindPoint,
+        format::HandleId                            layout,
+        uint32_t                                    firstSet,
+        uint32_t                                    setCount,
+        PointerDecoder<uint32_t>*                   pBufferIndices,
+        PointerDecoder<VkDeviceSize>*               pOffsets) {}
+
+    virtual void Process_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        VkPipelineBindPoint                         pipelineBindPoint,
+        format::HandleId                            layout,
+        uint32_t                                    set) {}
 
     virtual void Process_vkCmdSetFragmentShadingRateEnumNV(
         const ApiCallInfo&                          call_info,
@@ -3988,60 +4058,6 @@ class VulkanConsumer : public VulkanConsumerBase
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkPipelineIndirectDeviceAddressInfoNV>* pInfo) {}
 
-    virtual void Process_vkCreateNeuralEnginePipelinesARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        uint32_t                                    createInfoCount,
-        StructPointerDecoder<Decoded_VkNeuralEnginePipelineCreateInfoARM>* pCreateInfos,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-        HandlePointerDecoder<VkPipeline>*           pPipelines) {}
-
-    virtual void Process_vkCreateWeightsARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsCreateInfoARM>* pCreateInfo,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-        HandlePointerDecoder<VkWeightsARM>*         pWeights) {}
-
-    virtual void Process_vkDestroyWeightsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        format::HandleId                            weights,
-        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) {}
-
-    virtual void Process_vkGetWeightsMemoryRequirementsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsMemoryRequirementsInfoARM>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
-
-    virtual void Process_vkGetDeviceWeightsMemoryRequirementsARM(
-        const ApiCallInfo&                          call_info,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkDeviceWeightsMemoryRequirementsARM>* pInfo,
-        StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements) {}
-
-    virtual void Process_vkBindWeightsMemoryARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            device,
-        uint32_t                                    bindInfoCount,
-        StructPointerDecoder<Decoded_VkBindWeightsMemoryInfoARM>* pBindInfos) {}
-
-    virtual void Process_vkGetWeightsDeviceAddressARM(
-        const ApiCallInfo&                          call_info,
-        VkDeviceAddress                             returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkWeightsDeviceAddressInfoARM>* pInfo) {}
-
-    virtual void Process_vkGetTensorDeviceAddressARM(
-        const ApiCallInfo&                          call_info,
-        VkDeviceAddress                             returnValue,
-        format::HandleId                            device,
-        StructPointerDecoder<Decoded_VkTensorDeviceAddressInfoARM>* pInfo) {}
-
     virtual void Process_vkCmdSetDepthClampEnableEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
@@ -4261,6 +4277,12 @@ class VulkanConsumer : public VulkanConsumerBase
         format::HandleId                            commandBuffer,
         StructPointerDecoder<Decoded_VkCopyTensorInfoARM>* pCopyTensorInfo) {}
 
+    virtual void Process_vkGetPhysicalDeviceExternalTensorPropertiesARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceExternalTensorInfoARM>* pExternalTensorInfo,
+        StructPointerDecoder<Decoded_VkExternalTensorPropertiesARM>* pExternalTensorProperties) {}
+
     virtual void Process_vkGetShaderModuleIdentifierEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            device,
@@ -4416,13 +4438,6 @@ class VulkanConsumer : public VulkanConsumerBase
         format::HandleId                            queue,
         StructPointerDecoder<Decoded_VkOutOfBandQueueTypeInfoNV>* pQueueTypeInfo) {}
 
-    virtual void Process_vkGetPhysicalDeviceDataGraphInstructionSetsARM(
-        const ApiCallInfo&                          call_info,
-        VkResult                                    returnValue,
-        format::HandleId                            physicalDevice,
-        PointerDecoder<uint32_t>*                   pSetCount,
-        StructPointerDecoder<Decoded_VkPhysicalDeviceDataGraphInstructionSetARM>* pSets) {}
-
     virtual void Process_vkCreateDataGraphPipelinesARM(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
@@ -4472,20 +4487,48 @@ class VulkanConsumer : public VulkanConsumerBase
     virtual void Process_vkCmdDispatchDataGraphARM(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
-        format::HandleId                            session) {}
+        format::HandleId                            session,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineDispatchInfoARM>* pInfo) {}
+
+    virtual void Process_vkGetDataGraphPipelineAvailablePropertiesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            device,
+        StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
+        PointerDecoder<uint32_t>*                   pPropertiesCount,
+        PointerDecoder<VkDataGraphPipelinePropertyARM>* pProperties) {}
 
     virtual void Process_vkGetDataGraphPipelinePropertiesARM(
         const ApiCallInfo&                          call_info,
         VkResult                                    returnValue,
         format::HandleId                            device,
         StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
-        PointerDecoder<uint32_t>*                   pPropertiesCount,
+        uint32_t                                    propertiesCount,
         StructPointerDecoder<Decoded_VkDataGraphPipelinePropertyQueryResultARM>* pProperties) {}
+
+    virtual void Process_vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM(
+        const ApiCallInfo&                          call_info,
+        VkResult                                    returnValue,
+        format::HandleId                            physicalDevice,
+        uint32_t                                    queueFamilyIndex,
+        PointerDecoder<uint32_t>*                   pQueueFamilyDataGraphPropertyCount,
+        StructPointerDecoder<Decoded_VkQueueFamilyDataGraphPropertiesARM>* pQueueFamilyDataGraphProperties) {}
+
+    virtual void Process_vkGetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            physicalDevice,
+        StructPointerDecoder<Decoded_VkPhysicalDeviceQueueFamilyDataGraphProcessingEngineInfoARM>* pQueueFamilyDataGraphProcessingEngineInfo,
+        StructPointerDecoder<Decoded_VkQueueFamilyDataGraphProcessingEnginePropertiesARM>* pQueueFamilyDataGraphProcessingEngineProperties) {}
 
     virtual void Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
         const ApiCallInfo&                          call_info,
         format::HandleId                            commandBuffer,
         VkImageAspectFlags                          aspectMask) {}
+
+    virtual void Process_vkCmdBindTileMemoryQCOM(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkTileMemoryBindInfoQCOM>* pTileMemoryBindInfo) {}
 
     virtual void Process_vkGetPartitionedAccelerationStructuresBuildSizesNV(
         const ApiCallInfo&                          call_info,
@@ -4579,6 +4622,11 @@ class VulkanConsumer : public VulkanConsumerBase
         VkExternalMemoryHandleTypeFlagBits          handleType,
         uint64_t                                    pHandle,
         StructPointerDecoder<Decoded_VkMemoryMetalHandlePropertiesEXT>* pMemoryMetalHandleProperties) {}
+
+    virtual void Process_vkCmdEndRendering2EXT(
+        const ApiCallInfo&                          call_info,
+        format::HandleId                            commandBuffer,
+        StructPointerDecoder<Decoded_VkRenderingEndInfoEXT>* pRenderingEndInfo) {}
 
     virtual void Process_vkCreateAccelerationStructureKHR(
         const ApiCallInfo&                          call_info,
@@ -4751,4 +4799,4 @@ class VulkanConsumer : public VulkanConsumerBase
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif
+#endif // GFXRECON_GENERATED_VULKAN_CONSUMER_H

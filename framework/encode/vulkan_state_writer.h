@@ -202,19 +202,19 @@ class VulkanStateWriter
     void WriteDeferredOperationJoinCommand(format::HandleId device_id, format::HandleId deferred_operation_id);
 
     void ProcessBufferMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
-                             const std::vector<BufferSnapshotInfo>& buffer_snapshot_info,
+                             const std::vector<BufferSnapshotInfo>& buffer_snapshot_infos,
                              graphics::VulkanResourcesUtil&         resource_util);
 
     void ProcessBufferMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
-                                          const std::vector<BufferSnapshotInfo>& buffer_snapshot_info,
+                                          const std::vector<BufferSnapshotInfo>& buffer_snapshot_infos,
                                           graphics::VulkanResourcesUtil&         resource_util);
 
     void ProcessImageMemory(const vulkan_wrappers::DeviceWrapper* device_wrapper,
-                            const std::vector<ImageSnapshotInfo>& image_snapshot_info,
+                            const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
                             graphics::VulkanResourcesUtil&        resource_util);
 
     void ProcessImageMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper* device_wrapper,
-                                         const std::vector<ImageSnapshotInfo>& image_snapshot_info,
+                                         const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
                                          graphics::VulkanResourcesUtil&        resource_util);
 
     void ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
@@ -469,7 +469,7 @@ class VulkanStateWriter
     void WriteExecuteFromFile(const std::string& filename, uint32_t n_blocks, int64_t offset);
 
     void WriteDebugUtilsState(const VulkanStateTable& state_table);
-    void WriteNGPMemoryState(const VulkanStateTable& state_table);
+    void WriteTensorMemoryState(const VulkanStateTable& state_table);
 
   private:
     util::FileOutputStream*  output_stream_;

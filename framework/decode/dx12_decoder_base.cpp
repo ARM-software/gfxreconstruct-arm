@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -109,6 +109,7 @@ void Dx12DecoderBase::DispatchResizeWindowCommand2(
 
 void Dx12DecoderBase::DispatchCreateHardwareBufferCommand(
     format::ThreadId                                    thread_id,
+    format::HandleId                                    device_id,
     format::HandleId                                    memory_id,
     uint64_t                                            buffer_id,
     uint32_t                                            format,
@@ -124,7 +125,7 @@ void Dx12DecoderBase::DispatchCreateHardwareBufferCommand(
     for (auto consumer : consumers_)
     {
         consumer->ProcessCreateHardwareBufferCommand(
-            memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
+            device_id, memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
     }
 }
 
@@ -268,20 +269,6 @@ void Dx12DecoderBase::DispatchInitBufferCommand(format::ThreadId thread_id,
     }
 }
 
-void Dx12DecoderBase::DispatchInitTensorCommand(format::ThreadId thread_id,
-                                                format::HandleId device_id,
-                                                format::HandleId tensor_id,
-                                                uint64_t         data_size,
-                                                const uint8_t*   data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(thread_id);
-
-    for (auto consumer : consumers_)
-    {
-        consumer->ProcessInitTensorCommand(device_id, tensor_id, data_size, data);
-    }
-}
-
 void Dx12DecoderBase::DispatchInitImageCommand(format::ThreadId             thread_id,
                                                format::HandleId             device_id,
                                                format::HandleId             image_id,
@@ -332,6 +319,15 @@ void Dx12DecoderBase::DispatchGetDx12RuntimeInfo(const format::Dx12RuntimeInfoCo
     for (auto consumer : consumers_)
     {
         consumer->ProcessDx12RuntimeInfo(dx12_runtime_info_header);
+    }
+}
+
+void Dx12DecoderBase::DispatchInitializeMetaCommand(format::InitializeMetaCommand& header,
+                                                    const uint8_t*                 initialization_parameters_data)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessInitializeMetaCommand(header, initialization_parameters_data);
     }
 }
 
@@ -526,6 +522,30 @@ size_t Dx12DecoderBase::Decode_ID3D12Device_CheckFeatureSupport(format::HandleId
             break;
         case D3D12_FEATURE_D3D12_OPTIONS19:
             bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_D3D12_OPTIONS19>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_D3D12_OPTIONS20:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_D3D12_OPTIONS20>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_PREDICATION:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_PREDICATION>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_PLACED_RESOURCE_SUPPORT_INFO:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_HARDWARE_COPY:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_HARDWARE_COPY>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_D3D12_OPTIONS21:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_D3D12_OPTIONS21>(
+                object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
+            break;
+        case D3D12_FEATURE_BYTECODE_BYPASS_HASH_SUPPORTED:
+            bytes_read += DecodeCheckD3D12FeatureSupport<Decoded_D3D12_FEATURE_DATA_BYTECODE_BYPASS_HASH_SUPPORTED>(
                 object_id, feature, (parameter_buffer + bytes_read), (buffer_size - bytes_read));
             break;
         default:

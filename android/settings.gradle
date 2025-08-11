@@ -1,3 +1,8 @@
 include ':layer'
+
 include ':replay'
-project(':replay').projectDir = file('tools/replay')
+project(':replay').projectDir = file('tools/multi-win-replay')
+include ':quest_replay'
+project(':quest_replay').projectDir = file('tools/quest_replay')
+include ':test_app_triangle'
+project(':test_app_triangle').projectDir = file('test/test_apps/triangle')

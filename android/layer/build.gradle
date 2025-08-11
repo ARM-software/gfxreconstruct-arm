@@ -30,6 +30,13 @@ android {
                           "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}",
                           "-DCMAKE_C_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}",
                           "-DCMAKE_CXX_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}"
+                if (project.hasProperty("DisableOpenXR")) {
+                    logger.info('GFXReconstruct layer built with NO OpenXr Support! [DisableOpenXR found]')
+                }
+                else {
+                    logger.info('GFXReconstruct layer built with OpenXr Support.')
+                    arguments.add("-DGFXRECON_ENABLE_OPENXR=ON")
+                }
             }
         }
     }
@@ -43,5 +50,10 @@ android {
         cmake {
             path "CMakeLists.txt"
         }
+    }
+    sourceSets {
+       main {
+           assets.srcDirs = ['assets']
+       }
     }
 }

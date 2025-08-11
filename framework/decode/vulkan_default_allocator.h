@@ -318,52 +318,7 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
         return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->size;
     }
 
-    virtual bool     SupportBindVideoSessionMemory() override { return false; }
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data) override
-    {
-        return VK_SUCCESS;
-    };
-
-    virtual void DestroyTensor(VkTensorARM                  tensor,
-                               const VkAllocationCallbacks* allocation_callbacks,
-                               ResourceData                 allocator_data) override{};
-
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData* allocator_data) override
-    {
-        return VK_SUCCESS;
-    };
-
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data) override{};
-
-    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_tensor_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties) override
-    {
-        return VK_SUCCESS;
-    };
-
-    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                        VkDeviceMemory                memory,
-                                                        VkDeviceSize                  memory_offset,
-                                                        ResourceData                  allocator_session_data,
-                                                        MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties) override
-    {
-        return VK_SUCCESS;
-    };
+    virtual bool SupportBindVideoSessionMemory() override { return false; }
 
   protected:
     struct ResourceAllocInfo

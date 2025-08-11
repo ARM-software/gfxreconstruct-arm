@@ -22,10 +22,11 @@
 # IN THE SOFTWARE.
 
 import sys
-from base_generator import BaseGenerator, BaseGeneratorOptions, write
+from vulkan_base_generator import VulkanBaseGenerator, VulkanBaseGeneratorOptions, write
+from khronos_layer_func_table_generator import KhronosLayerFuncTableGenerator
 
 
-class VulkanLayerFuncTableGeneratorOptions(BaseGeneratorOptions):
+class VulkanLayerFuncTableGeneratorOptions(VulkanBaseGeneratorOptions):
     """Eliminates JSON black_lists and platform_types files, which are not necessary for
     function table generation.
     Options for Vulkan layer function table C++ code generation.
@@ -40,7 +41,7 @@ class VulkanLayerFuncTableGeneratorOptions(BaseGeneratorOptions):
         protect_feature=True,
         extra_headers=[]
     ):
-        BaseGeneratorOptions.__init__(
+        VulkanBaseGeneratorOptions.__init__(
             self,
             None,
             None,
@@ -51,10 +52,17 @@ class VulkanLayerFuncTableGeneratorOptions(BaseGeneratorOptions):
             protect_feature,
             extra_headers=extra_headers
         )
+        self.begin_end_file_data.specific_headers.extend((
+            'encode/custom_vulkan_api_call_encoders.h',
+            'generated/generated_vulkan_api_call_encoders.h',
+            'layer/trace_layer.h',
+            'util/defines.h',
+        ))
+        self.begin_end_file_data.system_headers.append('unordered_map')
+        self.begin_end_file_data.namespaces.append('gfxrecon')
 
-
-class VulkanLayerFuncTableGenerator(BaseGenerator):
-    """LayerFuncTableGenerator - subclass of BaseGenerator.
+class VulkanLayerFuncTableGenerator(VulkanBaseGenerator, KhronosLayerFuncTableGenerator):
+    """LayerFuncTableGenerator - subclass of VulkanBaseGenerator.
     Generates C++ function table for the Vulkan API calls exported by the layer.
     Generate Vulkan layer function table C++ type declarations.
     """
@@ -62,7 +70,7 @@ class VulkanLayerFuncTableGenerator(BaseGenerator):
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
-        BaseGenerator.__init__(
+        VulkanBaseGenerator.__init__(
             self,
             err_file=err_file,
             warn_file=warn_file,
@@ -81,64 +89,17 @@ class VulkanLayerFuncTableGenerator(BaseGenerator):
             'vkEnumerateDeviceExtensionProperties'
         ]
 
-    def beginFile(self, gen_opts):
-        """Method override."""
-        BaseGenerator.beginFile(self, gen_opts)
-
-        write(
-            '#include "encode/custom_vulkan_api_call_encoders.h"',
-            file=self.outFile
-        )
-        write(
-            '#include "generated/generated_vulkan_api_call_encoders.h"',
-            file=self.outFile
-        )
-        write('#include "layer/trace_layer.h"', file=self.outFile)
-        write('#include "util/defines.h"', file=self.outFile)
-        self.newline()
-        self.write_includes_of_common_api_headers(gen_opts)
-        self.newline()
-        write('#include <unordered_map>', file=self.outFile)
-        self.newline()
-        write('GFXRECON_BEGIN_NAMESPACE(gfxrecon)', file=self.outFile)
-        self.newline()
-
     def endFile(self):
         """Method override."""
 
-        self.write_layer_func_table_contents(self.LAYER_FUNCTIONS, 100)
-
+        KhronosLayerFuncTableGenerator.write_layer_func_table_contents(self, self.LAYER_FUNCTIONS, 100)
         self.newline()
-        write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
 
         # Finish processing in superclass
-        BaseGenerator.endFile(self)
-
-    def write_layer_func_table_contents(self, skip_func_list, align_col):
-        api_data = self.get_api_data()
-
-        write(
-            'const std::unordered_map<std::string, {}> {}_func_table = {{'.format(api_data.void_func_pointer_type, api_data.api_name.lower()),
-            file=self.outFile
-        )
-
-        for cmd in self.get_all_filtered_cmd_names():
-            align = align_col - len(cmd)
-            if (cmd in skip_func_list):
-                body = '    {{ "{}",{}reinterpret_cast<{}>({}_entry::{}) }},'.format(
-                    cmd, (' ' * align), api_data.void_func_pointer_type, api_data.api_name.lower(), cmd[2:]
-                )
-            else:
-                body = '    {{ "{}",{}reinterpret_cast<{}>(encode::{}) }},'.format(
-                    cmd, (' ' * align), api_data.void_func_pointer_type, cmd[2:]
-                )
-            write(body, file=self.outFile)
-
-        self.write_custom_layer_func_table_contents(api_data, align_col)
-
-        write('};', file=self.outFile)
+        VulkanBaseGenerator.endFile(self)
 
     def write_custom_layer_func_table_contents(self, api_data, align_col):
+        """ Method override """
         # Manually output the physical device proc address function as its name doesn't
         # match the scheme used by skip_func_list:
         align = align_col - len('vk_layerGetPhysicalDeviceProcAddr')

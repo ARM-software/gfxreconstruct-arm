@@ -351,9 +351,9 @@ size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDataGra
             {
                 size += description->pDimensions[i] * element_size;
             }
-            wrapper->pConstantData = (void*)DecodeAllocator::Allocate<uint8_t>(size);
+            wrapper->pConstantData = DecodeAllocator::Allocate<uint8_t>(size);
             bytes_read += ValueDecoder::DecodeUInt8Array(
-                (buffer + bytes_read), (buffer_size - bytes_read), wrapper->pConstantData, size);
+                (buffer + bytes_read), (buffer_size - bytes_read), (void*)wrapper->pConstantData, size);
         }
     }
 
@@ -518,6 +518,212 @@ size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkIndirec
     }
 
     bytes_read += ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &wrapper->offset);
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDescriptorDataEXT* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t               bytes_read = 0;
+    VkDescriptorDataEXT* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeUInt64Value(
+        (buffer + bytes_read), (buffer_size - bytes_read), &(value->accelerationStructure));
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkCopyMemoryToImageInfo* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t                   bytes_read = 0;
+    VkCopyMemoryToImageInfo* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->pNext));
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += ValueDecoder::DecodeFlagsValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->flags));
+    bytes_read +=
+        ValueDecoder::DecodeHandleIdValue((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->dstImage));
+    value->dstImage = VK_NULL_HANDLE;
+    bytes_read +=
+        ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->dstImageLayout));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->regionCount));
+    wrapper->pRegions = DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkMemoryToImageCopy>>();
+    bytes_read += wrapper->pRegions->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+    value->pRegions = wrapper->pRegions->GetPointer();
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkMemoryToImageCopy* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t               bytes_read = 0;
+    VkMemoryToImageCopy* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->pNext));
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += wrapper->pHostPointer.DecodeVoid((buffer + bytes_read), (buffer_size - bytes_read));
+    value->pHostPointer = wrapper->pHostPointer.GetPointer();
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->memoryRowLength));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->memoryImageHeight));
+    wrapper->imageSubresource                = DecodeAllocator::Allocate<Decoded_VkImageSubresourceLayers>();
+    wrapper->imageSubresource->decoded_value = &(value->imageSubresource);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageSubresource);
+    wrapper->imageOffset                = DecodeAllocator::Allocate<Decoded_VkOffset3D>();
+    wrapper->imageOffset->decoded_value = &(value->imageOffset);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageOffset);
+    wrapper->imageExtent                = DecodeAllocator::Allocate<Decoded_VkExtent3D>();
+    wrapper->imageExtent->decoded_value = &(value->imageExtent);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageExtent);
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDescriptorGetInfoEXT* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t                  bytes_read = 0;
+    VkDescriptorGetInfoEXT* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &wrapper->pNext);
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read +=
+        ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &wrapper->decoded_type);
+    value->type = wrapper->decoded_type;
+
+    wrapper->data                = DecodeAllocator::Allocate<Decoded_VkDescriptorDataEXT>();
+    wrapper->data->decoded_value = &(value->data);
+
+    switch (wrapper->decoded_type)
+    {
+        case VK_DESCRIPTOR_TYPE_SAMPLER:
+            bytes_read += wrapper->data->pSampler.Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pSampler = wrapper->data->pSampler.GetHandlePointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+            wrapper->data->pCombinedImageSampler =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorImageInfo>>();
+            bytes_read +=
+                wrapper->data->pCombinedImageSampler->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pCombinedImageSampler = wrapper->data->pCombinedImageSampler->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            wrapper->data->pInputAttachmentImage =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorImageInfo>>();
+            bytes_read +=
+                wrapper->data->pInputAttachmentImage->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pInputAttachmentImage = wrapper->data->pInputAttachmentImage->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            wrapper->data->pSampledImage =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorImageInfo>>();
+            bytes_read += wrapper->data->pSampledImage->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pSampledImage = wrapper->data->pSampledImage->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            wrapper->data->pStorageImage =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorImageInfo>>();
+            bytes_read += wrapper->data->pStorageImage->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pStorageImage = wrapper->data->pStorageImage->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            wrapper->data->pUniformTexelBuffer =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>>();
+            bytes_read += wrapper->data->pUniformTexelBuffer->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pUniformTexelBuffer = wrapper->data->pUniformTexelBuffer->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            wrapper->data->pStorageTexelBuffer =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>>();
+            bytes_read += wrapper->data->pStorageTexelBuffer->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pStorageTexelBuffer = wrapper->data->pStorageTexelBuffer->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            wrapper->data->pUniformBuffer =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>>();
+            bytes_read += wrapper->data->pUniformBuffer->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pUniformBuffer = wrapper->data->pUniformBuffer->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            wrapper->data->pStorageBuffer =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>>();
+            bytes_read += wrapper->data->pStorageBuffer->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+            value->data.pStorageBuffer = wrapper->data->pStorageBuffer->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+            bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->data);
+            value->data.accelerationStructure = wrapper->data->decoded_value->accelerationStructure;
+            break;
+        default:
+            break;
+    }
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkCopyImageToMemoryInfo* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t                   bytes_read = 0;
+    VkCopyImageToMemoryInfo* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->pNext));
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += ValueDecoder::DecodeFlagsValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->flags));
+    bytes_read +=
+        ValueDecoder::DecodeHandleIdValue((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->srcImage));
+    value->srcImage = VK_NULL_HANDLE;
+    bytes_read +=
+        ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->srcImageLayout));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->regionCount));
+    wrapper->pRegions = DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkImageToMemoryCopy>>();
+    bytes_read += wrapper->pRegions->Decode((buffer + bytes_read), (buffer_size - bytes_read));
+    value->pRegions = wrapper->pRegions->GetPointer();
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkImageToMemoryCopy* wrapper)
+{
+    assert((wrapper != nullptr) && (wrapper->decoded_value != nullptr));
+
+    size_t               bytes_read = 0;
+    VkImageToMemoryCopy* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->sType));
+    bytes_read += DecodePNextStruct((buffer + bytes_read), (buffer_size - bytes_read), &(wrapper->pNext));
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += wrapper->pHostPointer.DecodeVoid((buffer + bytes_read), (buffer_size - bytes_read));
+    value->pHostPointer = wrapper->pHostPointer.GetPointer();
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->memoryRowLength));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->memoryImageHeight));
+    wrapper->imageSubresource                = DecodeAllocator::Allocate<Decoded_VkImageSubresourceLayers>();
+    wrapper->imageSubresource->decoded_value = &(value->imageSubresource);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageSubresource);
+    wrapper->imageOffset                = DecodeAllocator::Allocate<Decoded_VkOffset3D>();
+    wrapper->imageOffset->decoded_value = &(value->imageOffset);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageOffset);
+    wrapper->imageExtent                = DecodeAllocator::Allocate<Decoded_VkExtent3D>();
+    wrapper->imageExtent->decoded_value = &(value->imageExtent);
+    bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), wrapper->imageExtent);
 
     return bytes_read;
 }

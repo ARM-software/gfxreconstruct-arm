@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -i
 #
 # Copyright (c) 2019 Valve Corporation
-# Copyright (c) 2019-2024 LunarG, Inc.
+# Copyright (c) 2019-2025 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -35,8 +35,9 @@ class KhronosStructHandleWrappersHeaderGenerator():
         # Generate unwrap and rewrap code for input structures.
         for struct in self.get_all_filtered_struct_names():
             if (
-                (struct in self.structs_with_handles)
-                or (struct in self.GENERIC_HANDLE_STRUCTS)
+                (struct in self.structs_with_handles) or
+                self.child_struct_has_handles(struct) or
+                (struct in self.GENERIC_HANDLE_STRUCTS)
             ) and (struct not in self.STRUCT_MAPPERS_BLACKLIST):
                 body = '\n'
                 body += 'void UnwrapStructHandles({}* value, HandleUnwrapMemory* unwrap_memory);'.format(
@@ -48,76 +49,43 @@ class KhronosStructHandleWrappersHeaderGenerator():
         const_prefix = ''
         if api_data.return_const_ptr_on_extended:
             const_prefix = 'const '
+        func_prefix = api_data.extended_struct_func_prefix
+        in_struct   = api_data.base_in_struct
 
-        self.newline()
-        write(
-            '{0}* Copy{1}Struct(const {0}* base, HandleUnwrapMemory* unwrap_memory);'.format(api_data.base_in_struct, api_data.extended_struct_func_prefix),
-            file=self.outFile
-        )
-        self.newline()
-        write(
-            '{}void* Unwrap{}StructHandles(const void* value, HandleUnwrapMemory* unwrap_memory);'.format(const_prefix, api_data.extended_struct_func_prefix),
-            file=self.outFile
-        )
-        self.newline()
-        write(
-            'template <typename ParentWrapper, typename CoParentWrapper, typename T>',
-            file=self.outFile
-        )
-        write(
-            'void CreateWrappedStructArrayHandles(typename ParentWrapper::HandleType parent, typename CoParentWrapper::HandleType co_parent, T* value, size_t len, PFN_GetHandleId get_id);',
-            file=self.outFile
-        )
-        self.newline()
-        write('template <typename T>', file=self.outFile)
-        write(
-            'T* MakeUnwrapStructs(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)',
-            file=self.outFile
-        )
-        write('{', file=self.outFile)
-        write(
-            '    assert((values != nullptr) && (len > 0) && (unwrap_memory != nullptr));',
-            file=self.outFile
-        )
-        self.newline()
-        write(
-            '    const uint8_t* bytes     = reinterpret_cast<const uint8_t*>(values);',
-            file=self.outFile
-        )
-        write(
-            '    size_t         num_bytes = len * sizeof(T);',
-            file=self.outFile
-        )
-        self.newline()
-        write(
-            '    return reinterpret_cast<T*>(unwrap_memory->GetFilledBuffer(bytes, num_bytes));',
-            file=self.outFile
-        )
-        write('}', file=self.outFile)
-        self.newline()
-        write('template <typename T>', file=self.outFile)
-        write(
-            '{}T* UnwrapStructPtrHandles(const T* value, HandleUnwrapMemory* unwrap_memory)'.format(const_prefix),
-            file=self.outFile
-        )
-        write('{', file=self.outFile)
-        write('    T* unwrapped_struct = nullptr;', file=self.outFile)
-        self.newline()
-        write('    if (value != nullptr)', file=self.outFile)
-        write('    {', file=self.outFile)
-        write(
-            '        unwrapped_struct = MakeUnwrapStructs(value, 1, unwrap_memory);',
-            file=self.outFile
-        )
-        write(
-            '        UnwrapStructHandles(unwrapped_struct, unwrap_memory);',
-            file=self.outFile
-        )
-        write('    }', file=self.outFile)
-        self.newline()
-        write('    return unwrapped_struct;', file=self.outFile)
-        write('}', file=self.outFile)
-        self.newline()
+        lines = ['']
+        lines.append(f'{in_struct}* Copy{func_prefix}Struct(const {in_struct}* base, HandleUnwrapMemory* unwrap_memory);')
+        lines.append('')
+        lines.append(f'{const_prefix}void* Unwrap{func_prefix}StructHandles(const void* value, HandleUnwrapMemory* unwrap_memory);')
+        lines.append('')
+        lines.append('template <typename ParentWrapper, typename CoParentWrapper, typename T>')
+        lines.append( 'void CreateWrappedStructArrayHandles(typename ParentWrapper::HandleType parent, typename CoParentWrapper::HandleType co_parent, T* value, size_t len, PFN_GetHandleId get_id);')
+        lines.append('')
+        lines.append('template <typename T>')
+        lines.append('T* MakeUnwrapStructs(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)')
+        lines.append('{')
+        lines.append('    assert((values != nullptr) && (len > 0) && (unwrap_memory != nullptr));')
+        lines.append('')
+        lines.append('    const uint8_t* bytes     = reinterpret_cast<const uint8_t*>(values);')
+        lines.append('    size_t         num_bytes = len * sizeof(T);')
+        lines.append('')
+        lines.append('    return reinterpret_cast<T*>(unwrap_memory->GetFilledBuffer(bytes, num_bytes));')
+        lines.append('}')
+        lines.append('')
+        lines.append('template <typename T>')
+        lines.append(f'{const_prefix}T* UnwrapStructPtrHandles(const T* value, HandleUnwrapMemory* unwrap_memory)')
+        lines.append('{')
+        lines.append('    T* unwrapped_struct = nullptr;')
+        lines.append('')
+        lines.append('    if (value != nullptr)')
+        lines.append('    {')
+        lines.append('        unwrapped_struct = MakeUnwrapStructs(value, 1, unwrap_memory);')
+        lines.append('        UnwrapStructHandles(unwrapped_struct, unwrap_memory);')
+        lines.append('    }')
+        lines.append('')
+        lines.append('    return unwrapped_struct;')
+        lines.append('}')
+        lines.append('')
+        write('\n'.join(lines), file=self.outFile)
 
         self.generate_create_wrapper_funcs()
 
@@ -145,7 +113,7 @@ class KhronosStructHandleWrappersHeaderGenerator():
 
         write('template <typename T>', file=self.outFile)
         write(
-            '{} T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)'.format(const_prefix),
+            f'{const_prefix}T* UnwrapStructArrayHandles({const_prefix}T* values, size_t len, HandleUnwrapMemory* unwrap_memory)',
             file=self.outFile
         )
         write('{', file=self.outFile)
@@ -249,36 +217,49 @@ class KhronosStructHandleWrappersHeaderGenerator():
             body += '    if (value != nullptr)\n'
             body += '    {\n'
 
+            default_info = {
+                    'indent': '        ',
+                    'struct': '',
+                    'plural': '',
+                    'length': '',
+                    'coparent_wrapper': '',
+                    'coparent_arg': '',
+                    'dref_value': '&',
+                }
             for member in self.structs_with_handles[struct]:
-                wrapper_prefix = self.get_wrapper_prefix_from_type(member.base_type)
-                func_target = self.get_handle_like_func_name_modifier(member.base_type)
+                # Set up the information needed to generation the createwrapper call
+                info = { **default_info }
+                info['prefix'] = self.get_wrapper_prefix_from_type(member.base_type)
+                info['target'] = self.get_handle_like_func_name_modifier(member.base_type)
+                info['name'] = member.name
+                if not (self.is_atom(member.base_type) or self.is_opaque(member.base_type)):
+                    info['coparent_wrapper'] = ', CoParentWrapper'
+                    info['coparent_arg'] = 'co_parent, '
+
+                if member.is_array or member.is_pointer:
+                    info['dref_value'] = ''
 
                 if self.is_struct(member.base_type):
+                    info['type'] = member.base_type
+                    info['plural'] = 's'
                     if member.is_array:
-                        body += '        {}::CreateWrappedStructArray{}s<ParentWrapper, CoParentWrapper, {}>(parent, co_parent, value->{}, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.base_type, member.name, member.array_length
-                        )
-                    elif member.is_pointer:
-                        body += '        {}::CreateWrappedStruct{}s<ParentWrapper, CoParentWrapper>(parent, co_parent, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.name
-                        )
+                        info['wrapper'] = ', ' + member.base_type
+                        info['struct'] = 'StructArray'
                     else:
-                        body += '        {}::CreateWrappedStruct{}s<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.name
-                        )
+                        info['wrapper'] = ''
+                        info['struct'] =  'Struct'
                 else:
-                    if member.is_array:
-                        body += '        {}::CreateWrapped{}s<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, value->{}, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name, member.array_length
-                        )
-                    elif member.is_pointer:
-                        body += '        {}::CreateWrapped{}<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name
-                        )
-                    else:
-                        body += '        {}::CreateWrapped{}<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, &value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name
-                        )
+                    info['type'] = member.base_type[2:]
+                    info['wrapper'] = ', {}::{}Wrapper'.format(info['prefix'], info['type'])
+
+                if member.is_array:
+                    info['length'] = 'value->{}, '.format(member.array_length)
+                    info['plural'] = 's'
+
+                wrapper_name ='        {prefix}::CreateWrapped{struct}{target}{plural}'.format(**info)
+                wrapper_template = '<ParentWrapper{coparent_wrapper}{wrapper}>'.format(**info)
+                wrapper_args ='(parent, {coparent_arg}{dref_value}value->{name}, {length}get_id);\n'.format(**info)
+                body += wrapper_name + wrapper_template + wrapper_args
 
             body += '    }\n'
             body += '}\n'

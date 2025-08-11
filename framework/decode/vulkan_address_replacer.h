@@ -27,7 +27,8 @@
 #include "decode/common_object_info_table.h"
 #include "decode/vulkan_device_address_tracker.h"
 #include "graphics/vulkan_shader_group_handle.h"
-#include "util/vulkan_device_table_dispatcher.h"
+#include "format/platform_types.h"
+#include "decode/vulkan_address_replacer_base.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -38,25 +39,94 @@ GFXRECON_BEGIN_NAMESPACE(decode)
  * Important note: all internal Vulkan-API calls performed by this class are expected to be wrapped by calls to:
  * - decode::BeginInjectedCommands() / decode::EndInjectedCommands()
  */
-class VulkanAddressReplacer
+class VulkanAddressReplacer : public VulkanAddressReplacerBase
 {
   public:
     VulkanAddressReplacer() = default;
 
     VulkanAddressReplacer(const VulkanDeviceInfo*              device_info,
-                          const encode::VulkanDeviceTable*     device_table,
+                          const graphics::VulkanDeviceTable*   device_table,
+                          const graphics::VulkanInstanceTable* instance_table,
                           const decode::CommonObjectInfoTable& object_table);
 
     //! prevent copying
     VulkanAddressReplacer(const VulkanAddressReplacer&) = delete;
 
     //! allow moving
-    VulkanAddressReplacer(VulkanAddressReplacer&& other) noexcept;
+    VulkanAddressReplacer(VulkanAddressReplacer&& other) noexcept = default;
 
     ~VulkanAddressReplacer();
 
     /**
-     * @brief   ProcessCmdTraceRays will check and potentially correct input-parameters to 'VkCmdTraceRays',
+     * @brief   Set raytracing-related properties
+     *
+     * @param   physical_device_info    a physical-device info struct.
+     */
+    void SetRaytracingProperties(const decode::VulkanPhysicalDeviceInfo* physical_device_info);
+
+    /**
+     * @brief   UpdateBufferAddresses will replace buffer-device-address in gpu-memory,
+     *          at locations pointed to by @param addresses.
+     *
+     * Replacement will be performed using a compute-dispatch injected into @param command_buffer_info.
+     *
+     * @param   command_buffer_info optional VulkanCommandBufferInfo* or nullptr to use an internal command-buffer
+     * @param   addresses           array of device-addresses
+     * @param   num_addresses       number of addresses
+     * @param   address_tracker     const reference to a VulkanDeviceAddressTracker, used for mapping device-addresses
+     */
+    void UpdateBufferAddresses(const VulkanCommandBufferInfo*            command_buffer_info,
+                               const VkDeviceAddress*                    addresses,
+                               uint32_t                                  num_addresses,
+                               const decode::VulkanDeviceAddressTracker& address_tracker);
+
+    /**
+     * @brief   ProcessCmdPushConstants will check and potentially correct input-parameters to 'vkCmdPushConstants',
+     *          replacing any used buffer-device-addresses in-place.
+     *
+     * @param   command_buffer_info a provided const VulkanCommandBufferInfo*
+     * @param   stage_flags         provided VkShaderStageFlags
+     * @param   offset              data offset
+     * @param   size                data size
+     * @param   data                provided pointer to push-constant data
+     * @param   address_tracker     const reference to a VulkanDeviceAddressTracker, used for mapping device-addresses
+     */
+    void ProcessCmdPushConstants(const VulkanCommandBufferInfo*            command_buffer_info,
+                                 VkShaderStageFlags                        stage_flags,
+                                 uint32_t                                  offset,
+                                 uint32_t                                  size,
+                                 void*                                     data,
+                                 const decode::VulkanDeviceAddressTracker& address_tracker);
+
+    /**
+     * @brief   ProcessCmdBindDescriptorSets will check the bound descriptor-sets for presence of buffer-references
+     *          and collect all addresses that will require replacement.
+     *
+     * The collected VkDeviceAddresses will be stored in @param command_buffer_info and depending on situation:
+     *
+     * a) if @param command_buffer_info is currently recording commands inside a renderpass:
+     * - keep the data, defer replacement until QueueSubmit
+     *
+     * b) if @param command_buffer_info is outside any renderpass:
+     * - consume collected addresses, inject call to UpdateBufferAddresses() into @param command_buffer_info
+     *
+     * @param   command_buffer_info a provided const VulkanCommandBufferInfo*
+     * @param   pipelineBindPoint   the pipeline bind-point
+     * @param   firstSet            index of first set
+     * @param   descriptorSetCount  number of descriptor-sets
+     * @param   pDescriptorSets     provided HandlePointerDecoder, containing descriptor-sets
+     * @param   address_tracker     reference to a VulkanDeviceAddressTracker, used for mapping device-addresses
+     *                              and storing newly created addresses
+     */
+    void ProcessCmdBindDescriptorSets(VulkanCommandBufferInfo*               command_buffer_info,
+                                      VkPipelineBindPoint                    pipelineBindPoint,
+                                      uint32_t                               firstSet,
+                                      uint32_t                               descriptorSetCount,
+                                      HandlePointerDecoder<VkDescriptorSet>* pDescriptorSets,
+                                      decode::VulkanDeviceAddressTracker&    address_tracker);
+
+    /**
+     * @brief   ProcessCmdTraceRays will check and potentially correct input-parameters to 'vkCmdTraceRays',
      *          like buffer-device-addresses and shader-group-handles.
      *
      * Depending on capture- and replay-device-properties one of the following strategies will be used:
@@ -89,7 +159,18 @@ class VulkanAddressReplacer
 
     /**
      * @brief   ProcessCmdBuildAccelerationStructuresKHR will check
-     *          and potentially correct input-parameters to 'VkCmdBuildAccelerationStructuresKHR'
+     *          and potentially correct input-parameters to 'vkCmdBuildAccelerationStructuresKHR'
+     *
+     * Depending on capture- and replay-device-properties this includes the following:
+     *
+     * if replaying on same device/driver using the default-allocator (no -m rebind):
+     * - happy day, nothing to do!
+     *
+     * if replaying on a different device/driver and/or using the rebind-allocator (via -m rebind):
+     * - remap buffer-device-addresses for triangle-, aabb- and instance-geometries referenced in `build_geometry_infos`
+     * - check buffer-sizes for acceleration-structures and scratch-buffers
+     *      - if necessary, create shadow acceleration-structures and -buffers, adjust references
+     * - apply in-place correction of acceleration-structure device-addresses referenced by top-level builds
      *
      * @param command_buffer_info   a provided VulkanCommandBufferInfo
      * @param info_count            number of elements in 'build_geometry_infos'
@@ -101,10 +182,125 @@ class VulkanAddressReplacer
                                                   uint32_t                                     info_count,
                                                   VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos,
                                                   VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos,
-                                                  const decode::VulkanDeviceAddressTracker&    address_tracker,
-                                                  bool                                         process_scratch_buffers);
+                                                  const decode::VulkanDeviceAddressTracker&    address_tracker);
 
-    friend void swap(VulkanAddressReplacer& lhs, VulkanAddressReplacer& rhs) noexcept;
+    /**
+     * @brief   ProcessCmdCopyAccelerationStructuresKHR will check
+     *          and potentially correct input-parameters to 'vkCmdCopyAccelerationStructuresKHR'
+     *
+     * @param   info                a provided VkCopyAccelerationStructureInfoKHR*
+     * @param   address_tracker     const reference to a VulkanDeviceAddressTracker, used for mapping device-addresses
+     */
+    void ProcessCmdCopyAccelerationStructuresKHR(VkCopyAccelerationStructureInfoKHR*       info,
+                                                 const decode::VulkanDeviceAddressTracker& address_tracker);
+
+    /**
+     * @brief   ProcessCmdWriteAccelerationStructuresPropertiesKHR will check
+     *          and potentially correct input-parameters to 'vkCmdWriteAccelerationStructuresPropertiesKHR'
+     *
+     * @param   count                   element count in acceleration_structures
+     * @param   acceleration_structures provided array of VkAccelerationStructureKHR-handles
+     * @param   query_type              the query's type
+     * @param   pool                    provided VkQuerypool handle
+     * @param   first_query             index of first query
+     */
+    void ProcessCmdWriteAccelerationStructuresPropertiesKHR(uint32_t                    count,
+                                                            VkAccelerationStructureKHR* acceleration_structures,
+                                                            VkQueryType                 query_type,
+                                                            VkQueryPool                 pool,
+                                                            uint32_t                    first_query);
+
+    /**
+     * @brief   ProcessUpdateDescriptorSets will check
+     *          and potentially correct input-parameters to 'vkUpdateDescriptorSets'
+     *
+     * @param   descriptor_write_count  element count in descriptor_writes
+     * @param   descriptor_writes       provided array of VkWriteDescriptorSet
+     * @param   descriptor_copy_count   element count in descriptor_copies
+     * @param   descriptor_copies       provided array of VkCopyDescriptorSet
+     */
+    void ProcessUpdateDescriptorSets(uint32_t              descriptor_write_count,
+                                     VkWriteDescriptorSet* descriptor_writes,
+                                     uint32_t              descriptor_copy_count,
+                                     VkCopyDescriptorSet*  descriptor_copies);
+
+    /**
+     * @brief   ProcessGetQueryPoolResults will check for running queries and attempt to extract information
+     *          about acceleration-structure compactions-sizes.
+     *
+     * Should be run after vkGetQueryPoolResults has returned.
+     *
+     * @param   device      a VkDevice handle
+     * @param   query_pool  a VkQueryPool handle
+     * @param   firstQuery  index for first query
+     * @param   queryCount  number of queries
+     * @param   dataSize    datasize in bytes
+     * @param   pData       provided data-pointer
+     * @param   stride      provided stride in bytes
+     * @param   flags       query result-flags
+     */
+    void ProcessGetQueryPoolResults(VkDevice           device,
+                                    VkQueryPool        query_pool,
+                                    uint32_t           firstQuery,
+                                    uint32_t           queryCount,
+                                    size_t             dataSize,
+                                    void*              pData,
+                                    VkDeviceSize       stride,
+                                    VkQueryResultFlags flags);
+
+    /**
+     * @brief   Process information contained in a metadata-block in order to build acceleration-structures.
+     *
+     * Will use an internal command-buffer, submit work to a VkQueue and perform host-synchronization.
+     *
+     * @param   info_count              element count in 'geometry_infos'
+     * @param   geometry_infos          provided array of VkAccelerationStructureBuildGeometryInfoKHR
+     * @param   range_infos             provided array of pointers to VkAccelerationStructureBuildRangeInfoKHR
+     * @param   address_tracker         const reference to a VulkanDeviceAddressTracker
+     */
+    void
+    ProcessBuildVulkanAccelerationStructuresMetaCommand(uint32_t                                     info_count,
+                                                        VkAccelerationStructureBuildGeometryInfoKHR* geometry_infos,
+                                                        VkAccelerationStructureBuildRangeInfoKHR**   range_infos,
+                                                        const decode::VulkanDeviceAddressTracker&    address_tracker);
+
+    /**
+     * @brief   Process information contained in a metadata-block in order to copy acceleration-structures.
+     *
+     * @param   info_count      element count in 'copy_infos'
+     * @param   copy_infos      provided array of VkCopyAccelerationStructureInfoKHR
+     * @param   address_tracker const reference to a VulkanDeviceAddressTracker
+     */
+    void ProcessCopyVulkanAccelerationStructuresMetaCommand(uint32_t                                  info_count,
+                                                            VkCopyAccelerationStructureInfoKHR*       copy_infos,
+                                                            const decode::VulkanDeviceAddressTracker& address_tracker);
+    /**
+     * @brief   Process information contained in a metadata-block in order to issue a query on internal an query-pool.
+     *
+     * Will use an internal command-buffer, submit work to a VkQueue and perform host-synchronization.
+     *
+     * @param   query_type              type of query
+     * @param   acceleration_structure  provided acceleration-structure handle
+     */
+    void
+    ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(VkQueryType                query_type,
+                                                                  VkAccelerationStructureKHR acceleration_structure);
+
+    /**
+     * @brief   DestroyShadowResources should be called upon destruction of provided VkAccelerationStructureKHR handle,
+     *          allowing this class to free potential resources associated with it.
+     *
+     * @param   handle  a provided VkAccelerationStructureKHR handle
+     */
+    void DestroyShadowResources(VkAccelerationStructureKHR handle);
+
+    /**
+     * @brief   DestroyShadowResources should be called upon destruction of provided VkCommandBuffer handle,
+     *          allowing this class to free potential resources associated with it.
+     *
+     * @param   handle  a provided VkCommandBuffer handle
+     */
+    void DestroyShadowResources(VkCommandBuffer handle);
 
   private:
     struct buffer_context_t
@@ -117,7 +313,14 @@ class VulkanAddressReplacer
         decode::VulkanResourceAllocator::MemoryData   memory_data{};
         VkDeviceAddress                               device_address = 0;
         void*                                         mapped_data    = nullptr;
+        std::string                                   name;
+
+        buffer_context_t()                        = default;
+        buffer_context_t(const buffer_context_t&) = delete;
+        buffer_context_t(buffer_context_t&& other) noexcept;
         ~buffer_context_t();
+        buffer_context_t& operator=(buffer_context_t other);
+        void              swap(buffer_context_t& other);
     };
 
     struct pipeline_context_t
@@ -141,7 +344,25 @@ class VulkanAddressReplacer
 
     [[nodiscard]] bool init_pipeline();
 
-    [[nodiscard]] bool create_buffer(size_t num_bytes, buffer_context_t& buffer_context, uint32_t usage_flags = 0);
+    [[nodiscard]] bool init_queue_assets();
+
+    void run_compute_replace(const VulkanCommandBufferInfo*            command_buffer_info,
+                             const VkDeviceAddress*                    addresses,
+                             uint32_t                                  num_addresses,
+                             const decode::VulkanDeviceAddressTracker& address_tracker,
+                             VkPipelineStageFlags                      sync_stage);
+
+    [[nodiscard]] bool create_buffer(buffer_context_t&  buffer_context,
+                                     size_t             num_bytes,
+                                     uint32_t           usage_flags   = 0,
+                                     uint32_t           min_alignment = 0,
+                                     bool               use_host_mem  = true,
+                                     const std::string& name          = "GFXR VulkanAddressReplacer Buffer");
+
+    [[nodiscard]] bool create_acceleration_asset(acceleration_structure_asset_t& as_asset,
+                                                 VkAccelerationStructureTypeKHR  type,
+                                                 size_t                          num_buffer_bytes,
+                                                 size_t                          num_scratch_bytes);
 
     void barrier(VkCommandBuffer      command_buffer,
                  VkBuffer             buffer,
@@ -150,8 +371,9 @@ class VulkanAddressReplacer
                  VkPipelineStageFlags dst_stage,
                  VkAccessFlags        dst_access);
 
-    const encode::VulkanDeviceTable*                               device_table_      = nullptr;
-    const VulkanDeviceInfo*                                        device_info_       = nullptr;
+    bool swap_acceleration_structure_handle(VkAccelerationStructureKHR& handle);
+
+    const graphics::VulkanDeviceTable*                             device_table_      = nullptr;
     const decode::CommonObjectInfoTable*                           object_table_      = nullptr;
     VkPhysicalDeviceMemoryProperties                               memory_properties_ = {};
     std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> capture_ray_properties_{}, replay_ray_properties_{};
@@ -171,9 +393,6 @@ class VulkanAddressReplacer
     // pipeline dealing with buffer-device-addresses (BDA), replacing addresses
     VkPipeline pipeline_bda_ = VK_NULL_HANDLE;
 
-    pipeline_context_t pipeline_context_sbt_;
-    pipeline_context_t pipeline_context_bda_;
-
     // required assets for submitting meta-commands
     VkCommandPool   command_pool_   = VK_NULL_HANDLE;
     VkCommandBuffer command_buffer_ = VK_NULL_HANDLE;
@@ -185,20 +404,20 @@ class VulkanAddressReplacer
     util::linear_hashmap<VkDeviceAddress, VkDeviceAddress>                                 hashmap_bda_;
     std::unordered_map<VkCommandBuffer, buffer_context_t>                                  shadow_sbt_map_;
 
-    // pipeline-contexts dealing with shader-binding-tables, per command-buffer
-    std::unordered_map<VkCommandBuffer, pipeline_context_t> pipeline_sbt_context_map_;
+    // pipeline-contexts per command-buffer
+    std::unordered_map<VkCommandBuffer, std::vector<pipeline_context_t>> pipeline_context_map_;
 
     // resources related to acceleration-structures
     std::unordered_map<VkAccelerationStructureKHR, acceleration_structure_asset_t> shadow_as_map_;
-
-    // pipeline-contexts dealing with acceleration-structure builds, per command-buffer
-    std::unordered_map<VkCommandBuffer, pipeline_context_t> build_as_context_map_;
 
     // currently running compaction queries. pool -> AS -> query-pool-index
     std::unordered_map<VkQueryPool, std::unordered_map<VkAccelerationStructureKHR, uint32_t>> as_compact_queries_;
     std::unordered_map<VkAccelerationStructureKHR, VkDeviceSize>                              as_compact_sizes_;
 
-    util::VulkanDeviceTableDispatcher dispatcher_;
+    // required function pointers
+    PFN_vkGetBufferDeviceAddress       get_device_address_fn_             = nullptr;
+    PFN_vkGetPhysicalDeviceProperties2 get_physical_device_properties_fn_ = nullptr;
+    PFN_vkSetDebugUtilsObjectNameEXT   set_debug_utils_object_name_fn_    = nullptr;
 };
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

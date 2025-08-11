@@ -165,10 +165,11 @@ class FileTransformer
     virtual bool ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
         const format::VulkanWriteAccelerationStructuresPropertiesCommandHeader& header);
     virtual bool ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header);
+    virtual bool ProcessFixShadowMemoryCommand(const format::FixShadowMemoryCommand& header);
+    virtual bool ProcessFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header);
     virtual bool ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header);
     virtual bool ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header);
     virtual bool ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header);
-    virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header);
 
     uint64_t GetCurrentBlockIndex() { return block_index_; }
 

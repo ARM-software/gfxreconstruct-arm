@@ -26,7 +26,11 @@
 
 #include <test_app_base.h>
 
+#ifdef __ANDROID__
+#include <android_native_app_glue.h>
+#else
 #include <SDL3/SDL_main.h>
+#endif
 
 namespace gfxrecon
 {
@@ -73,7 +77,10 @@ class App : public gfxrecon::test::TestAppBase
 
 void App::configure_instance_builder(gfxrecon::test::InstanceBuilder& instance_builder, vkmock::TestConfig* test_config)
 {
-    test_config->device_api_version_override = VK_MAKE_API_VERSION(0, 1, 3, 296);
+    if (test_config)
+    {
+        test_config->device_api_version_override = VK_MAKE_API_VERSION(0, 1, 3, 296);
+    }
 
     TestAppBase::configure_instance_builder(instance_builder, test_config);
 }
@@ -113,8 +120,13 @@ void App::create_render_pass()
 
 void App::create_graphics_pipeline()
 {
+#ifdef __ANDROID__
+    auto vert_module = gfxrecon::test::readShaderFromFile(init.disp, "shaders/vert.spv", init.android_app);
+    auto frag_module = gfxrecon::test::readShaderFromFile(init.disp, "shaders/frag.spv", init.android_app);
+#else
     auto vert_module = gfxrecon::test::readShaderFromFile(init.disp, "shaders/vert.spv");
     auto frag_module = gfxrecon::test::readShaderFromFile(init.disp, "shaders/frag.spv");
+#endif
 
     VkPipelineShaderStageCreateInfo vert_stage_info = {};
     vert_stage_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -493,6 +505,23 @@ void App::setup()
 
 } // namespace gfxrecon
 
+#if defined(__ANDROID__)
+void android_main(struct android_app* android_app)
+{
+    try
+    {
+        gfxrecon::test_app::triangle::App app{};
+        app.set_android_app(android_app);
+        app.run("triangle");
+        return;
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << e.what() << std::endl;
+        return;
+    }
+}
+#else
 int main(int argc, char* argv[])
 {
     try
@@ -507,3 +536,4 @@ int main(int argc, char* argv[])
         return -1;
     }
 }
+#endif

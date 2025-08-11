@@ -40,7 +40,7 @@ struct UintRange
 };
 
 std::vector<UintRange>
-GetUintRanges(const char* args, const char* option_name, bool check_overlap_range = true, bool allow_zero = false);
+GetUintRanges(const char* args, const char* option_name, bool check_overlap_range, bool allow_zero);
 
 enum class ScreenshotFormat : uint32_t
 {

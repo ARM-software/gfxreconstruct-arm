@@ -50,7 +50,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanMicromapBuilder
 {
   public:
-    VulkanMicromapBuilder(const encode::VulkanDeviceTable*        device_table,
+    VulkanMicromapBuilder(const graphics::VulkanDeviceTable*      device_table,
                           const VulkanPhysicalDeviceInfo*         physical_device_info,
                           VkDevice                                device,
                           VulkanResourceAllocator*                allocator,
@@ -101,7 +101,7 @@ class VulkanMicromapBuilder
     void UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_info);
     void UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& build_infos, VkDeviceSize scratch_size);
 
-    void InitializeFunctionPointers(const encode::VulkanDeviceTable* device_table);
+    void InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkCreateMicromapEXT        create_micromap{ nullptr };

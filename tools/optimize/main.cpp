@@ -28,6 +28,7 @@
 #include "vulkan_micromap_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
 #include "vulkan_raytracing_modifier.h"
+#include "vulkan_descriptor_buffer_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -63,7 +64,7 @@
 #if defined(WIN32)
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 615;
 }
 extern "C"
 {
@@ -172,11 +173,14 @@ GetVulkanOptimizationData(const std::string& input_filename, const gfxrecon::Vul
         auto micromap_modifier_consumer    = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
         auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
         auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>(options);
+        auto descriptor_buffer_modifier_consumer =
+            std::make_unique<gfxrecon::decode::VulkanDescriptorBufferModifier>(options);
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
         decoder.AddConsumer(vulkan_skia_modifier_consumer.get());
+        decoder.AddConsumer(descriptor_buffer_modifier_consumer.get());
         decoder.AddConsumer(raytracing_modifier_consumer.get());
 
         vulkan_skia_modifier_consumer.get()->SetAppName(remove_app_name);
@@ -201,6 +205,10 @@ GetVulkanOptimizationData(const std::string& input_filename, const gfxrecon::Vul
         if (vulkan_skia_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(vulkan_skia_modifier_consumer));
+        }
+        if (descriptor_buffer_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(descriptor_buffer_modifier_consumer));
         }
         if (raytracing_modifier_consumer->CanOptimize())
         {
@@ -384,12 +392,13 @@ int main(int argc, const char** argv)
         {
             bool detected_d3d12  = false;
             bool detected_vulkan = false;
-            gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
+            bool detected_openxr = false;
+            gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, detected_openxr);
 
             if ((!detected_d3d12) && (!detected_vulkan))
             {
                 // Detect with no block limit
-                gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, true);
+                gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, detected_openxr, true);
             }
 
             if (detected_d3d12)
@@ -404,6 +413,12 @@ int main(int argc, const char** argv)
                 // Run all vulkan optimizations
                 RunVulkanOptimizations(input_filename, output_filename, vulkan_options);
             }
+#ifdef ENABLE_OPENXR_SUPPORT
+            else if (detected_openxr)
+            {
+                GFXRECON_LOG_INFO("No optimizations defined for OpenXR capture files");
+            }
+#endif
             else
             {
                 GFXRECON_LOG_ERROR("Could not detect graphics API. Aborting optimization.")

@@ -93,13 +93,6 @@ class VulkanResourceAllocator
         PFN_vkGetPhysicalDeviceQueueFamilyProperties get_physical_device_queue_family_properties{ nullptr };
         PFN_vkSetDebugUtilsObjectNameEXT             set_debug_utils_object_name{ nullptr };
         PFN_vkSetDebugUtilsObjectTagEXT              set_debug_utils_object_tag{ nullptr };
-        PFN_vkCreateTensorARM                        create_tensor{ nullptr };
-        PFN_vkCreateDataGraphPipelineSessionARM      create_data_graph_pipeline_session{ nullptr };
-        PFN_vkDestroyTensorARM                       destroy_tensor{ nullptr };
-        PFN_vkDestroyDataGraphPipelineSessionARM     destroy_data_graph_pipeline_session{ nullptr };
-        PFN_vkBindTensorMemoryARM                    bind_tensor_memory{ nullptr };
-        PFN_vkBindDataGraphPipelineSessionMemoryARM  bind_data_graph_pipeline_session_memory{ nullptr };
-        PFN_vkGetTensorMemoryRequirementsARM         get_tensor_memory_requiements{ nullptr };
     };
 
   public:
@@ -149,42 +142,9 @@ class VulkanResourceAllocator
                                              VkMemoryRequirements* memory_requirements,
                                              ResourceData          allocator_data) = 0;
 
-    virtual void     GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
-                                                  VkMemoryRequirements2*                 memory_requirements,
-                                                  ResourceData                           allocator_data) = 0;
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data)                = 0;
-
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData*                                  allocator_data) = 0;
-
-    virtual void DestroyTensor(VkTensorARM                  tensor,
-                               const VkAllocationCallbacks* allocation_callbacks,
-                               ResourceData                 allocator_data) = 0;
-
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data) = 0;
-
-    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_tensor_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties) = 0;
-
-    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                        VkDeviceMemory                memory,
-                                                        VkDeviceSize                  memory_offset,
-                                                        ResourceData                  allocator_session_data,
-                                                        MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties) = 0;
+    virtual void GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
+                                              VkMemoryRequirements2*                 memory_requirements,
+                                              ResourceData                           allocator_data) = 0;
 
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
