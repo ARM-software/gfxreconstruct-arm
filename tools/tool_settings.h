@@ -41,7 +41,7 @@
 #include "decode/vulkan_tracked_object_info_table.h"
 #include "generated/generated_vulkan_decoder.h"
 
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
 #include "generated/generated_openxr_decoder.h"
 #endif
 
@@ -51,7 +51,7 @@
 #include "util/options.h"
 #include "util/strings.h"
 
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
 #include "openxr/openxr.h"
 #endif
 
@@ -1135,15 +1135,20 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     {
         if (gfxrecon::util::platform::StringCompareNoCase("debug", debug_severity_string.c_str()))
         {
-            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+            replay_options.debug_message_severity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         }
         else if (gfxrecon::util::platform::StringCompareNoCase("info", debug_severity_string.c_str()))
         {
-            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         }
         else if (gfxrecon::util::platform::StringCompareNoCase("warning", debug_severity_string.c_str()))
         {
-            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+            replay_options.debug_message_severity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         }
         else if (gfxrecon::util::platform::StringCompareNoCase("error", debug_severity_string.c_str()))
         {
@@ -1462,7 +1467,7 @@ static void PrintVersion(const char* exe_name)
                            VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
                            VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
 
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
     GFXRECON_WRITE_CONSOLE("  OpenXR Header Version %u.%u.%u",
                            XR_VERSION_MAJOR(XR_CURRENT_API_VERSION),
                            XR_VERSION_MINOR(XR_CURRENT_API_VERSION),

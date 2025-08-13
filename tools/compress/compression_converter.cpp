@@ -197,6 +197,7 @@ bool CompressionConverter::ProcessMetaData(const format::MetaDataHeader& meta_he
         case format::MetaDataType::kInitSubresourceCommand:
         case format::MetaDataType::kInitDx12AccelerationStructureCommand:
         case format::MetaDataType::kFillMemoryResourceValueCommand:
+        case format::MetaDataType::kInitTensorCommand:
         {
             break;
         }
@@ -626,6 +627,49 @@ bool CompressionConverter::ProcessFillMemoryResourceValueCommand(
         return false;
     }
 
+    return true;
+}
+
+bool CompressionConverter::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    format::InitTensorCommandHeader init_cmd = header;
+    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, init_cmd.data_size);
+    size_t data_size = static_cast<size_t>(init_cmd.data_size);
+    if (format::IsBlockCompressed(init_cmd.meta_header.block_header.type))
+    {
+        size_t uncompressed_size = 0;
+        size_t compressed_size =
+            static_cast<size_t>(init_cmd.meta_header.block_header.size - format::GetMetaDataBlockBaseSize(init_cmd));
+        if (!ReadCompressedParameterBuffer(compressed_size, data_size, &uncompressed_size))
+        {
+            HandleBlockReadError(kErrorReadingCompressedBlockData, "Failed to read init buffer meta-data block");
+            return false;
+        }
+        assert(uncompressed_size == data_size);
+    }
+    else
+    {
+        if (!ReadParameterBuffer(data_size))
+        {
+            HandleBlockReadError(kErrorReadingBlockData, "Failed to read init buffer meta-data block");
+            return false;
+        }
+    }
+    const auto&    buffer       = GetParameterBuffer();
+    const uint8_t* data_address = buffer.data();
+    PrepMetadataBlock(init_cmd.meta_header, init_cmd.meta_header.meta_data_id, data_address, data_size);
+    // Calculate size of packet with compressed or uncompressed data size.
+    init_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(init_cmd) + data_size;
+    if (!WriteBytes(&init_cmd, sizeof(init_cmd)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write init buffer meta-data block header");
+        return false;
+    }
+    if (!WriteBytes(data_address, data_size))
+    {
+        HandleBlockWriteError(kErrorWritingBlockData, "Failed to write init buffer meta-data block");
+        return false;
+    }
     return true;
 }
 

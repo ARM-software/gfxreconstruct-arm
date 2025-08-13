@@ -327,7 +327,9 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
     {
         buffer_context_t input_handle_buffer  = {};
         buffer_context_t output_handle_buffer = {};
-        buffer_context_t hashmap_storage      = {};
+
+        //! this can hold either a linear hashmap or a sorted array of key/value pairs
+        buffer_context_t storage_array = {};
     };
 
     struct acceleration_structure_asset_t
@@ -342,9 +344,19 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
         ~acceleration_structure_asset_t();
     };
 
+    struct bda_element_t
+    {
+        VkDeviceAddress capture_address = 0;
+        VkDeviceAddress replay_address  = 0;
+        VkDeviceSize    size            = 0;
+        bool            operator<(const bda_element_t& other) const { return capture_address < other.capture_address; }
+    };
+
     [[nodiscard]] bool init_pipeline();
 
     [[nodiscard]] bool init_queue_assets();
+
+    void update_global_hashmap(VkCommandBuffer command_buffer);
 
     void run_compute_replace(const VulkanCommandBufferInfo*            command_buffer_info,
                              const VkDeviceAddress*                    addresses,
@@ -393,6 +405,9 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
     // pipeline dealing with buffer-device-addresses (BDA), replacing addresses
     VkPipeline pipeline_bda_ = VK_NULL_HANDLE;
 
+    // pipeline enabling rehashing buffer-device-addresses (BDA), utility
+    VkPipeline pipeline_bda_rehash_ = VK_NULL_HANDLE;
+
     // required assets for submitting meta-commands
     VkCommandPool   command_pool_   = VK_NULL_HANDLE;
     VkCommandBuffer command_buffer_ = VK_NULL_HANDLE;
@@ -401,8 +416,13 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
     VkQueryPool     query_pool_     = VK_NULL_HANDLE;
 
     util::linear_hashmap<graphics::shader_group_handle_t, graphics::shader_group_handle_t> hashmap_sbt_;
-    util::linear_hashmap<VkDeviceAddress, VkDeviceAddress>                                 hashmap_bda_;
     std::unordered_map<VkCommandBuffer, buffer_context_t>                                  shadow_sbt_map_;
+
+    std::vector<bda_element_t> storage_bda_binary_;
+
+    // storage- and control-buffers for a global hashmap acting as address-filter
+    buffer_context_t hashmap_storage_bda_binary_       = {};
+    buffer_context_t hashmap_control_block_bda_binary_ = {};
 
     // pipeline-contexts per command-buffer
     std::unordered_map<VkCommandBuffer, std::vector<pipeline_context_t>> pipeline_context_map_;

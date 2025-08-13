@@ -32,7 +32,7 @@
 #include "decode/vulkan_pre_process_consumer.h"
 #include "format/format.h"
 
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
 #include "decode/openxr_tracked_object_info_table.h"
 #include "generated/generated_openxr_decoder.h"
 #include "generated/generated_openxr_replay_consumer.h"
@@ -72,12 +72,12 @@ static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
 extern "C"
 {
-    uint64_t MainGetCurrentBlockIndex()
+    GFXRECON_EXPORT uint64_t MainGetCurrentBlockIndex()
     {
         return file_processor->GetCurrentBlockIndex();
     }
 
-    bool MainGetLoadingTrimmedState()
+    GFXRECON_EXPORT bool MainGetLoadingTrimmedState()
     {
         return file_processor->GetLoadingTrimmedState();
     }

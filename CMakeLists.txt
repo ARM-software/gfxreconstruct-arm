@@ -36,6 +36,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${PROJECT_SOURCE_DIR}/external/cmake-modules")
+set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
+set(CMAKE_VISIBILITY_INLINES_HIDDEN "YES")
 
 option(USE_STRICT_COMPILER_WARNINGS "Use a stricter compiler-warning level" OFF)
 
@@ -137,10 +139,12 @@ if (GFXRECON_ENABLE_OPENXR)
 
     if ((NOT XR_VERSION_MAJOR STREQUAL "") AND (NOT XR_VERSION_MINOR STREQUAL ""))
         set(OPENXR_SUPPORT_ENABLED TRUE)
+        message(STATUS "OpenXR support enabled")
     else()
         message(FATAL_ERROR "Failed to find OpenXR headers for support!")
     endif()
-
+else()
+    message(STATUS "OpenXR support disabled!")
 endif()
 
 # Apply misc build directives to the given target

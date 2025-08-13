@@ -413,7 +413,7 @@ int main(int argc, const char** argv)
                 // Run all vulkan optimizations
                 RunVulkanOptimizations(input_filename, output_filename, vulkan_options);
             }
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
             else if (detected_openxr)
             {
                 GFXRECON_LOG_INFO("No optimizations defined for OpenXR capture files");

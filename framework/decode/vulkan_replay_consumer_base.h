@@ -618,6 +618,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                     const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                     HandlePointerDecoder<VkInstance>*                          pInstance);
 
+    void OverrideDestroyInstance(PFN_vkDestroyInstance                                      func,
+                                 const VulkanInstanceInfo*                                  instance_info,
+                                 const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
+
     VkResult OverrideCreateDevice(VkResult                                                   original_result,
                                   VulkanPhysicalDeviceInfo*                                  physical_device_info,
                                   const StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
@@ -1820,6 +1824,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                           uint32_t                pipelineCount);
     bool            IsExtensionBeingFaked(const char* extension);
 
+    void DestroyInternalInstanceResources(const VulkanInstanceInfo* instance_info);
+
   private:
     // Retrieve image attachments from the renderpass framebuffer
     // Returns attachments specified in CreateFramebuffer call, or in BeginRenderPass if imageless flag
@@ -1828,23 +1834,23 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     GetImageAttachments(StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* render_pass_begin_info_decoder);
 
   private:
-    util::platform::LibraryHandle                                              loader_handle_;
-    PFN_vkGetInstanceProcAddr                                                  get_instance_proc_addr_;
-    PFN_vkCreateInstance                                                       create_instance_proc_;
+    util::platform::LibraryHandle                                                  loader_handle_;
+    PFN_vkGetInstanceProcAddr                                                      get_instance_proc_addr_;
+    PFN_vkCreateInstance                                                           create_instance_proc_;
     std::unordered_map<graphics::VulkanDispatchKey, PFN_vkGetDeviceProcAddr>       get_device_proc_addrs_;
     std::unordered_map<graphics::VulkanDispatchKey, PFN_vkCreateDevice>            create_device_procs_;
     std::unordered_map<graphics::VulkanDispatchKey, graphics::VulkanInstanceTable> instance_tables_;
     std::unordered_map<graphics::VulkanDispatchKey, graphics::VulkanDeviceTable>   device_tables_;
-    std::function<void(const char*)>                                           fatal_error_handler_;
-    std::shared_ptr<application::Application>                                  application_;
-    CommonObjectInfoTable*                                                     object_info_table_;
-    bool                                                                       loading_trim_state_;
-    bool                                                                       replaying_trimmed_capture_;
-    SwapchainImageTracker                                                      swapchain_image_tracker_;
-    std::unique_ptr<ScreenshotHandler>                                         screenshot_handler_;
-    std::unique_ptr<VulkanSwapchain>                                           swapchain_;
-    std::string                                                                screenshot_file_prefix_;
-    graphics::FpsInfo*                                                         fps_info_;
+    std::function<void(const char*)>                                               fatal_error_handler_;
+    std::shared_ptr<application::Application>                                      application_;
+    CommonObjectInfoTable*                                                         object_info_table_;
+    bool                                                                           loading_trim_state_;
+    bool                                                                           replaying_trimmed_capture_;
+    SwapchainImageTracker                                                          swapchain_image_tracker_;
+    std::unique_ptr<ScreenshotHandler>                                             screenshot_handler_;
+    std::unique_ptr<VulkanSwapchain>                                               swapchain_;
+    std::string                                                                    screenshot_file_prefix_;
+    graphics::FpsInfo*                                                             fps_info_;
 
     std::unordered_map<const decode::VulkanDeviceInfo*, decode::VulkanDeviceAddressTracker> _device_address_trackers;
     std::unordered_map<const decode::VulkanDeviceInfo*, std::unique_ptr<decode::VulkanAddressReplacerBase>>
@@ -1852,8 +1858,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     util::ThreadPool main_thread_queue_;
     util::ThreadPool background_queue_;
-
-    VkDebugUtilsMessengerEXT debug_messenger_;
 
     //! async_tracked_handle_asset_t groups assets used by tracked async-dependencies
     struct async_tracked_handle_asset_t

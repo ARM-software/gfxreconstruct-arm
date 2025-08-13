@@ -506,6 +506,26 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindImageMemory2KHR>
 };
 
 template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateBuffer>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkCreateBuffer(result, args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateImage>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkCreateImage(result, args...);
+    }
+};
+
+template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBeginRenderPass>
 {
     template <typename... Args>
@@ -685,7 +705,7 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkFreeMemory>
     }
 };
 
-#ifdef ENABLE_OPENXR_SUPPORT
+#if ENABLE_OPENXR_SUPPORT
 template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkDestroyFence>
 {
@@ -1373,16 +1393,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkAllocateMemory>
 };
 
 template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateBuffer>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
-    {
-        manager->PostProcess_vkCreateBuffer(args...);
-    }
-};
-
-template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdBindDescriptorSets>
 {
     template <typename... Args>
@@ -1442,15 +1452,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCmdTraceRaysIndirectKH
     }
 };
 
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateImage>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
-    {
-        manager->PostProcess_vkCreateImage(args...);
-    }
-};
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkCreateEvent>
 {

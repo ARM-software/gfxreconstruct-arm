@@ -95,6 +95,7 @@ def CreateReplayParser():
     parser.add_argument('--log-level', metavar='LEVEL', help='Specify highest level message to log. Options are: debug, info, warning, error, and fatal. Default is info. (forwarded to replay tool)')
     parser.add_argument('--log-timestamps', action='store_true', help='Output a timestamp in front of each log message. (forwarded to replay tool)')
     parser.add_argument('--log-file', metavar='DEVICE_FILE', help='Write log messages to a file at the specified path instead of logcat (forwarded to replay tool)')
+    parser.add_argument('--debug-messenger-level', metavar='LEVEL', help='Specify highest debug messenger severity level. Options are: debug, info, warning, and error. Default is warning. (forwarded to replay tool)')
     parser.add_argument('--pause-frame', metavar='N', help='Pause after replaying frame number N (forwarded to replay tool)')
     parser.add_argument('--paused', action='store_true', default=False, help='Pause after replaying the first frame (same as "--pause-frame 1"; forwarded to replay tool)')
     parser.add_argument('--trigger-script-path', metavar='DEVICE_FILE', help='Path to the script needed to trigger)')
@@ -175,6 +176,10 @@ def MakeExtrasString(args):
     if args.log_file:
         arg_list.append('--log-file')
         arg_list.append('{}'.format(args.log_file))
+
+    if args.debug_messenger_level:
+        arg_list.append('--debug-messenger-level')
+        arg_list.append('{}'.format(args.debug_messenger_level))
 
     if args.pause_frame:
         arg_list.append('--pause-frame')

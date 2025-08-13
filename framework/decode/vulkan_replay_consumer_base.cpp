@@ -45,6 +45,7 @@
 #include "graphics/vulkan_device_util.h"
 #include "graphics/vulkan_feature_util.h"
 #include "graphics/vulkan_util.h"
+#include "graphics/vulkan_resources_util.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "graphics/vulkan_struct_deep_copy.h"
 #include "graphics/vulkan_struct_extract_handles.h"
@@ -285,6 +286,10 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
         swapchain_.get());
 
     swapchain_->Clean();
+
+    // Cleanup internal instance resources before destroying instances
+    object_info_table_->VisitVkInstanceInfo(
+        [this](const VulkanInstanceInfo* info) { DestroyInternalInstanceResources(info); });
 
     // Finally destroy vkInstances
     object_cleanup::FreeAllLiveInstances(
@@ -599,28 +604,37 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
                     if (vk_result == VK_SUCCESS)
                         vk_result = device_table->BindImageMemory(device, ahb_image, image_memory, 0);
 
-                    VkBufferImageCopy copy_region = {};
-                    copy_region.imageSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-                    copy_region.imageExtent       = { desc.width, desc.height, 1 };
-
                     ProcessBeginResourceInitCommand(ahb_info.device_id, size, size);
 
                     VulkanResourceInitializer* initializer = device_info->resource_initializer.get();
-                    initializer->InitializeImage(size,
-                                                 data,
-                                                 0,
-                                                 ahb_image,
-                                                 image_info.imageType,
-                                                 VK_FORMAT_R8G8B8A8_UNORM,
-                                                 image_info.extent,
-                                                 VK_IMAGE_ASPECT_COLOR_BIT,
-                                                 image_info.samples,
-                                                 image_info.usage,
-                                                 image_info.initialLayout,
-                                                 final_layout,
-                                                 image_info.arrayLayers,
-                                                 1,
-                                                 &copy_region);
+
+                    std::vector<VkImageAspectFlagBits> aspects;
+                    graphics::GetFormatAspects(image_info.format, &aspects);
+
+                    for (auto aspect : aspects)
+                    {
+                        VkImageAspectFlags aspect_flags = aspect;
+
+                        VkBufferImageCopy copy_region = {};
+                        copy_region.imageSubresource  = { aspect_flags, 0, 0, 1 };
+                        copy_region.imageExtent       = { desc.width, desc.height, 1 };
+
+                        initializer->InitializeImage(size,
+                                                     data,
+                                                     0,
+                                                     ahb_image,
+                                                     image_info.imageType,
+                                                     image_info.format,
+                                                     image_info.extent,
+                                                     aspect,
+                                                     image_info.samples,
+                                                     image_info.usage,
+                                                     image_info.initialLayout,
+                                                     final_layout,
+                                                     image_info.arrayLayers,
+                                                     1,
+                                                     &copy_region);
+                    }
 
                     ProcessEndResourceInitCommand(ahb_info.device_id);
 
@@ -3166,10 +3180,11 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
                 graphics::vulkan_struct_get_pnext<VkDebugUtilsMessengerCreateInfoEXT>(pnext_callback_info);
         }
 
-        create_state.messenger_create_info             = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-        create_state.messenger_create_info.pNext       = modified_create_info.pNext;
-        create_state.messenger_create_info.flags       = 0;
-        create_state.messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_FLAG_BITS_MAX_ENUM_EXT;
+        create_state.messenger_create_info       = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+        create_state.messenger_create_info.pNext = modified_create_info.pNext;
+        create_state.messenger_create_info.flags = 0;
+
+        create_state.messenger_create_info.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
         create_state.messenger_create_info.messageSeverity = options_.debug_message_severity;
         create_state.messenger_create_info.pfnUserCallback = DebugUtilsCallback;
         create_state.messenger_create_info.pUserData       = nullptr;
@@ -3297,11 +3312,22 @@ VulkanReplayConsumerBase::OverrideCreateInstance(VkResult original_result,
                 ->CreateDebugUtilsMessengerEXT(*replay_instance,
                                                &create_state.messenger_create_info,
                                                GetAllocationCallbacks(pAllocator),
-                                               &debug_messenger_);
+                                               &instance_info->debug_messenger);
         }
     }
 
     return result;
+}
+
+void VulkanReplayConsumerBase::OverrideDestroyInstance(
+    PFN_vkDestroyInstance                                      func,
+    const VulkanInstanceInfo*                                  instance_info,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    DestroyInternalInstanceResources(instance_info);
+
+    VkInstance instance = instance_info->handle;
+    func(instance, GetAllocationCallbacks(pAllocator));
 }
 
 void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
@@ -10018,11 +10044,9 @@ VkDeviceAddress VulkanReplayConsumerBase::OverrideGetBufferDeviceAddress(
     // retrieve replay-time device-address
     VkDeviceAddress replay_device_address = func(device, address_info);
 
-    if (device_info->allocator->SupportsOpaqueDeviceAddresses())
-    {
-        // opaque device-addresses are expected to match
-        GFXRECON_ASSERT(original_result == replay_device_address)
-    }
+    // if supported, opaque device-addresses are expected to match
+    GFXRECON_ASSERT(!device_info->allocator->SupportsOpaqueDeviceAddresses() ||
+                    original_result == replay_device_address)
 
     // keep track of old/new addresses in any case
     format::HandleId  buffer      = pInfo->GetMetaStructPointer()->buffer;
@@ -10255,7 +10279,7 @@ VkResult VulkanReplayConsumerBase::OverrideBeginCommandBuffer(
         const VulkanDeviceInfo* device = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
 
         res = resource_dumper_->CloneCommandBuffer(
-            index, command_buffer_info, GetDeviceTable(device->handle), GetInstanceTable(device->parent));
+            index, command_buffer_info, GetDeviceTable(device->handle), GetInstanceTable(device->parent), begin_info);
     }
 
     if (res == VK_SUCCESS)
@@ -13061,6 +13085,21 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineLayout(
     }
 
     return result;
+}
+
+void VulkanReplayConsumerBase::DestroyInternalInstanceResources(const VulkanInstanceInfo* info)
+{
+    GFXRECON_ASSERT(info != nullptr);
+
+    VkInstance instance       = info->handle;
+    const auto instance_table = GetInstanceTable(instance);
+
+    GFXRECON_ASSERT(instance_table != nullptr);
+
+    if (info->debug_messenger != VK_NULL_HANDLE)
+    {
+        instance_table->DestroyDebugUtilsMessengerEXT(instance, info->debug_messenger, nullptr);
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

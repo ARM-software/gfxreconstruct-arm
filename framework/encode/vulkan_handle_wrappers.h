@@ -29,8 +29,10 @@
 #include "encode/handle_unwrap_memory.h"
 #include "format/format.h"
 #include "generated/generated_vulkan_dispatch_table.h"
+#include "graphics/vulkan_util.h"
 #include "graphics/vulkan_device_util.h"
 #include "graphics/vulkan_instance_util.h"
+#include "graphics/vulkan_resources_util.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "util/page_guard_manager.h"
@@ -217,6 +219,19 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
     VkBufferUsageFlags usage{ 0 };
 
     std::set<BufferViewWrapper*> buffer_views;
+
+    DeviceWrapper*             bind_device{ nullptr };
+    const void*                bind_pnext{ nullptr };
+    std::unique_ptr<uint8_t[]> bind_pnext_memory;
+
+    bool                                       is_sparse_buffer{ false };
+    std::map<VkDeviceSize, VkSparseMemoryBind> sparse_memory_bind_map;
+    VkQueue                                    sparse_bind_queue;
+
+    format::HandleId bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize     bind_offset{ 0 };
+    uint32_t         queue_family_index{ 0 };
+    VkDeviceSize     created_size{ 0 };
 };
 
 struct ImageViewWrapper;
@@ -235,6 +250,20 @@ struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
     bool                  is_swapchain_image{ false };
 
     std::set<ImageViewWrapper*> image_views;
+
+    DeviceWrapper*             bind_device{ nullptr };
+    const void*                bind_pnext{ nullptr };
+    std::unique_ptr<uint8_t[]> bind_pnext_memory;
+
+    bool                                                is_sparse_image{ false };
+    std::map<VkDeviceSize, VkSparseMemoryBind>          sparse_opaque_memory_bind_map;
+    graphics::VulkanSubresourceSparseImageMemoryBindMap sparse_subresource_memory_bind_map;
+    VkQueue                                             sparse_bind_queue;
+
+    format::HandleId         bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize             bind_offset{ 0 };
+    uint32_t                 queue_family_index{ 0 };
+    std::set<VkSwapchainKHR> parent_swapchains;
 };
 
 struct SamplerWrapper : public HandleWrapper<VkSampler>
@@ -560,6 +589,10 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
     bool                                              release_full_screen_exclusive_mode{ false };
     bool                                              using_local_dimming_AMD{ false };
     VkBool32                                          local_dimming_enable_AMD{ false };
+
+    // This's for checking if WaitForPresent should or shouldn't be written. Its QueuePresent could be not written since
+    // it's before trim frame range. In this case, skip writing the WaitForPresent.
+    std::unordered_set<graphics::PresentId> record_queue_present_ids_not_written;
 };
 
 struct ASInputBuffer

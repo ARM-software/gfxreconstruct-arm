@@ -559,7 +559,7 @@ util::ThreadData* CommonCaptureManager::GetThreadData()
 bool CommonCaptureManager::IsCaptureSkippingCurrentThread() const
 {
 #if ENABLE_OPENXR_SUPPORT
-    return GetSkipThreadsWithInvalidData() && thread_data_->SkipCurrentThread();
+    return GetSkipThreadsWithInvalidData() && thread_data_ && thread_data_->SkipCurrentThread();
 #endif
     return false;
 }

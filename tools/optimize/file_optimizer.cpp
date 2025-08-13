@@ -442,4 +442,48 @@ bool FileOptimizer::RemoveThreadBlock(const format::BlockHeader& header, size_t 
     return true;
 }
 
+bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    // If the tensor is in the unused list, omit its initialization data from the file.
+    if (unreferenced_ids_.find(header.tensor_id) != unreferenced_ids_.end())
+    {
+        // In its place insert a dummy annotation meta command. This should keep the block index when
+        // replaying an optimized trimmed capture in in alignment with the block index calculated
+        // at capture time
+        const char*              label        = format::kAnnotationLabelRemovedResource;
+        const std::string        data         = "Removed tensor " + std::to_string(header.tensor_id);
+        const size_t             label_length = util::platform::StringLength(label);
+        const size_t             data_length  = data.length();
+        format::AnnotationHeader annotation;
+        annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
+        annotation.block_header.type = format::BlockType::kAnnotation;
+        annotation.annotation_type   = format::kText;
+        annotation.label_length      = static_cast<uint32_t>(label_length);
+        annotation.data_length       = static_cast<uint64_t>(data.length());
+        if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
+            !WriteBytes(data.c_str(), data_length))
+        {
+            HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
+            return false;
+        }
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes =
+            header.meta_header.block_header.size - (sizeof(header) - sizeof(header.meta_header.block_header));
+        if (!SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip init bimage data meta-data block data");
+            return false;
+        }
+    }
+    else if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    else
+    {
+        return FileTransformer::ProcessInitTensorCommand(header);
+    }
+    return true;
+}
+
 GFXRECON_END_NAMESPACE(gfxrecon)

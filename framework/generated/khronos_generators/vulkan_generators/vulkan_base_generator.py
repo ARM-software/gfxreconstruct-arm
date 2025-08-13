@@ -76,7 +76,7 @@ _remove_extensions = [
     "VK_NV_cuda_kernel_launch",
     "VK_NV_cluster_acceleration_structure",
     "VK_NV_external_compute_queue",
-    "VK_OHOS_surface",
+    "VK_OHOS_surface"
 ]
 
 # Turn lists of names/patterns into matching regular expressions.

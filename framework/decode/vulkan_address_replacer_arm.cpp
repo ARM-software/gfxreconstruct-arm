@@ -528,7 +528,7 @@ bool VulkanAddressReplacerARM::init_pipeline()
     }
 
     // create BDA pipeline
-    if (create_pipeline(pipeline_layout_, g_replacer_bda_comp, pipeline_bda_) != VK_SUCCESS)
+    if (create_pipeline(pipeline_layout_, g_replacer_bda_binary_comp, pipeline_bda_) != VK_SUCCESS)
     {
         return false;
     }

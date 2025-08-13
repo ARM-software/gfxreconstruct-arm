@@ -1773,6 +1773,60 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
+    {
+        format::InitTensorCommandHeader header;
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+        success = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
+        success = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+        if (success)
+        {
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, header.data_size);
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size =
+                    static_cast<size_t>(block_header.size) - (sizeof(header) - sizeof(header.meta_header.block_header));
+                success = ReadCompressedParameterBuffer(
+                    compressed_size, static_cast<size_t>(header.data_size), &uncompressed_size);
+            }
+            else
+            {
+                success = ReadParameterBuffer(static_cast<size_t>(header.data_size));
+            }
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchInitTensorCommand(header.thread_id,
+                                                           header.device_id,
+                                                           header.tensor_id,
+                                                           header.data_size,
+                                                           parameter_buffer_.data());
+                    }
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read init tensor data meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData, "Failed to read init tensor data meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init tensor data meta-data block header");
+        }
+    }
     else if (meta_data_type == format::MetaDataType::kInitImageCommand)
     {
         format::InitImageCommandHeader header;

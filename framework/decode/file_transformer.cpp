@@ -1177,6 +1177,20 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 
             return false;
         }
+        case format::MetaDataType::kInitTensorCommand:
+        {
+            format::InitTensorCommandHeader header;
+            header.meta_header = meta_header;
+            bool success       = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success            = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success            = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
+            success            = success && ReadBytes(&header.data_size, sizeof(header.data_size));
+            if (success)
+            {
+                return ProcessInitTensorCommand(header);
+            }
+            return false;
+        }
         default:
         {
             GFXRECON_LOG_ERROR("Unrecognized meta-data type %u", meta_data_type);
@@ -1764,6 +1778,21 @@ bool FileTransformer::ProcessFixShaderGroupHandleCommand(const format::FixShader
         return false;
     }
 
+    return true;
+}
+
+bool FileTransformer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
     return true;
 }
 
