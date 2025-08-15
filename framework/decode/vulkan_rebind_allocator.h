@@ -414,6 +414,17 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint64_t             debug_utils_tag_name;
     };
 
+    struct StagingResources
+    {
+        VkCommandBuffer    cmd_buffer;
+        VkBuffer           staging_buf;
+        VkSemaphore        staging_semaphore;
+        VmaAllocation      staging_alloc;
+        ResourceAllocInfo* resource_alloc_info;
+        size_t             dst_offset;
+        VkFence            staging_fence;
+    };
+
   private:
     void WriteBoundResource(ResourceAllocInfo* resource_alloc_info,
                             VkDeviceSize       src_offset,
@@ -499,6 +510,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                         VkObjectType             resource_type,
                                         uint64_t                 resource_handle);
 
+    virtual void ClearStagingResources() override;
+
   private:
     VkDevice                         device_ = VK_NULL_HANDLE;
     VmaAllocator                     allocator_;
@@ -507,10 +520,11 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     VkPhysicalDeviceType             capture_device_type_;
     VkPhysicalDeviceMemoryProperties capture_memory_properties_;
     VkPhysicalDeviceMemoryProperties replay_memory_properties_;
-    VkCommandBuffer                  cmd_buffer_    = VK_NULL_HANDLE;
     VkCommandPool                    cmd_pool_      = VK_NULL_HANDLE;
     VkQueue                          staging_queue_ = VK_NULL_HANDLE;
     uint32_t                         staging_queue_family_{};
+
+    std::vector<StagingResources> staging_resources_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)

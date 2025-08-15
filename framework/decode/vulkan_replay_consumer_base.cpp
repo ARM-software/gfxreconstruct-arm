@@ -2620,6 +2620,11 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.get_physical_device_queue_family_properties = instance_table->GetPhysicalDeviceQueueFamilyProperties;
     functions.set_debug_utils_object_name                 = instance_table->SetDebugUtilsObjectNameEXT;
     functions.set_debug_utils_object_tag                  = instance_table->SetDebugUtilsObjectTagEXT;
+    functions.create_semaphore                            = device_table->CreateSemaphore;
+    functions.destroy_semaphore                           = device_table->DestroySemaphore;
+    functions.create_fence                                = device_table->CreateFence;
+    functions.wait_for_fences                             = device_table->WaitForFences;
+    functions.destroy_fence                               = device_table->DestroyFence;
 
     if (physical_device_info->parent_info.api_version >= VK_MAKE_VERSION(1, 1, 0))
     {
@@ -4390,6 +4395,10 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit      fu
     auto* device_info = GetObjectInfoTable().GetVkDeviceInfo(queue_info->parent_id);
     GFXRECON_ASSERT(device_info != nullptr);
 
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+    allocator->ClearStagingResources();
+
     if (UseAddressReplacement(device_info) && submit_info_data != nullptr)
     {
         std::vector<VkDeviceAddress> addresses_to_replace;
@@ -4603,6 +4612,10 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2     f
 
     auto* device_info = GetObjectInfoTable().GetVkDeviceInfo(queue_info->parent_id);
     GFXRECON_ASSERT(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+    allocator->ClearStagingResources();
 
     if (UseAddressReplacement(device_info) && submit_info_data != nullptr)
     {

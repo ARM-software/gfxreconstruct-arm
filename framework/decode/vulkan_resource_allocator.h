@@ -93,6 +93,11 @@ class VulkanResourceAllocator
         PFN_vkGetPhysicalDeviceQueueFamilyProperties get_physical_device_queue_family_properties{ nullptr };
         PFN_vkSetDebugUtilsObjectNameEXT             set_debug_utils_object_name{ nullptr };
         PFN_vkSetDebugUtilsObjectTagEXT              set_debug_utils_object_tag{ nullptr };
+        PFN_vkCreateSemaphore                        create_semaphore{ nullptr };
+        PFN_vkDestroySemaphore                       destroy_semaphore{ nullptr };
+        PFN_vkCreateFence                            create_fence{ nullptr };
+        PFN_vkWaitForFences                          wait_for_fences{ nullptr };
+        PFN_vkDestroyFence                           destroy_fence{ nullptr };
     };
 
   public:
@@ -338,6 +343,8 @@ class VulkanResourceAllocator
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) { return 0; }
 
     virtual bool SupportBindVideoSessionMemory() = 0;
+
+    virtual void ClearStagingResources(){};
 };
 
 GFXRECON_END_NAMESPACE(decode)
