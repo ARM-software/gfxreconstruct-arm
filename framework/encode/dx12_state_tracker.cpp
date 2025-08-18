@@ -680,6 +680,19 @@ void Dx12StateTracker::TrackPrivateData(IUnknown_Wrapper* wrapper, REFGUID name,
     }
 }
 
+void Dx12StateTracker::TrackPrivateDataInterface(IUnknown_Wrapper*                wrapper,
+                                                 REFGUID                          name,
+                                                 Microsoft::WRL::ComPtr<IUnknown> data)
+{
+    GFXRECON_ASSERT(wrapper != nullptr);
+
+    auto* info = GetWrapperInfo(wrapper);
+    if (info)
+    {
+        info->private_data_interface[name] = std::move(data);
+    }
+}
+
 void Dx12StateTracker::TrackResidencyPriority(ID3D12Device1_Wrapper*          device_wrapper,
                                               UINT                            num_objects,
                                               ID3D12Pageable* const*          objects,

@@ -695,6 +695,26 @@ struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Object_SetPrivateD
 };
 
 template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_IDXGIObject_SetPrivateDataInterface>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_SetPrivateDataInterface(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Object_SetPrivateDataInterface>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_SetPrivateDataInterface(args...);
+    }
+};
+
+template <>
 struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Device1_SetResidencyPriority>
 {
     template <typename... Args>

@@ -614,6 +614,9 @@ class D3D12CaptureManager : public ApiCaptureManager
     void PostProcess_SetPrivateData(
         IUnknown_Wrapper* wrapper, HRESULT result, REFGUID Name, UINT DataSize, const void* pData);
 
+    void
+    PostProcess_SetPrivateDataInterface(IUnknown_Wrapper* wrapper, HRESULT result, REFGUID Name, const IUnknown* pData);
+
     void PostProcess_ID3D12Device1_SetResidencyPriority(ID3D12Device1_Wrapper*          device_wrapper,
                                                         HRESULT                         result,
                                                         UINT                            NumObjects,

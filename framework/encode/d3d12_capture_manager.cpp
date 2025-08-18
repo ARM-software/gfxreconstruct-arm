@@ -2832,6 +2832,17 @@ void D3D12CaptureManager::PostProcess_SetPrivateData(
     }
 }
 
+void D3D12CaptureManager::PostProcess_SetPrivateDataInterface(IUnknown_Wrapper* wrapper,
+                                                              HRESULT           result,
+                                                              REFGUID           Name,
+                                                              const IUnknown*   pData)
+{
+    if (IsCaptureModeTrack())
+    {
+        state_tracker_->TrackPrivateDataInterface(wrapper, Name, const_cast<IUnknown*>(pData));
+    }
+}
+
 void D3D12CaptureManager::PostProcess_ID3D12Device1_SetResidencyPriority(ID3D12Device1_Wrapper*          device_wrapper,
                                                                          HRESULT                         result,
                                                                          UINT                            NumObjects,

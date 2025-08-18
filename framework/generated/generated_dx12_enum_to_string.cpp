@@ -4930,7 +4930,7 @@ std::string ToString(const IID& iid)
     if (iid == IID_IDXGIFactory6) return "IID_IDXGIFactory6";
     if (iid == IID_IDXGIFactory7) return "IID_IDXGIFactory7";
     if (iid == IID_IUnknown) return "IID_IUnknown";
-    return "Invalid IID";
+    return GUIDToString(iid);
 }
 
 
