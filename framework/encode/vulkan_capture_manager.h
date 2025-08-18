@@ -40,7 +40,7 @@
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "generated/generated_vulkan_command_buffer_util.h"
 #include "util/defines.h"
-#include "util/ahardwarebuffer_format_converter.h"
+#include "graphics/ahardwarebuffer_format_converter.h"
 
 #include "vulkan/vulkan.h"
 #include "vulkan/vulkan_core.h"
@@ -2071,7 +2071,7 @@ class VulkanCaptureManager : public ApiCaptureManager
 #if defined(__ANDROID__)
     bool enable_hardwarebuffer_format_conversion_ = false;
     // format conversion is bound to a specific device instance
-    std::unordered_map<VkDevice, std::unique_ptr<util::AHardwareBufferFormatConverter>> ahb_format_converter_;
+    std::unordered_map<VkDevice, std::unique_ptr<graphics::AHardwareBufferFormatConverter>> ahb_format_converter_;
 #endif
 
     // In default mode, the capture manager uses a shared mutex to capture every API function. As a result,

@@ -181,7 +181,7 @@ void CommonProcessHardwareBuffer(format::ThreadId                      thread_id
         }
 #endif
 
-        is_standard_format = util::isStandardAndroidBufferFormat(desc.format);
+        is_standard_format = graphics::isStandardAndroidBufferFormat(desc.format);
         // Write CreateHardwareBufferCmd with or without the AHB payload
         CommonWriteCreateHardwareBufferCmd(
             thread_id, 0u, memory_id, hardware_buffer, plane_info, vulkan_capture_manager, vulkan_state_writer);

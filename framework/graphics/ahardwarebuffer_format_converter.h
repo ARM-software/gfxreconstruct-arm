@@ -25,6 +25,7 @@
 #define GFXRECON_AHARDWAREBUFFER_FORMAT_CONVERTER_H
 
 #include "util/defines.h"
+#include "generated/generated_vulkan_dispatch_table.h"
 
 #include "vulkan/vulkan.h"
 
@@ -36,13 +37,13 @@
 #endif
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-GFXRECON_BEGIN_NAMESPACE(util)
+GFXRECON_BEGIN_NAMESPACE(graphics)
 
 class AHardwareBufferFormatConverter
 {
   public:
-    AHardwareBufferFormatConverter();
-    AHardwareBufferFormatConverter(VkDevice device);
+    AHardwareBufferFormatConverter() = delete;
+    AHardwareBufferFormatConverter(VkDevice device, const VulkanDeviceTable* device_table);
     ~AHardwareBufferFormatConverter();
 
     VkResult ConvertImageFormat(VkQueue                                        queue,
@@ -59,7 +60,7 @@ class AHardwareBufferFormatConverter
 
     bool ConvertCreateImage(const VkImageCreateInfo* pCreateInfo);
 
-    void DestroyImage(VkImage image, const VkAllocationCallbacks* pAllocator);
+    VkImage DestroyImage(VkImage image, const VkAllocationCallbacks* pAllocator);
 
     void AddImage(VkImage capture_image, VkImage rgb_image);
 
@@ -81,7 +82,7 @@ class AHardwareBufferFormatConverter
                                     VkDeviceMemory&                                 rgb_memory,
                                     VkDeviceSize                                    allocation_size);
 
-    void FreeMemory(VkDeviceMemory memory, const VkAllocationCallbacks* pAllocator);
+    VkDeviceMemory FreeMemory(VkDeviceMemory memory, const VkAllocationCallbacks* pAllocator);
 
     void ConvertCreateSampler(const VkSamplerCreateInfo* pCreateInfo);
 
@@ -95,6 +96,8 @@ class AHardwareBufferFormatConverter
     };
     typedef std::unordered_map<VkImage, VkImage>               ExternalFormatToRGBImageMap;
     typedef std::unordered_map<VkDeviceMemory, VkDeviceMemory> ExternalFormatToRGBDeviceMemoryMap;
+
+    const VulkanDeviceTable* device_table_ = nullptr;
 
     ExternalFormatToRGBImageMap        ext_to_rgb_images_;
     ExternalFormatToRGBDeviceMemoryMap ext_to_rgb_image_device_memory_;
@@ -123,7 +126,7 @@ class AHardwareBufferFormatConverter
 
 bool isStandardAndroidBufferFormat(uint32_t format);
 
-GFXRECON_END_NAMESPACE(util)
+GFXRECON_END_NAMESPACE(graphics)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
 #endif // GFXRECON_AHARDWAREBUFFER_FORMAT_CONVERTER_H

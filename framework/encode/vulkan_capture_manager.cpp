@@ -973,7 +973,7 @@ VkResult VulkanCaptureManager::OverrideCreateImage(VkDevice                     
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
             if (converter->ConvertCreateImage(pCreateInfo_unwrapped))
             {
                 modified_create_info = (*pCreateInfo_unwrapped);
@@ -1016,8 +1016,12 @@ void VulkanCaptureManager::OverrideDestroyImage(VkDevice device, VkImage image, 
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
-            converter->DestroyImage(image, pAllocator);
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
+            VkImage                                   rgb_image = converter->DestroyImage(image, pAllocator);
+            if (rgb_image != VK_NULL_HANDLE)
+            {
+                vulkan_wrappers::DestroyWrappedHandle<vulkan_wrappers::ImageWrapper>(rgb_image);
+            }
         }
     }
 #endif
@@ -1049,7 +1053,7 @@ VkResult VulkanCaptureManager::OverrideCreateImageView(VkDevice                 
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
             converter->ConvertCreateImageView(pCreateInfo);
         }
     }
@@ -1071,8 +1075,12 @@ void VulkanCaptureManager::OverrideFreeMemory(VkDevice                     devic
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
-            converter->FreeMemory(memory, pAllocator);
+            graphics::AHardwareBufferFormatConverter* converter  = it->second.get();
+            VkDeviceMemory                            rgb_memory = converter->FreeMemory(memory, pAllocator);
+            if (rgb_memory != VK_NULL_HANDLE)
+            {
+                vulkan_wrappers::DestroyWrappedHandle<vulkan_wrappers::DeviceMemoryWrapper>(rgb_memory);
+            }
         }
     }
 #endif
@@ -1103,7 +1111,7 @@ VkResult VulkanCaptureManager::OverrideCreateSampler(VkDevice                   
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
             converter->ConvertCreateSampler(pCreateInfo);
         }
     }
@@ -1121,7 +1129,7 @@ void VulkanCaptureManager::OverrideDestroyDevice(VkDevice device, const VkAlloca
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
             converter->DestroyFormatConverterObjects();
             ahb_format_converter_.erase(it);
         }
@@ -1555,7 +1563,7 @@ VkResult VulkanCaptureManager::OverrideAllocateMemory(VkDevice                  
         auto it = ahb_format_converter_.find(device);
         if (it != ahb_format_converter_.end())
         {
-            util::AHardwareBufferFormatConverter* converter = it->second.get();
+            graphics::AHardwareBufferFormatConverter* converter = it->second.get();
 
             if (import_ahb_info)
             {
@@ -3794,7 +3802,8 @@ void VulkanCaptureManager::PreProcess_vkGetAndroidHardwareBufferPropertiesANDROI
         if (it == ahb_format_converter_.end())
         {
             // Create a Android format converter for this device
-            ahb_format_converter_[device] = std::make_unique<util::AHardwareBufferFormatConverter>(device);
+            ahb_format_converter_[device] = std::make_unique<graphics::AHardwareBufferFormatConverter>(
+                device, vulkan_wrappers::GetDeviceTable(device));
             GFXRECON_LOG_INFO_ONCE("The app is using non standard format Android hardware buffer! This capture will "
                                    "convert it to R8G8B8A8_UNORM format!");
         }

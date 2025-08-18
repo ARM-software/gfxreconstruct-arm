@@ -21,13 +21,12 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#include "util/ahardwarebuffer_format_converter.h"
+#include "graphics/ahardwarebuffer_format_converter.h"
 
-#include "encode/vulkan_handle_wrapper_util.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-GFXRECON_BEGIN_NAMESPACE(util)
+GFXRECON_BEGIN_NAMESPACE(graphics)
 
 std::unordered_set<uint32_t> standard_android_buffer_format = {
     0x01, // AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM     = VK_FORMAT_R8G8B8A8_UNORM
@@ -56,11 +55,13 @@ bool isStandardAndroidBufferFormat(uint32_t format)
     return standard_android_buffer_format.find(format) != standard_android_buffer_format.end();
 }
 
-AHardwareBufferFormatConverter::AHardwareBufferFormatConverter() {}
-
-AHardwareBufferFormatConverter::AHardwareBufferFormatConverter(VkDevice device)
+AHardwareBufferFormatConverter::AHardwareBufferFormatConverter(VkDevice device, const VulkanDeviceTable* device_table)
 {
-    device_ = device;
+    GFXRECON_ASSERT(device != VK_NULL_HANDLE);
+    GFXRECON_ASSERT(device_table != nullptr);
+
+    device_       = device;
+    device_table_ = device_table;
 }
 
 AHardwareBufferFormatConverter::~AHardwareBufferFormatConverter() {}
@@ -192,7 +193,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
             conversion_create_info.yChromaOffset               = y_chroma_offset;
             conversion_create_info.chromaFilter                = VK_FILTER_NEAREST;
             conversion_create_info.forceExplicitReconstruction = 0;
-            result = encode::vulkan_wrappers::GetDeviceTable(device_)->CreateSamplerYcbcrConversion(
+            result                                             = device_table_->CreateSamplerYcbcrConversion(
                 device_, &conversion_create_info, nullptr, &sampler_conversion_);
             if (result != VK_SUCCESS)
             {
@@ -216,8 +217,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
             VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         sampler_create_info.maxAnisotropy = 1;
         sampler_create_info.borderColor   = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-        result                            = encode::vulkan_wrappers::GetDeviceTable(device_)->CreateSampler(
-            device_, &sampler_create_info, nullptr, &ext_image_sampler_);
+        result = device_table_->CreateSampler(device_, &sampler_create_info, nullptr, &ext_image_sampler_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Failed to create sampler when converting image format!(Returned error value: %ld)",
@@ -234,8 +234,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         vertex_buffer_create_info.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         vertex_buffer_create_info.size               = sizeof(float) * 24;
         vertex_buffer_create_info.usage = (VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-        result                          = encode::vulkan_wrappers::GetDeviceTable(device_)->CreateBuffer(
-            device_, &vertex_buffer_create_info, nullptr, &vertex_buffer_);
+        result = device_table_->CreateBuffer(device_, &vertex_buffer_create_info, nullptr, &vertex_buffer_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Failed to create buffer when converting image format!(Returned error value: %ld)",
@@ -246,8 +245,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         VkMemoryAllocateInfo vertex_memory_allocate_info = {};
         vertex_memory_allocate_info.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         vertex_memory_allocate_info.allocationSize       = vertex_buffer_create_info.size;
-        result = encode::vulkan_wrappers::GetDeviceTable(device_)->AllocateMemory(
-            device_, &vertex_memory_allocate_info, nullptr, &vertex_memory_);
+        result = device_table_->AllocateMemory(device_, &vertex_memory_allocate_info, nullptr, &vertex_memory_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Failed to allocate memory when converting image format!(Returned error value: %ld)",
@@ -256,8 +254,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         }
         // copy vertex data to vertex buffer
         void* pData = nullptr;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->MapMemory(
-            device_, vertex_memory_, 0, vertex_buffer_create_info.size, 0, &pData);
+        device_table_->MapMemory(device_, vertex_memory_, 0, vertex_buffer_create_info.size, 0, &pData);
 
         memcpy(pData, vertex, vertex_buffer_create_info.size);
         VkMappedMemoryRange mapped_memory_range = {};
@@ -265,20 +262,19 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         mapped_memory_range.memory              = vertex_memory_;
         mapped_memory_range.offset              = 0;
         mapped_memory_range.size                = vertex_buffer_create_info.size;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->FlushMappedMemoryRanges(device_, 1, &mapped_memory_range);
+        device_table_->FlushMappedMemoryRanges(device_, 1, &mapped_memory_range);
 
-        encode::vulkan_wrappers::GetDeviceTable(device_)->UnmapMemory(device_, vertex_memory_);
+        device_table_->UnmapMemory(device_, vertex_memory_);
 
         // bind vertex buffer and memory
-        encode::vulkan_wrappers::GetDeviceTable(device_)->BindBufferMemory(device_, vertex_buffer_, vertex_memory_, 0);
+        device_table_->BindBufferMemory(device_, vertex_buffer_, vertex_memory_, 0);
 
         // create shader module
         VkShaderModuleCreateInfo vertex_shader_module_create_info = {};
         vertex_shader_module_create_info.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         vertex_shader_module_create_info.codeSize                 = sizeof(vertex_shader);
         vertex_shader_module_create_info.pCode                    = reinterpret_cast<const uint32_t*>(vertex_shader);
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateShaderModule(
-            device_, &vertex_shader_module_create_info, nullptr, &vertex_shader_module_);
+        device_table_->CreateShaderModule(device_, &vertex_shader_module_create_info, nullptr, &vertex_shader_module_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR(
@@ -290,7 +286,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         fragment_shader_module_create_info.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         fragment_shader_module_create_info.codeSize                 = sizeof(fragment_shader);
         fragment_shader_module_create_info.pCode = reinterpret_cast<const uint32_t*>(fragment_shader);
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateShaderModule(
+        device_table_->CreateShaderModule(
             device_, &fragment_shader_module_create_info, nullptr, &fragment_shader_module_);
         if (result != VK_SUCCESS)
         {
@@ -336,8 +332,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         render_pass_create_info.pSubpasses             = &subpass;
         render_pass_create_info.dependencyCount        = 1;
         render_pass_create_info.pDependencies          = &dependency;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateRenderPass(
-            device_, &render_pass_create_info, nullptr, &render_pass_);
+        device_table_->CreateRenderPass(device_, &render_pass_create_info, nullptr, &render_pass_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Failed to create render pass when converting image format!(Returned error value: %ld)",
@@ -357,8 +352,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         descriptor_pool_create_info.poolSizeCount              = 2;
         descriptor_pool_create_info.pPoolSizes                 = descriptor_pool_size;
         descriptor_pool_create_info.maxSets                    = 6;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateDescriptorPool(
-            device_, &descriptor_pool_create_info, nullptr, &descriptor_pool_);
+        device_table_->CreateDescriptorPool(device_, &descriptor_pool_create_info, nullptr, &descriptor_pool_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR(
@@ -382,7 +376,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         bind[1].descriptorCount                     = 1;
         bind[1].stageFlags                          = VK_SHADER_STAGE_FRAGMENT_BIT;
         bind[1].pImmutableSamplers                  = &ext_image_sampler_;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateDescriptorSetLayout(
+        device_table_->CreateDescriptorSetLayout(
             device_, &descriptor_set_layout_create_info, nullptr, &descriptor_set_layout_);
         if (result != VK_SUCCESS)
         {
@@ -398,8 +392,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         descriptor_set_allocate_info.descriptorPool              = descriptor_pool_;
         descriptor_set_allocate_info.descriptorSetCount          = 1;
         descriptor_set_allocate_info.pSetLayouts                 = &descriptor_set_layout_;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->AllocateDescriptorSets(
-            device_, &descriptor_set_allocate_info, &descriptor_set_);
+        device_table_->AllocateDescriptorSets(device_, &descriptor_set_allocate_info, &descriptor_set_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR(
@@ -411,8 +404,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         pipeline_layout_create_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipeline_layout_create_info.setLayoutCount             = 1;
         pipeline_layout_create_info.pSetLayouts                = &descriptor_set_layout_;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreatePipelineLayout(
-            device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_);
+        device_table_->CreatePipelineLayout(device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR(
@@ -520,7 +512,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         graphics_pipeline_create_info.subpass                      = 0;
         graphics_pipeline_create_info.basePipelineHandle           = VK_NULL_HANDLE;
         graphics_pipeline_create_info.basePipelineIndex            = -1;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateGraphicsPipelines(
+        device_table_->CreateGraphicsPipelines(
             device_, VK_NULL_HANDLE, 1, &graphics_pipeline_create_info, nullptr, &pipeline_);
         if (result != VK_SUCCESS)
         {
@@ -534,8 +526,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         command_pool_create_info.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         command_pool_create_info.flags                   = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         command_pool_create_info.queueFamilyIndex        = 0;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->CreateCommandPool(
-            device_, &command_pool_create_info, nullptr, &command_pool_);
+        device_table_->CreateCommandPool(device_, &command_pool_create_info, nullptr, &command_pool_);
 
         // allocate a command buffer from pool
         VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
@@ -543,8 +534,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         command_buffer_allocate_info.commandPool                 = command_pool_;
         command_buffer_allocate_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         command_buffer_allocate_info.commandBufferCount          = 1;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->AllocateCommandBuffers(
-            device_, &command_buffer_allocate_info, &command_buffer_);
+        device_table_->AllocateCommandBuffers(device_, &command_buffer_allocate_info, &command_buffer_);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR(
@@ -554,7 +544,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     }
 
     // bind the memory and image for external format image
-    encode::vulkan_wrappers::GetDeviceTable(device_)->BindImageMemory(device_, extImage, extMemory, 0);
+    device_table_->BindImageMemory(device_, extImage, extMemory, 0);
 
     // allocate hardware buffer for rgba image
     pDesc_->usage = AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN |
@@ -576,7 +566,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     VkAndroidHardwareBufferPropertiesANDROID androidHardwareBufferPropertiesANDROID = {
         VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID, &ahb_format_properties, 0, 0
     };
-    encode::vulkan_wrappers::GetDeviceTable(device_)->GetAndroidHardwareBufferPropertiesANDROID(
+    device_table_->GetAndroidHardwareBufferPropertiesANDROID(
         device_, import_ahb_info->buffer, &androidHardwareBufferPropertiesANDROID);
 
     // allocate vkmemory for rgba image
@@ -585,7 +575,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     auto memory_dedicated_allocate_info =
         graphics::vulkan_struct_get_pnext<VkMemoryDedicatedAllocateInfo>(pAllocateInfo);
     const_cast<VkMemoryDedicatedAllocateInfo*>(memory_dedicated_allocate_info)->image = rgbImage;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->AllocateMemory(device_, pAllocateInfo, nullptr, rgbMemory);
+    device_table_->AllocateMemory(device_, pAllocateInfo, nullptr, rgbMemory);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to allocate memory when converting image format!(Returned error value: %ld)",
@@ -597,7 +587,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     AHardwareBuffer_describe(import_ahb_info->buffer, pDesc_);
 
     // bind the memory and image for rgb image
-    encode::vulkan_wrappers::GetDeviceTable(device_)->BindImageMemory(device_, rgbImage, *rgbMemory, 0);
+    device_table_->BindImageMemory(device_, rgbImage, *rgbMemory, 0);
 
     // create the imageview for external format image
     VkSamplerYcbcrConversionInfo conversion_create_info = {};
@@ -620,8 +610,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     ext_image_view_create_info.subresourceRange.baseArrayLayer = 0;
     ext_image_view_create_info.subresourceRange.layerCount     = 1;
     VkImageView ext_image_view                                 = VK_NULL_HANDLE;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CreateImageView(
-        device_, &ext_image_view_create_info, nullptr, &ext_image_view);
+    device_table_->CreateImageView(device_, &ext_image_view_create_info, nullptr, &ext_image_view);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to create image view for external format image when converting image "
@@ -646,8 +635,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     rgb_image_view_create_info.subresourceRange.baseArrayLayer = 0;
     rgb_image_view_create_info.subresourceRange.layerCount     = 1;
     VkImageView rgb_image_view                                 = VK_NULL_HANDLE;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CreateImageView(
-        device_, &rgb_image_view_create_info, nullptr, &rgb_image_view);
+    device_table_->CreateImageView(device_, &rgb_image_view_create_info, nullptr, &rgb_image_view);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR(
@@ -666,8 +654,7 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     framebuffer_create_info.height                  = pDesc_->height;
     framebuffer_create_info.layers                  = 1;
     VkFramebuffer framebuffer                       = VK_NULL_HANDLE;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CreateFramebuffer(
-        device_, &framebuffer_create_info, nullptr, &framebuffer);
+    device_table_->CreateFramebuffer(device_, &framebuffer_create_info, nullptr, &framebuffer);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to create frame buffer when converting image format!(Returned error value: %ld)",
@@ -689,16 +676,16 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
     writeDescriptorSet.descriptorType       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writeDescriptorSet.descriptorCount      = 1;
     writeDescriptorSet.pImageInfo           = &descriptor_image_info;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->UpdateDescriptorSets(device_, 1, &writeDescriptorSet, 0, nullptr);
+    device_table_->UpdateDescriptorSets(device_, 1, &writeDescriptorSet, 0, nullptr);
 
     // begin record command
     VkCommandBufferBeginInfo command_buffer_begin_Info = {};
     command_buffer_begin_Info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     command_buffer_begin_Info.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->BeginCommandBuffer(command_buffer_, &command_buffer_begin_Info);
+    device_table_->BeginCommandBuffer(command_buffer_, &command_buffer_begin_Info);
 
     // bind descriptor sets
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdBindDescriptorSets(
+    device_table_->CmdBindDescriptorSets(
         command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_set_, 0, nullptr);
 
     VkRenderPassBeginInfo renderpass_begin_info    = {};
@@ -713,40 +700,37 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
 
     VkClearValue clearValue            = {};
     renderpass_begin_info.pClearValues = &clearValue;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdBeginRenderPass(
-        command_buffer_, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    device_table_->CmdBeginRenderPass(command_buffer_, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdBindPipeline(
-        command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+    device_table_->CmdBindPipeline(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
 
     VkViewport viewport = { 0.0f, 0.0f, (float)pDesc_->width, (float)pDesc_->height, 0.0f, 1.0f };
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdSetViewport(command_buffer_, 0, 1, &viewport);
+    device_table_->CmdSetViewport(command_buffer_, 0, 1, &viewport);
 
     VkRect2D scissor      = {};
     scissor.extent.width  = pDesc_->width;
     scissor.extent.height = pDesc_->height;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdSetScissor(command_buffer_, 0, 1, &scissor);
+    device_table_->CmdSetScissor(command_buffer_, 0, 1, &scissor);
 
     VkDeviceSize offset = 0;
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdBindVertexBuffers(
-        command_buffer_, 0, 1, &vertex_buffer_, &offset);
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdDraw(command_buffer_, 6, 1, 0, 0);
-    encode::vulkan_wrappers::GetDeviceTable(device_)->CmdEndRenderPass(command_buffer_);
-    encode::vulkan_wrappers::GetDeviceTable(device_)->EndCommandBuffer(command_buffer_);
+    device_table_->CmdBindVertexBuffers(command_buffer_, 0, 1, &vertex_buffer_, &offset);
+    device_table_->CmdDraw(command_buffer_, 6, 1, 0, 0);
+    device_table_->CmdEndRenderPass(command_buffer_);
+    device_table_->EndCommandBuffer(command_buffer_);
 
     VkSubmitInfo submit_info       = {};
     submit_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers    = &command_buffer_;
     VkFence nullFence              = { VK_NULL_HANDLE };
-    result = encode::vulkan_wrappers::GetDeviceTable(device_)->QueueSubmit(queue, 1, &submit_info, nullFence);
+    result                         = device_table_->QueueSubmit(queue, 1, &submit_info, nullFence);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to submit queue when converting image format!(Returned error value: %ld)", result);
         return result;
     }
 
-    result = encode::vulkan_wrappers::GetDeviceTable(device_)->QueueWaitIdle(queue);
+    result = device_table_->QueueWaitIdle(queue);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR(
@@ -754,9 +738,9 @@ VkResult AHardwareBufferFormatConverter::ConvertImageFormat(VkQueue             
         return result;
     }
 
-    encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyFramebuffer(device_, framebuffer, nullptr);
-    encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyImageView(device_, rgb_image_view, nullptr);
-    encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyImageView(device_, ext_image_view, nullptr);
+    device_table_->DestroyFramebuffer(device_, framebuffer, nullptr);
+    device_table_->DestroyImageView(device_, rgb_image_view, nullptr);
+    device_table_->DestroyImageView(device_, ext_image_view, nullptr);
     return result;
 }
 
@@ -768,65 +752,62 @@ void AHardwareBufferFormatConverter::DestroyFormatConverterObjects()
     }
     if (ext_image_sampler_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroySampler(device_, ext_image_sampler_, nullptr);
+        device_table_->DestroySampler(device_, ext_image_sampler_, nullptr);
         ext_image_sampler_ = VK_NULL_HANDLE;
     }
     if (vertex_buffer_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyBuffer(device_, vertex_buffer_, nullptr);
+        device_table_->DestroyBuffer(device_, vertex_buffer_, nullptr);
         vertex_buffer_ = VK_NULL_HANDLE;
     }
     if (vertex_memory_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->FreeMemory(device_, vertex_memory_, nullptr);
+        device_table_->FreeMemory(device_, vertex_memory_, nullptr);
         vertex_memory_ = VK_NULL_HANDLE;
     }
     if (vertex_shader_module_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyShaderModule(device_, vertex_shader_module_, nullptr);
+        device_table_->DestroyShaderModule(device_, vertex_shader_module_, nullptr);
         vertex_shader_module_ = VK_NULL_HANDLE;
     }
     if (fragment_shader_module_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyShaderModule(
-            device_, fragment_shader_module_, nullptr);
+        device_table_->DestroyShaderModule(device_, fragment_shader_module_, nullptr);
         fragment_shader_module_ = VK_NULL_HANDLE;
     }
     if (render_pass_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyRenderPass(device_, render_pass_, nullptr);
+        device_table_->DestroyRenderPass(device_, render_pass_, nullptr);
         render_pass_ = VK_NULL_HANDLE;
     }
     if (descriptor_pool_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyDescriptorPool(device_, descriptor_pool_, nullptr);
+        device_table_->DestroyDescriptorPool(device_, descriptor_pool_, nullptr);
         descriptor_pool_ = VK_NULL_HANDLE;
     }
     if (command_pool_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyCommandPool(device_, command_pool_, nullptr);
+        device_table_->DestroyCommandPool(device_, command_pool_, nullptr);
         command_pool_ = VK_NULL_HANDLE;
     }
     if (descriptor_set_layout_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyDescriptorSetLayout(
-            device_, descriptor_set_layout_, nullptr);
+        device_table_->DestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
         descriptor_set_layout_ = VK_NULL_HANDLE;
     }
     if (pipeline_layout_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+        device_table_->DestroyPipelineLayout(device_, pipeline_layout_, nullptr);
         pipeline_layout_ = VK_NULL_HANDLE;
     }
     if (pipeline_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyPipeline(device_, pipeline_, nullptr);
+        device_table_->DestroyPipeline(device_, pipeline_, nullptr);
         pipeline_ = VK_NULL_HANDLE;
     }
     if (sampler_conversion_ != VK_NULL_HANDLE)
     {
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroySamplerYcbcrConversion(
-            device_, sampler_conversion_, nullptr);
+        device_table_->DestroySamplerYcbcrConversion(device_, sampler_conversion_, nullptr);
         sampler_conversion_ = VK_NULL_HANDLE;
     }
 
@@ -861,18 +842,20 @@ bool AHardwareBufferFormatConverter::ConvertCreateImage(const VkImageCreateInfo*
     return false;
 }
 
-void AHardwareBufferFormatConverter::DestroyImage(VkImage capture_image, const VkAllocationCallbacks* pAllocator)
+VkImage AHardwareBufferFormatConverter::DestroyImage(VkImage capture_image, const VkAllocationCallbacks* pAllocator)
 {
     // If the capture image has an exteranl format, return its corresponding rgb format image or return null handle
     auto entry = ext_to_rgb_images_.find(capture_image);
     if (entry != ext_to_rgb_images_.end() && isValid(device_))
     {
         VkImage rgb_image = entry->second;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->DestroyImage(device_, rgb_image, pAllocator);
+        device_table_->DestroyImage(device_, rgb_image, pAllocator);
         ext_to_rgb_images_.erase(entry);
 
-        encode::vulkan_wrappers::DestroyWrappedHandle<encode::vulkan_wrappers::ImageWrapper>(rgb_image);
+        return rgb_image;
     }
+
+    return VK_NULL_HANDLE;
 }
 
 void AHardwareBufferFormatConverter::ConvertCreateImageView(const VkImageViewCreateInfo* pCreateInfo)
@@ -968,16 +951,19 @@ void AHardwareBufferFormatConverter::PostProcess_AllocateMemory(
     }
 }
 
-void AHardwareBufferFormatConverter::FreeMemory(VkDeviceMemory memory, const VkAllocationCallbacks* pAllocator)
+VkDeviceMemory AHardwareBufferFormatConverter::FreeMemory(VkDeviceMemory               memory,
+                                                          const VkAllocationCallbacks* pAllocator)
 {
     auto entry = ext_to_rgb_image_device_memory_.find(memory);
     if (entry != ext_to_rgb_image_device_memory_.end() && isValid(device_))
     {
         VkDeviceMemory rgb_memory = entry->second;
-        encode::vulkan_wrappers::GetDeviceTable(device_)->FreeMemory(device_, rgb_memory, pAllocator);
+        device_table_->FreeMemory(device_, rgb_memory, pAllocator);
 
-        encode::vulkan_wrappers::DestroyWrappedHandle<encode::vulkan_wrappers::DeviceMemoryWrapper>(rgb_memory);
+        return rgb_memory;
     }
+
+    return VK_NULL_HANDLE;
 }
 
 void AHardwareBufferFormatConverter::ConvertCreateSampler(const VkSamplerCreateInfo* pCreateInfo)
@@ -1010,5 +996,5 @@ bool AHardwareBufferFormatConverter::isValid(VkDevice device)
     return device != VK_NULL_HANDLE;
 }
 
-GFXRECON_END_NAMESPACE(util)
+GFXRECON_END_NAMESPACE(graphics)
 GFXRECON_END_NAMESPACE(gfxrecon)

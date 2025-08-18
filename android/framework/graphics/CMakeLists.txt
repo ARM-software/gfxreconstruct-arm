@@ -2,6 +2,8 @@ add_library(gfxrecon_graphics STATIC "")
 
 target_sources(gfxrecon_graphics
                PRIVATE
+                    ${GFXRECON_SOURCE_DIR}/framework/graphics/ahardwarebuffer_format_converter.h
+                    ${GFXRECON_SOURCE_DIR}/framework/graphics/ahardwarebuffer_format_converter.cpp
                     ${GFXRECON_SOURCE_DIR}/framework/graphics/fps_info.h
                     ${GFXRECON_SOURCE_DIR}/framework/graphics/fps_info.cpp
                     ${GFXRECON_SOURCE_DIR}/framework/graphics/vulkan_check_buffer_references.h
