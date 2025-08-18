@@ -208,7 +208,6 @@ class ApiCaptureManager
     bool GetDebugDeviceLostSetting() const { return common_manager_->GetDebugDeviceLostSetting(); }
     bool GetDisableDxrSetting() const { return common_manager_->GetDisableDxrSetting(); }
     auto GetAccelStructPaddingSetting() const { return common_manager_->GetAccelStructPaddingSetting(); }
-    bool GetDisableMetaCommandSetting() const { return common_manager_->GetDisableMetaCommandSetting(); }
 
     void WriteResizeWindowCmd(format::HandleId surface_id, uint32_t width, uint32_t height)
     {

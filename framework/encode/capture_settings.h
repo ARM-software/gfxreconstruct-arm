@@ -135,7 +135,6 @@ class CaptureSettings
         bool                         debug_set_objects_name{ false };
         bool                         disable_dxr{ false };
         uint32_t                     accel_struct_padding{ 0 };
-        bool                         disable_meta_command{ true };
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
         FenceQueryDelayUnit          fence_query_delay_unit{ FenceQueryDelayUnit::kCalls };

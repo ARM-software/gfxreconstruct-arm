@@ -19,7 +19,6 @@
       "CreateCommittedResource1": "D3D12CaptureManager::Get()->OverrideID3D12Device_CreateCommittedResource1"
     },
     "ID3D12Device5": {
-      "EnumerateMetaCommands": "D3D12CaptureManager::Get()->OverrideID3D12Device5_EnumerateMetaCommands",
       "GetRaytracingAccelerationStructurePrebuildInfo": "D3D12CaptureManager::Get()->OverrideGetRaytracingAccelerationStructurePrebuildInfo"
     },
     "ID3D12Device8": {

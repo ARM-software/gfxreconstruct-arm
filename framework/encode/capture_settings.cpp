@@ -133,8 +133,6 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define DISABLE_DXR_UPPER                                    "DISABLE_DXR"
 #define ACCEL_STRUCT_PADDING_LOWER                           "accel_struct_padding"
 #define ACCEL_STRUCT_PADDING_UPPER                           "ACCEL_STRUCT_PADDING"
-#define DISABLE_META_COMMAND_LOWER                           "disable_meta_command"
-#define DISABLE_META_COMMAND_UPPER                           "DISABLE_META_COMMAND"
 #define FORCE_COMMAND_SERIALIZATION_LOWER                    "force_command_serialization"
 #define FORCE_COMMAND_SERIALIZATION_UPPER                    "FORCE_COMMAND_SERIALIZATION"
 #define QUEUE_ZERO_ONLY_LOWER                                "queue_zero_only"
@@ -227,7 +225,6 @@ const char kDebugDeviceLostEnvVar[]                          = GFXRECON_OPTION_S
 const char kDebugSetObjectsNameEnvVar[]                      = GFXRECON_OPTION_STR(DEBUG_SET_OBJECTS_NAME);
 const char kDisableDxrEnvVar[]                               = GFXRECON_OPTION_STR(DISABLE_DXR);
 const char kAccelStructPaddingEnvVar[]                       = GFXRECON_OPTION_STR(ACCEL_STRUCT_PADDING);
-const char kDisableMetaCommandEnvVar[]                       = GFXRECON_OPTION_STR(DISABLE_META_COMMAND);
 const char kForceCommandSerializationEnvVar[]                = GFXRECON_OPTION_STR(FORCE_COMMAND_SERIALIZATION);
 const char kQueueZeroOnlyEnvVar[]                            = GFXRECON_OPTION_STR(QUEUE_ZERO_ONLY);
 const char kAllowPipelineCompileRequiredEnvVar[]             = GFXRECON_OPTION_STR(ALLOW_PIPELINE_COMPILE_REQUIRED);
@@ -297,7 +294,6 @@ const std::string kDebugDeviceLost                                   = std::stri
 const std::string kDebugSetObjectsName                               = std::string(kSettingsFilter) + std::string(DEBUG_SET_OBJECTS_NAME_LOWER);
 const std::string kOptionDisableDxr                                  = std::string(kSettingsFilter) + std::string(DISABLE_DXR_LOWER);
 const std::string kOptionAccelStructPadding                          = std::string(kSettingsFilter) + std::string(ACCEL_STRUCT_PADDING_LOWER);
-const std::string kOptionDisableMetaCommand                          = std::string(kSettingsFilter) + std::string(DISABLE_META_COMMAND_LOWER);
 const std::string kOptionForceCommandSerialization                   = std::string(kSettingsFilter) + std::string(FORCE_COMMAND_SERIALIZATION_LOWER);
 const std::string kOptionQueueZeroOnly                               = std::string(kSettingsFilter) + std::string(QUEUE_ZERO_ONLY_LOWER);
 const std::string kOptionAllowPipelineCompileRequired                = std::string(kSettingsFilter) + std::string(ALLOW_PIPELINE_COMPILE_REQUIRED_LOWER);
@@ -472,7 +468,6 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
     // DirectX environment variables
     LoadSingleOptionEnvVar(options, kDisableDxrEnvVar, kOptionDisableDxr);
     LoadSingleOptionEnvVar(options, kAccelStructPaddingEnvVar, kOptionAccelStructPadding);
-    LoadSingleOptionEnvVar(options, kDisableMetaCommandEnvVar, kOptionDisableMetaCommand);
 
     // IUnknown wrapping environment variable
     LoadSingleOptionEnvVar(options, kCaptureIUnknownWrappingEnvVar, kOptionKeyCaptureIUnknownWrapping);
@@ -698,10 +693,6 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         ParseBoolString(FindOption(options, kOptionDisableDxr), settings->trace_settings_.disable_dxr);
     settings->trace_settings_.accel_struct_padding = gfxrecon::util::ParseUintString(
         FindOption(options, kOptionAccelStructPadding), settings->trace_settings_.accel_struct_padding);
-
-    // Meta command options
-    settings->trace_settings_.disable_meta_command = gfxrecon::util::ParseUintString(
-        FindOption(options, kOptionDisableMetaCommand), settings->trace_settings_.disable_meta_command);
 
     // IUnknown wrapping option
     settings->trace_settings_.iunknown_wrapping = ParseBoolString(

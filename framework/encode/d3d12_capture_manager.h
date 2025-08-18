@@ -740,10 +740,6 @@ class D3D12CaptureManager : public ApiCaptureManager
                                                                 IDXGIOutput*                 pRestrictToOutput,
                                                                 IDXGISwapChain1**            ppSwapChain);
 
-    HRESULT OverrideID3D12Device5_EnumerateMetaCommands(ID3D12Device5_Wrapper*   device5_wrapper,
-                                                        UINT*                    pNumMetaCommands,
-                                                        D3D12_META_COMMAND_DESC* pDescs);
-
     void OverrideGetRaytracingAccelerationStructurePrebuildInfo(
         ID3D12Device5_Wrapper*                                      device5_wrapper,
         const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* pDesc,

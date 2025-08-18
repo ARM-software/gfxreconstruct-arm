@@ -74,8 +74,7 @@ CommonCaptureManager::CommonCaptureManager() :
     debug_device_lost_(false), screenshot_prefix_(""), screenshots_enabled_(false), disable_dxr_(false),
     accel_struct_padding_(0), iunknown_wrapping_(false), force_command_serialization_(false), queue_zero_only_(false),
     allow_pipeline_compile_required_(false), quit_after_frame_ranges_(false), use_asset_file_(false), block_index_(0),
-    write_assets_(false), previous_write_assets_(false), skip_threads_with_invalid_data_(false),
-    disable_meta_command_(false)
+    write_assets_(false), previous_write_assets_(false), skip_threads_with_invalid_data_(false)
 {}
 
 CommonCaptureManager::~CommonCaptureManager()
@@ -347,7 +346,6 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     screenshot_prefix_    = PrepScreenshotPrefix(trace_settings.screenshot_dir);
     disable_dxr_          = trace_settings.disable_dxr;
     accel_struct_padding_ = trace_settings.accel_struct_padding;
-    disable_meta_command_   = trace_settings.disable_meta_command;
     iunknown_wrapping_    = trace_settings.iunknown_wrapping;
     force_command_serialization_         = trace_settings.force_command_serialization;
     queue_zero_only_                     = trace_settings.queue_zero_only;

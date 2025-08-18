@@ -2366,14 +2366,6 @@ HRESULT D3D12CaptureManager::OverrideID3D12Device_CheckFeatureSupport(ID3D12Devi
         features->RaytracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         return result;
     }
-    else if (GetDisableMetaCommandSetting() && (feature == D3D12_FEATURE_QUERY_META_COMMAND))
-    {
-        auto    features = reinterpret_cast<D3D12_FEATURE_DATA_QUERY_META_COMMAND*>(feature_support_data);
-        HRESULT result   = device->CheckFeatureSupport(feature, features, feature_support_data_size);
-        features->QueryOutputDataSizeInBytes = 0;
-        features->pQueryOutputData           = nullptr;
-        return result;
-    }
     else
     {
         return device->CheckFeatureSupport(feature, feature_support_data, feature_support_data_size);
@@ -2855,23 +2847,6 @@ void D3D12CaptureManager::PostProcess_ID3D12Device1_SetResidencyPriority(ID3D12D
     }
 }
 
-HRESULT D3D12CaptureManager::OverrideID3D12Device5_EnumerateMetaCommands(ID3D12Device5_Wrapper*   device5_wrapper,
-                                                                         UINT*                    pNumMetaCommands,
-                                                                         D3D12_META_COMMAND_DESC* pDescs)
-{
-    auto device5 = device5_wrapper->GetWrappedObjectAs<ID3D12Device5>();
-
-    auto result = device5->EnumerateMetaCommands(pNumMetaCommands, pDescs);
-
-    if (GetDisableMetaCommandSetting())
-    {
-        *pNumMetaCommands = 0;
-        pDescs            = nullptr;
-    }
-
-    return result;
-}
-
 void D3D12CaptureManager::OverrideGetRaytracingAccelerationStructurePrebuildInfo(
     ID3D12Device5_Wrapper*                                      device5_wrapper,
     const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* pDesc,
@@ -2890,13 +2865,6 @@ void D3D12CaptureManager::OverrideGetRaytracingAccelerationStructurePrebuildInfo
         pInfo->UpdateScratchDataSizeInBytes =
             static_cast<UINT64>(std::ceil(pInfo->UpdateScratchDataSizeInBytes * size_scale));
     }
-
-    pInfo->ResultDataMaxSizeInBytes =
-        util::platform::AlignValue<D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT>(pInfo->ResultDataMaxSizeInBytes);
-    pInfo->ScratchDataSizeInBytes =
-        util::platform::AlignValue<D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT>(pInfo->ScratchDataSizeInBytes);
-    pInfo->UpdateScratchDataSizeInBytes =
-        util::platform::AlignValue<D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT>(pInfo->UpdateScratchDataSizeInBytes);
 }
 
 HRESULT D3D12CaptureManager::OverrideID3D12GraphicsCommandList_Reset(ID3D12GraphicsCommandList_Wrapper* wrapper,
