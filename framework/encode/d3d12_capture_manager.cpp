@@ -2366,6 +2366,10 @@ HRESULT D3D12CaptureManager::OverrideID3D12Device_CheckFeatureSupport(ID3D12Devi
         features->RaytracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         return result;
     }
+    else if (GetDisableMetaCommandSetting() && (feature == D3D12_FEATURE_QUERY_META_COMMAND))
+    {
+        return E_INVALIDARG;
+    }
     else
     {
         return device->CheckFeatureSupport(feature, feature_support_data, feature_support_data_size);

@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2022 Valve Corporation
 ** Copyright (c) 2018-2025 LunarG, Inc.
-** Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -416,6 +416,10 @@ class CommonCaptureManager
     {
         return disable_dxr_;
     }
+    bool GetDisableMetaCommandSetting() const
+    {
+        return disable_meta_command_;
+    }
     auto GetAccelStructPaddingSetting() const
     {
         return accel_struct_padding_;
@@ -444,7 +448,6 @@ class CommonCaptureManager
     {
         return ignore_frame_boundary_android_;
     }
-
     util::Compressor* GetCompressor()
     {
         return compressor_.get();
@@ -627,6 +630,7 @@ class CommonCaptureManager
     bool                                    screenshots_enabled_;
     std::vector<uint32_t>                   screenshot_indices_;
     bool                                    disable_dxr_;
+    bool                                    disable_meta_command_;
     uint32_t                                accel_struct_padding_;
     bool                                    iunknown_wrapping_;
     bool                                    force_command_serialization_;

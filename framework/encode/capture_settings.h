@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2019 Valve Corporation
 ** Copyright (c) 2018-2021 LunarG, Inc.
-** Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -134,6 +134,7 @@ class CaptureSettings
         bool                         debug_device_lost{ false };
         bool                         debug_set_objects_name{ false };
         bool                         disable_dxr{ false };
+        bool                         disable_meta_command{ false };
         uint32_t                     accel_struct_padding{ 0 };
         bool                         force_command_serialization{ false };
         uint32_t                     fence_query_delay{ 0 };
