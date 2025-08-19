@@ -126,10 +126,11 @@ class KhronosStateTableHeaderGenerator():
         code += self.get_code
         code += '\n'
         code += self.visit_code
-        code += '\n'
-        code += '    Custom{}StateTable customStateTable;\n'.format(
-            api_data.api_class_prefix
-        )
+        if api_data.api_class_prefix == 'Vulkan':
+            code += '\n'
+            code += '    Custom{}StateTable customStateTable;\n'.format(
+                api_data.api_class_prefix
+            )
         code += '\n'
         code += '  private:\n'
         code += self.map_code

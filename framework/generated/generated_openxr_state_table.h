@@ -578,58 +578,108 @@ class OpenXrStateHandleTable : OpenXrStateTableBase
          return RemoveEntry(wrapper->handle, xr_futureEXT_map_);
     }
 
+    void VisitWrappers(std::function<void(vulkan_wrappers::CommandBufferWrapper*)> visitor) const { for (auto entry : vk_commandBuffer_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::DeviceWrapper*)> visitor) const { for (auto entry : vk_device_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::ImageWrapper*)> visitor) const { for (auto entry : vk_image_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::InstanceWrapper*)> visitor) const { for (auto entry : vk_instance_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::PhysicalDeviceWrapper*)> visitor) const { for (auto entry : vk_physicalDevice_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::QueueWrapper*)> visitor) const { for (auto entry : vk_queue_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::SurfaceKHRWrapper*)> visitor) const { for (auto entry : vk_surfaceKHR_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(vulkan_wrappers::SwapchainKHRWrapper*)> visitor) const { for (auto entry : vk_swapchainKHR_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::ActionWrapper*)> visitor) const { for (auto entry : xr_action_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::ActionSetWrapper*)> visitor) const { for (auto entry : xr_actionSet_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::BodyTrackerFBWrapper*)> visitor) const { for (auto entry : xr_bodyTrackerFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::DebugUtilsMessengerEXTWrapper*)> visitor) const { for (auto entry : xr_debugUtilsMessengerEXT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::EnvironmentDepthProviderMETAWrapper*)> visitor) const { for (auto entry : xr_environmentDepthProviderMETA_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::EnvironmentDepthSwapchainMETAWrapper*)> visitor) const { for (auto entry : xr_environmentDepthSwapchainMETA_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::ExportedLocalizationMapMLWrapper*)> visitor) const { for (auto entry : xr_exportedLocalizationMapML_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::EyeTrackerFBWrapper*)> visitor) const { for (auto entry : xr_eyeTrackerFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::FaceTracker2FBWrapper*)> visitor) const { for (auto entry : xr_faceTracker2FB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::FaceTrackerFBWrapper*)> visitor) const { for (auto entry : xr_faceTrackerFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::FacialTrackerHTCWrapper*)> visitor) const { for (auto entry : xr_facialTrackerHTC_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::FoveationProfileFBWrapper*)> visitor) const { for (auto entry : xr_foveationProfileFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::GeometryInstanceFBWrapper*)> visitor) const { for (auto entry : xr_geometryInstanceFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::HandTrackerEXTWrapper*)> visitor) const { for (auto entry : xr_handTrackerEXT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::InstanceWrapper*)> visitor) const { for (auto entry : xr_instance_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::MarkerDetectorMLWrapper*)> visitor) const { for (auto entry : xr_markerDetectorML_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PassthroughColorLutMETAWrapper*)> visitor) const { for (auto entry : xr_passthroughColorLutMETA_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PassthroughFBWrapper*)> visitor) const { for (auto entry : xr_passthroughFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PassthroughHTCWrapper*)> visitor) const { for (auto entry : xr_passthroughHTC_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PassthroughLayerFBWrapper*)> visitor) const { for (auto entry : xr_passthroughLayerFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PlaneDetectorEXTWrapper*)> visitor) const { for (auto entry : xr_planeDetectorEXT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SceneMSFTWrapper*)> visitor) const { for (auto entry : xr_sceneMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SceneObserverMSFTWrapper*)> visitor) const { for (auto entry : xr_sceneObserverMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SessionWrapper*)> visitor) const { for (auto entry : xr_session_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SpaceWrapper*)> visitor) const { for (auto entry : xr_space_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SpaceUserFBWrapper*)> visitor) const { for (auto entry : xr_spaceUserFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SpatialAnchorMSFTWrapper*)> visitor) const { for (auto entry : xr_spatialAnchorMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SpatialAnchorStoreConnectionMSFTWrapper*)> visitor) const { for (auto entry : xr_spatialAnchorStoreConnectionMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SpatialGraphNodeBindingMSFTWrapper*)> visitor) const { for (auto entry : xr_spatialGraphNodeBindingMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SwapchainWrapper*)> visitor) const { for (auto entry : xr_swapchain_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::TriangleMeshFBWrapper*)> visitor) const { for (auto entry : xr_triangleMeshFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::VirtualKeyboardMETAWrapper*)> visitor) const { for (auto entry : xr_virtualKeyboardMETA_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::AsyncRequestIdFBWrapper*)> visitor) const { for (auto entry : xr_asyncRequestIdFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::ControllerModelKeyMSFTWrapper*)> visitor) const { for (auto entry : xr_controllerModelKeyMSFT_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::MarkerMLWrapper*)> visitor) const { for (auto entry : xr_markerML_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::PathWrapper*)> visitor) const { for (auto entry : xr_path_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::RenderModelKeyFBWrapper*)> visitor) const { for (auto entry : xr_renderModelKeyFB_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::SystemIdWrapper*)> visitor) const { for (auto entry : xr_systemId_map_) { visitor(entry.second); } }
+    void VisitWrappers(std::function<void(openxr_wrappers::FutureEXTWrapper*)> visitor) const { for (auto entry : xr_futureEXT_map_) { visitor(entry.second); } }
+
     template<typename Wrapper> const Wrapper* GetWrapper(typename Wrapper::HandleType handle) const { return nullptr; }
 
     template<typename Wrapper> Wrapper* GetWrapper(typename Wrapper::HandleType handle) { return nullptr; }
 
+    template<typename Wrapper> std::recursive_mutex& GetMapMutex();
+
   private:
-    std::unordered_map<VkCommandBuffer, vulkan_wrappers::CommandBufferWrapper*> vk_commandBuffer_map_;
-    std::unordered_map<VkDevice, vulkan_wrappers::DeviceWrapper*> vk_device_map_;
-    std::unordered_map<VkImage, vulkan_wrappers::ImageWrapper*> vk_image_map_;
-    std::unordered_map<VkInstance, vulkan_wrappers::InstanceWrapper*> vk_instance_map_;
-    std::unordered_map<VkPhysicalDevice, vulkan_wrappers::PhysicalDeviceWrapper*> vk_physicalDevice_map_;
-    std::unordered_map<VkQueue, vulkan_wrappers::QueueWrapper*> vk_queue_map_;
-    std::unordered_map<VkSurfaceKHR, vulkan_wrappers::SurfaceKHRWrapper*> vk_surfaceKHR_map_;
-    std::unordered_map<VkSwapchainKHR, vulkan_wrappers::SwapchainKHRWrapper*> vk_swapchainKHR_map_;
-    std::unordered_map<XrAction, openxr_wrappers::ActionWrapper*> xr_action_map_;
-    std::unordered_map<XrActionSet, openxr_wrappers::ActionSetWrapper*> xr_actionSet_map_;
-    std::unordered_map<XrBodyTrackerFB, openxr_wrappers::BodyTrackerFBWrapper*> xr_bodyTrackerFB_map_;
-    std::unordered_map<XrDebugUtilsMessengerEXT, openxr_wrappers::DebugUtilsMessengerEXTWrapper*> xr_debugUtilsMessengerEXT_map_;
-    std::unordered_map<XrEnvironmentDepthProviderMETA, openxr_wrappers::EnvironmentDepthProviderMETAWrapper*> xr_environmentDepthProviderMETA_map_;
-    std::unordered_map<XrEnvironmentDepthSwapchainMETA, openxr_wrappers::EnvironmentDepthSwapchainMETAWrapper*> xr_environmentDepthSwapchainMETA_map_;
-    std::unordered_map<XrExportedLocalizationMapML, openxr_wrappers::ExportedLocalizationMapMLWrapper*> xr_exportedLocalizationMapML_map_;
-    std::unordered_map<XrEyeTrackerFB, openxr_wrappers::EyeTrackerFBWrapper*> xr_eyeTrackerFB_map_;
-    std::unordered_map<XrFaceTracker2FB, openxr_wrappers::FaceTracker2FBWrapper*> xr_faceTracker2FB_map_;
-    std::unordered_map<XrFaceTrackerFB, openxr_wrappers::FaceTrackerFBWrapper*> xr_faceTrackerFB_map_;
-    std::unordered_map<XrFacialTrackerHTC, openxr_wrappers::FacialTrackerHTCWrapper*> xr_facialTrackerHTC_map_;
-    std::unordered_map<XrFoveationProfileFB, openxr_wrappers::FoveationProfileFBWrapper*> xr_foveationProfileFB_map_;
-    std::unordered_map<XrGeometryInstanceFB, openxr_wrappers::GeometryInstanceFBWrapper*> xr_geometryInstanceFB_map_;
-    std::unordered_map<XrHandTrackerEXT, openxr_wrappers::HandTrackerEXTWrapper*> xr_handTrackerEXT_map_;
-    std::unordered_map<XrInstance, openxr_wrappers::InstanceWrapper*> xr_instance_map_;
-    std::unordered_map<XrMarkerDetectorML, openxr_wrappers::MarkerDetectorMLWrapper*> xr_markerDetectorML_map_;
-    std::unordered_map<XrPassthroughColorLutMETA, openxr_wrappers::PassthroughColorLutMETAWrapper*> xr_passthroughColorLutMETA_map_;
-    std::unordered_map<XrPassthroughFB, openxr_wrappers::PassthroughFBWrapper*> xr_passthroughFB_map_;
-    std::unordered_map<XrPassthroughHTC, openxr_wrappers::PassthroughHTCWrapper*> xr_passthroughHTC_map_;
-    std::unordered_map<XrPassthroughLayerFB, openxr_wrappers::PassthroughLayerFBWrapper*> xr_passthroughLayerFB_map_;
-    std::unordered_map<XrPlaneDetectorEXT, openxr_wrappers::PlaneDetectorEXTWrapper*> xr_planeDetectorEXT_map_;
-    std::unordered_map<XrSceneMSFT, openxr_wrappers::SceneMSFTWrapper*> xr_sceneMSFT_map_;
-    std::unordered_map<XrSceneObserverMSFT, openxr_wrappers::SceneObserverMSFTWrapper*> xr_sceneObserverMSFT_map_;
-    std::unordered_map<XrSession, openxr_wrappers::SessionWrapper*> xr_session_map_;
-    std::unordered_map<XrSpace, openxr_wrappers::SpaceWrapper*> xr_space_map_;
-    std::unordered_map<XrSpaceUserFB, openxr_wrappers::SpaceUserFBWrapper*> xr_spaceUserFB_map_;
-    std::unordered_map<XrSpatialAnchorMSFT, openxr_wrappers::SpatialAnchorMSFTWrapper*> xr_spatialAnchorMSFT_map_;
-    std::unordered_map<XrSpatialAnchorStoreConnectionMSFT, openxr_wrappers::SpatialAnchorStoreConnectionMSFTWrapper*> xr_spatialAnchorStoreConnectionMSFT_map_;
-    std::unordered_map<XrSpatialGraphNodeBindingMSFT, openxr_wrappers::SpatialGraphNodeBindingMSFTWrapper*> xr_spatialGraphNodeBindingMSFT_map_;
-    std::unordered_map<XrSwapchain, openxr_wrappers::SwapchainWrapper*> xr_swapchain_map_;
-    std::unordered_map<XrTriangleMeshFB, openxr_wrappers::TriangleMeshFBWrapper*> xr_triangleMeshFB_map_;
-    std::unordered_map<XrVirtualKeyboardMETA, openxr_wrappers::VirtualKeyboardMETAWrapper*> xr_virtualKeyboardMETA_map_;
-    std::unordered_map<XrAsyncRequestIdFB, openxr_wrappers::AsyncRequestIdFBWrapper*> xr_asyncRequestIdFB_map_;
-    std::unordered_map<XrControllerModelKeyMSFT, openxr_wrappers::ControllerModelKeyMSFTWrapper*> xr_controllerModelKeyMSFT_map_;
-    std::unordered_map<XrMarkerML, openxr_wrappers::MarkerMLWrapper*> xr_markerML_map_;
-    std::unordered_map<XrPath, openxr_wrappers::PathWrapper*> xr_path_map_;
-    std::unordered_map<XrRenderModelKeyFB, openxr_wrappers::RenderModelKeyFBWrapper*> xr_renderModelKeyFB_map_;
-    std::unordered_map<XrSystemId, openxr_wrappers::SystemIdWrapper*> xr_systemId_map_;
-    std::unordered_map<XrFutureEXT, openxr_wrappers::FutureEXTWrapper*> xr_futureEXT_map_;
+    UnorderedStateMap<VkCommandBuffer, vulkan_wrappers::CommandBufferWrapper*> vk_commandBuffer_map_;
+    UnorderedStateMap<VkDevice, vulkan_wrappers::DeviceWrapper*> vk_device_map_;
+    UnorderedStateMap<VkImage, vulkan_wrappers::ImageWrapper*> vk_image_map_;
+    UnorderedStateMap<VkInstance, vulkan_wrappers::InstanceWrapper*> vk_instance_map_;
+    UnorderedStateMap<VkPhysicalDevice, vulkan_wrappers::PhysicalDeviceWrapper*> vk_physicalDevice_map_;
+    UnorderedStateMap<VkQueue, vulkan_wrappers::QueueWrapper*> vk_queue_map_;
+    UnorderedStateMap<VkSurfaceKHR, vulkan_wrappers::SurfaceKHRWrapper*> vk_surfaceKHR_map_;
+    UnorderedStateMap<VkSwapchainKHR, vulkan_wrappers::SwapchainKHRWrapper*> vk_swapchainKHR_map_;
+    UnorderedStateMap<XrAction, openxr_wrappers::ActionWrapper*> xr_action_map_;
+    UnorderedStateMap<XrActionSet, openxr_wrappers::ActionSetWrapper*> xr_actionSet_map_;
+    UnorderedStateMap<XrBodyTrackerFB, openxr_wrappers::BodyTrackerFBWrapper*> xr_bodyTrackerFB_map_;
+    UnorderedStateMap<XrDebugUtilsMessengerEXT, openxr_wrappers::DebugUtilsMessengerEXTWrapper*> xr_debugUtilsMessengerEXT_map_;
+    UnorderedStateMap<XrEnvironmentDepthProviderMETA, openxr_wrappers::EnvironmentDepthProviderMETAWrapper*> xr_environmentDepthProviderMETA_map_;
+    UnorderedStateMap<XrEnvironmentDepthSwapchainMETA, openxr_wrappers::EnvironmentDepthSwapchainMETAWrapper*> xr_environmentDepthSwapchainMETA_map_;
+    UnorderedStateMap<XrExportedLocalizationMapML, openxr_wrappers::ExportedLocalizationMapMLWrapper*> xr_exportedLocalizationMapML_map_;
+    UnorderedStateMap<XrEyeTrackerFB, openxr_wrappers::EyeTrackerFBWrapper*> xr_eyeTrackerFB_map_;
+    UnorderedStateMap<XrFaceTracker2FB, openxr_wrappers::FaceTracker2FBWrapper*> xr_faceTracker2FB_map_;
+    UnorderedStateMap<XrFaceTrackerFB, openxr_wrappers::FaceTrackerFBWrapper*> xr_faceTrackerFB_map_;
+    UnorderedStateMap<XrFacialTrackerHTC, openxr_wrappers::FacialTrackerHTCWrapper*> xr_facialTrackerHTC_map_;
+    UnorderedStateMap<XrFoveationProfileFB, openxr_wrappers::FoveationProfileFBWrapper*> xr_foveationProfileFB_map_;
+    UnorderedStateMap<XrGeometryInstanceFB, openxr_wrappers::GeometryInstanceFBWrapper*> xr_geometryInstanceFB_map_;
+    UnorderedStateMap<XrHandTrackerEXT, openxr_wrappers::HandTrackerEXTWrapper*> xr_handTrackerEXT_map_;
+    UnorderedStateMap<XrInstance, openxr_wrappers::InstanceWrapper*> xr_instance_map_;
+    UnorderedStateMap<XrMarkerDetectorML, openxr_wrappers::MarkerDetectorMLWrapper*> xr_markerDetectorML_map_;
+    UnorderedStateMap<XrPassthroughColorLutMETA, openxr_wrappers::PassthroughColorLutMETAWrapper*> xr_passthroughColorLutMETA_map_;
+    UnorderedStateMap<XrPassthroughFB, openxr_wrappers::PassthroughFBWrapper*> xr_passthroughFB_map_;
+    UnorderedStateMap<XrPassthroughHTC, openxr_wrappers::PassthroughHTCWrapper*> xr_passthroughHTC_map_;
+    UnorderedStateMap<XrPassthroughLayerFB, openxr_wrappers::PassthroughLayerFBWrapper*> xr_passthroughLayerFB_map_;
+    UnorderedStateMap<XrPlaneDetectorEXT, openxr_wrappers::PlaneDetectorEXTWrapper*> xr_planeDetectorEXT_map_;
+    UnorderedStateMap<XrSceneMSFT, openxr_wrappers::SceneMSFTWrapper*> xr_sceneMSFT_map_;
+    UnorderedStateMap<XrSceneObserverMSFT, openxr_wrappers::SceneObserverMSFTWrapper*> xr_sceneObserverMSFT_map_;
+    UnorderedStateMap<XrSession, openxr_wrappers::SessionWrapper*> xr_session_map_;
+    UnorderedStateMap<XrSpace, openxr_wrappers::SpaceWrapper*> xr_space_map_;
+    UnorderedStateMap<XrSpaceUserFB, openxr_wrappers::SpaceUserFBWrapper*> xr_spaceUserFB_map_;
+    UnorderedStateMap<XrSpatialAnchorMSFT, openxr_wrappers::SpatialAnchorMSFTWrapper*> xr_spatialAnchorMSFT_map_;
+    UnorderedStateMap<XrSpatialAnchorStoreConnectionMSFT, openxr_wrappers::SpatialAnchorStoreConnectionMSFTWrapper*> xr_spatialAnchorStoreConnectionMSFT_map_;
+    UnorderedStateMap<XrSpatialGraphNodeBindingMSFT, openxr_wrappers::SpatialGraphNodeBindingMSFTWrapper*> xr_spatialGraphNodeBindingMSFT_map_;
+    UnorderedStateMap<XrSwapchain, openxr_wrappers::SwapchainWrapper*> xr_swapchain_map_;
+    UnorderedStateMap<XrTriangleMeshFB, openxr_wrappers::TriangleMeshFBWrapper*> xr_triangleMeshFB_map_;
+    UnorderedStateMap<XrVirtualKeyboardMETA, openxr_wrappers::VirtualKeyboardMETAWrapper*> xr_virtualKeyboardMETA_map_;
+    UnorderedStateMap<XrAsyncRequestIdFB, openxr_wrappers::AsyncRequestIdFBWrapper*> xr_asyncRequestIdFB_map_;
+    UnorderedStateMap<XrControllerModelKeyMSFT, openxr_wrappers::ControllerModelKeyMSFTWrapper*> xr_controllerModelKeyMSFT_map_;
+    UnorderedStateMap<XrMarkerML, openxr_wrappers::MarkerMLWrapper*> xr_markerML_map_;
+    UnorderedStateMap<XrPath, openxr_wrappers::PathWrapper*> xr_path_map_;
+    UnorderedStateMap<XrRenderModelKeyFB, openxr_wrappers::RenderModelKeyFBWrapper*> xr_renderModelKeyFB_map_;
+    UnorderedStateMap<XrSystemId, openxr_wrappers::SystemIdWrapper*> xr_systemId_map_;
+    UnorderedStateMap<XrFutureEXT, openxr_wrappers::FutureEXTWrapper*> xr_futureEXT_map_;
 };
 
 template<> inline const vulkan_wrappers::CommandBufferWrapper* OpenXrStateHandleTable::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(VkCommandBuffer handle) const { return OpenXrStateTableBase::GetWrapper(handle, vk_commandBuffer_map_); }
@@ -727,6 +777,54 @@ template<> inline openxr_wrappers::PathWrapper* OpenXrStateHandleTable::GetWrapp
 template<> inline openxr_wrappers::RenderModelKeyFBWrapper* OpenXrStateHandleTable::GetWrapper<openxr_wrappers::RenderModelKeyFBWrapper>(XrRenderModelKeyFB handle) { return OpenXrStateTableBase::GetWrapper(handle, xr_renderModelKeyFB_map_); }
 template<> inline openxr_wrappers::SystemIdWrapper* OpenXrStateHandleTable::GetWrapper<openxr_wrappers::SystemIdWrapper>(XrSystemId handle) { return OpenXrStateTableBase::GetWrapper(handle, xr_systemId_map_); }
 template<> inline openxr_wrappers::FutureEXTWrapper* OpenXrStateHandleTable::GetWrapper<openxr_wrappers::FutureEXTWrapper>(XrFutureEXT handle) { return OpenXrStateTableBase::GetWrapper(handle, xr_futureEXT_map_); }
+
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::CommandBufferWrapper>(){ return vk_commandBuffer_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::DeviceWrapper>(){ return vk_device_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::ImageWrapper>(){ return vk_image_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::InstanceWrapper>(){ return vk_instance_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::PhysicalDeviceWrapper>(){ return vk_physicalDevice_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::QueueWrapper>(){ return vk_queue_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::SurfaceKHRWrapper>(){ return vk_surfaceKHR_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<vulkan_wrappers::SwapchainKHRWrapper>(){ return vk_swapchainKHR_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::ActionWrapper>(){ return xr_action_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::ActionSetWrapper>(){ return xr_actionSet_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::BodyTrackerFBWrapper>(){ return xr_bodyTrackerFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::DebugUtilsMessengerEXTWrapper>(){ return xr_debugUtilsMessengerEXT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::EnvironmentDepthProviderMETAWrapper>(){ return xr_environmentDepthProviderMETA_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::EnvironmentDepthSwapchainMETAWrapper>(){ return xr_environmentDepthSwapchainMETA_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::ExportedLocalizationMapMLWrapper>(){ return xr_exportedLocalizationMapML_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::EyeTrackerFBWrapper>(){ return xr_eyeTrackerFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::FaceTracker2FBWrapper>(){ return xr_faceTracker2FB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::FaceTrackerFBWrapper>(){ return xr_faceTrackerFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::FacialTrackerHTCWrapper>(){ return xr_facialTrackerHTC_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::FoveationProfileFBWrapper>(){ return xr_foveationProfileFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::GeometryInstanceFBWrapper>(){ return xr_geometryInstanceFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::HandTrackerEXTWrapper>(){ return xr_handTrackerEXT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::InstanceWrapper>(){ return xr_instance_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::MarkerDetectorMLWrapper>(){ return xr_markerDetectorML_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PassthroughColorLutMETAWrapper>(){ return xr_passthroughColorLutMETA_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PassthroughFBWrapper>(){ return xr_passthroughFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PassthroughHTCWrapper>(){ return xr_passthroughHTC_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PassthroughLayerFBWrapper>(){ return xr_passthroughLayerFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PlaneDetectorEXTWrapper>(){ return xr_planeDetectorEXT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SceneMSFTWrapper>(){ return xr_sceneMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SceneObserverMSFTWrapper>(){ return xr_sceneObserverMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SessionWrapper>(){ return xr_session_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SpaceWrapper>(){ return xr_space_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SpaceUserFBWrapper>(){ return xr_spaceUserFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SpatialAnchorMSFTWrapper>(){ return xr_spatialAnchorMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SpatialAnchorStoreConnectionMSFTWrapper>(){ return xr_spatialAnchorStoreConnectionMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SpatialGraphNodeBindingMSFTWrapper>(){ return xr_spatialGraphNodeBindingMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SwapchainWrapper>(){ return xr_swapchain_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::TriangleMeshFBWrapper>(){ return xr_triangleMeshFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::VirtualKeyboardMETAWrapper>(){ return xr_virtualKeyboardMETA_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::AsyncRequestIdFBWrapper>(){ return xr_asyncRequestIdFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::ControllerModelKeyMSFTWrapper>(){ return xr_controllerModelKeyMSFT_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::MarkerMLWrapper>(){ return xr_markerML_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::PathWrapper>(){ return xr_path_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::RenderModelKeyFBWrapper>(){ return xr_renderModelKeyFB_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::SystemIdWrapper>(){ return xr_systemId_map_.mutex; }
+template<> inline std::recursive_mutex& OpenXrStateHandleTable::GetMapMutex<openxr_wrappers::FutureEXTWrapper>(){ return xr_futureEXT_map_.mutex; }
 
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

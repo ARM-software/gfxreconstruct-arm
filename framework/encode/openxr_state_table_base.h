@@ -26,6 +26,7 @@
 #if ENABLE_OPENXR_SUPPORT
 
 #include "encode/openxr_handle_wrappers.h"
+#include "encode/unordered_state_map.h"
 #include "format/format.h"
 #include "util/defines.h"
 
@@ -77,9 +78,9 @@ class OpenXrStateTableBase
     }
 
     template <typename Wrapper>
-    bool InsertEntry(typename Wrapper::HandleType                                handle,
-                     Wrapper*                                                    wrapper,
-                     std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    bool InsertEntry(typename Wrapper::HandleType                               handle,
+                     Wrapper*                                                   wrapper,
+                     UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
         const std::unique_lock<std::shared_mutex> lock(mutex_);
         const auto&                               inserted = map.insert(std::make_pair(handle, wrapper));
@@ -87,16 +88,16 @@ class OpenXrStateTableBase
     }
 
     template <typename Wrapper>
-    bool RemoveEntry(const typename Wrapper::HandleType                          handle,
-                     std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    bool RemoveEntry(const typename Wrapper::HandleType                         handle,
+                     UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
         const std::unique_lock<std::shared_mutex> lock(mutex_);
         return (map.erase(handle) != 0);
     }
 
     template <typename Wrapper>
-    Wrapper* GetWrapper(typename Wrapper::HandleType                                      handle,
-                        const std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map)
+    Wrapper* GetWrapper(typename Wrapper::HandleType                                     handle,
+                        const UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map)
     {
         const std::shared_lock<std::shared_mutex> lock(mutex_);
         auto                                      entry = map.find(handle);
@@ -104,8 +105,8 @@ class OpenXrStateTableBase
     }
 
     template <typename Wrapper>
-    const Wrapper* GetWrapper(typename Wrapper::HandleType                                      handle,
-                              const std::unordered_map<typename Wrapper::HandleType, Wrapper*>& map) const
+    const Wrapper* GetWrapper(typename Wrapper::HandleType                                     handle,
+                              const UnorderedStateMap<typename Wrapper::HandleType, Wrapper*>& map) const
     {
         const std::shared_lock<std::shared_mutex> lock(mutex_);
         auto                                      entry = map.find(handle);
