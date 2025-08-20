@@ -10885,18 +10885,17 @@ void VulkanReplayConsumer::Process_vkCreateTensorARM(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkTensorARM>*          pTensor)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkTensorCreateInfoARM* in_pCreateInfo = pCreateInfo->GetPointer();
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
     if (!pTensor->IsNull()) { pTensor->SetHandleLength(1); }
-    VkTensorARM* out_pTensor = pTensor->GetHandlePointer();
+    VulkanTensorARMInfo handle_info;
+    pTensor->SetConsumerData(0, &handle_info);
 
-    VkResult replay_result = GetDeviceTable(in_device)->CreateTensorARM(in_device, in_pCreateInfo, in_pAllocator, out_pTensor);
+    VkResult replay_result = OverrideCreateTensorARM(GetDeviceTable(in_device->handle)->CreateTensorARM, returnValue, in_device, pCreateInfo, pAllocator, pTensor);
     CheckResult("vkCreateTensorARM", returnValue, replay_result, call_info);
 
-    AddHandle<VulkanTensorARMInfo>(device, pTensor->GetPointer(), out_pTensor, &CommonObjectInfoTable::AddVkTensorARMInfo);
+    AddHandle<VulkanTensorARMInfo>(device, pTensor->GetPointer(), pTensor->GetHandlePointer(), std::move(handle_info), &CommonObjectInfoTable::AddVkTensorARMInfo);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkDestroyTensorARM(
@@ -10905,11 +10904,10 @@ void VulkanReplayConsumer::Process_vkDestroyTensorARM(
     format::HandleId                            tensor,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    VkTensorARM in_tensor = MapHandle<VulkanTensorARMInfo>(tensor, &CommonObjectInfoTable::GetVkTensorARMInfo);
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    auto in_tensor = GetObjectInfoTable().GetVkTensorARMInfo(tensor);
 
-    GetDeviceTable(in_device)->DestroyTensorARM(in_device, in_tensor, in_pAllocator);
+    OverrideDestroyTensorARM(GetDeviceTable(in_device->handle)->DestroyTensorARM, in_device, in_tensor, pAllocator);
     RemoveHandle(tensor, &CommonObjectInfoTable::RemoveVkTensorARMInfo);
 }
 
@@ -10956,13 +10954,13 @@ void VulkanReplayConsumer::Process_vkGetTensorMemoryRequirementsARM(
     StructPointerDecoder<Decoded_VkTensorMemoryRequirementsInfoARM>* pInfo,
     StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkTensorMemoryRequirementsInfoARM* in_pInfo = pInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    VkMemoryRequirements2* out_pMemoryRequirements = pMemoryRequirements->IsNull() ? nullptr : pMemoryRequirements->AllocateOutputData(1, { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, nullptr });
+    pMemoryRequirements->IsNull() ? nullptr : pMemoryRequirements->AllocateOutputData(1, { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, nullptr });
     InitializeOutputStructPNext(pMemoryRequirements);
 
-    GetDeviceTable(in_device)->GetTensorMemoryRequirementsARM(in_device, in_pInfo, out_pMemoryRequirements);
+    OverrideGetTensorMemoryRequirementsARM(GetDeviceTable(in_device->handle)->GetTensorMemoryRequirementsARM, in_device, pInfo, pMemoryRequirements);
 }
 
 void VulkanReplayConsumer::Process_vkBindTensorMemoryARM(
@@ -10972,14 +10970,14 @@ void VulkanReplayConsumer::Process_vkBindTensorMemoryARM(
     uint32_t                                    bindInfoCount,
     StructPointerDecoder<Decoded_VkBindTensorMemoryInfoARM>* pBindInfos)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkBindTensorMemoryInfoARM* in_pBindInfos = pBindInfos->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructArrayHandles(pBindInfos->GetMetaStructPointer(), pBindInfos->GetLength(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->BindTensorMemoryARM(in_device, bindInfoCount, in_pBindInfos);
+    VkResult replay_result = OverrideBindTensorMemoryARM(GetDeviceTable(in_device->handle)->BindTensorMemoryARM, returnValue, in_device, bindInfoCount, pBindInfos);
     CheckResult("vkBindTensorMemoryARM", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkGetDeviceTensorMemoryRequirementsARM(

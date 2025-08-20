@@ -1954,6 +1954,7 @@ class VulkanCaptureManager : public ApiCaptureManager
                              const std::string*      asset_file_name,
                              util::ThreadData*       thread_data) override;
 
+  public:
     void
     PostProcess_vkBindDataGraphPipelineSessionMemoryARM(VkResult,
                                                         VkDevice device,
@@ -1988,11 +1989,11 @@ class VulkanCaptureManager : public ApiCaptureManager
         }
     }
 
-    void PostProcess_vkCreateTensorView(VkResult,
-                                        VkDevice                         device,
-                                        const VkTensorViewCreateInfoARM* pCreateInfo,
-                                        const VkAllocationCallbacks*     pAllocator,
-                                        VkTensorViewARM*                 pView)
+    void PostProcess_vkCreateTensorViewARM(VkResult,
+                                           VkDevice                         device,
+                                           const VkTensorViewCreateInfoARM* pCreateInfo,
+                                           const VkAllocationCallbacks*     pAllocator,
+                                           VkTensorViewARM*                 pView)
     {
         auto view   = GetWrapper<TensorViewARMWrapper>(*pView);
         auto tensor = GetWrapper<TensorARMWrapper>(pCreateInfo->tensor);
