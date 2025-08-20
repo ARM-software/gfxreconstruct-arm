@@ -20,20 +20,6 @@ android {
             }
         }
     }
-    signingConfigs {
-        debug {
-            storeFile file('../../keystore')
-            storePassword 'GfxReconKey'
-            keyAlias 'key-gfxrecon'
-            keyPassword 'GfxReconKey'
-        }
-        release {
-            storeFile file('../../keystore')
-            storePassword 'GfxReconKey'
-            keyPassword 'GfxReconKey'
-            keyAlias 'key-gfxrecon'
-        }
-    }
     buildTypes {
         release {
             minifyEnabled false
@@ -56,12 +42,11 @@ android {
             ignoreAssetsPattern "XrLayer_gfxreconstruct.json"
         }
     }
-}
+ }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.0'
     implementation project(':layer')
-    implementation fileTree(dir: "libs", include: ["libVkLayer_*.so"])
 }

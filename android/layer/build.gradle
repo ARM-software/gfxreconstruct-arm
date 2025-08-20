@@ -8,7 +8,7 @@ android {
         minSdkVersion 26
         targetSdkVersion 33
         versionCode 1
-        versionName "${System.env.GFXRECON_INTERNAL_VERSION}"
+        versionName project.findProperty("Version") ?: "1.0"
         ndk {
             if (project.hasProperty("armeabi-v7a")) {
                 abiFilters 'armeabi-v7a'
@@ -25,11 +25,24 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-fexceptions", "-std=c++17", "-Wno-nullability-completeness"
-                arguments "-DANDROID_TOOLCHAIN=clang",
-                          "-DANDROID_STL=c++_static",
-                          "-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${System.env.GFXRECON_INTERNAL_VERSION}",
-                          "-DCMAKE_C_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}",
-                          "-DCMAKE_CXX_COMPILER_LAUNCHER=${System.env.GFXRECON_INTERNAL_USE_CCACHE ? "ccache" : ""}"
+                arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static"
+
+                if (project.hasProperty("Version"))
+                {
+                    arguments.add("-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${project.getProperty('Version')}")
+                }
+
+                if (project.hasProperty("MaxThreadsPerBuildTask")) {
+                    arguments.add("-DCMAKE_JOB_POOL_COMPILE:STRING=build")
+                    arguments.add("-DCMAKE_JOB_POOL_LINK:STRING=build")
+                    arguments.add("-DCMAKE_JOB_POOLS:STRING=build=${project.getProperty('MaxThreadsPerBuildTask')}")
+                }
+
+                if (project.hasProperty("EnableCcache")) {
+                    arguments.add("-DCMAKE_C_COMPILER_LAUNCHER=ccache")
+                    arguments.add("-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
+                }
+
                 if (project.hasProperty("DisableOpenXR")) {
                     logger.info('GFXReconstruct layer built with NO OpenXr Support! [DisableOpenXR found]')
                     arguments.add("-DGFXRECON_ENABLE_OPENXR=OFF")
