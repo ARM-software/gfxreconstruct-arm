@@ -100,6 +100,10 @@ const std::unordered_set<std::string> kSurfaceExtensions = {
 // Device extensions to enable for trimming state setup, when available.
 const std::unordered_set<std::string> kTrimStateSetupDeviceExtensions = { VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME };
 
+const std::unordered_set<std::string> kFunctionsAllowedToReturnDifferentCodeThanCapture = {
+    "vkSetDebugUtilsObjectNameEXT", "vkSetDebugUtilsObjectTagEXT"
+};
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT      flags,
                                                           VkDebugReportObjectTypeEXT objectType,
                                                           uint64_t                   object,
@@ -214,14 +218,6 @@ VulkanReplayConsumerBase::VulkanReplayConsumerBase(std::shared_ptr<application::
             num_threads += (int32_t)std::thread::hardware_concurrency();
         }
         background_queue_.set_num_threads(std::clamp<uint32_t>(num_threads, 0, std::thread::hardware_concurrency()));
-
-        if (options_.add_new_pipeline_caches || !options_.save_pipeline_cache_filename.empty() ||
-            !options_.load_pipeline_cache_filename.empty())
-        {
-            GFXRECON_LOG_WARNING("Requested both asynchronous pipeline-creation (--pipeline-creation-jobs) and "
-                                 "explicit pipeline-caches (--save-pipeline-cache | --load-pipeline-cache). This is "
-                                 "currently not supported and will prevent usage of pipeline-caches.");
-        }
     }
 
     // If we want to save a pipeline cache file, we do this to be sure the file exists, is empty, and optionally, is
@@ -344,7 +340,7 @@ void VulkanReplayConsumerBase::ProcessStateEndMarker(uint64_t frame_number)
 
 void VulkanReplayConsumerBase::ProcessDisplayMessageCommand(const std::string& message)
 {
-    GFXRECON_LOG_INFO("Trace Message: %s", message.c_str());
+    GFXRECON_LOG_INFO("Vulkan Trace Message: %s", message.c_str());
 }
 
 void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id,
@@ -1861,7 +1857,9 @@ void VulkanReplayConsumerBase::CheckResult(const char*                func_name,
 {
     if (original != replay)
     {
-        if ((replay < 0) && (replay != VK_ERROR_FORMAT_NOT_SUPPORTED))
+        const bool is_func_allowed_to_differ = kFunctionsAllowedToReturnDifferentCodeThanCapture.count(func_name);
+
+        if (!is_func_allowed_to_differ && (replay < 0) && (replay != VK_ERROR_FORMAT_NOT_SUPPORTED))
         {
             // Raise a fatal error if replay produced an error that did not occur during capture.  Format not supported
             // errors are not treated as fatal, but will be reported as warnings below, allowing the replay to attempt
@@ -1879,7 +1877,8 @@ void VulkanReplayConsumerBase::CheckResult(const char*                func_name,
         }
         else if (!((replay == VK_SUCCESS) &&
                    ((original == VK_TIMEOUT) || (original == VK_NOT_READY) || (original == VK_ERROR_OUT_OF_DATE_KHR) ||
-                    (original == VK_SUBOPTIMAL_KHR))))
+                    (original == VK_SUBOPTIMAL_KHR))) ||
+                 is_func_allowed_to_differ)
         {
             // Report differences between replay result and capture result, unless the replay results indicates
             // that a wait operation completed before the original or a WSI function succeeded when the original failed.
@@ -2625,6 +2624,7 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.create_fence                                = device_table->CreateFence;
     functions.wait_for_fences                             = device_table->WaitForFences;
     functions.destroy_fence                               = device_table->DestroyFence;
+    functions.get_android_hardware_buffer_properties      = device_table->GetAndroidHardwareBufferPropertiesANDROID;
 
     if (physical_device_info->parent_info.api_version >= VK_MAKE_VERSION(1, 1, 0))
     {
@@ -6186,8 +6186,7 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
     auto               replay_create_info   = pCreateInfo->GetPointer();
     VkBufferCreateInfo modified_create_info = *replay_create_info;
 
-    VkExternalMemoryBufferCreateInfo* external_memory =
-        graphics::vulkan_struct_get_pnext<VkExternalMemoryBufferCreateInfo>(&modified_create_info);
+    auto* external_memory = graphics::vulkan_struct_get_pnext<VkExternalMemoryBufferCreateInfo>(&modified_create_info);
 
     if (external_memory && external_memory->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT)
     {
@@ -6219,7 +6218,8 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
     auto* buffer_info = reinterpret_cast<VulkanBufferInfo*>(pBuffer->GetConsumerData(0));
     GFXRECON_ASSERT(buffer_info != nullptr);
 
-    if (replaying_trimmed_capture_)
+    // replaying a trimmed capture or dump-resources will require us to copy from buffers
+    if (replaying_trimmed_capture_ || options_.dumping_resources)
     {
         // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer
         // VkBufferCreateInfo. Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is
@@ -6368,6 +6368,8 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     auto              replay_create_info   = pCreateInfo->GetPointer();
     VkImageCreateInfo modified_create_info = *replay_create_info;
 
+    // replaying a trimmed capture or dump-resources might require us to copy from images
+    // NOTE: we skip TRANSFER_SRC_BIT flag when other incompatible flags are present
     if ((replaying_trimmed_capture_ || options_.dumping_resources) &&
         (modified_create_info.usage & VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT) == 0)
     {
@@ -6377,6 +6379,7 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         // VK_IMAGE_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
         // We also need to add VK_IMAGE_USAGE_TRANSFER_DST_BIT to be able to restore image and copy to it
         modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
         if (loading_trim_state_)
         {
             // ensure image-initialization can copy
@@ -6861,7 +6864,9 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass(
     render_pass_info->subpass_refs.reserve(create_info->subpassCount);
     for (uint32_t i = 0; i < create_info->subpassCount; ++i)
     {
-        struct VulkanRenderPassInfo::SubpassReferences sp_ref;
+        VulkanRenderPassInfo::SubpassReferences sp_ref;
+        sp_ref.flags               = create_info->pSubpasses[i].flags;
+        sp_ref.pipeline_bind_point = create_info->pSubpasses[i].pipelineBindPoint;
 
         // Copy input attachment refs
         for (uint32_t s = 0; s < create_info->pSubpasses[i].inputAttachmentCount; ++s)
@@ -6906,8 +6911,6 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass(
         {
             sp_ref.has_depth = false;
         }
-
-        sp_ref.flags = create_info->pSubpasses[i].flags;
 
         render_pass_info->subpass_refs.push_back(std::move(sp_ref));
     }
@@ -7007,22 +7010,32 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass2(
     render_pass_info->subpass_refs.reserve(create_info->subpassCount);
     for (uint32_t i = 0; i < create_info->subpassCount; ++i)
     {
-        struct VulkanRenderPassInfo::SubpassReferences sp_ref;
-        sp_ref.color_att_refs.resize(create_info->pSubpasses[i].colorAttachmentCount);
+        VulkanRenderPassInfo::SubpassReferences sp_ref;
+        sp_ref.flags               = create_info->pSubpasses[i].flags;
+        sp_ref.pipeline_bind_point = create_info->pSubpasses[i].pipelineBindPoint;
+
         for (uint32_t s = 0; s < create_info->pSubpasses[i].colorAttachmentCount; ++s)
         {
-            sp_ref.color_att_refs[s].attachment = create_info->pSubpasses[i].pColorAttachments[s].attachment;
-            sp_ref.color_att_refs[s].layout     = create_info->pSubpasses[i].pColorAttachments[s].layout;
+            if (create_info->pSubpasses[i].pColorAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
+            {
+                sp_ref.color_att_refs.emplace_back(
+                    VkAttachmentReference{ create_info->pSubpasses[i].pColorAttachments[s].attachment,
+                                           create_info->pSubpasses[i].pColorAttachments[s].layout });
+            }
         }
 
-        sp_ref.input_att_refs.resize(create_info->pSubpasses[i].inputAttachmentCount);
         for (uint32_t s = 0; s < create_info->pSubpasses[i].inputAttachmentCount; ++s)
         {
-            sp_ref.input_att_refs[s].attachment = create_info->pSubpasses[i].pInputAttachments[s].attachment;
-            sp_ref.input_att_refs[s].layout     = create_info->pSubpasses[i].pInputAttachments[s].layout;
+            if (create_info->pSubpasses[i].pInputAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
+            {
+                sp_ref.input_att_refs.emplace_back(
+                    VkAttachmentReference{ create_info->pSubpasses[i].pInputAttachments[s].attachment,
+                                           create_info->pSubpasses[i].pInputAttachments[s].layout });
+            }
         }
 
-        if (create_info->pSubpasses[i].pDepthStencilAttachment)
+        if (create_info->pSubpasses[i].pDepthStencilAttachment &&
+            create_info->pSubpasses[i].pDepthStencilAttachment->attachment != VK_ATTACHMENT_UNUSED)
         {
             sp_ref.has_depth                = true;
             sp_ref.depth_att_ref.attachment = create_info->pSubpasses[i].pDepthStencilAttachment->attachment;
@@ -7399,12 +7412,12 @@ VkResult VulkanReplayConsumerBase::OverrideCreateShaderModule(
     return vk_res;
 }
 
-VkResult VulkanReplayConsumerBase::OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData     func,
-                                                                VkResult                       original_result,
-                                                                const VulkanDeviceInfo*        device_info,
-                                                                const VulkanPipelineCacheInfo* pipeline_cache_info,
-                                                                PointerDecoder<size_t>*        pDataSize,
-                                                                PointerDecoder<uint8_t>*       pData)
+VkResult VulkanReplayConsumerBase::OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData func,
+                                                                VkResult                   original_result,
+                                                                const VulkanDeviceInfo*    device_info,
+                                                                VulkanPipelineCacheInfo*   pipeline_cache_info,
+                                                                PointerDecoder<size_t>*    pDataSize,
+                                                                PointerDecoder<uint8_t>*   pData)
 {
     if ((options_.omit_pipeline_cache_data) || (original_result != VK_SUCCESS) || pData->GetPointer() == nullptr)
     {
@@ -7442,9 +7455,9 @@ VkResult VulkanReplayConsumerBase::OverrideGetPipelineCacheData(PFN_vkGetPipelin
 
             GFXRECON_ASSERT(replay_result == VK_SUCCESS);
 
-            bool     new_cache_data  = true;
-            auto     cache_data_size = *pDataSize->GetPointer();
-            uint32_t capture_pipeline_cache_data_hash =
+            bool new_cache_data  = true;
+            auto cache_data_size = *pDataSize->GetPointer();
+            auto capture_pipeline_cache_data_hash =
                 gfxrecon::util::hash::GenerateCheckSum<uint32_t>(pData->GetPointer(), cache_data_size);
 
             auto iterator = pipeline_cache_info->pipeline_cache_data.find(capture_pipeline_cache_data_hash);
@@ -7476,15 +7489,14 @@ VkResult VulkanReplayConsumerBase::OverrideGetPipelineCacheData(PFN_vkGetPipelin
             if (new_cache_data)
             {
                 std::vector<VulkanPipelineCacheData>& item =
-                    const_cast<VulkanPipelineCacheInfo*>(pipeline_cache_info)
-                        ->pipeline_cache_data[capture_pipeline_cache_data_hash];
-                auto                    output_cache_data_size = *pDataSize->GetOutputPointer();
-                VulkanPipelineCacheData pipeline_cache_data;
-                pipeline_cache_data.capture_cache_data.resize(cache_data_size);
-                memcpy(pipeline_cache_data.capture_cache_data.data(), pData->GetPointer(), cache_data_size);
-                pipeline_cache_data.replay_cache_data.resize(output_cache_data_size);
-                memcpy(pipeline_cache_data.replay_cache_data.data(), pData->GetOutputPointer(), output_cache_data_size);
-                item.push_back(std::move(pipeline_cache_data));
+                    pipeline_cache_info->pipeline_cache_data[capture_pipeline_cache_data_hash];
+
+                VulkanPipelineCacheData& pipeline_cache_data = item.emplace_back();
+                pipeline_cache_data.capture_cache_data = { pData->GetPointer(), pData->GetPointer() + cache_data_size };
+
+                size_t output_cache_data_size         = *pDataSize->GetOutputPointer();
+                pipeline_cache_data.replay_cache_data = { pData->GetOutputPointer(),
+                                                          pData->GetOutputPointer() + output_cache_data_size };
             }
         }
         return replay_result;
@@ -7505,7 +7517,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
                     (pPipelineCache->GetHandlePointer() != nullptr) && (pCreateInfo->GetPointer() != nullptr));
 
     VkPipelineCacheCreateInfo override_create_info = *pCreateInfo->GetPointer();
-    std::vector<char>         pipelineCacheData;
+    std::vector<uint8_t>      override_cache_data;
 
     // If pipeline cache must not be loaded
     if (options_.omit_pipeline_cache_data)
@@ -7521,12 +7533,12 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
     else if (!options_.load_pipeline_cache_filename.empty())
     {
         // If pipeline cache must be loaded from file
-        LoadPipelineCache(*pPipelineCache->GetPointer(), pipelineCacheData);
+        LoadPipelineCache(*pPipelineCache->GetPointer(), override_cache_data);
 
-        if (!pipelineCacheData.empty())
+        if (!override_cache_data.empty())
         {
-            override_create_info.initialDataSize = pipelineCacheData.size();
-            override_create_info.pInitialData    = pipelineCacheData.data();
+            override_create_info.initialDataSize = override_cache_data.size();
+            override_create_info.pInitialData    = override_cache_data.data();
         }
         else
         {
@@ -7539,21 +7551,17 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
     }
     else if ((override_create_info.pInitialData != nullptr) && (override_create_info.initialDataSize != 0))
     {
-        // If tracked pipeline cache data can be used
-
         // This vkCreatePipelineCache call has initial pipeline cache data, the data is valid for capture time,
         // but it might not be valid for replay time if considering platform/driver version change. So in the
         // following process, we'll try to find corresponding replay time pipeline cache data.
-        matched_replay_cache_data_exist_  = false;
-        capture_pipeline_cache_data_hash_ = gfxrecon::util::hash::GenerateCheckSum<uint32_t>(
+        auto capture_pipeline_cache_data_hash = gfxrecon::util::hash::GenerateCheckSum<uint32_t>(
             reinterpret_cast<const uint8_t*>(override_create_info.pInitialData), override_create_info.initialDataSize);
-        capture_pipeline_cache_data_      = const_cast<void*>(override_create_info.pInitialData);
-        capture_pipeline_cache_data_size_ = override_create_info.initialDataSize;
+        uint32_t capture_pipeline_cache_data_size = override_create_info.initialDataSize;
 
-        object_info_table_->VisitVkPipelineCacheInfo([this](const VulkanPipelineCacheInfo* pipeline_cache_info) {
+        object_info_table_->VisitVkPipelineCacheInfo([&](const VulkanPipelineCacheInfo* pipeline_cache_info) {
             GFXRECON_ASSERT(pipeline_cache_info != nullptr);
 
-            auto iterator = pipeline_cache_info->pipeline_cache_data.find(capture_pipeline_cache_data_hash_);
+            auto iterator = pipeline_cache_info->pipeline_cache_data.find(capture_pipeline_cache_data_hash);
 
             if (iterator != pipeline_cache_info->pipeline_cache_data.end())
             {
@@ -7563,20 +7571,16 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
 
                 for (auto& existing_cache_data : cache_data)
                 {
-                    if (capture_pipeline_cache_data_size_ == existing_cache_data.capture_cache_data.size())
+                    if (capture_pipeline_cache_data_size == existing_cache_data.capture_cache_data.size())
                     {
                         // Target pipeline cache data has same size, we continue to check if it also has same data.
                         if (memcmp(existing_cache_data.capture_cache_data.data(),
-                                   capture_pipeline_cache_data_,
-                                   capture_pipeline_cache_data_size_) == 0)
+                                   override_create_info.pInitialData,
+                                   capture_pipeline_cache_data_size) == 0)
                         {
                             // Now we found the pipeline cache data, here we record its replay time data because we
                             // need this data to replace capture time cache data in the vkCreatePipelineCache call.
-                            matched_replay_cache_data_exist_ = true;
-                            matched_replay_cache_data_.resize(existing_cache_data.replay_cache_data.size());
-                            memcpy(matched_replay_cache_data_.data(),
-                                   existing_cache_data.replay_cache_data.data(),
-                                   existing_cache_data.replay_cache_data.size());
+                            override_cache_data = existing_cache_data.replay_cache_data;
                             break;
                         }
                     }
@@ -7584,18 +7588,28 @@ VkResult VulkanReplayConsumerBase::OverrideCreatePipelineCache(
             }
         });
 
-        if (matched_replay_cache_data_exist_)
+        if (!override_cache_data.empty())
         {
-            override_create_info.initialDataSize = matched_replay_cache_data_.size();
-            override_create_info.pInitialData    = matched_replay_cache_data_.data();
+            override_create_info.initialDataSize = override_cache_data.size();
+            override_create_info.pInitialData    = override_cache_data.data();
         }
         else
         {
             GFXRECON_LOG_DEBUG("There's initial pipeline cache data in VkPipelineCacheCreateInfo, but no corresponding "
                                "replay time cache data!");
-
             omitted_pipeline_cache_data_ = true;
         }
+    }
+
+    // compare pipelineCacheUUID for replay-device and cache-data
+    if (!CheckPipelineCacheUUID(device_info, &override_create_info))
+    {
+        GFXRECON_LOG_WARNING_ONCE("%s(): PipelineCache data was provided, but pipelineCacheUUIDs did not match. This "
+                                  "requires a pipeline-recompilation and may cause unexpected delays.",
+                                  __func__);
+        override_create_info.pInitialData    = nullptr;
+        override_create_info.initialDataSize = 0;
+        omitted_pipeline_cache_data_         = true;
     }
 
     // Actual pipeline cache creation call
@@ -10172,6 +10186,15 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesNV(
                               createInfoCount);
     }
 
+    // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
+    if (result == VK_SUCCESS)
+    {
+        if (options_.dumping_resources)
+        {
+            resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
+        }
+    }
+
     return result;
 }
 
@@ -12220,14 +12243,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateGraphicsPipelines(
     const VkGraphicsPipelineCreateInfo* in_p_create_infos         = pCreateInfos->GetPointer();
     const VkAllocationCallbacks*        in_p_allocation_callbacks = GetAllocationCallbacks(pAllocator);
     VkPipeline*                         out_pipelines             = pPipelines->GetHandlePointer();
-    VkPipelineCache in_pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
-    VkPipelineCache override_pipeline_cache = in_pipeline_cache;
+    VkPipelineCache pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
 
     // If there is no pipeline cache and we want to create a new one
-
-    if (in_pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
+    format::HandleId cache_pipeline_id = format::kNullHandleId;
+    if (pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
     {
-        override_pipeline_cache = CreateNewPipelineCache(device_info, *pPipelines->GetPointer());
+        cache_pipeline_id = *pPipelines->GetPointer();
+        pipeline_cache    = CreateNewPipelineCache(device_info, cache_pipeline_id);
     }
 
     std::vector<uint8_t>                 create_info_data;
@@ -12246,28 +12269,17 @@ VkResult VulkanReplayConsumerBase::OverrideCreateGraphicsPipelines(
         maybe_replaced_create_infos = replaced_create_infos;
     }
 
-    // If there is no pipeline cache and we want to create a new one
-    if (in_pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
-    {
-        override_pipeline_cache = CreateNewPipelineCache(device_info, *pPipelines->GetPointer());
-    }
-
     VkResult replay_result = func(in_device,
-                                  override_pipeline_cache,
+                                  pipeline_cache,
                                   create_info_count,
                                   maybe_replaced_create_infos,
                                   in_p_allocation_callbacks,
                                   out_pipelines);
 
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
-
-    if (in_pipeline_cache != override_pipeline_cache && replay_result == VK_SUCCESS)
+    if (cache_pipeline_id != format::kNullHandleId && replay_result == VK_SUCCESS)
     {
-        TrackNewPipelineCache(device_info,
-                              *pPipelines->GetPointer(),
-                              override_pipeline_cache,
-                              pPipelines->GetHandlePointer(),
-                              create_info_count);
+        TrackNewPipelineCache(device_info, cache_pipeline_id, pipeline_cache, out_pipelines, create_info_count);
     }
 
     // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
@@ -12303,31 +12315,23 @@ VkResult VulkanReplayConsumerBase::OverrideCreateComputePipelines(
     const VkComputePipelineCreateInfo* in_p_create_infos         = pCreateInfos->GetPointer();
     const VkAllocationCallbacks*       in_p_allocation_callbacks = GetAllocationCallbacks(pAllocator);
     VkPipeline*                        out_pipelines             = pPipelines->GetHandlePointer();
-    VkPipelineCache in_pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
-    VkPipelineCache override_pipeline_cache = in_pipeline_cache;
+    VkPipelineCache pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
 
     // If there is no pipeline cache and we want to create a new one
-
-    if (in_pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
+    format::HandleId cache_pipeline_id = format::kNullHandleId;
+    if (pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
     {
-        override_pipeline_cache = CreateNewPipelineCache(device_info, *pPipelines->GetPointer());
+        cache_pipeline_id = *pPipelines->GetPointer();
+        pipeline_cache    = CreateNewPipelineCache(device_info, cache_pipeline_id);
     }
 
-    VkResult replay_result = func(in_device,
-                                  override_pipeline_cache,
-                                  create_info_count,
-                                  in_p_create_infos,
-                                  in_p_allocation_callbacks,
-                                  out_pipelines);
+    VkResult replay_result =
+        func(in_device, pipeline_cache, create_info_count, in_p_create_infos, in_p_allocation_callbacks, out_pipelines);
 
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
-    if (in_pipeline_cache != override_pipeline_cache && replay_result == VK_SUCCESS)
+    if (cache_pipeline_id != format::kNullHandleId && replay_result == VK_SUCCESS)
     {
-        TrackNewPipelineCache(device_info,
-                              *pPipelines->GetPointer(),
-                              override_pipeline_cache,
-                              pPipelines->GetHandlePointer(),
-                              create_info_count);
+        TrackNewPipelineCache(device_info, cache_pipeline_id, pipeline_cache, out_pipelines, create_info_count);
     }
 
     if (replay_result == VK_SUCCESS)
@@ -12335,6 +12339,16 @@ VkResult VulkanReplayConsumerBase::OverrideCreateComputePipelines(
         // populate all VulkanPipelineInfo structs with information related to shader-modules
         graphics::populate_shader_stages(pCreateInfos, pPipelines, GetObjectInfoTable());
     }
+
+    // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
+    if (replay_result == VK_SUCCESS)
+    {
+        if (options_.dumping_resources)
+        {
+            resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, create_info_count, pPipelines);
+        }
+    }
+
     return replay_result;
 }
 
@@ -12661,8 +12675,15 @@ std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumer
     const VkGraphicsPipelineCreateInfo* in_pCreateInfos = pCreateInfos->GetPointer();
     const VkAllocationCallbacks*        in_pAllocator   = GetAllocationCallbacks(pAllocator);
     VkDevice                            device_handle   = device_info->handle;
-    VkPipelineCache                     pipeline_cache_handle =
-        (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
+    VkPipelineCache pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
+
+    // If there is no pipeline cache and we want to create a new one
+    format::HandleId cache_pipeline_id = format::kNullHandleId;
+    if (pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
+    {
+        cache_pipeline_id = *pPipelines->GetPointer();
+        pipeline_cache    = CreateNewPipelineCache(device_info, cache_pipeline_id);
+    }
 
     // populate VulkanPipelineInfo structs with information related to shader-modules
     graphics::populate_shader_stages(pCreateInfos, pPipelines, GetObjectInfoTable());
@@ -12677,14 +12698,14 @@ std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumer
     uint32_t             num_bytes = graphics::vulkan_struct_deep_copy(in_pCreateInfos, createInfoCount, nullptr);
     std::vector<uint8_t> create_info_data(num_bytes);
     graphics::vulkan_struct_deep_copy(in_pCreateInfos, createInfoCount, create_info_data.data());
-    std::vector<format::HandleId> pipelines(createInfoCount);
+    std::vector<format::HandleId> pipeline_ids(createInfoCount);
 
     // extract handle-dependencies and track those
     auto                  handle_deps = graphics::vulkan_struct_extract_handle_ids(pCreateInfos);
     std::function<void()> sync_fn;
     if (pPipelines != nullptr && createInfoCount > 0)
     {
-        std::copy_n(pPipelines->GetPointer(), createInfoCount, pipelines.begin());
+        std::copy_n(pPipelines->GetPointer(), createInfoCount, pipeline_ids.begin());
 
         sync_fn = [this, parent_id = pPipelines->GetPointer()[0]]() {
             MapHandle<VulkanPipelineInfo>(parent_id, &VulkanObjectInfoTable::GetVkPipelineInfo);
@@ -12694,8 +12715,9 @@ std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumer
 
     // define pipeline-creation task, assert object-lifetimes by copying/moving into closure
     auto task = [this,
-                 device_handle,
-                 pipeline_cache_handle,
+                 device_info,
+                 pipeline_cache,
+                 cache_pipeline_id,
                  func,
                  returnValue,
                  call_info,
@@ -12703,37 +12725,53 @@ std::function<decode::handle_create_result_t<VkPipeline>()> VulkanReplayConsumer
                  createInfoCount,
                  create_info_data = std::move(create_info_data),
                  handle_deps      = std::move(handle_deps),
-                 pipelines        = std::move(pipelines)]() mutable -> handle_create_result_t<VkPipeline> {
+                 pipeline_ids     = std::move(pipeline_ids)]() mutable -> handle_create_result_t<VkPipeline> {
         std::vector<VkPipeline> out_pipelines(createInfoCount);
         auto                    create_infos = reinterpret_cast<VkGraphicsPipelineCreateInfo*>(create_info_data.data());
 
         std::vector<std::unique_ptr<char[]>> replaced_file_code;
         if (returnValue >= 0 && !options_.replace_shader_dir.empty())
         {
-            replaced_file_code = ReplaceShaders(createInfoCount, create_infos, pipelines.data());
+            replaced_file_code = ReplaceShaders(createInfoCount, create_infos, pipeline_ids.data());
         }
 
         VkResult replay_result = func(
-            device_handle, pipeline_cache_handle, createInfoCount, create_infos, in_pAllocator, out_pipelines.data());
+            device_info->handle, pipeline_cache, createInfoCount, create_infos, in_pAllocator, out_pipelines.data());
         CheckResult("vkCreateGraphicsPipelines", returnValue, replay_result, call_info);
 
         // schedule dependency-clear on main-thread
-        MainThreadQueue().post([this, handle_deps = std::move(handle_deps)] { ClearAsyncHandles(handle_deps); });
+        MainThreadQueue().post([this,
+                                device_info,
+                                pipeline_cache,
+                                cache_pipeline_id,
+                                replay_result,
+                                pipeline_handles = out_pipelines.data(),
+                                num_pipelines    = out_pipelines.size(),
+                                handle_deps      = std::move(handle_deps)] {
+            // asynchronous operation is done. clear tracked handles, call deferred deletes
+            ClearAsyncHandles(handle_deps);
+
+            // if a pipeline cache was created, track it to know when to destroy it/save it to file
+            if (cache_pipeline_id != format::kNullHandleId && replay_result == VK_SUCCESS)
+            {
+                TrackNewPipelineCache(device_info, cache_pipeline_id, pipeline_cache, pipeline_handles, num_pipelines);
+            }
+        });
         return { replay_result, std::move(out_pipelines) };
     };
     return task;
 }
 
 std::function<handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::AsyncCreateComputePipelines(
-    PFN_vkCreateComputePipelines                               func,
-    VkResult                                                   returnValue,
-    const ApiCallInfo&                                         call_info,
-    const VulkanDeviceInfo*                                    device_info,
-    const VulkanPipelineCacheInfo*                             pipeline_cache_info,
-    uint32_t                                                   createInfoCount,
-    StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
-    HandlePointerDecoder<VkPipeline>*                          pPipelines)
+    PFN_vkCreateComputePipelines                                     func,
+    VkResult                                                         returnValue,
+    const ApiCallInfo&                                               call_info,
+    const VulkanDeviceInfo*                                          device_info,
+    const VulkanPipelineCacheInfo*                                   pipeline_cache_info,
+    uint32_t                                                         createInfoCount,
+    const StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+    HandlePointerDecoder<VkPipeline>*                                pPipelines)
 {
     // avoid async operations if an externally synchronized pipeline-cache is used
     if (pipeline_cache_info != nullptr && pipeline_cache_info->requires_external_synchronization)
@@ -12744,8 +12782,21 @@ std::function<handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::As
     const VkComputePipelineCreateInfo* in_pCreateInfos = pCreateInfos->GetPointer();
     const VkAllocationCallbacks*       in_pAllocator   = GetAllocationCallbacks(pAllocator);
     VkDevice                           device_handle   = device_info->handle;
-    VkPipelineCache                    pipeline_cache_handle =
-        (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
+    VkPipelineCache pipeline_cache = (pipeline_cache_info != nullptr) ? pipeline_cache_info->handle : VK_NULL_HANDLE;
+
+    // If there is no pipeline cache and we want to create a new one
+    format::HandleId cache_pipeline_id = format::kNullHandleId;
+    if (pipeline_cache == VK_NULL_HANDLE && options_.add_new_pipeline_caches)
+    {
+        cache_pipeline_id = *pPipelines->GetPointer();
+        pipeline_cache    = CreateNewPipelineCache(device_info, cache_pipeline_id);
+    }
+
+    // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
+    if (returnValue == VK_SUCCESS && options_.dumping_resources)
+    {
+        resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
+    }
 
     // populate VulkanPipelineInfo structs with information related to shader-modules
     graphics::populate_shader_stages(pCreateInfos, pPipelines, GetObjectInfoTable());
@@ -12768,8 +12819,9 @@ std::function<handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::As
 
     // define pipeline-creation task, assert object-lifetimes by copying/moving into closure
     auto task = [this,
-                 device_handle,
-                 pipeline_cache_handle,
+                 device_info,
+                 pipeline_cache,
+                 cache_pipeline_id,
                  func,
                  returnValue,
                  call_info,
@@ -12780,11 +12832,27 @@ std::function<handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::As
         std::vector<VkPipeline> out_pipelines(createInfoCount);
         auto     create_infos  = reinterpret_cast<const VkComputePipelineCreateInfo*>(create_info_data.data());
         VkResult replay_result = func(
-            device_handle, pipeline_cache_handle, createInfoCount, create_infos, in_pAllocator, out_pipelines.data());
+            device_info->handle, pipeline_cache, createInfoCount, create_infos, in_pAllocator, out_pipelines.data());
         CheckResult("vkCreateComputePipelines", returnValue, replay_result, call_info);
 
         // schedule dependency-clear on main-thread
-        MainThreadQueue().post([this, handle_deps = std::move(handle_deps)] { ClearAsyncHandles(handle_deps); });
+        MainThreadQueue().post([this,
+                                device_info,
+                                pipeline_cache,
+                                cache_pipeline_id,
+                                replay_result,
+                                pipeline_handles = out_pipelines.data(),
+                                num_pipelines    = out_pipelines.size(),
+                                handle_deps      = std::move(handle_deps)] {
+            // asynchronous operation is done. clear tracked handles, call deferred deletes
+            ClearAsyncHandles(handle_deps);
+
+            // if a pipeline cache was created, track it to know when to destroy it/save it to file
+            if (cache_pipeline_id != format::kNullHandleId && replay_result == VK_SUCCESS)
+            {
+                TrackNewPipelineCache(device_info, cache_pipeline_id, pipeline_cache, pipeline_handles, num_pipelines);
+            }
+        });
         return { replay_result, std::move(out_pipelines) };
     };
     return task;
@@ -12938,7 +13006,32 @@ void VulkanReplayConsumerBase::SetCurrentBlockIndex(uint64_t block_index)
     main_thread_queue_.poll();
 }
 
-void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData)
+bool VulkanReplayConsumerBase::CheckPipelineCacheUUID(const VulkanDeviceInfo*          device_info,
+                                                      const VkPipelineCacheCreateInfo* create_info)
+{
+    GFXRECON_ASSERT(device_info != nullptr);
+    GFXRECON_ASSERT(create_info != nullptr);
+
+    // compare pipelineCacheUUID for replay-device and cache-data
+    if (create_info->pInitialData != nullptr && create_info->initialDataSize >= sizeof(VkPipelineCacheHeaderVersionOne))
+    {
+        bool        uuid_match           = false;
+        const auto* physical_device_info = object_info_table_->GetVkPhysicalDeviceInfo(device_info->parent_id);
+
+        if (physical_device_info != nullptr && physical_device_info->replay_device_info->properties)
+        {
+            // compare pipelineCacheUUID for device and blob
+            auto* cache_header = reinterpret_cast<const VkPipelineCacheHeaderVersionOne*>(create_info->pInitialData);
+            uuid_match         = memcmp(cache_header->pipelineCacheUUID,
+                                physical_device_info->replay_device_info->properties->pipelineCacheUUID,
+                                VK_UUID_SIZE) == 0;
+        }
+        return uuid_match;
+    }
+    return true;
+}
+
+void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vector<uint8_t>& pipelineCacheData)
 {
     FILE*   file  = nullptr;
     int32_t error = util::platform::FileOpen(&file, options_.load_pipeline_cache_filename.c_str(), "r");
@@ -12977,7 +13070,7 @@ void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vecto
         }
         else
         {
-            if (!util::platform::FileSeek(file, cacheSizeRead, util::platform::FileSeekCurrent))
+            if (!util::platform::FileSeek(file, static_cast<int64_t>(cacheSizeRead), util::platform::FileSeekCurrent))
             {
                 GFXRECON_LOG_FATAL("Pipeline cache file corrupted.");
                 util::platform::FileClose(file);
@@ -12985,9 +13078,7 @@ void VulkanReplayConsumerBase::LoadPipelineCache(format::HandleId id, std::vecto
             }
         }
     }
-
     GFXRECON_LOG_ERROR("Pipeline cache file entry not found: %u", id);
-
     util::platform::FileClose(file);
 }
 
@@ -13041,7 +13132,7 @@ VkPipelineCache VulkanReplayConsumerBase::CreateNewPipelineCache(const VulkanDev
     pipelineCacheCreateInfo.initialDataSize = 0;
     pipelineCacheCreateInfo.pInitialData    = nullptr;
 
-    std::vector<char> pipelineCacheData;
+    std::vector<uint8_t> pipelineCacheData;
     if (!options_.load_pipeline_cache_filename.empty())
     {
         LoadPipelineCache(id, pipelineCacheData);
@@ -13049,6 +13140,18 @@ VkPipelineCache VulkanReplayConsumerBase::CreateNewPipelineCache(const VulkanDev
         {
             pipelineCacheCreateInfo.initialDataSize = pipelineCacheData.size();
             pipelineCacheCreateInfo.pInitialData    = pipelineCacheData.data();
+        }
+
+        // compare pipelineCacheUUID for replay-device and cache-data
+        if (!CheckPipelineCacheUUID(device_info, &pipelineCacheCreateInfo))
+        {
+            GFXRECON_LOG_WARNING_ONCE(
+                "%s(): Trying to load externally provided pipeline-cache-data (%s), but pipelineCacheUUIDs do not "
+                "match. This requires a pipeline-recompilation and may cause unexpected delays.",
+                __func__,
+                options_.load_pipeline_cache_filename.c_str());
+            pipelineCacheCreateInfo.initialDataSize = 0;
+            pipelineCacheCreateInfo.pInitialData    = nullptr;
         }
     }
 
@@ -13066,7 +13169,6 @@ VkPipelineCache VulkanReplayConsumerBase::CreateNewPipelineCache(const VulkanDev
                            enumutil::GetResultDescription(result));
         pipelineCache = VK_NULL_HANDLE;
     }
-
     return pipelineCache;
 }
 

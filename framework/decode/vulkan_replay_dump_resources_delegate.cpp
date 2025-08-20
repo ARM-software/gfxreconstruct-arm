@@ -157,8 +157,8 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpRenderTargetImage(const VulkanD
         }
     }
 
-    std::vector<bool> scaling_supported(filenames.size());
-    VkResult          res = DumpImageToFile(image_info,
+    bool     scaling_supported;
+    VkResult res = DumpImageToFile(image_info,
                                    resource_info.device_info,
                                    resource_info.device_table,
                                    resource_info.instance_table,
@@ -189,7 +189,7 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpRenderTargetImage(const VulkanD
     // Keep track of images for which scaling failed
     for (size_t i = 0; i < filenames.size(); ++i)
     {
-        if (!scaling_supported[i])
+        if (!scaling_supported)
         {
             images_failed_scaling_.insert(filenames[i]);
         }
@@ -305,8 +305,8 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpImageDescriptor(const VulkanDum
         }
     }
 
-    std::vector<bool> scaling_supported(total_files);
-    VkResult          res = DumpImageToFile(image_info,
+    bool     scaling_supported;
+    VkResult res = DumpImageToFile(image_info,
                                    resource_info.device_info,
                                    resource_info.device_table,
                                    resource_info.instance_table,
@@ -337,7 +337,7 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpImageDescriptor(const VulkanDum
     // Keep track of images for which scaling failed
     for (size_t i = 0; i < filenames.size(); ++i)
     {
-        if (!scaling_supported[i])
+        if (!scaling_supported)
         {
             images_failed_scaling_.insert(filenames[i]);
         }
@@ -527,7 +527,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
     dc_params_json_entry["drawCallType"] = DrawCallsDumpingContext::DrawCallTypeToStr(draw_call_info.dc_param->type);
     switch (draw_call_info.dc_param->type)
     {
-        case DrawCallsDumpingContext::DrawCallTypes::kDraw:
+        case DrawCallsDumpingContext::DrawCallType::kDraw:
         {
             const VkDrawIndirectCommand& dc_params = draw_call_info.dc_param->dc_params_union.draw;
 
@@ -538,7 +538,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
         }
         break;
 
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndexed:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndexed:
         {
             const VkDrawIndexedIndirectCommand& dc_params = draw_call_info.dc_param->dc_params_union.draw_indexed;
 
@@ -550,7 +550,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
         }
         break;
 
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndirect:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndirect:
         {
             const auto& dc_params = draw_call_info.dc_param->dc_params_union.draw_indirect;
 
@@ -568,7 +568,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
         }
         break;
 
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndexedIndirect:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndexedIndirect:
         {
             const auto& dc_params = draw_call_info.dc_param->dc_params_union.draw_indirect;
 
@@ -587,8 +587,9 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
         }
         break;
 
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndirectCount:
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndirectCountKHR:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndirectCount:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndirectCountKHR:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndirectCountAMD:
         {
             const auto& dc_params = draw_call_info.dc_param->dc_params_union.draw_indirect_count;
 
@@ -606,8 +607,9 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDrawCallInfo(
         }
         break;
 
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndexedIndirectCount:
-        case DrawCallsDumpingContext::DrawCallTypes::kDrawIndexedIndirectCountKHR:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndexedIndirectCount:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndexedIndirectCountKHR:
+        case DrawCallsDumpingContext::DrawCallType::kDrawIndexedIndirectCountAMD:
         {
             const auto& dc_params = draw_call_info.dc_param->dc_params_union.draw_indirect_count;
 
@@ -1072,8 +1074,8 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpeDispatchTraceRaysImage(const V
         }
     }
 
-    std::vector<bool> scaling_supported(filenames.size());
-    VkResult          res = DumpImageToFile(image_info,
+    bool     scaling_supported;
+    VkResult res = DumpImageToFile(image_info,
                                    resource_info.device_info,
                                    resource_info.device_table,
                                    resource_info.instance_table,
@@ -1104,7 +1106,7 @@ VkResult DefaultVulkanDumpResourcesDelegate::DumpeDispatchTraceRaysImage(const V
     // Keep track of images for which scaling failed
     for (size_t i = 0; i < filenames.size(); ++i)
     {
-        if (!scaling_supported[i])
+        if (!scaling_supported)
         {
             images_failed_scaling_.insert(filenames[i]);
         }
@@ -1239,8 +1241,8 @@ DefaultVulkanDumpResourcesDelegate::DumpDispatchTraceRaysImageDescriptor(const V
         }
     }
 
-    std::vector<bool> scaling_supported(filenames.size());
-    VkResult          res = DumpImageToFile(image_info,
+    bool     scaling_supported;
+    VkResult res = DumpImageToFile(image_info,
                                    resource_info.device_info,
                                    resource_info.device_table,
                                    resource_info.instance_table,
@@ -1261,7 +1263,7 @@ DefaultVulkanDumpResourcesDelegate::DumpDispatchTraceRaysImageDescriptor(const V
     // Keep track of images for which scaling failed
     for (size_t i = 0; i < filenames.size(); ++i)
     {
-        if (!scaling_supported[i])
+        if (scaling_supported)
         {
             images_failed_scaling_.insert(filenames[i]);
         }
@@ -1679,20 +1681,18 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(
     if (options_.dump_resources_dump_immutable_resources)
     {
         uint32_t descriptor_entries_count = 0;
-        for (const auto& desc_set : draw_call_info.disp_param->referenced_descriptors)
+        for (const auto& [desc_set_index, desc_set_info] : draw_call_info.disp_param->referenced_descriptors)
         {
-            const uint32_t desc_set_index = desc_set.first;
-            for (const auto& desc_binding : desc_set.second)
+            for (const auto& [desc_binding_index, desc_binding_info] : desc_set_info)
             {
-                const uint32_t desc_binding_index = desc_binding.first;
-                switch (desc_binding.second.desc_type)
+                switch (desc_binding_info.desc_type)
                 {
                     case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                     case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
                     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                     case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
                     {
-                        for (const auto& img_desc : desc_binding.second.image_info)
+                        for (const auto& img_desc : desc_binding_info.image_info)
                         {
                             if (img_desc.second.image_view_info == nullptr)
                             {
@@ -1708,7 +1708,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(
 
                             auto& entry = dispatch_json_entry["descriptors"][descriptor_entries_count++];
 
-                            entry["type"]       = util::ToString<VkDescriptorType>(desc_binding.second.desc_type);
+                            entry["type"]       = util::ToString<VkDescriptorType>(desc_binding_info.desc_type);
                             entry["set"]        = desc_set_index;
                             entry["binding"]    = desc_binding_index;
                             entry["arrayIndex"] = img_desc.first;
@@ -1770,13 +1770,13 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(
                     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
                     case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
                     {
-                        for (const auto& buf_desc : desc_binding.second.buffer_info)
+                        for (const auto& buf_desc : desc_binding_info.buffer_info)
                         {
                             if (buf_desc.second.buffer_info != nullptr)
                             {
                                 auto& entry = dispatch_json_entry["descriptors"][descriptor_entries_count++];
 
-                                entry["type"]       = util::ToString<VkDescriptorType>(desc_binding.second.desc_type);
+                                entry["type"]       = util::ToString<VkDescriptorType>(desc_binding_info.desc_type);
                                 entry["set"]        = desc_set_index;
                                 entry["binding"]    = desc_binding_index;
                                 entry["arrayIndex"] = buf_desc.first;
@@ -1804,10 +1804,10 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(
                     {
                         auto& entry = dispatch_json_entry["descriptors"][descriptor_entries_count++];
 
-                        entry["type"]    = util::ToString<VkDescriptorType>(desc_binding.second.desc_type);
+                        entry["type"]    = util::ToString<VkDescriptorType>(desc_binding_info.desc_type);
                         entry["set"]     = desc_set_index;
                         entry["binding"] = desc_binding_index;
-                        entry["size"]    = desc_binding.second.inline_uniform_block.size();
+                        entry["size"]    = desc_binding_info.inline_uniform_block.size();
 
                         VulkanDumpResourceInfo res_info = res_info_base;
                         res_info.type    = DumpResourceType::kDispatchTraceRaysInlineUniformBufferDescriptor;
@@ -1824,7 +1824,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonDispatchInfo(
                         GFXRECON_LOG_WARNING_ONCE(
                             "%s(): Descriptor type (%s) not handled",
                             __func__,
-                            util::ToString<VkDescriptorType>(desc_binding.second.desc_type).c_str());
+                            util::ToString<VkDescriptorType>(desc_binding_info.desc_type).c_str());
                         break;
                 }
             }
@@ -2059,7 +2059,7 @@ void DefaultVulkanDumpResourcesDelegate::GenerateOutputJsonTraceRaysIndex(
             image_json_entry["set"]        = desc_set;
             image_json_entry["binding"]    = binding;
             image_json_entry["arrayIndex"] = array_index;
-            auto& image_json_entry_desc    = image_json_entry["image"];
+            auto& image_json_entry_desc    = image_json_entry["images"];
 
             std::vector<VkImageAspectFlagBits> aspects;
             GetFormatAspects(img_info->format, aspects);

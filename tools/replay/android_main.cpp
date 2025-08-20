@@ -72,12 +72,12 @@ static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
 extern "C"
 {
-    GFXRECON_EXPORT uint64_t MainGetCurrentBlockIndex()
+    uint64_t MainGetCurrentBlockIndex()
     {
         return file_processor->GetCurrentBlockIndex();
     }
 
-    GFXRECON_EXPORT bool MainGetLoadingTrimmedState()
+    bool MainGetLoadingTrimmedState()
     {
         return file_processor->GetLoadingTrimmedState();
     }
@@ -208,6 +208,7 @@ void android_main(struct android_app* app)
                 gfxrecon::decode::OpenXrReplayConsumer openxr_replay_consumer(application, openxr_replay_options);
                 openxr_replay_consumer.SetVulkanReplayConsumer(&vulkan_replay_consumer);
                 openxr_replay_consumer.SetAndroidApp(app);
+                openxr_replay_consumer.SetFpsInfo(&fps_info);
                 openxr_decoder.AddConsumer(&openxr_replay_consumer);
                 file_processor->AddDecoder(&openxr_decoder);
 #endif

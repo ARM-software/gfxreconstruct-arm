@@ -1,4 +1,4 @@
-##############################################################################
+###############################################################################
 # Copyright (c) 2025 LunarG, Inc.
 # All rights reserved
 #
@@ -21,18 +21,17 @@
 # IN THE SOFTWARE.
 #
 # Author: LunarG Team
-# Description: CMake script for Android triangle test app
+# Description: CMake script for Android Hardware Buffer test app
 ###############################################################################
 
-get_filename_component(GFXRECON_SOURCE_DIR ../../../.. ABSOLUTE)
+add_library(gfxrecon-testapp-ahb app.cpp)
 
-set(TRIANGLE_DIR ${GFXRECON_SOURCE_DIR}/test/test_apps/triangle)
-add_library(gfxrecon-testapp-triangle
-            STATIC
-                ${TRIANGLE_DIR}/app.cpp)
+target_include_directories(gfxrecon-testapp-ahb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_include_directories(gfxrecon-testapp-triangle
-                           PUBLIC
-                               ${TRIANGLE_DIR}
-                               ${GFXRECON_SOURCE_DIR}/external/precompiled/android/include
-                               ${CMAKE_BINARY_DIR})
+target_link_libraries(gfxrecon-testapp-ahb PUBLIC gfxrecon-testapp-base)
+
+common_build_directives(gfxrecon-testapp-ahb)
+
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    install(TARGETS gfxrecon-testapp-ahb RUNTIME DESTINATION ${GFXRECON_INSTALL_TESTAPPDIR}/ahb)
+endif()

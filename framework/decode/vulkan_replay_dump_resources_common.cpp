@@ -264,8 +264,17 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
 
     mem_alloc_info.memoryTypeIndex = index;
 
+    VkMemoryAllocateFlagsInfo mem_alloc_flags_info = {};
+    mem_alloc_flags_info.sType                     = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    if (ci.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+    {
+        mem_alloc_flags_info.flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    }
+    mem_alloc_info.pNext = &mem_alloc_flags_info;
+
     assert(new_buffer_memory);
     res = device_table->AllocateMemory(device, &mem_alloc_info, nullptr, new_buffer_memory);
+
     if (res != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("AllocateMemory failed with %s", util::ToString<VkResult>(res).c_str());
@@ -278,7 +287,6 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
         GFXRECON_LOG_ERROR("BindBufferMemory failed with %s", util::ToString<VkResult>(res).c_str());
         return res;
     }
-
     return VK_SUCCESS;
 }
 
@@ -313,9 +321,9 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
     {
         case VK_INDEX_TYPE_UINT8_EXT:
         {
-            const uint8_t  restart_index = 0xff;
-            const uint8_t* indices       = static_cast<const uint8_t*>(index_data.data());
-            uint32_t       i             = 0;
+            const uint8_t restart_index = 0xff;
+            const auto*   indices       = static_cast<const uint8_t*>(index_data.data());
+            uint32_t      i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -335,16 +343,8 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
 
             return MinMaxVertexIndex{ static_cast<uint32_t>(min) + vertex_offset,
@@ -354,9 +354,9 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
 
         case VK_INDEX_TYPE_UINT16:
         {
-            const uint16_t  restart_index = 0xffff;
-            const uint16_t* indices       = reinterpret_cast<const uint16_t*>(index_data.data());
-            uint32_t        i             = 0;
+            const uint16_t restart_index = 0xffff;
+            const auto*    indices       = reinterpret_cast<const uint16_t*>(index_data.data());
+            uint32_t       i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -376,16 +376,8 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
 
             return MinMaxVertexIndex{ static_cast<uint32_t>(min) + vertex_offset,
@@ -395,9 +387,9 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
 
         case VK_INDEX_TYPE_UINT32:
         {
-            const uint32_t  restart_index = 0xffffffff;
-            const uint32_t* indices       = reinterpret_cast<const uint32_t*>(index_data.data());
-            uint32_t        i             = 0;
+            const uint32_t restart_index = 0xffffffff;
+            const auto*    indices       = reinterpret_cast<const uint32_t*>(index_data.data());
+            uint32_t       i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -417,18 +409,9 @@ MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
-
             return MinMaxVertexIndex{ min + vertex_offset, max + vertex_offset };
         }
         break;
@@ -450,7 +433,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
                          CommonObjectInfoTable&               object_info_table,
                          const std::vector<std::string>&      filenames,
                          float                                scale,
-                         std::vector<bool>&                   scaling_supported,
+                         bool&                                scaling_supported,
                          util::ScreenshotFormat               image_file_format,
                          bool                                 dump_all_subresources,
                          bool                                 dump_image_raw,
@@ -468,7 +451,6 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
     const uint32_t total_files =
         dump_all_subresources ? (aspects.size() * image_info->layer_count * image_info->level_count) : aspects.size();
     assert(total_files == filenames.size());
-    assert(scaling_supported.size() == total_files);
 
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
@@ -509,15 +491,16 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
         image_resource.dst_format           = dst_format;
         image_resource.all_layers_per_level = false;
 
-        scaling_supported[i] = resource_util.IsScalingSupported(image_resource.format,
-                                                                image_resource.tiling,
-                                                                dst_format,
-                                                                image_resource.type,
-                                                                image_resource.extent,
-                                                                scale);
-        bool blit_supported  = resource_util.IsBlitSupported(image_resource.format, image_resource.tiling, dst_format);
-        bool use_blit        = (image_resource.format != dst_format && blit_supported) ||
-                        (image_resource.scale != 1.0f && scaling_supported[i]);
+        scaling_supported = resource_util.IsScalingSupported(image_resource.format,
+                                                             image_resource.tiling,
+                                                             dst_format,
+                                                             image_resource.type,
+                                                             image_resource.extent,
+                                                             scale);
+        const bool blit_supported =
+            resource_util.IsBlitSupported(image_resource.format, image_resource.tiling, dst_format);
+        const bool use_blit = (image_resource.format != dst_format && blit_supported) ||
+                              (image_resource.scale != 1.0f && scaling_supported);
 
         VkExtent3D scaled_extent = {
             static_cast<uint32_t>(std::max(static_cast<float>(image_resource.extent.width) * scale, 1.0f)),
@@ -583,7 +566,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
                         VkFormatToImageWriterDataFormat(dst_format);
                     assert(image_writer_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED);
 
-                    if (scale != 1.0f && scaling_supported[i])
+                    if (scale != 1.0f && scaling_supported)
                     {
                         scaled_extent.width  = std::max(image_info->extent.width * scale, 1.0f);
                         scaled_extent.height = std::max(image_info->extent.height * scale, 1.0f);

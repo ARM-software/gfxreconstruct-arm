@@ -478,7 +478,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool IsUsedByAsyncTask(uint64_t handle) const { return async_tracked_handles_.count(handle) > 0; }
 
     //! returns true if asynchronous operations should be used at all
-    bool UseAsyncOperations() { return options_.num_pipeline_creation_jobs != 0 && !options_.dumping_resources; }
+    bool UseAsyncOperations() { return options_.num_pipeline_creation_jobs != 0; }
 
     //! returns a thread-safe queue, that is polled on the main-thread, at the beginning of a new block
     util::ThreadPool& MainThreadQueue() { return main_thread_queue_; }
@@ -1026,12 +1026,12 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                         HandlePointerDecoder<VkShaderModule>*                         pShaderModule);
 
-    VkResult OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData     func,
-                                          VkResult                       original_result,
-                                          const VulkanDeviceInfo*        device_info,
-                                          const VulkanPipelineCacheInfo* pipeline_cache_info,
-                                          PointerDecoder<size_t>*        pDataSize,
-                                          PointerDecoder<uint8_t>*       pData);
+    VkResult OverrideGetPipelineCacheData(PFN_vkGetPipelineCacheData func,
+                                          VkResult                   original_result,
+                                          const VulkanDeviceInfo*    device_info,
+                                          VulkanPipelineCacheInfo*   pipeline_cache_info,
+                                          PointerDecoder<size_t>*    pDataSize,
+                                          PointerDecoder<uint8_t>*   pData);
 
     VkResult OverrideCreatePipelineCache(PFN_vkCreatePipelineCache                                      func,
                                          VkResult                                                       original_result,
@@ -1625,15 +1625,15 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                  HandlePointerDecoder<VkPipeline>*                           pPipelines);
 
     std::function<handle_create_result_t<VkPipeline>()>
-    AsyncCreateComputePipelines(PFN_vkCreateComputePipelines                               func,
-                                VkResult                                                   returnValue,
-                                const ApiCallInfo&                                         call_info,
-                                const VulkanDeviceInfo*                                    device_info,
-                                const VulkanPipelineCacheInfo*                             pipeline_cache_info,
-                                uint32_t                                                   createInfoCount,
-                                StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
-                                StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
-                                HandlePointerDecoder<VkPipeline>*                          pPipelines);
+    AsyncCreateComputePipelines(PFN_vkCreateComputePipelines                                     func,
+                                VkResult                                                         returnValue,
+                                const ApiCallInfo&                                               call_info,
+                                const VulkanDeviceInfo*                                          device_info,
+                                const VulkanPipelineCacheInfo*                                   pipeline_cache_info,
+                                uint32_t                                                         createInfoCount,
+                                const StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+                                StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+                                HandlePointerDecoder<VkPipeline>*                                pPipelines);
 
     std::function<handle_create_result_t<VkShaderEXT>()>
     AsyncCreateShadersEXT(PFN_vkCreateShadersEXT                               func,
@@ -1814,7 +1814,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                                       VkShaderCreateInfoEXT*  create_infos,
                                                                       const format::HandleId* shaders) const;
 
-    void LoadPipelineCache(format::HandleId id, std::vector<char>& pipelineCacheData);
+    /**
+     * @brief   CheckPipelineCacheUUID returns true if provided 'create_info' contains no data
+     *          (VkPipelineCacheCreateInfo::pInitialData is null),
+     *          or data with matching pipelineCacheUUID for current replay-device.
+     *
+     * @param   device_info     a VulkanDeviceInfo wrapper-struct
+     * @param   create_info     a VkPipelineCacheCreateInfo struct
+     * @return  false if data was provided but the pipelineCacheUUID did not match, true otherwise.
+     */
+    bool CheckPipelineCacheUUID(const VulkanDeviceInfo* device_info, const VkPipelineCacheCreateInfo* create_info);
+
+    void LoadPipelineCache(format::HandleId id, std::vector<uint8_t>& pipelineCacheData);
     void SavePipelineCache(format::HandleId id, const VulkanDeviceInfo* device_info, VkPipelineCache pipelineCache);
     VkPipelineCache CreateNewPipelineCache(const VulkanDeviceInfo* device_info, format::HandleId id);
     void            TrackNewPipelineCache(const VulkanDeviceInfo* device_info,
@@ -1925,15 +1936,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     //       at least one vkCreatePipelineCache call with valid initial pipeline cache data and
     //       the initial cache data has no corresponding replay time cache data.
     bool omitted_pipeline_cache_data_;
-
-    // Temporary data used by pipeline cache data handling
-    // The following capture time data used for calling VisitPipelineCacheInfo as input parameters
-    // , replay time data used as output result.
-    uint32_t             capture_pipeline_cache_data_hash_ = 0;
-    uint32_t             capture_pipeline_cache_data_size_ = 0;
-    void*                capture_pipeline_cache_data_;
-    bool                 matched_replay_cache_data_exist_ = false;
-    std::vector<uint8_t> matched_replay_cache_data_;
 
     std::unordered_map<format::HandleId, std::pair<const VulkanDeviceInfo*, VkPipelineCache>> tracked_pipeline_caches_;
     std::unordered_map<VkPipeline, format::HandleId> pipeline_cache_correspondances_;
