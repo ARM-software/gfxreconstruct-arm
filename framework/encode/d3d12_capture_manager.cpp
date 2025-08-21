@@ -1454,15 +1454,15 @@ void D3D12CaptureManager::PreProcess_ID3D12Resource_Unmap(ID3D12Resource_Wrapper
 
                             manager->ProcessMemoryEntry(
                                 memory_id, [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+                                    WriteFillMemoryCmd(memory_id, offset, size, start_address);
                                     if (RvAnnotationActive() == true)
                                     {
-                                        resource_value_annotator_->ScanForGPUVA(
+                                        resource_value_annotator_->RestoreForGPUVA(
                                             memory_id,
                                             reinterpret_cast<uint8_t*>(start_address) + offset,
                                             size,
                                             offset);
                                     }
-                                    WriteFillMemoryCmd(memory_id, offset, size, start_address);
                                 });
 
                             manager->RemoveTrackedMemory(memory_id);
@@ -1477,18 +1477,18 @@ void D3D12CaptureManager::PreProcess_ID3D12Resource_Unmap(ID3D12Resource_Wrapper
                                 offset = written_range->Begin;
                                 size   = (written_range->End - written_range->Begin) + 1;
                             }
+                            WriteFillMemoryCmd(reinterpret_cast<uint64_t>(mapped_subresource.data),
+                                               offset,
+                                               size,
+                                               mapped_subresource.data);
                             if (RvAnnotationActive() == true)
                             {
-                                resource_value_annotator_->ScanForGPUVA(
+                                resource_value_annotator_->RestoreForGPUVA(
                                     reinterpret_cast<uint64_t>(mapped_subresource.data),
                                     reinterpret_cast<uint8_t*>(mapped_subresource.data) + offset,
                                     size,
                                     offset);
                             }
-                            WriteFillMemoryCmd(reinterpret_cast<uint64_t>(mapped_subresource.data),
-                                               offset,
-                                               size,
-                                               mapped_subresource.data);
 
                             bool is_mapped = false;
 
@@ -1726,12 +1726,12 @@ void D3D12CaptureManager::PreProcess_ID3D12CommandQueue_ExecuteCommandLists(
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+            WriteFillMemoryCmd(memory_id, offset, size, start_address);
             if (RvAnnotationActive() == true)
             {
-                resource_value_annotator_->ScanForGPUVA(
+                resource_value_annotator_->RestoreForGPUVA(
                     memory_id, reinterpret_cast<uint8_t*>(start_address) + offset, size, offset);
             }
-            WriteFillMemoryCmd(memory_id, offset, size, start_address);
         });
     }
     else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUnassisted)
@@ -1751,15 +1751,16 @@ void D3D12CaptureManager::PreProcess_ID3D12CommandQueue_ExecuteCommandLists(
                     // we only need to handle data != nullptr case because no mapped memory and shadow memory
                     // be tracked for data == nullptr, also no corresponding memory data for WriteFillMemoryCmd
                     // writing to trace file.
-                    if (RvAnnotationActive() == true)
-                    {
-                        resource_value_annotator_->ScanForGPUVA(reinterpret_cast<uint64_t>(mapped_subresource.data),
-                                                                reinterpret_cast<uint8_t*>(mapped_subresource.data),
-                                                                size,
-                                                                0);
-                    }
                     WriteFillMemoryCmd(
                         reinterpret_cast<uint64_t>(mapped_subresource.data), 0, size, mapped_subresource.data);
+
+                    if (RvAnnotationActive() == true)
+                    {
+                        resource_value_annotator_->RestoreForGPUVA(reinterpret_cast<uint64_t>(mapped_subresource.data),
+                                                                   reinterpret_cast<uint8_t*>(mapped_subresource.data),
+                                                                   size,
+                                                                   0);
+                    }
                 }
             }
         }
