@@ -98,7 +98,12 @@ void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKH
         return;
     }
 
-    acceleration_structure_device_addresses_[returnValue] = as_id;
+    auto [it, inserted] =
+        acceleration_structure_device_addresses_.try_emplace(returnValue, std::unordered_set<format::HandleId>{});
+    it->second.insert(as_id);
+
+    acceleration_structure_entries_[as_id].device_address = returnValue;
+
     if (acceleration_structure_entries_.find(as_id) != acceleration_structure_entries_.end())
     {
         if (buffer_device_addresses_.find(returnValue) != buffer_device_addresses_.end())
@@ -235,12 +240,12 @@ VulkanRayTracingModifier::GetAccelerationStructureDeviceAddressesInFillMemory(co
                                           acceleration_structure_device_addresses_.end(),
                                           [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    if (acceleration_structure_entries_.find(max->second) == acceleration_structure_entries_.end())
+    if (acceleration_structure_entries_.find(*max->second.begin()) == acceleration_structure_entries_.end())
     {
         return {};
     }
 
-    format::HandleId buffer_id = acceleration_structure_entries_[max->second].buf_handle;
+    format::HandleId buffer_id = acceleration_structure_entries_[*max->second.begin()].buf_handle;
     if (buffer_entries_.find(buffer_id) == buffer_entries_.end())
     {
         return {};
@@ -259,27 +264,43 @@ VulkanRayTracingModifier::GetAccelerationStructureDeviceAddressesInFillMemory(co
         {
             continue;
         }
-        auto entry = std::find_if(acceleration_structure_device_addresses_.begin(),
-                                  acceleration_structure_device_addresses_.end(),
-                                  [value, this](auto& entry) {
-                                      auto it = acceleration_structure_entries_.find(entry.second);
-                                      if (it == acceleration_structure_entries_.end())
-                                      {
-                                          return false;
-                                      }
-                                      return (value == entry.first);
-                                  });
 
-        if (entry == acceleration_structure_device_addresses_.end())
+        auto ids = acceleration_structure_device_addresses_.find(value);
+        if (ids == acceleration_structure_device_addresses_.end())
+        {
+            continue;
+        }
+
+        auto entry = acceleration_structure_entries_.end();
+
+        for (auto& id : ids->second)
+        {
+            entry = acceleration_structure_entries_.find(id);
+            if (entry == acceleration_structure_entries_.end())
+            {
+                continue;
+            }
+            if (entry->second.creation_index > block_index_)
+            {
+                continue;
+            }
+            if (entry->second.destruction_index < block_index_)
+            {
+                continue;
+            }
+            break;
+        }
+
+        if (entry == acceleration_structure_entries_.end())
         {
             continue;
         }
 
         format::AddressLocationInfo loc{};
-        loc.id               = entry->second;
-        loc.original_address = entry->first;
+        loc.id               = entry->second.as_handle;
+        loc.original_address = entry->second.device_address;
         loc.adjusted_address = value;
-        loc.size             = acceleration_structure_entries_[entry->second].size;
+        loc.size             = entry->second.size;
         loc.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
         locations.push_back(loc);
     }

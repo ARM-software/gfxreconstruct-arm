@@ -431,8 +431,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // -----buffer device address-----handle id
     std::unordered_map<uint64_t, format::HandleId> buffer_device_addresses_;
 
-    // -----acceleration structure device address-----handle id
-    std::unordered_map<uint64_t, format::HandleId> acceleration_structure_device_addresses_;
+    // -----acceleration structure device address-----set of unique handle ids
+    std::unordered_map<uint64_t, std::unordered_set<format::HandleId>> acceleration_structure_device_addresses_;
 
     // -----pipeline handle-----group index-----SGH location info
     std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
