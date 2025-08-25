@@ -197,7 +197,9 @@ HRESULT WaitForQueue(ID3D12CommandQueue* queue, ID3D12Fence* fence = nullptr, ui
 // Utility function to analyze DRED output.
 // This function is meant to be called when device gets removed, to get extended debug information.
 // For it to work, gfxrecon-replay must be launched with: --debug-device-lost
-void AnalyzeDeviceRemoved(ID3D12Device* device);
+void        AnalyzeDeviceRemoved(ID3D12Device* device);
+std::string BreadcrumbOpToString(D3D12_AUTO_BREADCRUMB_OP op);
+void        PrintAllocationNode(const D3D12_DRED_ALLOCATION_NODE* node, std::string type);
 
 ID3D12ResourceComPtr CreateBufferResource(ID3D12Device*         device,
                                           uint64_t              size,

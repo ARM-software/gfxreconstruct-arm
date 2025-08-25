@@ -310,8 +310,9 @@ Optional arguments:
                         (Same as --force-windowed-origin)
   --use-cached-psos     Permit using cached PSOs when creating graphics or compute pipelines.
                         Using cached PSOs may reduce PSO creation time but may result in replay errors.
-  --debug-device-lost   Enables automatic injection of breadcrumbs into command buffers and page fault
+  --debug-device-lost   Enables automatic injection of breadcrumbs into command buffers and   page fault
                         reporting.  Used to debug Direct3D 12 device removed problems.
+                        For accurate DRED data that matches the current command list, please add `--sync` option.
   --fw <width,height>   Setup windowed and override resolution.
                         (Same as --force-windowed)
   --create-dummy-allocations

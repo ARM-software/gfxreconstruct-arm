@@ -3055,6 +3055,25 @@ void Dx12ReplayConsumerBase::OverrideExecuteCommandLists(DxObjectInfo*          
     if (!is_complete)
     {
         replay_object->ExecuteCommandLists(num_command_lists, command_lists->GetHandlePointer());
+        ReadDebugMessages();
+
+        if (options_.enable_debug_device_lost)
+        {
+            auto          command_queue_info = GetExtraInfo<D3D12CommandQueueInfo>(replay_object_info);
+            auto          device_id          = command_queue_info->parent_id;
+            DxObjectInfo* info               = GetObjectInfo(device_id);
+
+            if (info && info->object)
+            {
+                auto device_ptr = static_cast<ID3D12Device*>(info->object);
+
+                HRESULT reason = device_ptr->GetDeviceRemovedReason();
+                if (reason != S_OK)
+                {
+                    gfxrecon::graphics::dx12::AnalyzeDeviceRemoved(device_ptr);
+                }
+            }
+        }
     }
 
     if (resource_value_mapper_ != nullptr)
@@ -4308,19 +4327,34 @@ void Dx12ReplayConsumerBase::ReadDebugMessages()
         switch (message->Severity)
         {
             case DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION:
-                GFXRECON_LOG_ERROR("D3D12 CORRUPTION: [ID %d] %s\n", message->ID, message->pDescription);
+                GFXRECON_LOG_ERROR("D3D12 CORRUPTION: [ID %d][BLOCK ID %" PRIu64 "] %s\n",
+                                   message->ID,
+                                   this->block_index_,
+                                   message->pDescription);
                 break;
             case DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR:
-                GFXRECON_LOG_ERROR("D3D12 ERROR: [ID %d] %s\n", message->ID, message->pDescription);
+                GFXRECON_LOG_ERROR("D3D12 ERROR: [ID %d][BLOCK ID %" PRIu64 "] %s\n",
+                                   message->ID,
+                                   this->block_index_,
+                                   message->pDescription);
                 break;
             case DXGI_INFO_QUEUE_MESSAGE_SEVERITY_WARNING:
-                GFXRECON_LOG_WARNING("D3D12 WARNING: [ID %d] %s\n", message->ID, message->pDescription);
+                GFXRECON_LOG_WARNING("D3D12 WARNING: [ID %d][BLOCK ID %" PRIu64 "] %s\n",
+                                     message->ID,
+                                     this->block_index_,
+                                     message->pDescription);
                 break;
             case DXGI_INFO_QUEUE_MESSAGE_SEVERITY_INFO:
-                GFXRECON_LOG_INFO("D3D12 INFO: [ID %d] %s\n", message->ID, message->pDescription);
+                GFXRECON_LOG_INFO("D3D12 INFO: [ID %d][BLOCK ID %" PRIu64 "] %s\n",
+                                  message->ID,
+                                  this->block_index_,
+                                  message->pDescription);
                 break;
             case DXGI_INFO_QUEUE_MESSAGE_SEVERITY_MESSAGE:
-                GFXRECON_LOG_INFO("D3D12 MESSAGE: [ID %d] %s\n", message->ID, message->pDescription);
+                GFXRECON_LOG_INFO("D3D12 MESSAGE: [ID %d][BLOCK ID %" PRIu64 "] %s\n",
+                                  message->ID,
+                                  this->block_index_,
+                                  message->pDescription);
                 break;
             default:
                 break;

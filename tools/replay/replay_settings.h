@@ -397,6 +397,8 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --debug-device-lost\tEnable automatic injection of breadcrumbs into command buffers");
     GFXRECON_WRITE_CONSOLE("            \t\tand page fault reporting.");
     GFXRECON_WRITE_CONSOLE("            \t\tUsed to debug Direct3D 12 device removed problems.");
+    GFXRECON_WRITE_CONSOLE(
+        "            \t\tNote: For accurate DRED data that matches the current command list, please enable --sync.");
     GFXRECON_WRITE_CONSOLE("  --fw <width,height>\tSetup windowed and override resolution.");
     GFXRECON_WRITE_CONSOLE("                     \t(Same as --force-windowed)");
     GFXRECON_WRITE_CONSOLE("  --create-dummy-allocations");
