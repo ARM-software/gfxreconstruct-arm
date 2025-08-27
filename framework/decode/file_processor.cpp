@@ -2463,6 +2463,53 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                                  "Failed to read init subresource data meta-data block header");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kFillMemoryResourceAddressCommand)
+    {
+        format::FillMemoryResourceAddressCommandHeader header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = ReadBytes(&header.resource_address_count, sizeof(header.resource_address_count));
+
+        if (success)
+        {
+            uint64_t data_size = header.resource_address_count * sizeof(format::Dx12FillMemoryResourceAddressInfo);
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, data_size);
+
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size   = static_cast<size_t>(block_header.size) - sizeof(meta_data_id) -
+                                         sizeof(header.thread_id) - sizeof(header.resource_address_count);
+                size_t uncompressed_data = static_cast<size_t>(data_size);
+                success = ReadCompressedParameterBuffer(compressed_size, uncompressed_data, &uncompressed_size);
+            }
+            else
+            {
+                success = ReadParameterBuffer(static_cast<size_t>(data_size));
+            }
+
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchFillMemoryResourceAddressCommand(header, parameter_buffer_.data());
+                    }
+                }
+            }
+            else
+            {
+                HandleBlockReadError(kErrorReadingBlockData,
+                                     "Failed to read fill memory resource address meta-data block");
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read fill memory resource address meta-data block header");
+        }
+    }
     else
     {
         if ((meta_data_type == format::MetaDataType::kReserved23) ||

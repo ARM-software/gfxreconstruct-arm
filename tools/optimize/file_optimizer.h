@@ -80,6 +80,8 @@ class FileOptimizer : public decode::FileTransformer
     virtual bool ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header) override;
     virtual bool ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header) override;
     virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
+    virtual bool
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& header) override;
 
     bool RemoveThreadBlock(const format::BlockHeader& header, size_t size_read);
 

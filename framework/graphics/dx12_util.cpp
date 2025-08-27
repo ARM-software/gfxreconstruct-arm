@@ -538,7 +538,8 @@ ID3D12ResourceComPtr CreateBufferResource(ID3D12Device*         device,
                                           uint64_t              size,
                                           D3D12_HEAP_TYPE       heap_type,
                                           D3D12_RESOURCE_STATES initial_state,
-                                          D3D12_RESOURCE_FLAGS  flags)
+                                          D3D12_RESOURCE_FLAGS  flags,
+                                          D3D12_HEAP_FLAGS      heap_flags)
 {
     D3D12_HEAP_PROPERTIES heap_props;
     heap_props.Type                 = heap_type;
@@ -562,7 +563,7 @@ ID3D12ResourceComPtr CreateBufferResource(ID3D12Device*         device,
 
     ID3D12ResourceComPtr resource = nullptr;
     device->CreateCommittedResource(
-        &heap_props, D3D12_HEAP_FLAG_NONE, &res_desc, initial_state, nullptr, IID_PPV_ARGS(&resource));
+        &heap_props, heap_flags, &res_desc, initial_state, nullptr, IID_PPV_ARGS(&resource));
     GFXRECON_ASSERT(resource);
 
     return resource;

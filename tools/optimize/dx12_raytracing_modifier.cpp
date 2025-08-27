@@ -36,18 +36,41 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_GetGPUVirtualAddress(const A
                                                                          format::HandleId          object_id,
                                                                          D3D12_GPU_VIRTUAL_ADDRESS return_value)
 {
-    if (resource_entries_.find(object_id) != resource_entries_.end())
+    if ((return_value == 0) || (return_value == UINT64_MAX))
     {
-        if (resource_entries_[object_id].start_virtual_address == 0)
+        // If the GPU virtual address is 0 or UINT64_MAX, it indicates that the resource is not valid or not
+        // allocated, so we do not track it.
+        return;
+    }
+
+    auto iter = resource_entries_.find(object_id);
+    if (iter != resource_entries_.end())
+    {
+        if (iter->second.desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER)
         {
-            resource_entries_[object_id].start_virtual_address = return_value;
+            // This is not a buffer resource, so we do not track its GPU virtual address.
+            return;
         }
 
-        UINT64 width = resource_entries_[object_id].desc.Width;
-        min_gpu_va_  = std::min(min_gpu_va_, return_value);
-        max_gpu_va_  = std::max(max_gpu_va_, return_value + width);
+        iter->second.start_virtual_address = return_value;
+        iter->second.end_virtual_address   = return_value + iter->second.desc.Width;
 
-        gpu_virtual_address_resource_[return_value] = resource_entries_[object_id];
+        min_gpu_va_  = std::min(min_gpu_va_, return_value);
+        max_gpu_va_  = std::max(max_gpu_va_, return_value + iter->second.desc.Width);
+
+        gpu_virtual_address_resource_[return_value] = iter->second;
+        if ((iter->second.initial_state & D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE) ==
+            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE)
+        {
+            accel_struct_address_resource_[return_value] = iter->second;
+        }
+
+        GFXRECON_LOG_DEBUG("*** GPU virtual start address: 0x%" PRIx64 " end address: 0x%" PRIx64
+                           " for resource ID: %" PRIu64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                           return_value,
+                           iter->second.end_virtual_address,
+                           object_id,
+                           call_info.index);
     }
     else
     {
@@ -63,13 +86,26 @@ void Dx12RayTracingModifier::Process_ID3D12StateObjectProperties_GetShaderIdenti
 {
     if ((return_value != nullptr) && !return_value->IsNull())
     {
-        shader_id_map_.Add(return_value->GetPointer(), return_value->GetPointer());
+        std::vector<uint8_t> shader_id(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, 0);
+        util::platform::MemoryCopy(shader_id.data(),
+                                   D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+                                   (uint8_t*)return_value->GetPointer(),
+                                   D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+        state_object_shader_identifiers_[object_id].insert(shader_id);
     }
 }
 
 void Dx12RayTracingModifier::Process_ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(
     const ApiCallInfo& call_info, format::HandleId object_id, Decoded_D3D12_GPU_DESCRIPTOR_HANDLE return_value)
 {
+    if ((return_value.decoded_value->ptr == 0) || (return_value.decoded_value->ptr == UINT64_MAX))
+    {
+        // If the GPU descriptor handle is 0 or UINT64_MAX, it indicates that the descriptor heap is not valid or not
+        // allocated, so we do not track it.
+        return;
+    }
+
     if (descriptor_heap_infos_.find(object_id) == descriptor_heap_infos_.end())
     {
         GFXRECON_LOG_ERROR("Failed to find descriptor heap object id %llu in descriptor_heap_infos_ map.", object_id);
@@ -77,24 +113,48 @@ void Dx12RayTracingModifier::Process_ID3D12DescriptorHeap_GetGPUDescriptorHandle
     }
 
     auto&    heap_info = descriptor_heap_infos_[object_id];
-    uint64_t descriptor_size =
-        static_cast<uint64_t>(heap_info.descriptor_count) * (*heap_info.capture_increments)[heap_info.descriptor_type];
+    uint64_t increment = 0;
+    for (const auto& device_descriptor : device_descriptor_increment_sizes_)
+    {
+        for (const auto& descriptor_increment : device_descriptor.second)
+        {
+            if (descriptor_increment.first == heap_info.descriptor_type)
+            {
+                increment = descriptor_increment.second;
+                break;
+            }
+        }
+        if (increment != 0)
+        {
+            break;
+        }
+    }
+
+    if (increment == 0)
+    {
+        increment = min_gpu_descriptor_increment_;
+    }
+    heap_info.capture_increment = increment;
+
+    uint64_t descriptor_size = static_cast<uint64_t>(heap_info.descriptor_count) * increment;
     if (heap_info.capture_gpu_addr_begin == kNullGpuAddress)
     {
         heap_info.capture_gpu_addr_begin = return_value.decoded_value->ptr;
         heap_info.capture_gpu_addr_end   = return_value.decoded_value->ptr + descriptor_size;
     }
+
+    if (heap_info.descriptor_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV ||
+        heap_info.descriptor_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+    {
+        // For RTV and DSV heaps, do not track the GPU descriptor address.
+        return;
+    }
+
     descriptor_start_address_info_[return_value.decoded_value->ptr] = heap_info;
 
     min_gpu_descriptor_ = std::min(min_gpu_descriptor_, (*return_value.decoded_value).ptr);
     max_gpu_descriptor_ = std::max(max_gpu_descriptor_, (*return_value.decoded_value).ptr + descriptor_size);
-    for (auto increment : *heap_info.capture_increments)
-    {
-        if (increment > 0)
-        {
-            min_gpu_descriptor_alignment_ = std::min(min_gpu_descriptor_alignment_, static_cast<uint64_t>(increment));
-        }
-    }
+    min_gpu_descriptor_alignment_ = std::min(min_gpu_descriptor_alignment_, increment);
 }
 
 void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommittedResource(
@@ -109,6 +169,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommittedResource(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -133,6 +198,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateCommittedResource1(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -157,6 +227,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device8_CreateCommittedResource2(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -185,6 +260,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreateCommittedResource3(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                  = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id      = handle;
     resource_entries_[handle].object_id      = object_id;
@@ -210,6 +290,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreatePlacedResource(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -232,6 +317,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device8_CreatePlacedResource1(
     Decoded_GUID                                        riid,
     HandlePointerDecoder<void*>*                        ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -258,6 +348,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreatePlacedResource2(
     Decoded_GUID                                        riid,
     HandlePointerDecoder<void*>*                        ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                  = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id      = handle;
     resource_entries_[handle].object_id      = object_id;
@@ -280,6 +375,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateReservedResource(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -300,6 +400,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateReservedResource1(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                 = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id     = handle;
     resource_entries_[handle].object_id     = object_id;
@@ -322,6 +427,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreateReservedResource2(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId handle                  = *ppvResource->GetPointer();
     resource_entries_[handle].handle_id      = handle;
     resource_entries_[handle].object_id      = object_id;
@@ -342,43 +452,186 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
     format::HandleId src_id       = format::kNullHandleId;
     format::HandleId dst_id       = format::kNullHandleId;
 
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+    if (pDesc_struct->Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
     {
-        command_list_related_ids_[object_id].push_back(dst_id);
+        format::HandleId instance_id = FindBaseResourceFromGPUAddress(pDesc_struct->Inputs.InstanceDescs);
+        if (instance_id != format::kNullHandleId)
+        {
+            auto offset = pDesc_struct->Inputs.InstanceDescs - resource_entries_[instance_id].start_virtual_address;
+
+            ResourceValueInfo resource_value;
+            resource_value.offset = offset;
+            resource_value.size   = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * pDesc_struct->Inputs.NumDescs;
+            resource_value.type   = ResourceValueType::kRaytracingInstanceDescPointer;
+            command_list_related_infos_[object_id].related_resource_values[instance_id] = resource_value;
+        }
     }
 
     auto src_address = pDesc_struct->SourceAccelerationStructureData;
     auto dst_address = pDesc_struct->DestAccelerationStructureData;
-    if (gpu_virtual_address_resource_.find(src_address) != gpu_virtual_address_resource_.end())
+    if (src_address != 0)
     {
-        src_id = gpu_virtual_address_resource_[src_address].handle_id;
+        FindAccelerationStructureResourceFromGPUAddress(src_address);
+    }
+    if (dst_address != 0)
+    {
+        FindAccelerationStructureResourceFromGPUAddress(dst_address);
     }
 
-    if (gpu_virtual_address_resource_.find(dst_address) != gpu_virtual_address_resource_.end())
+    if (accel_struct_address_resource_.find(src_address) != accel_struct_address_resource_.end())
     {
-        dst_id = gpu_virtual_address_resource_[dst_address].handle_id;
+        src_id = accel_struct_address_resource_[src_address].handle_id;
     }
 
-    if ((dst_id != format::kNullHandleId) && (src_id == format::kNullHandleId))
+    if (accel_struct_address_resource_.find(dst_address) != accel_struct_address_resource_.end())
     {
-        if ((acceleration_structure_build_desc_.find(dst_id) == acceleration_structure_build_desc_.end()) &&
-            (resource_entries_.find(dst_id) != resource_entries_.end()))
+        dst_id = accel_struct_address_resource_[dst_address].handle_id;
+    }
+
+    if (real_device5_ == nullptr)
+    {
+        CreateDeviceAndCheckRayTracingSupport();
+    }
+
+    if (dst_id != format::kNullHandleId)
+    {
+        AccelerationStructureBuildDesc build_desc;
+        build_desc.handle_id            = dst_id;
+        build_desc.object_id            = resource_entries_[dst_id].object_id;
+        build_desc.is_first_built       = true;
+        build_desc.is_meta_copy         = false;
+        build_desc.source_of_compaction = 0;
+        build_desc.build_inputs         = pDesc_struct->Inputs;
+        build_desc.real_prebuild_info   = {};
+        build_desc.postbuild_info       = {};
+        build_desc.geometry_descs.resize(pDesc_struct->Inputs.NumDescs);
+
+        if (real_device5_ != nullptr)
         {
-            AccelerationStructureBuildDesc build_desc;
-            build_desc.handle_id            = dst_id;
-            build_desc.object_id            = resource_entries_[dst_id].object_id;
-            build_desc.is_first_built       = true;
-            build_desc.is_meta_copy         = false;
-            build_desc.source_of_compaction = format::kNullHandleId;
+            real_device5_->GetRaytracingAccelerationStructurePrebuildInfo(&(pDesc_struct->Inputs),
+                                                                          &(build_desc.real_prebuild_info));
+        }
 
+        if (build_desc.real_prebuild_info.ResultDataMaxSizeInBytes == 0)
+        {
+            GFXRECON_LOG_ERROR("Failed to get real prebuild info for dest address 0x%" PRIx64, dst_address);
+        }
+
+        const auto post_build_descs = pPostbuildInfoDescs->GetPointer();
+        for (UINT i = 0; i < NumPostbuildInfoDescs; i++)
+        {
+            if (post_build_descs[i].InfoType == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE)
+            {
+                build_desc.source_of_compaction = dst_address;
+                build_desc.postbuild_info       = post_build_descs[i];
+            }
+        }
+
+        auto& acceleration_structure_inputs = pDesc_struct->Inputs;
+        if (acceleration_structure_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
+        {
+            for (UINT i = 0; i < acceleration_structure_inputs.NumDescs; i++)
+            {
+                if (acceleration_structure_inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY)
+                {
+                    auto& geometry_desc =
+                        const_cast<D3D12_RAYTRACING_GEOMETRY_DESC&>(acceleration_structure_inputs.pGeometryDescs[i]);
+                    if (geometry_desc.Type == D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES)
+                    {
+                        geometry_desc.Triangles.VertexBuffer.StartAddress = 0;
+                        geometry_desc.Triangles.IndexBuffer               = 0;
+                        geometry_desc.Triangles.Transform3x4              = 0;
+                    }
+                    else
+                    {
+                        geometry_desc.AABBs.AABBs.StartAddress = 0;
+                    }
+
+                    build_desc.geometry_descs[i] = acceleration_structure_inputs.pGeometryDescs[i];
+                }
+                else
+                {
+                    auto geometry_desc =
+                        const_cast<D3D12_RAYTRACING_GEOMETRY_DESC*>(acceleration_structure_inputs.ppGeometryDescs[i]);
+                    if (geometry_desc->Type == D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES)
+                    {
+                        geometry_desc->Triangles.VertexBuffer.StartAddress = 0;
+                        geometry_desc->Triangles.IndexBuffer               = 0;
+                        geometry_desc->Triangles.Transform3x4              = 0;
+                    }
+                    else
+                    {
+                        geometry_desc->AABBs.AABBs.StartAddress = 0;
+                    }
+
+                    build_desc.geometry_descs[i] = *acceleration_structure_inputs.ppGeometryDescs[i];
+                }
+            }
+        }
+        else
+        {
+            acceleration_structure_inputs.InstanceDescs = 0;
+        }
+
+        auto build_desc_iter = acceleration_structure_build_desc_.find(dst_address);
+        if (build_desc_iter == acceleration_structure_build_desc_.end())
+        {
             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
-            gfxrecon::encode::ParameterEncoder                    encoder(&build_desc.get_prebuild_info);
+            if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
+            {
+                // Set dst_id and dst_address with offset to prebuild_info just to create a new resource
+                prebuild_info.ResultDataMaxSizeInBytes     = dst_address;
+                prebuild_info.UpdateScratchDataSizeInBytes = dst_id;
+            }
+
+            AccelerationStructurePreBuildDesc prebuild_desc;
+            prebuild_desc.handle_id = dst_id;
+            prebuild_desc.object_id = resource_entries_[dst_id].object_id;
+            prebuild_desc.get_prebuild_info.Clear();
+
+            gfxrecon::encode::ParameterEncoder encoder(&prebuild_desc.get_prebuild_info);
             encode::EncodeStructPtr(&encoder, &(pDesc_struct->Inputs));
             encode::EncodeStructPtr(&encoder, &prebuild_info);
 
-            acceleration_structure_build_desc_.emplace(std::make_pair(dst_id, build_desc));
-            prebuild_info_insert_values_.emplace(std::make_pair(resource_entries_[dst_id].block_index, build_desc));
+            acceleration_structure_build_desc_.emplace(dst_address, build_desc);
+            prebuild_info_insert_values_[resource_entries_[dst_id].block_index].emplace(dst_address, prebuild_desc);
         }
+        else
+        {
+            const auto iter_bytes = build_desc_iter->second.real_prebuild_info.ResultDataMaxSizeInBytes;
+            const auto new_bytes  = build_desc.real_prebuild_info.ResultDataMaxSizeInBytes;
+
+            if ((iter_bytes != 0) && (new_bytes != 0) && (new_bytes > iter_bytes))
+            {
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
+                if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
+                {
+                    // Set dst_id and dst_address with offset to prebuild_info just to create a new resource
+                    prebuild_info.ResultDataMaxSizeInBytes     = dst_address;
+                    prebuild_info.UpdateScratchDataSizeInBytes = dst_id;
+                }
+
+                AccelerationStructurePreBuildDesc prebuild_desc;
+                prebuild_desc.handle_id = dst_id;
+                prebuild_desc.object_id = resource_entries_[dst_id].object_id;
+                prebuild_desc.get_prebuild_info.Clear();
+
+                gfxrecon::encode::ParameterEncoder encoder(&prebuild_desc.get_prebuild_info);
+                encode::EncodeStructPtr(&encoder, &(pDesc_struct->Inputs));
+                encode::EncodeStructPtr(&encoder, &prebuild_info);
+
+                acceleration_structure_build_desc_.erase(dst_address);
+                acceleration_structure_build_desc_.emplace(dst_address, build_desc);
+
+                prebuild_info_insert_values_[resource_entries_[dst_id].block_index].erase(dst_address);
+                prebuild_info_insert_values_[resource_entries_[dst_id].block_index].emplace(dst_address, prebuild_desc);
+            }
+        }
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("Failed to find resource id for acceleration structure destination address 0x%" PRIx64,
+                           dst_address);
     }
 }
 
@@ -400,27 +653,31 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAc
     format::HandleId src_id = format::kNullHandleId;
     format::HandleId dst_id = format::kNullHandleId;
 
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
-    {
-        command_list_related_ids_[object_id].push_back(dst_id);
-    }
-
     auto src_address = SourceAccelerationStructureData;
     auto dst_address = DestAccelerationStructureData;
-    if (gpu_virtual_address_resource_.find(src_address) != gpu_virtual_address_resource_.end())
+    if (src_address != 0)
     {
-        src_id = gpu_virtual_address_resource_[src_address].handle_id;
+        FindAccelerationStructureResourceFromGPUAddress(src_address);
+    }
+    if (dst_address != 0)
+    {
+        FindAccelerationStructureResourceFromGPUAddress(dst_address);
     }
 
-    if (gpu_virtual_address_resource_.find(dst_address) != gpu_virtual_address_resource_.end())
+    if (accel_struct_address_resource_.find(src_address) != accel_struct_address_resource_.end())
     {
-        dst_id = gpu_virtual_address_resource_[dst_address].handle_id;
+        src_id = accel_struct_address_resource_[src_address].handle_id;
+    }
+
+    if (accel_struct_address_resource_.find(dst_address) != accel_struct_address_resource_.end())
+    {
+        dst_id = accel_struct_address_resource_[dst_address].handle_id;
     }
 
     if ((dst_id != format::kNullHandleId) && (src_id != format::kNullHandleId))
     {
-        if ((acceleration_structure_build_desc_.find(src_id) != acceleration_structure_build_desc_.end()) &&
-            (acceleration_structure_build_desc_.find(dst_id) == acceleration_structure_build_desc_.end()))
+        if ((acceleration_structure_build_desc_.find(src_address) != acceleration_structure_build_desc_.end()) &&
+            (acceleration_structure_build_desc_.find(dst_address) == acceleration_structure_build_desc_.end()))
         {
             if (Mode == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)
             {
@@ -429,20 +686,239 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAc
                 build_desc.object_id            = resource_entries_[dst_id].object_id;
                 build_desc.is_first_built       = false;
                 build_desc.is_meta_copy         = true;
-                build_desc.source_of_compaction = src_id;
+                build_desc.source_of_compaction = src_address;
+                build_desc.build_inputs         = {};
+                build_desc.real_prebuild_info   = {};
+                build_desc.postbuild_info       = {};
+                build_desc.geometry_descs       = {};
 
-                acceleration_structure_build_desc_.emplace(std::make_pair(dst_id, build_desc));
+                acceleration_structure_build_desc_.emplace(dst_address, build_desc);
             }
             else
             {
                 acceleration_structure_build_desc_.emplace(
-                    std::make_pair(dst_id, acceleration_structure_build_desc_[src_id]));
+                    std::make_pair(dst_address, acceleration_structure_build_desc_[src_address]));
             }
 
-            // TODO current only insert GetRaytracingAccelerationStructurePrebuildInfo
-            auto& build_desc = acceleration_structure_build_desc_[src_id];
-            prebuild_info_insert_values_.emplace(std::make_pair(resource_entries_[dst_id].block_index, build_desc));
+            // TODO: current insert GetRaytracingAccelerationStructurePrebuildInfo of source VA
+            // The compacted resource size should be obtained from the post-build info
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
+            if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
+            {
+                // Set dst_id and dst_address with offset to prebuild_info just to create a new resource
+                prebuild_info.ResultDataMaxSizeInBytes     = dst_address;
+                prebuild_info.UpdateScratchDataSizeInBytes = dst_id;
+            }
+
+            auto build_inputs        = acceleration_structure_build_desc_[src_address].build_inputs;
+            build_inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+            if (build_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
+            {
+                build_inputs.pGeometryDescs = acceleration_structure_build_desc_[src_address].geometry_descs.data();
+            }
+            else if (build_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
+            {
+                build_inputs.InstanceDescs = 0;
+            }
+            else
+            {
+                GFXRECON_LOG_ERROR(
+                    "Unsupported acceleration structure type %d for CopyRaytracingAccelerationStructure.",
+                    build_inputs.Type);
+                return;
+            }
+
+            if (real_device5_ != nullptr)
+            {
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{ 0, 0, 0 };
+                real_device5_->GetRaytracingAccelerationStructurePrebuildInfo(&build_inputs, &info);
+                if (info.ResultDataMaxSizeInBytes == 0)
+                {
+                    GFXRECON_LOG_ERROR("Failed to get real prebuild info for dest address 0x%" PRIx64, dst_address);
+                }
+            }
+
+            AccelerationStructurePreBuildDesc prebuild_desc;
+            prebuild_desc.handle_id = dst_id;
+            prebuild_desc.object_id = resource_entries_[dst_id].object_id;
+            prebuild_desc.get_prebuild_info.Clear();
+
+            gfxrecon::encode::ParameterEncoder encoder(&prebuild_desc.get_prebuild_info);
+            encode::EncodeStructPtr(&encoder, &build_inputs);
+            encode::EncodeStructPtr(&encoder, &prebuild_info);
+
+            prebuild_info_insert_values_[resource_entries_[dst_id].block_index].emplace(dst_address, prebuild_desc);
         }
+    }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device5_CreateStateObject(
+    const ApiCallInfo&                                     call_info,
+    format::HandleId                                       object_id,
+    HRESULT                                                return_value,
+    StructPointerDecoder<Decoded_D3D12_STATE_OBJECT_DESC>* pDesc,
+    Decoded_GUID                                           riid,
+    HandlePointerDecoder<void*>*                           ppStateObject)
+{
+    if (return_value != S_OK)
+    {
+        return;
+    }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device7_AddToStateObject(
+    const ApiCallInfo&                                     call_info,
+    format::HandleId                                       object_id,
+    HRESULT                                                return_value,
+    StructPointerDecoder<Decoded_D3D12_STATE_OBJECT_DESC>* pAddition,
+    format::HandleId                                       pStateObjectToGrowFrom,
+    Decoded_GUID                                           riid,
+    HandlePointerDecoder<void*>*                           ppNewStateObject)
+{
+    if (return_value != S_OK)
+    {
+        return;
+    }
+}
+
+void Dx12RayTracingModifier::Process_D3D12SerializeRootSignature(
+    const ApiCallInfo&                                       call_info,
+    HRESULT                                                  return_value,
+    StructPointerDecoder<Decoded_D3D12_ROOT_SIGNATURE_DESC>* pRootSignature,
+    D3D_ROOT_SIGNATURE_VERSION                               Version,
+    HandlePointerDecoder<ID3D10Blob*>*                       ppBlob,
+    HandlePointerDecoder<ID3D10Blob*>*                       ppErrorBlob)
+{
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
+    format::HandleId blob_id = *ppBlob->GetPointer();
+    auto             desc    = pRootSignature->GetPointer();
+    if (desc != nullptr && desc->NumParameters > 0 && desc->pParameters != nullptr)
+    {
+        for (UINT i = 0; i < desc->NumParameters; ++i)
+        {
+            const auto& parameter_desc = desc->pParameters[i];
+            if ((parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) ||
+                (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV) ||
+                (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_SRV) ||
+                (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_UAV))
+            {
+                latest_blob_related_types_[blob_id].emplace_back(parameter_desc.ParameterType);
+            }
+        }
+    }
+}
+
+void Dx12RayTracingModifier::Process_D3D12SerializeVersionedRootSignature(
+    const ApiCallInfo&                                                 call_info,
+    HRESULT                                                            return_value,
+    StructPointerDecoder<Decoded_D3D12_VERSIONED_ROOT_SIGNATURE_DESC>* pRootSignature,
+    HandlePointerDecoder<ID3D10Blob*>*                                 ppBlob,
+    HandlePointerDecoder<ID3D10Blob*>*                                 ppErrorBlob)
+{
+    if ((return_value != S_OK) || (pRootSignature == nullptr) || (pRootSignature->GetPointer() == nullptr))
+    {
+        return;
+    }
+
+    format::HandleId blob_id = *ppBlob->GetPointer();
+    auto             desc    = pRootSignature->GetPointer();
+
+    if (desc->Version == D3D_ROOT_SIGNATURE_VERSION_1_0)
+    {
+        if (desc->Desc_1_0.NumParameters > 0 && desc->Desc_1_0.pParameters != nullptr)
+        {
+            for (UINT i = 0; i < desc->Desc_1_0.NumParameters; ++i)
+            {
+                const auto& parameter_desc = desc->Desc_1_0.pParameters[i];
+                if ((parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_SRV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_UAV))
+                {
+                    latest_blob_related_types_[blob_id].emplace_back(parameter_desc.ParameterType);
+                }
+            }
+        }
+    }
+    else if (desc->Version == D3D_ROOT_SIGNATURE_VERSION_1_1)
+    {
+        if (desc->Desc_1_1.NumParameters > 0 && desc->Desc_1_1.pParameters != nullptr)
+        {
+            for (UINT i = 0; i < desc->Desc_1_1.NumParameters; ++i)
+            {
+                const auto& parameter_desc = desc->Desc_1_1.pParameters[i];
+                if ((parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_SRV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_UAV))
+                {
+                    latest_blob_related_types_[blob_id].emplace_back(parameter_desc.ParameterType);
+                }
+            }
+        }
+    }
+    else if (desc->Version == D3D_ROOT_SIGNATURE_VERSION_1_2)
+    {
+        if (desc->Desc_1_2.NumParameters > 0 && desc->Desc_1_2.pParameters != nullptr)
+        {
+            for (UINT i = 0; i < desc->Desc_1_2.NumParameters; ++i)
+            {
+                const auto& parameter_desc = desc->Desc_1_2.pParameters[i];
+                if ((parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_SRV) ||
+                    (parameter_desc.ParameterType == D3D12_ROOT_PARAMETER_TYPE_UAV))
+                {
+                    latest_blob_related_types_[blob_id].emplace_back(parameter_desc.ParameterType);
+                }
+            }
+        }
+    }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device_CreateRootSignature(const ApiCallInfo&       call_info,
+                                                                      format::HandleId         object_id,
+                                                                      HRESULT                  return_value,
+                                                                      UINT                     nodeMask,
+                                                                      PointerDecoder<uint8_t>* pBlobWithRootSignature,
+                                                                      SIZE_T                   blobLengthInBytes,
+                                                                      Decoded_GUID             riid,
+                                                                      HandlePointerDecoder<void*>* ppvRootSignature)
+{
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
+    if (latest_blob_related_types_.size() == 1)
+    {
+        format::HandleId root_signature_id = *ppvRootSignature->GetPointer();
+        const auto&      types             = latest_blob_related_types_.begin()->second;
+
+        root_signature_related_types_[root_signature_id].insert(
+            root_signature_related_types_[root_signature_id].end(), types.begin(), types.end());
+        latest_blob_related_types_.clear();
+    }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device14_CreateRootSignatureFromSubobjectInLibrary(
+    const ApiCallInfo&           call_info,
+    format::HandleId             object_id,
+    HRESULT                      return_value,
+    UINT                         nodeMask,
+    PointerDecoder<uint8_t>*     pLibraryBlob,
+    SIZE_T                       blobLengthInBytes,
+    WStringDecoder*              subobjectName,
+    Decoded_GUID                 riid,
+    HandlePointerDecoder<void*>* ppvRootSignature)
+{
+    if (return_value != S_OK)
+    {
+        return;
     }
 }
 
@@ -455,11 +931,15 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandSignature(
     Decoded_GUID                                                riid,
     HandlePointerDecoder<void*>*                                ppvCommandSignature)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     auto desc = pDesc->GetPointer();
     if (desc && desc->NumArgumentDescs > 0 && desc->pArgumentDescs)
     {
-        format::HandleId              command_signature_id = *ppvCommandSignature->GetPointer();
-        std::vector<format::HandleId> related_ids;
+        format::HandleId command_signature_id = *ppvCommandSignature->GetPointer();
 
         for (UINT i = 0; i < desc->NumArgumentDescs; ++i)
         {
@@ -471,7 +951,7 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandSignature(
                 (arg_desc.Type == D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW) ||
                 (arg_desc.Type == D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW))
             {
-                command_signature_related_ids_.emplace(command_signature_id, related_ids);
+                command_signature_related_types_[command_signature_id].emplace_back(arg_desc.Type);
             }
         }
     }
@@ -486,12 +966,20 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_ExecuteIndirect(c
                                                                                format::HandleId   pCountBuffer,
                                                                                UINT64             CountBufferOffset)
 {
-    if (command_signature_related_ids_.find(pCommandSignature) != command_signature_related_ids_.end())
+    if (command_signature_related_types_.find(pCommandSignature) != command_signature_related_types_.end())
     {
-        if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+        ResourceValueInfo resource_value;
+        resource_value.offset = ArgumentBufferOffset;
+        resource_value.size   = MaxCommandCount;
+        resource_value.type   = ResourceValueType::kGpuVirtualAddress;
+
+        const auto iter = resource_entries_.find(pArgumentBuffer);
+        if (iter != resource_entries_.end())
         {
-            command_list_related_ids_[object_id].push_back(pArgumentBuffer);
+            resource_value.size = iter->second.desc.Width;
         }
+
+        command_list_related_infos_[object_id].related_resource_values[pArgumentBuffer] = resource_value;
     }
 }
 
@@ -499,9 +987,9 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_SetPipelineState
                                                                                   format::HandleId   object_id,
                                                                                   format::HandleId   pStateObject)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+    if (command_list_related_infos_.find(object_id) != command_list_related_infos_.end())
     {
-        command_list_related_ids_[object_id].push_back(pStateObject);
+        command_list_related_infos_[object_id].state_object_id = pStateObject;
     }
 }
 
@@ -510,9 +998,57 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_DispatchRays(
     format::HandleId                                        object_id,
     StructPointerDecoder<Decoded_D3D12_DISPATCH_RAYS_DESC>* pDesc)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+    const auto pDesc_struct    = pDesc->GetPointer();
+    auto       ray_gen_id      = FindBaseResourceFromGPUAddress(pDesc_struct->RayGenerationShaderRecord.StartAddress);
+    auto       miss_table_id   = FindBaseResourceFromGPUAddress(pDesc_struct->MissShaderTable.StartAddress);
+    auto       hit_table_id    = FindBaseResourceFromGPUAddress(pDesc_struct->HitGroupTable.StartAddress);
+    auto       caller_table_id = FindBaseResourceFromGPUAddress(pDesc_struct->CallableShaderTable.StartAddress);
+
+    if (ray_gen_id != format::kNullHandleId)
     {
-        command_list_related_ids_[object_id].push_back(object_id);
+        auto offset =
+            pDesc_struct->RayGenerationShaderRecord.StartAddress - resource_entries_[ray_gen_id].start_virtual_address;
+
+        ResourceValueInfo resource_value;
+        resource_value.offset = offset;
+        resource_value.size   = pDesc_struct->RayGenerationShaderRecord.SizeInBytes;
+        resource_value.type   = ResourceValueType::kShaderIdentifier;
+        command_list_related_infos_[object_id].related_resource_values[ray_gen_id] = resource_value;
+    }
+
+    if (miss_table_id != format::kNullHandleId)
+    {
+        auto offset =
+            pDesc_struct->MissShaderTable.StartAddress - resource_entries_[miss_table_id].start_virtual_address;
+
+        ResourceValueInfo resource_value;
+        resource_value.offset = offset;
+        resource_value.size   = pDesc_struct->MissShaderTable.SizeInBytes;
+        resource_value.type   = ResourceValueType::kShaderIdentifier;
+        command_list_related_infos_[object_id].related_resource_values[miss_table_id] = resource_value;
+    }
+
+    if (hit_table_id != format::kNullHandleId)
+    {
+        auto offset = pDesc_struct->HitGroupTable.StartAddress - resource_entries_[hit_table_id].start_virtual_address;
+
+        ResourceValueInfo resource_value;
+        resource_value.offset = offset;
+        resource_value.size   = pDesc_struct->HitGroupTable.SizeInBytes;
+        resource_value.type   = ResourceValueType::kShaderIdentifier;
+        command_list_related_infos_[object_id].related_resource_values[hit_table_id] = resource_value;
+    }
+
+    if (caller_table_id != format::kNullHandleId)
+    {
+        auto offset =
+            pDesc_struct->CallableShaderTable.StartAddress - resource_entries_[caller_table_id].start_virtual_address;
+
+        ResourceValueInfo resource_value;
+        resource_value.offset = offset;
+        resource_value.size   = pDesc_struct->CallableShaderTable.SizeInBytes;
+        resource_value.type   = ResourceValueType::kShaderIdentifier;
+        command_list_related_infos_[object_id].related_resource_values[caller_table_id] = resource_value;
     }
 }
 
@@ -526,12 +1062,18 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandList(const ApiCal
                                                                     Decoded_GUID                 riid,
                                                                     HandlePointerDecoder<void*>* ppCommandList)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     if (type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE ||
         type == D3D12_COMMAND_LIST_TYPE_COPY)
     {
-        std::vector<format::HandleId> command_list_handles;
-        auto                          cmd_list_id = *ppCommandList->GetPointer();
-        command_list_related_ids_.emplace(cmd_list_id, command_list_handles);
+        CommandListInfo cmd_list_info{};
+        auto            cmd_list_id = *ppCommandList->GetPointer();
+
+        command_list_related_infos_[cmd_list_id] = cmd_list_info;
     }
 }
 
@@ -544,12 +1086,18 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateCommandList1(const ApiC
                                                                       Decoded_GUID                 riid,
                                                                       HandlePointerDecoder<void*>* ppCommandList)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     if (type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE ||
         type == D3D12_COMMAND_LIST_TYPE_COPY)
     {
-        std::vector<format::HandleId> command_list_handles;
-        auto                          cmd_list_id = *ppCommandList->GetPointer();
-        command_list_related_ids_.emplace(cmd_list_id, command_list_handles);
+        CommandListInfo cmd_list_info{};
+        auto            cmd_list_id = *ppCommandList->GetPointer();
+
+        command_list_related_infos_[cmd_list_id] = cmd_list_info;
     }
 }
 
@@ -559,10 +1107,7 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_Dispatch(const Ap
                                                                         UINT               ThreadGroupCountY,
                                                                         UINT               ThreadGroupCountZ)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
-    {
-        command_list_related_ids_[object_id].push_back(object_id);
-    }
+    return;
 }
 
 void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyBufferRegion(const ApiCallInfo& call_info,
@@ -573,10 +1118,14 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyBufferRegion(
                                                                                 UINT64             SrcOffset,
                                                                                 UINT64             NumBytes)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
-    {
-        command_list_related_ids_[object_id].push_back(pDstBuffer);
-    }
+    ResourceCopyInfo copy_info;
+    copy_info.dst_resource_id = pDstBuffer;
+    copy_info.dst_offset      = DstOffset;
+    copy_info.src_resource_id = pSrcBuffer;
+    copy_info.src_offset      = SrcOffset;
+    copy_info.num_bytes       = NumBytes;
+
+    command_list_related_infos_[object_id].resource_copies.emplace_back(copy_info);
 }
 
 void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyResource(const ApiCallInfo& call_info,
@@ -584,9 +1133,20 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyResource(cons
                                                                             format::HandleId   pDstResource,
                                                                             format::HandleId   pSrcResource)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+    const auto iter = resource_entries_.find(pDstResource);
+    if (iter != resource_entries_.end())
     {
-        command_list_related_ids_[object_id].push_back(pDstResource);
+        if (iter->second.desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+        {
+            ResourceCopyInfo copy_info;
+            copy_info.dst_resource_id = pDstResource;
+            copy_info.dst_offset      = 0;
+            copy_info.src_resource_id = pSrcResource;
+            copy_info.src_offset      = 0;
+            copy_info.num_bytes       = 0;
+
+            command_list_related_infos_[object_id].resource_copies.emplace_back(copy_info);
+        }
     }
 }
 
@@ -600,9 +1160,11 @@ void Dx12RayTracingModifier::Process_ID3D12CommandQueue_ExecuteCommandLists(
     for (UINT i = 0; i < NumCommandLists; ++i)
     {
         format::HandleId command_list_id = command_lists[i];
-        if (command_list_related_ids_.find(command_list_id) != command_list_related_ids_.end())
+        if (command_list_related_infos_.find(command_list_id) != command_list_related_infos_.end())
         {
-            command_list_related_ids_[command_list_id].clear();
+            command_list_related_infos_[command_list_id].related_resource_values.clear();
+            command_list_related_infos_[command_list_id].resource_copies.clear();
+            command_list_related_infos_[command_list_id].state_object_id = format::kNullHandleId;
         }
     }
 }
@@ -613,9 +1175,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_Reset(const ApiCa
                                                                      format::HandleId   pAllocator,
                                                                      format::HandleId   pInitialState)
 {
-    if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+    if (command_list_related_infos_.find(object_id) != command_list_related_infos_.end())
     {
-        command_list_related_ids_[object_id].clear();
+        command_list_related_infos_[object_id].related_resource_values.clear();
+        command_list_related_infos_[object_id].resource_copies.clear();
+        command_list_related_infos_[object_id].state_object_id = format::kNullHandleId;
     }
 }
 
@@ -627,21 +1191,23 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateDescriptorHeap(
     Decoded_GUID                                              riid,
     HandlePointerDecoder<void*>*                              ppvHeap)
 {
+    if (return_value != S_OK)
+    {
+        return;
+    }
+
     format::HandleId heap_id = *ppvHeap->GetPointer();
     if (descriptor_heap_infos_.find(heap_id) == descriptor_heap_infos_.end())
     {
-        DescriptorHeapDescInfo heap_info;
+        DescriptorHeapDescInfo heap_info = {};
         descriptor_heap_infos_.emplace(heap_id, heap_info);
     }
 
     auto& heap_info            = descriptor_heap_infos_[heap_id];
+    heap_info.handle_id        = heap_id;
+    heap_info.object_id        = object_id;
     heap_info.descriptor_type  = pDescriptorHeapDesc->GetPointer()->Type;
     heap_info.descriptor_count = pDescriptorHeapDesc->GetPointer()->NumDescriptors;
-
-    if (device_descriptor_increment_sizes_.find(object_id) != device_descriptor_increment_sizes_.end())
-    {
-        heap_info.capture_increments = device_descriptor_increment_sizes_[object_id];
-    }
 }
 
 void Dx12RayTracingModifier::Process_ID3D12Device_GetDescriptorHandleIncrementSize(
@@ -650,67 +1216,198 @@ void Dx12RayTracingModifier::Process_ID3D12Device_GetDescriptorHandleIncrementSi
     UINT                       return_value,
     D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType)
 {
-    if (device_descriptor_increment_sizes_.find(object_id) == device_descriptor_increment_sizes_.end())
+    if (return_value == 0)
     {
-        auto increments                               = std::make_shared<DescriptorIncrements>();
-        device_descriptor_increment_sizes_[object_id] = increments;
+        GFXRECON_LOG_WARNING("GetDescriptorHandleIncrementSize returned 0 for object ID: 0x%" PRIx64
+                             ", descriptor heap type: %d",
+                             object_id,
+                             DescriptorHeapType);
+        return;
     }
 
-    auto increments                   = device_descriptor_increment_sizes_[object_id];
-    (*increments)[DescriptorHeapType] = return_value;
-    for (auto& heap_infos : descriptor_heap_infos_)
+    auto iter = device_descriptor_increment_sizes_.find(object_id);
+    if (iter == device_descriptor_increment_sizes_.end())
     {
-        if (heap_infos.second.capture_increments == nullptr)
+        device_descriptor_increment_sizes_[object_id][DescriptorHeapType] = return_value;
+    }
+    else
+    {
+        auto increments = iter->second;
+        if (increments.find(DescriptorHeapType) == increments.end())
         {
-            if (heap_infos.second.descriptor_type == DescriptorHeapType)
+            device_descriptor_increment_sizes_[object_id][DescriptorHeapType] = return_value;
+        }
+        else
+        {
+            if (increments[DescriptorHeapType] != return_value)
             {
-                heap_infos.second.capture_increments = increments;
+                GFXRECON_LOG_WARNING(
+                    "GetDescriptorHandleIncrementSize returned different values for object ID: 0x%" PRIx64
+                    ", descriptor heap type: %d, previous value: %u, new value: %u",
+                    object_id,
+                    DescriptorHeapType,
+                    increments[DescriptorHeapType],
+                    return_value);
             }
         }
     }
 }
 
-void Dx12RayTracingModifier::FindResourceRemapValues(
-    const uint8_t*                                               data,
-    uint64_t                                                     data_size,
-    std::vector<std::pair<uint64_t, format::ResourceValueType>>* found_resource_values)
+void Dx12RayTracingModifier::FindAccelerationStructureResourceFromGPUAddress(const D3D12_GPU_VIRTUAL_ADDRESS address)
 {
-    found_resource_values->clear();
+    if ((address == 0) || (address < min_gpu_va_) || (address >= max_gpu_va_))
+    {
+        return;
+    }
 
-    const graphics::Dx12ShaderIdentifier zero_shader_id = { 0 };
-    const uint64_t                       kDescSize      = sizeof(D3D12_GPU_DESCRIPTOR_HANDLE::ptr);
-    const uint64_t                       kAddrSize      = sizeof(uint64_t);
-    const uint64_t                       kIdSize        = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    const uint64_t                       kMinDataStride = 4;
+    format::HandleId accel_struct_id = FindBaseResourceFromGPUAddress(address);
+    if (accel_struct_id == format::kNullHandleId)
+    {
+        return;
+    }
+
+    auto resource_iter = resource_entries_.find(accel_struct_id);
+    if (resource_iter == resource_entries_.end())
+    {
+        return;
+    }
+
+    if ((resource_iter->second.initial_state & D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE) !=
+        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE)
+    {
+        return;
+    }
+
+    if (address % D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT != 0)
+    {
+        return;
+    }
+
+    accel_struct_address_resource_[address] = resource_iter->second;
+}
+
+format::HandleId Dx12RayTracingModifier::FindBaseResourceFromGPUAddress(const D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+    if (address == 0 || address < min_gpu_va_ || address >= max_gpu_va_)
+    {
+        return format::kNullHandleId;
+    }
+
+    auto entry = std::find_if(
+        gpu_virtual_address_resource_.begin(), gpu_virtual_address_resource_.end(), [address](auto& entry) {
+            {
+                return ((entry.first == entry.second.start_virtual_address) &&
+                        (address >= entry.second.start_virtual_address) &&
+                        (address < entry.second.end_virtual_address));
+            }
+        });
+
+    if (entry != gpu_virtual_address_resource_.end())
+    {
+        return entry->second.handle_id;
+    }
+
+    return format::kNullHandleId;
+}
+
+void Dx12RayTracingModifier::FindResourceRemapValues(
+    const format::HandleId                       mapped_resource_id,
+    const uint8_t*                               data,
+    const uint64_t                               data_offset,
+    const uint64_t                               data_size,
+    std::vector<Dx12FillCommandResourceAddress>* found_resource_addresses)
+{
+    found_resource_addresses->clear();
+
+    const uint64_t kDescSize       = sizeof(D3D12_GPU_DESCRIPTOR_HANDLE::ptr);
+    const uint64_t kAddrSize       = sizeof(uint64_t);
+    const uint64_t kIdSize         = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    const uint64_t kMinDataStride  = 4;
+    const uint64_t kGpuVaAlignment = 4;
 
     // TODO: Before checking for GPU VA match, ensure that the data is valid.
     bool check_gpu_va = true;
+    // TODO: Before checking for GPU descriptor handle match, ensure that the data is valid.
+    bool check_gpu_descriptor = true;
+
+    if (min_gpu_descriptor_alignment_ == 0 || min_gpu_descriptor_alignment_ == UINT64_MAX)
+    {
+        min_gpu_descriptor_alignment_ = min_gpu_descriptor_increment_;
+    }
+
+    std::vector<uint8_t> zero_shader_id(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, 0);
 
     for (uint64_t i = 0; (i + kMinDataStride) <= data_size; i += kMinDataStride)
     {
+        Dx12FillCommandResourceAddress fill_cmd_resource_address;
+
         // First check for a shader id match.
         if ((i + kIdSize) <= data_size)
         {
-            uint8_t*                       shader_id  = const_cast<uint8_t*>(data) + i;
-            graphics::Dx12ShaderIdentifier current_id = graphics::PackDx12ShaderIdentifier(shader_id);
-            if (current_id == zero_shader_id)
+            uint8_t* shader_id_ptr = const_cast<uint8_t*>(data) + i;
+
+            if (0 == std::memcmp(shader_id_ptr, zero_shader_id.data(), kIdSize))
             {
+                i += kIdSize - kMinDataStride;
                 continue;
             }
 
-            std::vector<uint8_t> shader_id_vec(shader_id, shader_id + kIdSize);
-            if (shader_id_map_.Map(shader_id_vec.data()))
+            bool found_shader_id = false;
+            auto properties_id   = format::kNullHandleId;
+            for (const auto& state_object_shader_identifier : state_object_shader_identifiers_)
             {
-                found_resource_values->emplace_back(i, format::ResourceValueType::kShaderIdentifier);
+                properties_id                  = state_object_shader_identifier.first;
+                const auto& shader_identifiers = state_object_shader_identifier.second;
+                for (const auto& shader_id : shader_identifiers)
+                {
+                    if (0 == std::memcmp(shader_id_ptr, shader_id.data(), kIdSize))
+                    {
+                        found_shader_id = true;
+                        break;
+                    }
+                }
+
+                if (found_shader_id)
+                {
+                    break;
+                }
+            }
+
+            if (found_shader_id && (properties_id != format::kNullHandleId))
+            {
+                GFXRECON_LOG_DEBUG("Found shader identifier : 0x%" PRIx64 " offset %llu in resource ID: %" PRIu64
+                                   ", data_offset %" PRIu64 " data_size %" PRIu64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                                   (uint64_t*)shader_id_ptr,
+                                   i,
+                                   mapped_resource_id,
+                                   data_offset,
+                                   data_size,
+                                   GetCurrentBlockIndex());
+
+                fill_cmd_resource_address.offset    = i;
+                fill_cmd_resource_address.type      = format::ResourceValueType::kShaderIdentifier;
+                fill_cmd_resource_address.object_id = properties_id;
+                util::platform::MemoryCopy(fill_cmd_resource_address.shader_id,
+                                           D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+                                           shader_id_ptr,
+                                           D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+                found_resource_addresses->emplace_back(fill_cmd_resource_address);
                 i += kIdSize - kMinDataStride;
                 continue;
             }
         }
 
         // Next check for GPU descriptor match.
-        if ((i + kDescSize) <= data_size)
+        if (check_gpu_descriptor && ((i + kDescSize) <= data_size))
         {
-            uint64_t* handle_value = (uint64_t*)((uint8_t*)data + i);
+            uint64_t* handle_value = reinterpret_cast<uint64_t*>(const_cast<uint8_t*>(data) + i);
+            if (*handle_value == 0)
+            {
+                i += kDescSize - kMinDataStride;
+                continue;
+            }
+
             if ((*handle_value >= min_gpu_descriptor_) && (*handle_value < max_gpu_descriptor_) &&
                 (*handle_value % min_gpu_descriptor_alignment_ == 0))
             {
@@ -721,12 +1418,30 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
                                           descriptor_start_address_info_.end(),
                                           [old_descriptor](auto& entry) {
                                               return (old_descriptor.ptr >= entry.second.capture_gpu_addr_begin) &&
-                                                     (old_descriptor.ptr <= entry.second.capture_gpu_addr_end);
+                                                     (old_descriptor.ptr < entry.second.capture_gpu_addr_end);
                                           });
 
                 if (entry != descriptor_start_address_info_.end())
                 {
-                    found_resource_values->emplace_back(i, format::ResourceValueType::kGpuDescriptorHandle);
+                    GFXRECON_LOG_DEBUG("Found GPU descriptor handle: 0x%" PRIx64 " offset %llu in resource ID: %" PRIu64
+                                       ", data_offset %" PRIu64 " data_size %" PRIu64 " start handle: 0x%" PRIx64
+                                       ", end handle: 0x%" PRIx64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                                       old_descriptor.ptr,
+                                       i,
+                                       mapped_resource_id,
+                                       data_offset,
+                                       data_size,
+                                       entry->second.capture_gpu_addr_begin,
+                                       entry->second.capture_gpu_addr_end,
+                                       GetCurrentBlockIndex());
+
+                    fill_cmd_resource_address.offset         = i;
+                    fill_cmd_resource_address.type           = format::ResourceValueType::kGpuDescriptorHandle;
+                    fill_cmd_resource_address.object_id      = entry->second.handle_id;
+                    fill_cmd_resource_address.start_value    = entry->second.capture_gpu_addr_begin;
+                    fill_cmd_resource_address.adjusted_value = old_descriptor.ptr;
+
+                    found_resource_addresses->emplace_back(fill_cmd_resource_address);
                     i += kDescSize - kMinDataStride;
                     continue;
                 }
@@ -734,26 +1449,81 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
         }
 
         // Finally check for GPU VA match.
-        if (check_gpu_va && ((i + kAddrSize) <= data_size) && (i % sizeof(uint64_t) == 0))
+        if (check_gpu_va && ((i + kAddrSize) <= data_size))
         {
-            uint64_t* address_value = (uint64_t*)((uint8_t*)data + i);
+            uint64_t* address_value = reinterpret_cast<uint64_t*>(const_cast<uint8_t*>(data) + i);
+            if (*address_value == 0)
+            {
+                i += kAddrSize - kMinDataStride;
+                continue;
+            }
+
             if ((*address_value >= min_gpu_va_) && (*address_value < max_gpu_va_) &&
-                (*address_value % kMinDataStride == 0))
+                (*address_value % kGpuVaAlignment == 0))
             {
                 uint64_t old_address = *address_value;
 
-                auto entry = std::find_if(gpu_virtual_address_resource_.begin(),
-                                          gpu_virtual_address_resource_.end(),
-                                          [old_address](auto& entry) {
-                                              return (old_address >= entry.first) &&
-                                                     (old_address <= entry.first + entry.second.desc.Width);
-                                          });
-
-                if (entry != gpu_virtual_address_resource_.end())
+                // First check if the GPU VA is a raytracing acceleration structure.
+                auto accel_struct_iter = accel_struct_address_resource_.find(old_address);
+                if (accel_struct_iter != accel_struct_address_resource_.end())
                 {
-                    found_resource_values->emplace_back(i, format::ResourceValueType::kGpuVirtualAddress);
+                    GFXRECON_LOG_DEBUG("Found acceleration structure address: 0x%" PRIx64
+                                       " offset %llu in resource ID: %" PRIu64 ", data_offset %" PRIu64
+                                       " data_size %" PRIu64 "  start address: 0x%" PRIx64 ", end address: 0x%" PRIx64
+                                       " GetCurrentBlockIndex(%" PRIu64 ")",
+                                       old_address,
+                                       i,
+                                       mapped_resource_id,
+                                       data_offset,
+                                       data_size,
+                                       accel_struct_iter->second.start_virtual_address,
+                                       accel_struct_iter->second.end_virtual_address,
+                                       GetCurrentBlockIndex());
+
+                    fill_cmd_resource_address.offset         = i;
+                    fill_cmd_resource_address.type           = format::ResourceValueType::kGpuVirtualAddress;
+                    fill_cmd_resource_address.object_id      = accel_struct_iter->second.handle_id;
+                    fill_cmd_resource_address.start_value    = accel_struct_iter->second.start_virtual_address;
+                    fill_cmd_resource_address.adjusted_value = old_address;
+
+                    found_resource_addresses->emplace_back(fill_cmd_resource_address);
                     i += kAddrSize - kMinDataStride;
                     continue;
+                }
+                else
+                {
+                    auto entry = std::find_if(gpu_virtual_address_resource_.begin(),
+                                              gpu_virtual_address_resource_.end(),
+                                              [old_address](auto& entry) {
+                                                  return (old_address >= entry.second.start_virtual_address) &&
+                                                         (old_address < entry.second.end_virtual_address);
+                                              });
+
+                    if (entry != gpu_virtual_address_resource_.end())
+                    {
+                        GFXRECON_LOG_DEBUG("Found GPU virtual address: 0x%" PRIx64
+                                           " offset %llu in resource ID: %" PRIu64 ", data_offset %" PRIu64
+                                           " data_size %" PRIu64 "  start address: 0x%" PRIx64
+                                           ", end address: 0x%" PRIx64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                                           old_address,
+                                           i,
+                                           mapped_resource_id,
+                                           data_offset,
+                                           data_size,
+                                           entry->second.start_virtual_address,
+                                           entry->second.end_virtual_address,
+                                           GetCurrentBlockIndex());
+
+                        fill_cmd_resource_address.offset         = i;
+                        fill_cmd_resource_address.type           = format::ResourceValueType::kGpuVirtualAddress;
+                        fill_cmd_resource_address.object_id      = entry->second.handle_id;
+                        fill_cmd_resource_address.start_value    = entry->second.start_virtual_address;
+                        fill_cmd_resource_address.adjusted_value = old_address;
+
+                        found_resource_addresses->emplace_back(fill_cmd_resource_address);
+                        i += kAddrSize - kMinDataStride;
+                        continue;
+                    }
                 }
             }
         }
@@ -815,19 +1585,30 @@ void Dx12RayTracingModifier::Process_IUnknown_QueryInterface(const ApiCallInfo& 
     if (*riid.decoded_value == __uuidof(ID3D12Resource) || *riid.decoded_value == __uuidof(ID3D12Resource1) ||
         *riid.decoded_value == __uuidof(ID3D12Resource2))
     {
-        if (resource_entries_.find(object_id) != resource_entries_.end())
+        if (resource_entries_.find(handle_id) == resource_entries_.end())
         {
-            resource_entries_[handle_id]             = resource_entries_[object_id];
-            resource_entries_[handle_id].handle_id   = handle_id;
-            resource_entries_[handle_id].block_index = GetCurrentBlockIndex();
+            if (resource_entries_.find(object_id) != resource_entries_.end())
+            {
+                resource_entries_[handle_id]             = resource_entries_[object_id];
+                resource_entries_[handle_id].handle_id   = handle_id;
+                resource_entries_[handle_id].block_index = GetCurrentBlockIndex();
+            }
         }
     }
     else if (*riid.decoded_value == __uuidof(ID3D12DescriptorHeap))
     {
-        if (descriptor_heap_infos_.find(object_id) != descriptor_heap_infos_.end())
+        if (descriptor_heap_infos_.find(handle_id) == descriptor_heap_infos_.end())
         {
-            descriptor_heap_infos_[handle_id] = descriptor_heap_infos_[object_id];
+            if (descriptor_heap_infos_.find(object_id) != descriptor_heap_infos_.end())
+            {
+                descriptor_heap_infos_[handle_id] = descriptor_heap_infos_[object_id];
+            }
         }
+    }
+    else if (*riid.decoded_value == __uuidof(ID3D12StateObjectProperties) ||
+             *riid.decoded_value == __uuidof(ID3D12StateObjectProperties1))
+    {
+        state_object_properties_[object_id] = handle_id;
     }
 }
 
@@ -847,13 +1628,33 @@ void Dx12RayTracingModifier::Process_IUnknown_Release(const ApiCallInfo& call_in
                 gpu_virtual_address_resource_.erase(addr_iter);
             }
 
-            resource_entries_.erase(resource_iter);
-        }
+            auto iter = accel_struct_address_resource_.begin();
+            for (; iter != accel_struct_address_resource_.end();)
+            {
+                if (iter->second.handle_id == object_id)
+                {
+                    iter = accel_struct_address_resource_.erase(iter);
+                }
+                else
+                {
+                    ++iter;
+                }
+            }
 
-        auto acc_str_iter = acceleration_structure_build_desc_.find(object_id);
-        if (acc_str_iter != acceleration_structure_build_desc_.end())
-        {
-            acceleration_structure_build_desc_.erase(acc_str_iter);
+            auto desc_iter = acceleration_structure_build_desc_.begin();
+            for (; desc_iter != acceleration_structure_build_desc_.end();)
+            {
+                if (desc_iter->second.handle_id == object_id)
+                {
+                    desc_iter = acceleration_structure_build_desc_.erase(desc_iter);
+                }
+                else
+                {
+                    ++desc_iter;
+                }
+            }
+
+            resource_entries_.erase(resource_iter);
         }
 
         auto descriptor_iter = device_descriptor_increment_sizes_.find(object_id);
@@ -869,9 +1670,15 @@ void Dx12RayTracingModifier::Process_IUnknown_Release(const ApiCallInfo& call_in
             descriptor_heap_infos_.erase(descriptor_heap_iter);
         }
 
-        if (command_list_related_ids_.find(object_id) != command_list_related_ids_.end())
+        if (command_list_related_infos_.find(object_id) != command_list_related_infos_.end())
         {
-            command_list_related_ids_.erase(object_id);
+            command_list_related_infos_.erase(object_id);
+        }
+
+        auto state_object_iter = state_object_properties_.find(object_id);
+        if (state_object_iter != state_object_properties_.end())
+        {
+            state_object_properties_.erase(state_object_iter);
         }
     }
 }
@@ -886,6 +1693,8 @@ void Dx12RayTracingModifier::ProcessFillMemoryResourceValueCommand(
 void Dx12RayTracingModifier::ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                            const uint8_t*                              data)
 {
+    std::vector<Dx12FillCommandResourceAddress> found_resource_addresses;
+
     if (resource_entries_.find(command_header.resource_id) != resource_entries_.end())
     {
         auto& resource_info = resource_entries_[command_header.resource_id];
@@ -893,16 +1702,24 @@ void Dx12RayTracingModifier::ProcessInitSubresourceCommand(const format::InitSub
         {
             return;
         }
+
+        auto resource_id = resource_info.handle_id;
+        auto data_size   = command_header.data_size;
+        FindResourceRemapValues(resource_id, data, 0, data_size, &found_resource_addresses);
     }
 
-    std::vector<std::pair<uint64_t, format::ResourceValueType>> found_resource_values;
-    FindResourceRemapValues(data, command_header.data_size, &found_resource_values);
-
-    for (const auto& found_resource_value : found_resource_values)
+    for (const auto& found_resource_address : found_resource_addresses)
     {
-        auto& resource_values = fill_cmd_resource_values_[GetCurrentBlockIndex()];
-        resource_values.push_back({ found_resource_value.first, found_resource_value.second });
+        auto& resource_addresses = fill_cmd_resource_addresses_[GetCurrentBlockIndex()];
+        resource_addresses.push_back(found_resource_address);
     }
+}
+
+void Dx12RayTracingModifier::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& command_header, const uint8_t* data)
+{
+    // All old FillMemoryResourceAddressCommand Will be deleted
+    return;
 }
 
 void Dx12RayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
@@ -910,36 +1727,83 @@ void Dx12RayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
                                                       uint64_t       size,
                                                       const uint8_t* data)
 {
+    std::vector<Dx12FillCommandResourceAddress> found_resource_addresses;
+
     if (mapped_memory_resource_id_.find(memory_id) != mapped_memory_resource_id_.end())
     {
-        if (resource_entries_.find(mapped_memory_resource_id_[memory_id]) != resource_entries_.end())
+        const auto& mapped_resource_id = mapped_memory_resource_id_[memory_id];
+        if (resource_entries_.find(mapped_resource_id) != resource_entries_.end())
         {
-            auto& resource_info = resource_entries_[mapped_memory_resource_id_[memory_id]];
+            const auto& resource_info = resource_entries_[mapped_resource_id];
             if (resource_info.desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER)
             {
                 return;
             }
         }
+
+        FindResourceRemapValues(mapped_resource_id, data, offset, size, &found_resource_addresses);
     }
 
-    std::vector<std::pair<uint64_t, format::ResourceValueType>> found_resource_values;
-    FindResourceRemapValues(data, size, &found_resource_values);
-
-    for (const auto& found_resource_value : found_resource_values)
+    for (auto& found_resource_address : found_resource_addresses)
     {
-        auto& resource_values = fill_cmd_resource_values_[GetCurrentBlockIndex()];
-        resource_values.push_back({ found_resource_value.first + offset, found_resource_value.second });
+        found_resource_address.offset += offset;
+        auto& resource_addresses = fill_cmd_resource_addresses_[GetCurrentBlockIndex()];
+        resource_addresses.push_back(found_resource_address);
     }
 }
 
-void Dx12RayTracingModifier::GetTrackedResourceValues(Dx12PrebuildInfoResourceValueMap& prebuild_values,
-                                                      Dx12FillCommandResourceValueMap&  resource_values)
+void Dx12RayTracingModifier::GetTrackedResourceValues(Dx12PrebuildInfoResourceValueMap&  prebuild_values,
+                                                      Dx12FillCommandResourceAddressMap& resource_addresses)
 {
-    prebuild_values = std::move(prebuild_info_insert_values_);
-    prebuild_info_insert_values_.clear();
+    prebuild_values.swap(prebuild_info_insert_values_);
+    resource_addresses.swap(fill_cmd_resource_addresses_);
+}
 
-    resource_values = std::move(fill_cmd_resource_values_);
-    fill_cmd_resource_values_.clear();
+void Dx12RayTracingModifier::CreateDeviceAndCheckRayTracingSupport()
+{
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory = nullptr;
+    HRESULT                               result  = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+    if (FAILED(result))
+    {
+        return;
+    }
+
+    const UINT                            kMaxEnumAdapters = 3;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter          = nullptr;
+    for (UINT index = 0; index < kMaxEnumAdapters; ++index)
+    {
+        if (factory->EnumAdapters1(index, &adapter) == DXGI_ERROR_NOT_FOUND)
+        {
+            continue;
+        }
+
+        DXGI_ADAPTER_DESC1 desc;
+        adapter->GetDesc1(&desc);
+        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        {
+            continue;
+        }
+
+        graphics::dx12::ID3D12Device5ComPtr device = nullptr;
+        result = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&device));
+        if (SUCCEEDED(result))
+        {
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_data = {};
+            result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_data, sizeof(feature_data));
+            if (SUCCEEDED(result))
+            {
+                if (feature_data.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0)
+                {
+                    device->QueryInterface(IID_PPV_ARGS(&real_device5_));
+                    if (real_device5_ != nullptr)
+                    {
+                        GFXRECON_LOG_INFO("Ray tracing is supported on this device.");
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

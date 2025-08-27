@@ -171,6 +171,7 @@ class FileTransformer
     virtual bool ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header);
     virtual bool ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header);
     virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header);
+    virtual bool ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& header);
 
     uint64_t GetCurrentBlockIndex() { return block_index_; }
 

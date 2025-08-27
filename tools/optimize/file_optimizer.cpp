@@ -486,4 +486,14 @@ bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHead
     return true;
 }
 
+bool FileOptimizer::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& header)
+{
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
+    {
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
+    }
+    return FileTransformer::ProcessFillMemoryResourceAddressCommand(header);
+}
+
 GFXRECON_END_NAMESPACE(gfxrecon)

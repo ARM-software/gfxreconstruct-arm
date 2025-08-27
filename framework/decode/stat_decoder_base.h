@@ -212,6 +212,11 @@ class StatDecoderBase : public ApiDecoder
         const uint8_t*                                                  build_inputs_data) override
     {}
 
+    virtual void
+    DispatchFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                             const uint8_t*                                        data) override
+    {}
+
   private:
     std::vector<StatConsumerBase*> consumers_;
 };

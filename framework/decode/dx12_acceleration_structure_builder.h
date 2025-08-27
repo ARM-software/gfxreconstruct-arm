@@ -49,24 +49,23 @@ class Dx12AccelerationStructureBuilder
                const std::vector<format::InitDx12AccelerationStructureGeometryDesc>& init_geometry_descs,
                const uint8_t*                                                        build_inputs_data);
 
-    void PrebuildInfo(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* pInfo) { prebuild_info_ = *pInfo; }
+    void SetPrebuildInfo(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* capture_prebuild_info,
+                         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* replay_prebuild_info,
+                         graphics::Dx12GpuVaMap&                                gpu_va_map);
 
     const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO GetLastPrebuildInfo();
 
     void PreBuildRaytracingAccelerationStructure(const format::HandleId                                    command_list,
                                                  const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* pDesc);
 
-    void ReleaseScratchBuffer(const format::HandleId command_list);
+    void ReleaseAccelerationStructureBuffer(const format::HandleId resource_id, graphics::Dx12GpuVaMap& gpu_va_map);
 
-    void PostExecuteCommandLists(const format::HandleId  queue,
+    void ReleaseScratchBuffer();
+
+    void PostExecuteCommandLists(ID3D12CommandQueue*     command_queue,
+                                 const format::HandleId  queue,
                                  const UINT              num_command_lists,
                                  const format::HandleId* command_lists);
-
-    void PostCommandQueueSignal(const format::HandleId queue, const format::HandleId fence, const UINT64 value);
-
-    void PostGetCompletedValue(const format::HandleId fence, const UINT64 value);
-
-    void PostCommandQueueWait(const format::HandleId queue, const format::HandleId fence, const UINT64 value);
 
     ID3D12Device5* GetDevice5() { return device5_; }
 
@@ -102,19 +101,40 @@ class Dx12AccelerationStructureBuilder
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> temp_geometry_descs_;
     std::vector<uint8_t>                        temp_instance_desc_input_data_;
 
+    struct AccelerationStructureBufferData
+    {
+        graphics::dx12::ID3D12ResourceComPtr accel_struct_buffer{ nullptr };
+        UINT64                               accel_struct_buffer_size{ 0 };
+        D3D12_GPU_VIRTUAL_ADDRESS            capture_accel_struct_address{ 0 };
+        D3D12_GPU_VIRTUAL_ADDRESS            replay_accel_struct_address{ 0 };
+
+        AccelerationStructureBufferData() = default;
+
+        AccelerationStructureBufferData(AccelerationStructureBufferData&& other) noexcept = default;
+
+        AccelerationStructureBufferData& operator=(AccelerationStructureBufferData&& other) noexcept
+        {
+            if (this != &other)
+            {
+                accel_struct_buffer          = std::move(other.accel_struct_buffer);
+                accel_struct_buffer_size     = other.accel_struct_buffer_size;
+                capture_accel_struct_address = other.capture_accel_struct_address;
+                replay_accel_struct_address  = other.replay_accel_struct_address;
+            }
+            return *this;
+        }
+    };
+
     struct ScratchBufferData
     {
-        graphics::dx12::ID3D12ResourceComPtr scratch_buffer;
-        UINT64                               build_size;
-        D3D12_GPU_VIRTUAL_ADDRESS            capture_scratch_address;
-        D3D12_GPU_VIRTUAL_ADDRESS            replay_scratch_address;
+        graphics::dx12::ID3D12ResourceComPtr scratch_buffer{ nullptr };
+        UINT64                               build_size{ 0 };
+        D3D12_GPU_VIRTUAL_ADDRESS            capture_scratch_address{ 0 };
+        D3D12_GPU_VIRTUAL_ADDRESS            replay_scratch_address{ 0 };
 
-        ScratchBufferData() {}
+        ScratchBufferData() = default;
 
-        ScratchBufferData(ScratchBufferData&& other) noexcept :
-            scratch_buffer(std::move(other.scratch_buffer)), build_size(other.build_size),
-            capture_scratch_address(other.capture_scratch_address), replay_scratch_address(other.replay_scratch_address)
-        {}
+        ScratchBufferData(ScratchBufferData&& other) noexcept = default;
 
         ScratchBufferData& operator=(ScratchBufferData&& other) noexcept
         {
@@ -129,25 +149,11 @@ class Dx12AccelerationStructureBuilder
         }
     };
 
-    struct CommandQueueData
-    {
-        std::vector<format::HandleId>                command_lists;
-        std::unordered_map<format::HandleId, UINT64> wait_fences_value;
-
-        CommandQueueData& operator=(CommandQueueData&& other) noexcept
-        {
-            if (this != &other)
-            {
-                command_lists     = std::move(other.command_lists);
-                wait_fences_value = std::move(other.wait_fences_value);
-            }
-            return *this;
-        }
-    };
-
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO                prebuild_info_{};
-    std::unordered_map<format::HandleId, std::vector<ScratchBufferData>> command_lis_recorded_scratches_;
-    std::unordered_map<format::HandleId, CommandQueueData>               command_queue_data_;
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO                prebuild_info_ = {};
+    std::unordered_map<format::HandleId, std::vector<ScratchBufferData>> command_list_recorded_scratches_;
+    std::unordered_map<uint64_t, std::vector<ScratchBufferData>>         sync_fence_value_executed_scratches_;
+    std::unordered_map<format::HandleId, std::vector<AccelerationStructureBufferData>>
+        recreated_new_accel_struct_buffers_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

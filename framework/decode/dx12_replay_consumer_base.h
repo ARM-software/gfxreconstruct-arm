@@ -127,6 +127,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,
                                               const uint8_t*                       parameters_data) override;
 
+    virtual void
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                            const uint8_t*                                        data) override;
+
     virtual void Process_ID3D12Device_CheckFeatureSupport(format::HandleId object_id,
                                                           HRESULT          original_result,
                                                           D3D12_FEATURE    feature,
@@ -1271,6 +1275,18 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         }
     };
 
+    struct FillMemoryResourceAddressInfo
+    {
+        uint64_t                                    expected_block_index{ 0 };
+        std::vector<Dx12FillCommandResourceAddress> resource_addresses;
+
+        void Clear()
+        {
+            expected_block_index = 0;
+            resource_addresses.clear();
+        }
+    };
+
     IUnknown* GetCreateDeviceAdapter(DxObjectInfo* adapter_info);
 
     void InitializeD3D12Device(HandlePointerDecoder<void*>* device);
@@ -1378,6 +1394,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                              const uint8_t* data,
                                              uint8_t*       dst_resource_data_ptr);
 
+    void ApplyFillMemoryResourceAddressCommand(uint64_t offset, uint64_t size, const uint8_t* data);
+
     void ApplyBatchedResourceInitInfo(std::unordered_map<ID3D12Resource*, ResourceInitInfo>& resource_infos);
 
     void SetResourceInitInfoState(ResourceInitInfo&                           resource_info,
@@ -1387,7 +1405,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void SetResourceReplayRequiredSize(DxObjectInfo*                                       replay_object_info,
                                        StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC>*  pDesc,
                                        StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC1>* pDesc1,
-                                       D3D12_RESOURCE_STATES                               InitialResourceState);
+                                       D3D12_RESOURCE_STATES                               resource_state,
+                                       format::HandleId                                    resource_id);
 
     std::wstring ConstructObjectName(format::HandleId capture_id, format::ApiCallId call_id);
 
@@ -1436,6 +1455,9 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 #ifdef GFXRECON_AGS_SUPPORT
     graphics::Dx12AgsMarkerInjector* ags_marker_injector_{ nullptr };
 #endif
+
+    FillMemoryResourceAddressInfo                            fill_memory_resource_address_info_;
+    std::unordered_map<format::HandleId, uint64_t>           resource_buffer_widths_;
     std::optional<std::pair<uint64_t, std::vector<uint8_t>>> latest_root_signature_blob_datas_;
     // map dx12 acceleration structure builders for each device
     std::unordered_map<const ID3D12Device*, std::unique_ptr<Dx12AccelerationStructureBuilder>>

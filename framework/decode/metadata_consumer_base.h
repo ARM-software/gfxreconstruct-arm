@@ -147,6 +147,11 @@ class MetadataConsumerBase
                                           const uint8_t*   data)
     {}
 
+    virtual void
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                            const uint8_t*                                        data)
+    {}
+
     virtual void ProcessViewRelativeLocation(format::ThreadId thread_id, format::ViewRelativeLocation& location){};
 
     virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,

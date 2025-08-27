@@ -331,6 +331,15 @@ void Dx12DecoderBase::DispatchInitializeMetaCommand(format::InitializeMetaComman
     }
 }
 
+void Dx12DecoderBase::DispatchFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& command_header, const uint8_t* data)
+{
+    for (auto consumer : consumers_)
+    {
+        consumer->ProcessFillMemoryResourceAddressCommand(command_header, data);
+    }
+}
+
 void Dx12DecoderBase::DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
                                                              const char*                             env_string)
 {

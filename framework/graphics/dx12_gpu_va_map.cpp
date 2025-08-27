@@ -46,6 +46,14 @@ void Dx12GpuVaMap::Add(format::HandleId resource_id,
     }
 }
 
+void Dx12GpuVaMap::AddForAccelStruct(uint64_t old_start_address, uint64_t new_start_address)
+{
+    if ((old_start_address != kNullAddress) && (new_start_address != kNullAddress))
+    {
+        accel_struct_gpu_va_map_[old_start_address] = new_start_address;
+    }
+}
+
 void Dx12GpuVaMap::Remove(format::HandleId resource_id, uint64_t old_start_address)
 {
     if ((resource_id != format::kNullHandleId) && (old_start_address != kNullAddress))
@@ -62,6 +70,18 @@ void Dx12GpuVaMap::Remove(format::HandleId resource_id, uint64_t old_start_addre
     }
 }
 
+void Dx12GpuVaMap::RemoveForAccelStruct(uint64_t old_start_address)
+{
+    if (old_start_address != kNullAddress)
+    {
+        auto entry = accel_struct_gpu_va_map_.find(old_start_address);
+        if (entry != accel_struct_gpu_va_map_.end())
+        {
+            accel_struct_gpu_va_map_.erase(entry);
+        }
+    }
+}
+
 uint64_t Dx12GpuVaMap::Map(uint64_t                 address,
                            format::HandleId*        resource_id,
                            bool*                    found,
@@ -72,6 +92,17 @@ uint64_t Dx12GpuVaMap::Map(uint64_t                 address,
 
     if (address != kNullAddress)
     {
+        auto replay_address = GetReplayAccelerationStructureAddress(address);
+        if (replay_address != kNullAddress)
+        {
+            if (found != nullptr)
+            {
+                (*found) = local_found;
+            }
+
+            return replay_address;
+        }
+
         auto va_entry = gpu_va_map_.lower_bound(address);
         if (va_entry != gpu_va_map_.end())
         {
@@ -148,6 +179,42 @@ bool Dx12GpuVaMap::FindMatch(const AliasedResourceVaInfo& resource_info,
     }
 
     return false;
+}
+
+uint64_t Dx12GpuVaMap::GetReplayGpuVirtualBaseAddress(const format::HandleId resource_id, const uint64_t address) const
+{
+    if ((resource_id == format::kNullHandleId) || (address == kNullAddress))
+    {
+        return kNullAddress;
+    }
+
+    auto entry = gpu_va_map_.find(address);
+    if (entry != gpu_va_map_.end())
+    {
+        auto address_infos = entry->second;
+        auto info          = address_infos.find(resource_id);
+        if (info != address_infos.end())
+        {
+            return info->second.new_start_address;
+        }
+    }
+
+    GFXRECON_LOG_ERROR("Failed to find replay GPU virtual base address for 0x%" PRIx64, address);
+    return kNullAddress;
+}
+
+uint64_t Dx12GpuVaMap::GetReplayAccelerationStructureAddress(const uint64_t address) const
+{
+    if (address != kNullAddress)
+    {
+        auto accel_struct_iter = accel_struct_gpu_va_map_.find(address);
+        if (accel_struct_iter != accel_struct_gpu_va_map_.end())
+        {
+            return accel_struct_iter->second;
+        }
+    }
+
+    return kNullAddress;
 }
 
 GFXRECON_END_NAMESPACE(graphics)

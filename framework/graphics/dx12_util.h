@@ -205,7 +205,8 @@ ID3D12ResourceComPtr CreateBufferResource(ID3D12Device*         device,
                                           uint64_t              size,
                                           D3D12_HEAP_TYPE       heap_type,
                                           D3D12_RESOURCE_STATES initial_state,
-                                          D3D12_RESOURCE_FLAGS  flags);
+                                          D3D12_RESOURCE_FLAGS  flags,
+                                          D3D12_HEAP_FLAGS      heap_flags = D3D12_HEAP_FLAG_NONE);
 
 template <typename DeviceT>
 auto GetDeviceComPtrFromChild(ID3D12DeviceChild* device_child)

@@ -165,6 +165,7 @@ enum class MetaDataType : uint16_t
     kFixDescriptorDataCommand                           = 38,
     kFixShadowMemoryCommand                             = 39,
     kFixShaderGroupHandleCommand                        = 40,
+    kFillMemoryResourceAddressCommand                   = 41,
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -836,6 +837,28 @@ struct InitializeMetaCommand
     // In the capture file, initialize metacommand data is written in the following order:
     // InitializeMetaCommandHeder
     // parameters data
+};
+
+struct FillMemoryResourceAddressCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+    uint64_t         resource_address_count;
+};
+
+struct Dx12FillMemoryResourceAddressInfo
+{
+    uint64_t          offset;
+    ResourceValueType type;
+
+    // The relevant resource, descriptor, or state object properties.
+    format::HandleId object_id;
+    // Base GPU VA or GPU Descriptor start address.
+    uint64_t start_value;
+    // GPU VA or GPU Descriptor found in memory.
+    uint64_t adjusted_value;
+    // Shader identifier found in memory.
+    uint8_t shader_id[kMaxShaderGroupHandleSize];
 };
 
 // Restore size_t to normal behavior.

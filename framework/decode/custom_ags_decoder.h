@@ -201,6 +201,11 @@ class AgsDecoder : public ApiDecoder
         const uint8_t*                                                  build_inputs_data) override
     {}
 
+    virtual void
+    DispatchFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                             const uint8_t*                                        data) override
+    {}
+
   protected:
     const std::vector<AgsConsumerBase*>& GetConsumers() const { return consumers_; }
 

@@ -69,6 +69,8 @@ class Dx12DescriptorMap
 
     void GetGpuAddress(D3D12_GPU_DESCRIPTOR_HANDLE& descriptor, bool* found = nullptr) const;
 
+    uint64_t GetReplayGpuDescriptorBaseAddress(const uint64_t descriptor_ptr, const uint64_t capture_offset = 0);
+
     void RemoveCpuDescriptorHeap(const size_t capture_cpu_addr_begin);
 
     void RemoveGpuDescriptorHeap(const uint64_t capture_gpu_addr_begin);

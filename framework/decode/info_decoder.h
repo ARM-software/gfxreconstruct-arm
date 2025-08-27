@@ -215,6 +215,11 @@ class InfoDecoder : public ApiDecoder
     virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
                                                         const char*                             env_string) override;
 
+    virtual void
+    DispatchFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                             const uint8_t*                                        data) override
+    {}
+
   private:
     std::vector<InfoConsumer*> consumers_;
 };

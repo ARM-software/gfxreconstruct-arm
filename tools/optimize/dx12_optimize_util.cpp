@@ -56,10 +56,23 @@ struct Dx12OptimizationInfo
     // DXR optimization
     decode::Dx12FillCommandResourceValueMap  fill_command_resource_values;
     decode::Dx12UnassociatedResourceValueMap unassociated_resource_values;
-    decode::Dx12PrebuildInfoResourceValueMap prebuild_Info_resource_values;
+
+    decode::Dx12FillCommandResourceAddressMap fill_command_resource_addresses;
+    decode::Dx12PrebuildInfoResourceValueMap  prebuild_info_resource_values;
 
     bool found_opt_fill_mem{ false };
     bool inject_noop_resource_value_optimization{ false };
+
+    void Clear()
+    {
+        unreferenced_blocks.clear();
+        fill_command_resource_values.clear();
+        unassociated_resource_values.clear();
+        fill_command_resource_addresses.clear();
+        prebuild_info_resource_values.clear();
+        found_opt_fill_mem                      = false;
+        inject_noop_resource_value_optimization = false;
+    }
 };
 
 void CreateResourceValueTrackingConsumer(
@@ -201,11 +214,11 @@ bool GetDxrOfflineOptimizationInfo(const std::string&               input_filena
         file_processor.ProcessAllFrames();
         if (FileProcessorSucceeded(file_processor))
         {
-            ray_tracing_modifier_consumer.GetTrackedResourceValues(info.prebuild_Info_resource_values,
-                                                                   info.fill_command_resource_values);
+            ray_tracing_modifier_consumer.GetTrackedResourceValues(info.prebuild_info_resource_values,
+                                                                   info.fill_command_resource_addresses);
             GFXRECON_WRITE_CONSOLE("Finished scanning capture file for ray tracing offline infos.");
 
-            if (info.prebuild_Info_resource_values.empty() && info.fill_command_resource_values.empty())
+            if (info.prebuild_info_resource_values.empty() && info.fill_command_resource_addresses.empty())
             {
                 // If the file is not optimized for DXR but does not contain any resource values that need to be
                 // mapped during replay, mark it as optimized.
@@ -414,7 +427,7 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
     }
 
     // Log info about resource value optimization
-    if (options.optimize_resource_values || options.optimize_resource_values_offline)
+    if (options.optimize_resource_values)
     {
         if (info.inject_noop_resource_value_optimization)
         {
@@ -427,6 +440,26 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
             found_optimization_data = true;
             GFXRECON_WRITE_CONSOLE("Optimizing %zu FillMemoryCommand blocks for DXR/EI replay.",
                                    info.fill_command_resource_values.size());
+        }
+        else
+        {
+            GFXRECON_WRITE_CONSOLE("Found no DXR or EI optimization info. Skipping DXR/EI optimization.");
+        }
+    }
+
+    if (options.optimize_resource_values_offline)
+    {
+        if (info.inject_noop_resource_value_optimization)
+        {
+            found_optimization_data = true;
+            GFXRECON_WRITE_CONSOLE("No DXR/EI optimization data found. Marking file as optimized for DXR/EI replay.",
+                                   info.fill_command_resource_addresses.size());
+        }
+        else if (!info.fill_command_resource_addresses.empty())
+        {
+            found_optimization_data = true;
+            GFXRECON_WRITE_CONSOLE("Optimizing %zu FillMemoryCommand blocks for DXR/EI replay.",
+                                   info.fill_command_resource_addresses.size());
         }
         else
         {
@@ -450,9 +483,10 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
         {
             file_optimizer.SetUnreferencedBlocks(info.unreferenced_blocks);
             file_optimizer.SetRemovedThreads(removed_threads_ids);
-            file_optimizer.SetPrebuildInfoResourceValues(&info.prebuild_Info_resource_values);
+            file_optimizer.SetPrebuildInfoResourceValues(&info.prebuild_info_resource_values);
             file_optimizer.SetFillCommandResourceValues(&info.fill_command_resource_values,
                                                         info.inject_noop_resource_value_optimization);
+            file_optimizer.SetFillCommandResourceAddresses(&info.fill_command_resource_addresses);
 
             file_optimizer.Process();
 
@@ -473,6 +507,10 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
                 if (info.inject_noop_resource_value_optimization)
                 {
                     expected_fill_commands = 1;
+                }
+                else if (options.optimize_resource_values_offline)
+                {
+                    expected_fill_commands = info.fill_command_resource_addresses.size();
                 }
 
                 if (resultant_objects > 0)
@@ -517,8 +555,10 @@ bool Dx12OptimizeFile(std::string input_filename, std::string output_filename, d
     }
 
     // Run a scanning pass to collect the necessary optimization info.
-    Dx12OptimizationInfo info;
-    bool                 scan_result = GetDx12OptimizationInfo(input_filename, options, info);
+    static Dx12OptimizationInfo info;
+    info.Clear();
+
+    bool scan_result = GetDx12OptimizationInfo(input_filename, options, info);
     if (scan_result == false)
     {
         GFXRECON_WRITE_CONSOLE("File processing has encountered a fatal error and cannot continue.");

@@ -45,11 +45,22 @@ void Dx12FileOptimizer::SetFillCommandResourceValues(
     }
 }
 
-void Dx12FileOptimizer::SetPrebuildInfoResourceValues(
-    const decode::Dx12PrebuildInfoResourceValueMap* prebuild_Info_resource_values)
+void Dx12FileOptimizer::SetFillCommandResourceAddresses(
+    const decode::Dx12FillCommandResourceAddressMap* fill_command_resource_addresses)
 {
-    GFXRECON_ASSERT((prebuild_Info_resource_values != nullptr) && !prebuild_Info_resource_values->empty());
-    prebuild_Info_resource_values_ = prebuild_Info_resource_values;
+    fill_command_resource_addresses_ = fill_command_resource_addresses;
+    if (fill_command_resource_addresses_ != nullptr)
+    {
+        GFXRECON_ASSERT(fill_command_resource_addresses->empty());
+        resource_addresses_iter_ = fill_command_resource_addresses_->begin();
+    }
+}
+
+void Dx12FileOptimizer::SetPrebuildInfoResourceValues(
+    const decode::Dx12PrebuildInfoResourceValueMap* prebuild_info_resource_values)
+{
+    GFXRECON_ASSERT((prebuild_info_resource_values != nullptr) && !prebuild_info_resource_values->empty());
+    prebuild_info_resource_values_ = prebuild_info_resource_values;
 }
 
 bool Dx12FileOptimizer::AddFillMemoryResourceValueCommand()
@@ -132,6 +143,81 @@ bool Dx12FileOptimizer::AddFillMemoryResourceValueCommand()
     return success;
 }
 
+bool Dx12FileOptimizer::AddFillMemoryResourceAddressCommand()
+{
+    bool success = true;
+
+    GFXRECON_ASSERT(resource_addresses_iter_->first == GetCurrentBlockIndex());
+
+    format::FillMemoryResourceAddressCommandHeader ra_header;
+    ra_header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+    ra_header.meta_header.meta_data_id      = format::MakeMetaDataId(
+        format::ApiFamilyId::ApiFamily_D3D12, format::MetaDataType::kFillMemoryResourceAddressCommand);
+    ra_header.thread_id              = 1;
+    ra_header.resource_address_count = resource_addresses_iter_->second.size();
+
+    size_t       header_size = sizeof(format::FillMemoryResourceAddressCommandHeader);
+    const size_t uncompressed_size =
+        resource_addresses_iter_->second.size() * sizeof(decode::Dx12FillCommandResourceAddress);
+
+    bool not_compressed = true;
+
+    if (uncompressed_size > 0)
+    {
+        write_buffer_.clear();
+        write_buffer_.resize(uncompressed_size);
+
+        // Write resource address data to uncompressed buffer.
+        auto data_pos = write_buffer_.data();
+        for (const auto& resource_address : resource_addresses_iter_->second)
+        {
+            util::platform::MemoryCopy(data_pos,
+                                       sizeof(decode::Dx12FillCommandResourceAddress),
+                                       &resource_address,
+                                       sizeof(decode::Dx12FillCommandResourceAddress));
+
+            data_pos += sizeof(decode::Dx12FillCommandResourceAddress);
+        }
+        GFXRECON_ASSERT(data_pos == (write_buffer_.data() + (ra_header.resource_address_count *
+                                                             sizeof(decode::Dx12FillCommandResourceAddress))));
+
+        std::vector<uint8_t> compressed_write_buffer;
+
+        if (GetCompressor() != nullptr)
+        {
+            size_t compressed_size =
+                GetCompressor()->Compress(write_buffer_.size(), write_buffer_.data(), &compressed_write_buffer, 0);
+
+            if ((compressed_size > 0) && (compressed_size < uncompressed_size))
+            {
+                not_compressed = false;
+
+                // Calculate size of packet with compressed data size.
+                ra_header.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(ra_header) + compressed_size;
+                ra_header.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
+
+                success = success && WriteBytes(&ra_header, header_size);
+                success = success && WriteBytes(compressed_write_buffer.data(), compressed_size);
+            }
+        }
+    }
+
+    // If the data was not compressed, write the uncompressed data here.
+    if (not_compressed)
+    {
+        // Calculate size of packet with uncompressed data size.
+        ra_header.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(ra_header) + uncompressed_size;
+
+        success = success && WriteBytes(&ra_header, header_size);
+        success = success && WriteBytes(write_buffer_.data(), uncompressed_size);
+    }
+
+    ++resource_addresses_iter_;
+    ++num_optimized_fill_commands_;
+
+    return success;
+}
+
 void Dx12FileOptimizer::WriteMethodCall(format::ApiCallId               call_id,
                                         format::HandleId                call_object_id,
                                         format::ThreadId                thread_id,
@@ -209,20 +295,23 @@ bool Dx12FileOptimizer::AddPrebuildInfoResourceValueCommand(const format::BlockH
                                                             format::ApiCallId          call_id)
 {
     bool success = true;
-    GFXRECON_ASSERT(prebuild_Info_resource_values_ != nullptr);
+    GFXRECON_ASSERT(prebuild_info_resource_values_ != nullptr);
 
-    auto it = prebuild_Info_resource_values_->find(GetCurrentBlockIndex());
-    GFXRECON_ASSERT(it != prebuild_Info_resource_values_->end());
+    auto prebuild_iter = prebuild_info_resource_values_->find(GetCurrentBlockIndex());
+    GFXRECON_ASSERT(prebuild_iter != prebuild_info_resource_values_->end());
 
-    auto& info_values = it->second;
-    GFXRECON_ASSERT(info_values.is_first_built == true);
-    format::HandleId  object_id     = info_values.object_id;
-    const auto&       prebuild_info = info_values.get_prebuild_info;
-    format::ThreadId  thread_id     = 0;
-    format::ApiCallId api_call_id =
-        format::ApiCallId::ApiCall_ID3D12Device5_GetRaytracingAccelerationStructurePrebuildInfo;
+    auto& build_descs = prebuild_iter->second;
+    for (auto iter = build_descs.begin(); iter != build_descs.end(); ++iter)
+    {
+        format::HandleId  object_id     = iter->second.object_id;
+        const auto&       prebuild_info = iter->second.get_prebuild_info;
+        format::ThreadId  thread_id     = 0;
+        format::ApiCallId api_call_id =
+            format::ApiCallId::ApiCall_ID3D12Device5_GetRaytracingAccelerationStructurePrebuildInfo;
 
-    WriteMethodCall(api_call_id, object_id, thread_id, &prebuild_info);
+        WriteMethodCall(api_call_id, object_id, thread_id, &prebuild_info);
+    }
+
     return success;
 }
 
@@ -234,11 +323,12 @@ bool Dx12FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header
         (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreateCommittedResource3) ||
         (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_CreatePlacedResource) ||
         (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device8_CreatePlacedResource1) ||
-        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreatePlacedResource2))
+        (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device10_CreatePlacedResource2) ||
+        (header.api_call_id == format::ApiCallId::ApiCall_IUnknown_QueryInterface))
     {
-        GFXRECON_ASSERT(prebuild_Info_resource_values_ != nullptr);
+        GFXRECON_ASSERT(prebuild_info_resource_values_ != nullptr);
 
-        if (prebuild_Info_resource_values_->find(GetCurrentBlockIndex()) != prebuild_Info_resource_values_->end())
+        if (prebuild_info_resource_values_->find(GetCurrentBlockIndex()) != prebuild_info_resource_values_->end())
         {
             if (!AddPrebuildInfoResourceValueCommand(header.block_header, header.api_call_id))
             {
@@ -290,8 +380,34 @@ bool Dx12FileOptimizer::ProcessMetaData(const format::MetaDataHeader& meta_heade
             fill_command_resource_values_ = nullptr;
             resource_values_iter_         = {};
         }
+        else if ((fill_command_resource_addresses_ != nullptr) && (!fill_command_resource_addresses_->empty()))
+        {
+            if ((resource_addresses_iter_ != fill_command_resource_addresses_->end()) &&
+                (resource_addresses_iter_->first == GetCurrentBlockIndex()))
+            {
+                if (!AddFillMemoryResourceAddressCommand())
+                {
+                    GFXRECON_LOG_ERROR("Failed to write the FillMemoryResourceAddressCommand needed for DXR or EI "
+                                       "optimization. Optimized file may be invalid.");
+                }
+            }
+        }
     }
     else if (meta_data_type == format::MetaDataType::kFillMemoryResourceValueCommand)
+    {
+        // Total number of bytes remaining to be read for the current block.
+        const uint64_t unread_bytes =
+            meta_header.block_header.size - sizeof(meta_header) + sizeof(meta_header.block_header);
+
+        if (!FileOptimizer::SkipBytes(unread_bytes))
+        {
+            HandleBlockReadError(kErrorSeekingFile, "Failed to skip meta block data");
+            return false;
+        }
+
+        return true;
+    }
+    else if (meta_data_type == format::MetaDataType::kFillMemoryResourceAddressCommand)
     {
         // Total number of bytes remaining to be read for the current block.
         const uint64_t unread_bytes =

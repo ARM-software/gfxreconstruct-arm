@@ -62,6 +62,8 @@ class CompressionConverter : public decode::FileTransformer
     virtual bool
     ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& header) override;
     virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
+    virtual bool
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& header) override;
 
   private:
     bool WriteFunctionCall(format::ApiCallId call_id, format::ThreadId thread_id, size_t buffer_size);

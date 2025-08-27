@@ -247,6 +247,10 @@ class ApiDecoder
 
     virtual void DispatchInitializeMetaCommand(format::InitializeMetaCommand& header,
                                                const uint8_t*                 initialization_parameters_data){};
+
+    virtual void
+    DispatchFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                             const uint8_t*                                        data){};
 };
 
 GFXRECON_END_NAMESPACE(decode)
