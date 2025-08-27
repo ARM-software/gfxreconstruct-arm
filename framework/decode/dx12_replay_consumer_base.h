@@ -1246,6 +1246,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         void*            data_pointer{ 0 };
         format::HandleId resource_id{ format::kNullHandleId };
+        uint32_t         ref_count{ 0 };
     };
 
     struct ResourceInitInfo
