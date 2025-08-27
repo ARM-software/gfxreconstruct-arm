@@ -1018,19 +1018,23 @@ by any of the captured frames, and generate a new capture file that omits the
 data for these unused buffer and image objects.
 
 ```text
-gfxrecon-optimize - Remove unused resource initialization data from trimmed
-                    GFXReconstruct capture files.
+gfxrecon-optimize - Produce new captures with enhanced performance characteristics
+                        The optimizer will produce a capture with better portability characteristics for captures that use device addresses and / or ray-tracing
+                        For Vulkan, the optimizer will remove unused buffer and image initialization data (for trimmed captures)
+                        For D3D12, the optimizer will improve DXR replay performance and remove unused PSOs (for all captures)
 
 Usage:
-  gfxrecon-optimize [-h | --help] [--version] <input-file> <output-file>
+  gfxrecon-optimize [-h | --help] [--version] [--d3d12-pso-removal] [--dxr] [--dxr-offline] [--gpu <index>] [--set-replay-options] [--remove-device-instance] <input-file> <output-file>
 
 Required arguments:
-  <input-file>          The trimmed GFXReconstruct capture file to be
-                        processed.
-  <output-file>         The name of the new GFXReconstruct capture file to be
-                        created.
+  <input-file>          The path to input GFXReconstruct capture file to be processed.
+  <output-file>         The path to output GFXReconstruct capture file to be created.
 
 Optional arguments:
+  --set-replay-options <options>                Add default playback options to the trace. Use quotation marks for multiple arguments. Do NOT combine this option with any other option.
+  --remove-device-instance <options>            Remove redundant instance/device and corresponding APIs. Use comma marks for multiple arguments. the default value is "android framework".
+  --vk-remove-rt                Remove ray-tracing related API calls from the trace
+  --remove-thread <threads>             Remove the specified threads from the trace.
   -h                    Print usage information and exit (same as --help).
   --version             Print version information and exit.
 ```
@@ -1058,23 +1062,38 @@ capture. More details of the file format can be found in the tool's
 
 
 ```text
-gfxrecon-convert - A tool to convert GFXReconstruct capture files to text.
+gfxrecon-convert - A tool to convert the contents of GFXReconstruct capture files to JSON.
 
 Usage:
   gfxrecon-convert [-h | --help] [--version] <file>
 
 Required arguments:
-  <file>		Path to the GFXReconstruct capture file to be converted
-                to text.
+  <file>                Path to the GFXReconstruct capture file to be converted
+                        to text.
 
 Optional arguments:
-  -h			        Print usage information and exit (same as --help).
-  --version		        Print version information and exit.
+  -h                    Print usage information and exit (same as --help).
+  --version             Print version information and exit.
   --output file         'stdout' or a path to a file to write JSON output
-                        to. Default is the input filepath with "gfxr" replaced
-                        by "jsonl".
-  --no-debug-popup      Disable the 'Abort, Retry, Ignore' message box
-                        displayed when abort() is called (Windows debug only).
+                        to. Default is the input filepath with "gfxr" replaced by "json".
+  --format <format>     JSON format to write.
+           json         Standard JSON format (indented)
+           jsonl        JSON lines format (every object in a single line)
+  --include-binaries    Dump binaries from Vulkan traces in a separate file with an unique name. The main JSON file
+                        will include a reference with the file name. The binary files are dumped in a subdirectory
+  --expand-flags        Print flags values from Vulkan traces with its correspondent symbolic representation. Otherwise,
+                        the flags are printed as hexadecimal value.
+  --file-per-frame      Creates a new file for every frame processed. Frame number is added as a suffix
+                        to the output file name.
+  --frame-range <N1[-N2][,...]>
+                        Frame ranges to be converted. In order to retrieve trim trace state, frame 0 has to be in frame range.
+                        Frame ranges should be specified in ascending order and cannot overlap. Frame numbering is zero-indexed and inclusive.
+                        Example: 0-2,5,8-10 will generate data for 7 frames.
+  --log-level <level>   Specify highest level message to log. Options are:
+                                debug, info, warning, error, and fatal. Default is info.
+  --verbose      Request verbose output.
+  --checksum     Show checksum of every data vector (ex pData field in a vkApiCall) with size bigger than --checksum-trigger
+  --checksum-trigger     If --checksum set, represents the minimum data vector length for which checksums are generated. Default value: 5.
 ```
 
 ### Command Launcher
