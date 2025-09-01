@@ -92,7 +92,7 @@ void RvAnnotationUtil::AddRvAnnotation(void** result)
                     std::memcpy(shader_id.data() + shader_id_mask_offset, &shader_id_mask, sizeof(shader_id_mask));
                     shader_id_mask++;
 
-                    auto& annotated_shader_id = annotated_shader_ids_.find(*result);
+                    auto annotated_shader_id = annotated_shader_ids_.find(*result);
                     if (annotated_shader_id == annotated_shader_ids_.end())
                     {
                         annotated_shader_ids_[*result] = shader_id;

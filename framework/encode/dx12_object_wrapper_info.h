@@ -91,7 +91,7 @@ struct DxWrapperInfo
     format::HandleId                     create_object_id{ format::kNullHandleId };
     std::shared_ptr<const DxWrapperInfo> create_object_info;
 
-    std::unordered_map<const GUID, std::vector<uint8_t>, GUID_Hash, GUID_Equal> private_datas;
+    std::unordered_map<const GUID, std::vector<uint8_t>, GUID_Hash, GUID_Equal>             private_datas;
     std::unordered_map<const GUID, Microsoft::WRL::ComPtr<IUnknown>, GUID_Hash, GUID_Equal> private_data_interface;
 
     std::wstring object_name{ L"" };
@@ -505,7 +505,7 @@ struct ID3D12CommandListInfo : public DxWrapperInfo
     std::array<graphics::dx12::CommandSet, 3>    split_command_sets;
     bool                                         is_split_commandlist{ false };
     uint32_t                                     find_target_draw_call_count{ 0 };
-    std::shared_ptr<const ID3D12CommandListInfo> target_bundle_commandlist_info;
+    std::shared_ptr<const ID3D12CommandListInfo> target_bundle_commandlist_info{};
     bool                                         is_trim_target{ false };
 };
 

@@ -116,20 +116,19 @@ class Dx12ObjectScanningConsumer : public Dx12ObjectScanningConsumerBase
     ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
                                             const uint8_t*                                        data);
 
-    virtual void Dx12ObjectScanningConsumer::ProcessInitDx12AccelerationStructureCommand(
+    virtual void ProcessInitDx12AccelerationStructureCommand(
         const format::InitDx12AccelerationStructureCommandHeader&       command_header,
         std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
         const uint8_t*                                                  build_inputs_data);
 
-    virtual void
-    Dx12ObjectScanningConsumer::Process_ID3D12GraphicsCommandList_ExecuteIndirect(const ApiCallInfo& call_info,
-                                                                                  format::HandleId   object_id,
-                                                                                  format::HandleId   pCommandSignature,
-                                                                                  UINT               MaxCommandCount,
-                                                                                  format::HandleId   pArgumentBuffer,
-                                                                                  UINT64           ArgumentBufferOffset,
-                                                                                  format::HandleId pCountBuffer,
-                                                                                  UINT64 CountBufferOffset) override;
+    virtual void Process_ID3D12GraphicsCommandList_ExecuteIndirect(const ApiCallInfo& call_info,
+                                                                   format::HandleId   object_id,
+                                                                   format::HandleId   pCommandSignature,
+                                                                   UINT               MaxCommandCount,
+                                                                   format::HandleId   pArgumentBuffer,
+                                                                   UINT64             ArgumentBufferOffset,
+                                                                   format::HandleId   pCountBuffer,
+                                                                   UINT64             CountBufferOffset) override;
 };
 
 GFXRECON_END_NAMESPACE(decode)
