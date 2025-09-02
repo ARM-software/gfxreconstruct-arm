@@ -164,7 +164,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     // Resource creation.
     WriteBufferState(state_table);
-    StandardCreateWrite<vulkan_wrappers::ImageWrapper>(state_table);
+    WriteImageState(state_table);
     StandardCreateWrite<vulkan_wrappers::DataGraphPipelineSessionARMWrapper>(state_table);
     StandardCreateWrite<vulkan_wrappers::TensorARMWrapper>(state_table);
     StandardCreateWrite<vulkan_wrappers::TensorViewARMWrapper>(state_table);
@@ -249,10 +249,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     auto done = std::chrono::high_resolution_clock::now();
     uint32_t time = std::chrono::duration_cast<std::chrono::milliseconds>(done - started).count();
-    GFXRECON_LOG_INFO("--------------------------------------")
-    GFXRECON_LOG_INFO("%s()", __func__)
-    GFXRECON_LOG_INFO("  saved in %u ms", time);
-    GFXRECON_LOG_INFO("--------------------------------------")
+    GFXRECON_LOG_INFO("%s() saved in %u ms", __func__, time);
 
     return blocks_written_;
     // clang-format on
@@ -1464,6 +1461,26 @@ void VulkanStateWriter::WriteBufferState(const VulkanStateTable& state_table)
         }
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());
+    });
+}
+
+void VulkanStateWriter::WriteImageState(const VulkanStateTable& state_table)
+{
+    std::set<util::MemoryOutputStream*> processed;
+    state_table.VisitWrappers([&](const vulkan_wrappers::ImageWrapper* image_wrapper) {
+        // Skip create call for swapchain images, i.e. vkGetSwapchainImagesKHR
+        // This call is already emitted by the state setup for the parent swapchain
+        if (image_wrapper->is_swapchain_image)
+        {
+            return;
+        }
+        // Filter duplicate entries for calls that create multiple objects, where objects created by the same call
+        // all reference the same parameter buffer.
+        if (processed.find(image_wrapper->create_parameters.get()) == processed.end())
+        {
+            WriteFunctionCall(image_wrapper->create_call_id, image_wrapper->create_parameters.get());
+            processed.insert(image_wrapper->create_parameters.get());
+        }
     });
 }
 
@@ -3760,10 +3777,7 @@ void VulkanStateWriter::WriteResourceMemoryState(const VulkanStateTable& state_t
     auto     done = std::chrono::high_resolution_clock::now();
     uint32_t time = std::chrono::duration_cast<std::chrono::milliseconds>(done - started).count();
 
-    GFXRECON_LOG_INFO("--------------------------------------")
-    GFXRECON_LOG_INFO("%s()", __func__)
-    GFXRECON_LOG_INFO("  saved in %u ms", time);
-    GFXRECON_LOG_INFO("--------------------------------------")
+    GFXRECON_LOG_INFO("%s()  saved in %u ms", __func__, time)
 }
 
 void VulkanStateWriter::WriteMappedMemoryState(const VulkanStateTable& state_table)

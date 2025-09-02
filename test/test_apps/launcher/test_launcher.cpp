@@ -28,6 +28,7 @@
 #include <shader_objects_app.h>
 #include <sparse_resources_app.h>
 #include <triangle_app.h>
+#include <triangle_extra_device_app.h>
 
 #ifdef __linux__
 #include <external_memory_fd_export_app.h>
@@ -41,6 +42,8 @@
 #include <util/strings.h>
 #include <util/argument_parser.h>
 
+#include <tools/tool_settings.h>
+
 #if defined(__ANDROID__)
 #include <ahb_app.h>
 
@@ -48,12 +51,8 @@
 #include <util/android/intent.h>
 #endif
 
-#include <SDL3/SDL_main.h>
-
-const char kHelpShortOption[] = "-h";
-const char kHelpLongOption[]  = "--help";
-
 const char kOptions[] = "-h|--help";
+const char kArguments[] = "--wsi";
 
 static const char* kAppNames[] = { "acquired-image",
                                    "host-image-copy",
@@ -62,6 +61,7 @@ static const char* kAppNames[] = { "acquired-image",
                                    "shader-objects",
                                    "sparse-resources",
                                    "triangle",
+                                   "triangle-extra-device",
 #ifdef __linux__
                                    "external-memory-fd-export",
                                    "external-memory-fd-import",
@@ -82,7 +82,9 @@ void PrintUsage(const char* exe_name)
     }
     GFXRECON_WRITE_CONSOLE("\n%s - A launcher for GFXReconstruct test apps.\n", app_name.c_str());
     GFXRECON_WRITE_CONSOLE("Usage:");
-    GFXRECON_WRITE_CONSOLE("  %s [-h | --help] <test_name>\n", app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("  %s\t[-h | --help]", app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("\t\t\t\t[--wsi <platform>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t\t<test_name>\n");
     GFXRECON_WRITE_CONSOLE("Required arguments:");
     GFXRECON_WRITE_CONSOLE("  <test_name>\tName of the test app to launch.");
     GFXRECON_WRITE_CONSOLE("             \tOptions are: ");
@@ -90,24 +92,17 @@ void PrintUsage(const char* exe_name)
     {
         GFXRECON_WRITE_CONSOLE("             \t  %s", app_name);
     }
+    GFXRECON_WRITE_CONSOLE("\nOptional arguments:");
+    GFXRECON_WRITE_CONSOLE("  --wsi <platform>\tUse the specified wsi platform.");
+    GFXRECON_WRITE_CONSOLE("                  \tAvailable platforms are: %s", GetWsiArgString().c_str());
 }
 
-bool CheckOptionPrintUsage(const char* exe_name, const gfxrecon::util::ArgumentParser& arg_parser)
-{
-    if (arg_parser.IsOptionSet(kHelpShortOption) || arg_parser.IsOptionSet(kHelpLongOption))
-    {
-        PrintUsage(exe_name);
-        return true;
-    }
-
-    return false;
-}
-
-std::unique_ptr<gfxrecon::test::TestAppBase> CreateTestApp(
+std::unique_ptr<gfxrecon::test::TestAppBase>
+CreateTestApp(std::unique_ptr<gfxrecon::application::Application> application,
 #if defined(__ANDROID__)
-    struct android_app* android_app,
+              struct android_app* android_app,
 #endif
-    const std::string& app_name)
+              const std::string& app_name)
 {
     // Make sure the app name is within the options
     bool found = false;
@@ -134,6 +129,10 @@ std::unique_ptr<gfxrecon::test::TestAppBase> CreateTestApp(
     else if (app_name == "triangle")
     {
         app = std::make_unique<gfxrecon::test_app::triangle::App>();
+    }
+    else if (app_name == "triangle-extra-device")
+    {
+        app = std::make_unique<gfxrecon::test_app::triangle_extra_device::App>();
     }
     else if (app_name == "host-image-copy")
     {
@@ -178,6 +177,8 @@ std::unique_ptr<gfxrecon::test::TestAppBase> CreateTestApp(
     app->set_android_app(android_app);
 #endif // __ANDROID__
 
+    app->SetApplication(std::move(application));
+
     return app;
 }
 
@@ -190,7 +191,7 @@ int inner_main(
 {
     gfxrecon::util::Log::Init();
 
-    gfxrecon::util::ArgumentParser arg_parser(argc, argv, kOptions, "");
+    gfxrecon::util::ArgumentParser arg_parser(argc, argv, kOptions, kArguments);
 
     if (CheckOptionPrintUsage(argv[0], arg_parser))
     {
@@ -207,11 +208,20 @@ int inner_main(
     const auto& positional_arguments = arg_parser.GetPositionalArguments();
     const auto& app_name             = positional_arguments[0];
 
-    std::unique_ptr<gfxrecon::test::TestAppBase> app = CreateTestApp(
-#if defined(__ANDROID__)
-        android_app,
+#ifdef __ANDROID__
+    auto application = std::make_unique<gfxrecon::application::Application>(kApplicationName, nullptr);
+    application->InitializeWsiContext(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, android_app);
+#else
+    // Select WSI context based on CLI
+    std::string wsi_extension = GetFirstWsiExtensionName(GetWsiPlatform(arg_parser));
+    auto        application   = std::make_unique<gfxrecon::application::Application>(app_name, wsi_extension, nullptr);
 #endif
-        app_name);
+
+    std::unique_ptr<gfxrecon::test::TestAppBase> app = CreateTestApp(std::move(application),
+#if defined(__ANDROID__)
+                                                                     android_app,
+#endif
+                                                                     app_name);
     if (app == nullptr)
     {
         GFXRECON_LOG_ERROR("Failed to create test app with name: %s", app_name.c_str());

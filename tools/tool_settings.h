@@ -152,6 +152,7 @@ const char kTriggerScriptFrameArgument[]          = "--trigger-script-frame";
 const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
+const char kDeduplicateDevice[]                   = "--deduplicate-device";
 
 const char kScreenshotIgnoreFrameBoundaryArgument[] = "--screenshot-ignore-FrameBoundaryANDROID";
 
@@ -162,23 +163,24 @@ const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
-const char kDumpResourcesArgument[]               = "--dump-resources";
-const char kDumpResourcesBeforeDrawOption[]       = "--dump-resources-before-draw";
-const char kDumpResourcesImageFormat[]            = "--dump-resources-image-format";
-const char kDumpResourcesScaleArgument[]          = "--dump-resources-scale";
-const char kDumpResourcesDepth[]                  = "--dump-resources-dump-depth-attachment";
-const char kDumpResourcesDirArgument[]            = "--dump-resources-dir";
-const char kDumpResourcesModifiableStateOnly[]    = "--dump-resources-modifiable-state-only";
-const char kDumpResourcesColorAttIdxArg[]         = "--dump-resources-dump-color-attachment-index";
-const char kDumpResourcesDumpVertexIndexBuffers[] = "--dump-resources-dump-vertex-index-buffers";
-const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-output-per-command";
-const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
-const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
-const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
-const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
-const char kVerboseOption[]                       = "--verbose";
-const char kChecksumOption[]                      = "--checksum";
-const char kChecksumTriggerOption[]               = "--checksum-trigger";
+const char kDumpResourcesArgument[]                 = "--dump-resources";
+const char kDumpResourcesBeforeDrawOption[]         = "--dump-resources-before-draw";
+const char kDumpResourcesImageFormat[]              = "--dump-resources-image-format";
+const char kDumpResourcesScaleArgument[]            = "--dump-resources-scale";
+const char kDumpResourcesDepth[]                    = "--dump-resources-dump-depth-attachment";
+const char kDumpResourcesDirArgument[]              = "--dump-resources-dir";
+const char kDumpResourcesModifiableStateOnly[]      = "--dump-resources-modifiable-state-only";
+const char kDumpResourcesColorAttIdxArg[]           = "--dump-resources-dump-color-attachment-index";
+const char kDumpResourcesDumpVertexIndexBuffers[]   = "--dump-resources-dump-vertex-index-buffers";
+const char kDumpResourcesJsonPerCommand[]           = "--dump-resources-json-output-per-command";
+const char kDumpResourcesDumpImmutableResources[]   = "--dump-resources-dump-immutable-resources";
+const char kDumpResourcesDumpImageSubresources[]    = "--dump-resources-dump-all-image-subresources";
+const char kDumpResourcesDumpRawImages[]            = "--dump-resources-dump-raw-images";
+const char kDumpResourcesDumpSeparateAlpha[]        = "--dump-resources-dump-separate-alpha";
+const char kDumpResourcesDumpUnusedVertexBindings[] = "--dump-resources-dump-unused-vertex-bindigs";
+const char kVerboseOption[]                         = "--verbose";
+const char kChecksumOption[]                        = "--checksum";
+const char kChecksumTriggerOption[]                 = "--checksum-trigger";
 
 enum class WsiPlatform
 {
@@ -415,10 +417,16 @@ static WsiPlatform GetWsiPlatform(const gfxrecon::util::ArgumentParser& arg_pars
     return wsi_platform;
 }
 
-static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
+/// @brief Selects the WSI extension name based on the WSI platform.
+/// @param wsi_platform The WSI platform to select the extension name for.
+/// @return If WsiPlatform::kAuto, returns the first available WSI extension name.
+///         Otherwise, returns the WSI extension name for the specified platform.
+static std::string GetFirstWsiExtensionName(WsiPlatform wsi_platform)
 {
     switch (wsi_platform)
     {
+        // Return the first available WSI extension name
+        case WsiPlatform::kAuto:
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         case WsiPlatform::kWin32:
         {
@@ -463,7 +471,27 @@ static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
 #endif
         default:
         {
+            GFXRECON_ASSERT(false && "Failed to get WSI extension name");
             return std::string();
+        }
+    }
+}
+
+/// @brief Selects the WSI extension name based on the WSI platform.
+/// @param wsi_platform The WSI platform to select the extension name for.
+/// @return If WsiPlatform::kAuto, returns an empty string.
+///         Otherwise, returns the WSI extension name for the specified platform.
+static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
+{
+    switch (wsi_platform)
+    {
+        case WsiPlatform::kAuto:
+        {
+            return std::string();
+        }
+        default:
+        {
+            return GetFirstWsiExtensionName(wsi_platform);
         }
     }
 }
@@ -1304,6 +1332,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         arg_parser.IsOptionSet(kDumpResourcesDumpImageSubresources);
     replay_options.dump_resources_dump_raw_images     = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
     replay_options.dump_resources_dump_separate_alpha = arg_parser.IsOptionSet(kDumpResourcesDumpSeparateAlpha);
+    replay_options.dump_resources_dump_unused_vertex_bindings =
+        arg_parser.IsOptionSet(kDumpResourcesDumpUnusedVertexBindings);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())
@@ -1314,6 +1344,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
     replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
+    replay_options.do_device_deduplication      = arg_parser.IsOptionSet(kDeduplicateDevice);
 
     return replay_options;
 }

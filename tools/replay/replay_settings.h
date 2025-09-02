@@ -38,7 +38,8 @@ const char kOptions[] =
     "--dump-resources-json-output-per-command,--dump-resources-dump-immutable-resources,"
     "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
     "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
-    "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--log-timestamps";
+    "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
+    "deduplicate-device,--log-timestamps";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
@@ -309,14 +310,14 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\treturned by vkEnumeratePhysicalDeviceGroups.  Replay may fail");
     GFXRECON_WRITE_CONSOLE("          \t\tif the specified device group is not compatible with the");
     GFXRECON_WRITE_CONSOLE("          \t\toriginal capture device group.");
-    GFXRECON_WRITE_CONSOLE("  --sgfs <status>");
+    GFXRECON_WRITE_CONSOLE("  --sgfs | --skip-get-fence-status <status>");
     GFXRECON_WRITE_CONSOLE("          \t\tSpecify behaviour to skip calls to vkWaitForFences and vkGetFenceStatus:");
     GFXRECON_WRITE_CONSOLE("          \t\t\tstatus=0 : Don't skip");
     GFXRECON_WRITE_CONSOLE("          \t\t\tstatus=1 : Skip unsuccessful calls");
     GFXRECON_WRITE_CONSOLE("          \t\t\tstatus=2 : Always skip");
     GFXRECON_WRITE_CONSOLE("          \t\tIf no skip frame range is specified (--sgfr), the status applies to all");
     GFXRECON_WRITE_CONSOLE("          \t\tframes.");
-    GFXRECON_WRITE_CONSOLE("  --sgfr <frame-ranges>");
+    GFXRECON_WRITE_CONSOLE("  --sgfr | --skip-get-fence-ranges <frame-ranges>");
     GFXRECON_WRITE_CONSOLE("          \t\tFrame ranges where --sgfs applies. The format is:");
     GFXRECON_WRITE_CONSOLE("          \t\t\t<frame-start-1>-<frame-end-1>[,<frame-start-1>-<frame-end-1>]*");
     GFXRECON_WRITE_CONSOLE("  --preload-measurement-range");
@@ -364,14 +365,12 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tDump immutable shader resources.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-dump-all-image-subresources");
     GFXRECON_WRITE_CONSOLE("          \t\tDump all available mip levels and layers when dumping images.");
-    GFXRECON_WRITE_CONSOLE("  --pcj\t\t\tSpecify the number of pipeline-creation-jobs or background-threads.");
-    GFXRECON_WRITE_CONSOLE("       \t\t\tDefault is 0.");
-    GFXRECON_WRITE_CONSOLE("       \t\t\t(same as --pipeline-creation-jobs");
-    GFXRECON_WRITE_CONSOLE("  --pipeline-creation-jobs <num_jobs>");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources-dump-unused-vertex-bindings");
+    GFXRECON_WRITE_CONSOLE("          \t\tDump a vertex binding even if no vertex attributes references it.");
+    GFXRECON_WRITE_CONSOLE("  --pcj | --pipeline-creation-jobs <num_jobs>");
     GFXRECON_WRITE_CONSOLE("          \t\tSpecify the number of asynchronous pipeline-creation jobs as integer.");
     GFXRECON_WRITE_CONSOLE("          \t\tIf <num_jobs> is negative it will be added to the number of cpu-cores");
     GFXRECON_WRITE_CONSOLE("          \t\tDefault: 0 (do not use asynchronous operations).");
-    GFXRECON_WRITE_CONSOLE("          \t\tSame as --pcj <num_jobs>");
     GFXRECON_WRITE_CONSOLE("  --save-pipeline-cache <cache-file>");
     GFXRECON_WRITE_CONSOLE("          \t\tIf set, produces pipeline caches at replay time instead of using");
     GFXRECON_WRITE_CONSOLE("          \t\tthe one saved at capture time and save those caches in <cache-file>.");
@@ -387,6 +386,8 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --screenshot-ignore-FrameBoundaryANDROID");
     GFXRECON_WRITE_CONSOLE("          \t\tIf set, frames switced with vkFrameBoundANDROID will be ignored from");
     GFXRECON_WRITE_CONSOLE("          \t\tthe screenshot handler.");
+    GFXRECON_WRITE_CONSOLE("  --deduplicate-device");
+    GFXRECON_WRITE_CONSOLE("          \t\tIf set, at most one VkDevice will be created for each VkPhysicalDevice.");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("D3D12 only:")

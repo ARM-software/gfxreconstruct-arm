@@ -24,7 +24,13 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include <triangle_app.h>
+#include <triangle_extra_device_app.h>
+
+// #ifdef __ANDROID__
+// #include <android_native_app_glue.h>
+// #else
+// #include <SDL3/SDL_main.h>
+// #endif
 
 namespace gfxrecon
 {
@@ -32,7 +38,7 @@ namespace gfxrecon
 namespace test_app
 {
 
-namespace triangle
+namespace triangle_extra_device
 {
 
 void App::configure_instance_builder(gfxrecon::test::InstanceBuilder& instance_builder, vkmock::TestConfig* test_config)
@@ -81,11 +87,13 @@ void App::create_render_pass()
 void App::create_graphics_pipeline()
 {
 #ifdef __ANDROID__
-    auto vert_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle/shaders/vert.spv", init.android_app);
-    auto frag_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle/shaders/frag.spv", init.android_app);
+    auto vert_module =
+        gfxrecon::test::readShaderFromFile(init.disp, "triangle-extra-device/shaders/vert.spv", init.android_app);
+    auto frag_module =
+        gfxrecon::test::readShaderFromFile(init.disp, "triangle-extra-device/shaders/frag.spv", init.android_app);
 #else
-    auto vert_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle/shaders/vert.spv");
-    auto frag_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle/shaders/frag.spv");
+    auto vert_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle-extra-device/shaders/vert.spv");
+    auto frag_module = gfxrecon::test::readShaderFromFile(init.disp, "triangle-extra-device/shaders/frag.spv");
 #endif
 
     VkPipelineShaderStageCreateInfo vert_stage_info = {};
@@ -236,7 +244,7 @@ void App::recreate_swapchain()
     create_framebuffers();
 }
 
-const int NUM_FRAMES = 10;
+const int NUM_FRAMES = 300;
 #define IS_RUNNING(frame_num) frame_num < NUM_FRAMES;
 
 bool App::frame(const int frame_num)
@@ -429,6 +437,13 @@ void App::cleanup()
     init.disp.destroyPipeline(graphics_pipeline_, nullptr);
     init.disp.destroyPipelineLayout(pipeline_layout_, nullptr);
     init.disp.destroyRenderPass(render_pass_, nullptr);
+
+    // Destroy superfluous device
+    {
+        PFN_vkDestroyDevice destroy_device =
+            (PFN_vkDestroyDevice)init.instance.fp_vkGetInstanceProcAddr(init.instance.instance, "vkDestroyDevice");
+        destroy_device(fake_device, init.device.allocation_callbacks);
+    }
 }
 
 void App::setup()
@@ -442,6 +457,29 @@ void App::setup()
     if (!present_queue.has_value())
         throw std::runtime_error("could not get present queue");
     present_queue_ = *present_queue;
+
+    // Create superfluous extra VkDevice
+    {
+        PFN_vkCreateDevice create_device =
+            (PFN_vkCreateDevice)init.instance.fp_vkGetInstanceProcAddr(init.instance.instance, "vkCreateDevice");
+
+        float                   priority               = 1.0;
+        VkDeviceQueueCreateInfo fake_queue_create_info = {};
+        fake_queue_create_info.sType                   = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        fake_queue_create_info.queueFamilyIndex        = 0;
+        fake_queue_create_info.queueCount              = 1;
+        fake_queue_create_info.pQueuePriorities        = &priority;
+
+        VkDeviceCreateInfo fake_device_create_info   = {};
+        fake_device_create_info.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        fake_device_create_info.flags                = 0;
+        fake_device_create_info.queueCreateInfoCount = 1;
+        fake_device_create_info.pQueueCreateInfos    = &fake_queue_create_info;
+        // fake_device_create_info.enabledExtensionCount   = static_cast<uint32_t>(extensions_to_enable.size());
+        // fake_device_create_info.ppEnabledExtensionNames = extensions_to_enable.data();
+        create_device(
+            init.device.physical_device, &fake_device_create_info, init.device.allocation_callbacks, &fake_device);
+    }
 
     create_render_pass();
     create_graphics_pipeline();
@@ -459,7 +497,7 @@ void App::setup()
     sync_ = gfxrecon::test::create_sync_objects(init.swapchain, init.disp, MAX_FRAMES_IN_FLIGHT);
 }
 
-} // namespace triangle
+} // namespace triangle_extra_device
 
 } // namespace test_app
 

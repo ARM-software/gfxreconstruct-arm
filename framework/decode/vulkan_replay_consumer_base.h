@@ -57,6 +57,7 @@
 #include "vulkan/vulkan.h"
 
 #include <algorithm>
+#include <bitset>
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -86,6 +87,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     ~VulkanReplayConsumerBase() override;
 
     void SetCurrentBlockIndex(uint64_t block_index) override;
+
+    void SetCurrentFrameNumber(uint64_t frame_number) override;
 
     void Process_ExeFileInfo(util::filepath::FileInfo& info_record) override
     {
@@ -330,6 +333,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void GetMatchingDevice(VulkanPhysicalDeviceInfo* physical_device_info);
 
     void InitializeReplayDumpResources();
+
+    const uint64_t GetFrameNumber();
 
   protected:
     const CommonObjectInfoTable& GetObjectInfoTable() const { return *object_info_table_; }
@@ -1852,6 +1857,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<graphics::VulkanDispatchKey, PFN_vkCreateDevice>            create_device_procs_;
     std::unordered_map<graphics::VulkanDispatchKey, graphics::VulkanInstanceTable> instance_tables_;
     std::unordered_map<graphics::VulkanDispatchKey, graphics::VulkanDeviceTable>   device_tables_;
+    std::unordered_map<std::bitset<VK_UUID_SIZE * 8>, VkDevice>                    device_uuid_map_;
     std::function<void(const char*)>                                               fatal_error_handler_;
     std::shared_ptr<application::Application>                                      application_;
     CommonObjectInfoTable*                                                         object_info_table_;

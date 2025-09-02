@@ -1353,7 +1353,7 @@ enum ApiCallId : uint32_t
     ApiCall_ID3D12GBVDiagnostics_GetGBVResourceInfo                                               = MakeApiCallId(ApiFamily_D3D12, 0x1165),
     ApiCall_ID3D12GBVDiagnostics_GBVReserved0                                                     = MakeApiCallId(ApiFamily_D3D12, 0x1166),
     ApiCall_ID3D12GBVDiagnostics_GBVReserved1                                                     = MakeApiCallId(ApiFamily_D3D12, 0x1167),
-    
+
     // AGS API
     // amd_ags.h
     ApiCall_Ags_agsInitialize_6_0_1                                                               = MakeApiCallId(ApiFamily_AGS, 0x1000),

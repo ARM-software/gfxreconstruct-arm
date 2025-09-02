@@ -20,23 +20,28 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_TESTAPP_TRIANGLE_H
-#define GFXRECON_TESTAPP_TRIANGLE_H
+#ifndef GFXRECON_TESTAPP_TRIANGLE_EXTRA_DEVICE_H
+#define GFXRECON_TESTAPP_TRIANGLE_EXTRA_DEVICE_H
 
 #include <test_app_base.h>
 
-#include <application/application.h>
+#include <util/defines.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(test_app)
-GFXRECON_BEGIN_NAMESPACE(triangle)
+GFXRECON_BEGIN_NAMESPACE(triangle_extra_device)
 
 const size_t MAX_FRAMES_IN_FLIGHT = 2;
 
 class App : public gfxrecon::test::TestAppBase
 {
+  public:
+    App() = default;
+
+  private:
     VkQueue graphics_queue_;
     VkQueue present_queue_;
+    VkDevice fake_device;
 
     std::vector<VkFramebuffer> framebuffers_;
 
@@ -61,8 +66,8 @@ class App : public gfxrecon::test::TestAppBase
     void configure_instance_builder(gfxrecon::test::InstanceBuilder& instance_builder, vkmock::TestConfig*) override;
 };
 
-GFXRECON_END_NAMESPACE(triangle)
+GFXRECON_END_NAMESPACE(triangle_extra_device)
 GFXRECON_END_NAMESPACE(test_app)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_TESTAPP_TRIANGLE_H
+#endif // GFXRECON_TESTAPP_TRIANGLE_EXTRA_DEVICE_H

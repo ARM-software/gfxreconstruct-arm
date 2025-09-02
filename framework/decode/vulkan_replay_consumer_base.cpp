@@ -133,7 +133,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeve
                                                          const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                                          void*                                       pUserData)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(pUserData);
+    VulkanReplayConsumerBase* replay_consumer = static_cast<VulkanReplayConsumerBase*>(pUserData);
+    uint64_t                  frame_number    = replay_consumer->GetFrameNumber();
 
     // Allow pCallbackData->pMessageIdName to be nullptr by defining a default string for message id name
     const char* message_id_name = "(nullptr)";
@@ -146,19 +147,23 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeve
     {
         if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         {
-            GFXRECON_LOG_ERROR("DEBUG MESSENGER: %s: %s", message_id_name, pCallbackData->pMessage);
+            GFXRECON_LOG_ERROR(
+                "DEBUG MESSENGER: Frame #%i: %s: %s", frame_number, message_id_name, pCallbackData->pMessage);
         }
         else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            GFXRECON_LOG_WARNING("DEBUG MESSENGER: %s: %s", message_id_name, pCallbackData->pMessage);
+            GFXRECON_LOG_WARNING(
+                "DEBUG MESSENGER: Frame #%i: %s: %s", frame_number, message_id_name, pCallbackData->pMessage);
         }
         else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
         {
-            GFXRECON_LOG_INFO("DEBUG MESSENGER: %s: %s", message_id_name, pCallbackData->pMessage);
+            GFXRECON_LOG_INFO(
+                "DEBUG MESSENGER: Frame #%i: %s: %s", frame_number, message_id_name, pCallbackData->pMessage);
         }
         else
         {
-            GFXRECON_LOG_DEBUG("DEBUG MESSENGER: %s: %s", message_id_name, pCallbackData->pMessage);
+            GFXRECON_LOG_DEBUG(
+                "DEBUG MESSENGER: Frame #%i: %s: %s", frame_number, message_id_name, pCallbackData->pMessage);
         }
     }
 
@@ -2360,6 +2365,11 @@ void VulkanReplayConsumerBase::InitializeReplayDumpResources()
     }
 }
 
+const uint64_t VulkanReplayConsumerBase::GetFrameNumber()
+{
+    return this->frame_number_ + 1; // Add 1 because of one-based indexing of frames
+}
+
 void VulkanReplayConsumerBase::GetMatchingDeviceGroup(VulkanInstanceInfo*                  instance_info,
                                                       VulkanPhysicalDeviceInfo*            physical_device_info,
                                                       const std::vector<format::HandleId>& capture_device_group,
@@ -2698,6 +2708,7 @@ void VulkanReplayConsumerBase::ProcessCreateInstanceDebugCallbackInfo(const Deco
             graphics::vulkan_struct_get_pnext<VkDebugUtilsMessengerCreateInfoEXT>(instance_info->decoded_value))
     {
         debug_utils_info->pfnUserCallback = DebugUtilsCallback;
+        debug_utils_info->pUserData       = this;
     }
 }
 
@@ -3181,6 +3192,7 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
         while (pnext_callback_info != nullptr)
         {
             pnext_callback_info->pfnUserCallback = DebugUtilsCallback;
+            pnext_callback_info->pUserData       = this;
             pnext_callback_info =
                 graphics::vulkan_struct_get_pnext<VkDebugUtilsMessengerCreateInfoEXT>(pnext_callback_info);
         }
@@ -3192,7 +3204,7 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
         create_state.messenger_create_info.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
         create_state.messenger_create_info.messageSeverity = options_.debug_message_severity;
         create_state.messenger_create_info.pfnUserCallback = DebugUtilsCallback;
-        create_state.messenger_create_info.pUserData       = nullptr;
+        create_state.messenger_create_info.pUserData       = this;
 
         // We chain the debug messenger create info here to catch debug messages
         // emitted during vkCreateInstance()/vkDestroyInstance()
@@ -3587,20 +3599,20 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
 
     auto instance_table = GetInstanceTable(physical_device);
 
-    assert(device_info != nullptr);
+    GFXRECON_ASSERT(device_info != nullptr);
     device_info->replay_device_group = std::move(create_state.replay_device_group);
     device_info->extensions          = std::move(create_state.trim_extensions);
     device_info->parent              = physical_device;
 
     // Create the memory allocator for the selected physical device.
     auto replay_device_info = physical_device_info->replay_device_info;
-    assert(replay_device_info != nullptr);
+    GFXRECON_ASSERT(replay_device_info != nullptr);
 
     if (replay_device_info->memory_properties == std::nullopt)
     {
         // Memory properties weren't queried before device creation, so retrieve them now.
         auto table = GetInstanceTable(physical_device);
-        assert(table != nullptr);
+        GFXRECON_ASSERT(table != nullptr);
 
         replay_device_info->memory_properties = VkPhysicalDeviceMemoryProperties();
         table->GetPhysicalDeviceMemoryProperties(physical_device, &replay_device_info->memory_properties.value());
@@ -3634,8 +3646,8 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
     for (uint32_t q = 0; q < create_state.modified_create_info.queueCreateInfoCount; ++q)
     {
         const VkDeviceQueueCreateInfo* queue_create_info = &create_state.modified_create_info.pQueueCreateInfos[q];
-        assert(device_info->queue_family_creation_flags.find(queue_create_info->queueFamilyIndex) ==
-               device_info->queue_family_creation_flags.end());
+        GFXRECON_ASSERT(device_info->queue_family_creation_flags.find(queue_create_info->queueFamilyIndex) ==
+                        device_info->queue_family_creation_flags.end());
         device_info->queue_family_creation_flags[queue_create_info->queueFamilyIndex] = queue_create_info->flags;
         device_info->queue_family_index_enabled[queue_create_info->queueFamilyIndex]  = true;
     }
@@ -3691,8 +3703,29 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  origina
 {
     GFXRECON_UNREFERENCED_PARAMETER(original_result);
 
-    assert((physical_device_info != nullptr) && (pDevice != nullptr) && !pDevice->IsNull() &&
-           (pDevice->GetHandlePointer() != nullptr) && (pCreateInfo != nullptr));
+    GFXRECON_ASSERT((physical_device_info != nullptr) && (pDevice != nullptr) && !pDevice->IsNull() &&
+                    (pDevice->GetHandlePointer() != nullptr) && (pCreateInfo != nullptr));
+
+    VulkanDeviceInfo* device_info = reinterpret_cast<VulkanDeviceInfo*>(pDevice->GetConsumerData(0));
+    GFXRECON_ASSERT(device_info);
+
+    // If we're doing device deduplication, check if we've already seen this create device request
+    std::bitset<VK_UUID_SIZE * 8> casted_uuid;
+    util::platform::MemoryCopy(
+        &casted_uuid, format::kUuidSize, physical_device_info->capture_pipeline_cache_uuid, VK_UUID_SIZE);
+    if (options_.do_device_deduplication)
+    {
+        auto it = device_uuid_map_.find(casted_uuid);
+        if (it != device_uuid_map_.end())
+        {
+            // We have seen this device before
+            VkDevice& extant_device   = device_uuid_map_[casted_uuid];
+            device_info->is_duplicate = true;
+            VkDevice* replay_device   = pDevice->GetHandlePointer();
+            *replay_device            = extant_device;
+            return VK_SUCCESS;
+        }
+    }
 
     // NOTE: This must be first as it *sets* the physical_device_info->handle to point to the replay physical device
     SelectPhysicalDevice(physical_device_info);
@@ -3714,7 +3747,7 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  origina
 
     VkResult result        = VK_ERROR_INITIALIZATION_FAILED;
     auto     replay_device = pDevice->GetHandlePointer();
-    assert(replay_device);
+    GFXRECON_ASSERT(replay_device);
 
     // Forward device creation to next layer/driver
     result = create_device_proc(
@@ -3724,10 +3757,14 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  origina
     {
         return result;
     }
-
-    VulkanDeviceInfo* device_info = reinterpret_cast<VulkanDeviceInfo*>(pDevice->GetConsumerData(0));
-    assert(device_info);
     result = PostCreateDeviceUpdateState(physical_device_info, *replay_device, create_state, device_info);
+
+    if (options_.do_device_deduplication)
+    {
+        // Insert this device info into map
+        device_uuid_map_.insert(std::pair(casted_uuid, *replay_device));
+    }
+
     return result;
 }
 
@@ -3738,7 +3775,7 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
 {
     VkDevice device = VK_NULL_HANDLE;
 
-    if (device_info != nullptr)
+    if (device_info != nullptr && !device_info->is_duplicate)
     {
         device            = device_info->handle;
         auto device_table = GetDeviceTable(device);
@@ -3764,6 +3801,9 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
             micromap_builders_.erase(device_info);
             acceleration_structure_builders_.erase(device_info);
         }
+
+        // free replacer internal vulkan-resources for the device
+        _device_address_replacers.erase(device_info);
 
         device_info->allocator->Destroy();
     }
@@ -6221,14 +6261,17 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
     // replaying a trimmed capture or dump-resources will require us to copy from buffers
     if (replaying_trimmed_capture_ || options_.dumping_resources)
     {
-        // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer
-        // VkBufferCreateInfo. Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is
-        // set, we sometimes hit vkBindBufferMemory failures due to memory requirement mismatch during replay. So
-        // here we add VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture. We also need to add
-        // VK_BUFFER_USAGE_TRANSFER_DST_BIT to be able to restore buffer and copy to it
-        auto modified_create_info = const_cast<VkBufferCreateInfo*>(replay_create_info);
-        modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        modified_create_info->usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        if (loading_trim_state_)
+        {
+            // ensure buffer-initialization can copy
+            modified_create_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        }
+
+        // The GFXR trimmed capture process sets VK_BUFFER_USAGE_TRANSFER_SRC_BIT flag for buffer VkBufferCreateInfo.
+        // Since buffer memory requirements can differ when VK_BUFFER_USAGE_TRANSFER_SRC_BIT is set, we sometimes hit
+        // vkBindBufferMemory failures due to memory requirement mismatch during replay. So here we add
+        // VK_BUFFER_USAGE_TRANSFER_SRC_BIT to keep things consistent with capture.
+        modified_create_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     }
 
     if (device_info->property_feature_info.feature_bufferDeviceAddressCaptureReplay &&
@@ -7737,6 +7780,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDebugUtilsMessengerEXT(
     {
         modified_create_info                 = (*pCreateInfo->GetPointer());
         modified_create_info.pfnUserCallback = DebugUtilsCallback;
+        modified_create_info.pUserData       = this;
     }
     else
     {
@@ -10021,7 +10065,7 @@ VulkanReplayConsumerBase::OverrideDeferredOperationJoinKHR(PFN_vkDeferredOperati
     if (!deferred_operation_info->pending_state)
     {
         // The deferred operation object has no deferred command or its deferred command has been finished.
-        return VK_SUCCESS;
+        return original_result;
     }
 
     VkDevice               device             = device_info->handle;
@@ -11910,15 +11954,12 @@ void VulkanReplayConsumerBase::ProcessCopyVulkanAccelerationStructuresMetaComman
         VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(device);
         GFXRECON_ASSERT(device_info != nullptr);
 
-        if (UseAddressReplacement(device_info))
-        {
-            MapStructArrayHandles(copy_infos->GetMetaStructPointer(), copy_infos->GetLength(), GetObjectInfoTable());
+        MapStructArrayHandles(copy_infos->GetMetaStructPointer(), copy_infos->GetLength(), GetObjectInfoTable());
 
-            const auto& address_tracker  = GetDeviceAddressTracker(device_info);
-            auto&       address_replacer = GetDeviceAddressReplacer(device_info);
-            address_replacer.ProcessCopyVulkanAccelerationStructuresMetaCommand(
-                copy_infos->GetLength(), copy_infos->GetPointer(), address_tracker);
-        }
+        const auto& address_tracker  = GetDeviceAddressTracker(device_info);
+        auto&       address_replacer = GetDeviceAddressReplacer(device_info);
+        address_replacer.ProcessCopyVulkanAccelerationStructuresMetaCommand(
+            copy_infos->GetLength(), copy_infos->GetPointer(), address_tracker);
     }
     ******************** UPSTREAM CODE ********************/
 
@@ -13004,6 +13045,11 @@ void VulkanReplayConsumerBase::SetCurrentBlockIndex(uint64_t block_index)
     VulkanConsumer::SetCurrentBlockIndex(block_index);
     // poll main-dispatch-queue at beginning of new blocks
     main_thread_queue_.poll();
+}
+
+void VulkanReplayConsumerBase::SetCurrentFrameNumber(uint64_t frame_number)
+{
+    VulkanConsumer::SetCurrentFrameNumber(frame_number);
 }
 
 bool VulkanReplayConsumerBase::CheckPipelineCacheUUID(const VulkanDeviceInfo*          device_info,
