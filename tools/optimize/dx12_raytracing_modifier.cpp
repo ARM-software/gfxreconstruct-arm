@@ -55,8 +55,8 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_GetGPUVirtualAddress(const A
         iter->second.start_virtual_address = return_value;
         iter->second.end_virtual_address   = return_value + iter->second.desc.Width;
 
-        min_gpu_va_  = std::min(min_gpu_va_, return_value);
-        max_gpu_va_  = std::max(max_gpu_va_, return_value + iter->second.desc.Width);
+        min_gpu_va_ = std::min(min_gpu_va_, return_value);
+        max_gpu_va_ = std::max(max_gpu_va_, return_value + iter->second.desc.Width);
 
         gpu_virtual_address_resource_[return_value] = iter->second;
         if ((iter->second.initial_state & D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE) ==
@@ -92,7 +92,7 @@ void Dx12RayTracingModifier::Process_ID3D12StateObjectProperties_GetShaderIdenti
                                    (uint8_t*)return_value->GetPointer(),
                                    D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
-        state_object_shader_identifiers_[object_id].insert(shader_id);
+        shader_id_to_properties_id_[shader_id] = object_id;
     }
 }
 
@@ -152,8 +152,8 @@ void Dx12RayTracingModifier::Process_ID3D12DescriptorHeap_GetGPUDescriptorHandle
 
     descriptor_start_address_info_[return_value.decoded_value->ptr] = heap_info;
 
-    min_gpu_descriptor_ = std::min(min_gpu_descriptor_, (*return_value.decoded_value).ptr);
-    max_gpu_descriptor_ = std::max(max_gpu_descriptor_, (*return_value.decoded_value).ptr + descriptor_size);
+    min_gpu_descriptor_           = std::min(min_gpu_descriptor_, (*return_value.decoded_value).ptr);
+    max_gpu_descriptor_           = std::max(max_gpu_descriptor_, (*return_value.decoded_value).ptr + descriptor_size);
     min_gpu_descriptor_alignment_ = std::min(min_gpu_descriptor_alignment_, increment);
 }
 
@@ -1352,29 +1352,11 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
                 continue;
             }
 
-            bool found_shader_id = false;
-            auto properties_id   = format::kNullHandleId;
-            for (const auto& state_object_shader_identifier : state_object_shader_identifiers_)
+            std::vector<uint8_t> shader_id(shader_id_ptr, shader_id_ptr + kIdSize);
+            auto                 shader_id_iter = shader_id_to_properties_id_.find(shader_id);
+            if (shader_id_iter != shader_id_to_properties_id_.end() && shader_id_iter->second != format::kNullHandleId)
             {
-                properties_id                  = state_object_shader_identifier.first;
-                const auto& shader_identifiers = state_object_shader_identifier.second;
-                for (const auto& shader_id : shader_identifiers)
-                {
-                    if (0 == std::memcmp(shader_id_ptr, shader_id.data(), kIdSize))
-                    {
-                        found_shader_id = true;
-                        break;
-                    }
-                }
-
-                if (found_shader_id)
-                {
-                    break;
-                }
-            }
-
-            if (found_shader_id && (properties_id != format::kNullHandleId))
-            {
+                auto properties_id = shader_id_iter->second;
                 GFXRECON_LOG_DEBUG("Found shader identifier : 0x%" PRIx64 " offset %llu in resource ID: %" PRIu64
                                    ", data_offset %" PRIu64 " data_size %" PRIu64 " GetCurrentBlockIndex(%" PRIu64 ")",
                                    (uint64_t*)shader_id_ptr,

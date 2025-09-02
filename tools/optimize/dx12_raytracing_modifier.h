@@ -41,6 +41,7 @@
 #include "util/memory_output_stream.h"
 #include "util/defines.h"
 #include "format/format.h"
+#include "util/hash.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -499,9 +500,6 @@ class Dx12RayTracingModifier : public decode::Dx12Consumer
     // -----state object-----state object properties-----
     std::unordered_map<format::HandleId, format::HandleId> state_object_properties_;
 
-    // -----state object properties-----shader identifiers-----
-    std::unordered_map<format::HandleId, std::set<std::vector<uint8_t>>> state_object_shader_identifiers_;
-
     // -----device handle-----D3D12_DESCRIPTOR_HEAP_TYPE------increment size
     std::unordered_map<format::HandleId, std::unordered_map<D3D12_DESCRIPTOR_HEAP_TYPE, uint64_t>>
         device_descriptor_increment_sizes_;
@@ -541,6 +539,16 @@ class Dx12RayTracingModifier : public decode::Dx12Consumer
 
     // -----latest blob id-----related D3D12_ROOT_PARAMETER_TYPE
     std::unordered_map<format::HandleId, std::vector<D3D12_ROOT_PARAMETER_TYPE>> latest_blob_related_types_;
+
+    struct VectorHash
+    {
+        std::size_t operator()(const std::vector<uint8_t>& v) const
+        {
+            return gfxrecon::util::hash::hash_range(v.begin(), v.end());
+        }
+    };
+    // -----shader_id-----state object properties id
+    std::unordered_map<std::vector<uint8_t>, format::HandleId, VectorHash> shader_id_to_properties_id_;
 
     Dx12PrebuildInfoResourceValueMap  prebuild_info_insert_values_;
     Dx12FillCommandResourceAddressMap fill_cmd_resource_addresses_;
