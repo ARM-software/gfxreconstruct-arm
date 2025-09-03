@@ -99,6 +99,11 @@ class VulkanResourceAllocator
         PFN_vkWaitForFences                             wait_for_fences{ nullptr };
         PFN_vkDestroyFence                              destroy_fence{ nullptr };
         PFN_vkGetAndroidHardwareBufferPropertiesANDROID get_android_hardware_buffer_properties{ nullptr };
+        PFN_vkCreateTensorARM                           create_tensor{ nullptr };
+        PFN_vkDestroyTensorARM                          destroy_tensor{ nullptr };
+        PFN_vkGetTensorMemoryRequirementsARM            get_tensor_memory_requirements{ nullptr };
+        PFN_vkBindTensorMemoryARM                       bind_tensor_memory{ nullptr };
+        PFN_vkCmdCopyTensorARM                          cmd_copy_tensor{ nullptr };
     };
 
   public:

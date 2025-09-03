@@ -2635,6 +2635,11 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.wait_for_fences                             = device_table->WaitForFences;
     functions.destroy_fence                               = device_table->DestroyFence;
     functions.get_android_hardware_buffer_properties      = device_table->GetAndroidHardwareBufferPropertiesANDROID;
+    functions.create_tensor                               = device_table->CreateTensorARM;
+    functions.destroy_tensor                              = device_table->DestroyTensorARM;
+    functions.get_tensor_memory_requirements              = device_table->GetTensorMemoryRequirementsARM;
+    functions.bind_tensor_memory                          = device_table->BindTensorMemoryARM;
+    functions.cmd_copy_tensor                             = device_table->CmdCopyTensorARM;
 
     if (physical_device_info->parent_info.api_version >= VK_MAKE_VERSION(1, 1, 0))
     {
