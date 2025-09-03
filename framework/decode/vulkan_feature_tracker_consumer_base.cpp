@@ -29,6 +29,8 @@
 #include <stdexcept>
 #include <algorithm>
 
+#include "spirv/unified1/spirv.h"
+
 #include "generated/generated_vulkan_api_call_encoders.h"
 
 #include "encode/custom_vulkan_encoder_commands.h"
@@ -69,7 +71,7 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     // having the same handling for the same struct in multiple functions
 
     core10_.robustBufferAccess                      = true;
-    core10_.fullDrawIndexUint32                     = true;
+    core10_.fullDrawIndexUint32                     = false;
     core10_.imageCubeArray                          = false;
     core10_.independentBlend                        = false;
     core10_.geometryShader                          = false;
@@ -80,10 +82,10 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core10_.multiDrawIndirect                       = false;
     core10_.drawIndirectFirstInstance               = true;
     core10_.depthClamp                              = false;
-    core10_.depthBiasClamp                          = true;
+    core10_.depthBiasClamp                          = false;
     core10_.fillModeNonSolid                        = false;
     core10_.depthBounds                             = false;
-    core10_.wideLines                               = true;
+    core10_.wideLines                               = false;
     core10_.largePoints                             = true;
     core10_.alphaToOne                              = false;
     core10_.multiViewport                           = false;
@@ -91,28 +93,27 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core10_.textureCompressionETC2                  = true;
     core10_.textureCompressionASTC_LDR              = true;
     core10_.textureCompressionBC                    = true;
-    core10_.occlusionQueryPrecise                   = true;
+    core10_.occlusionQueryPrecise                   = false;
     core10_.pipelineStatisticsQuery                 = false;
     core10_.vertexPipelineStoresAndAtomics          = true;
     core10_.fragmentStoresAndAtomics                = true;
     core10_.shaderTessellationAndGeometryPointSize  = true;
-    core10_.shaderImageGatherExtended               = true;
+    core10_.shaderImageGatherExtended               = false;
     core10_.shaderStorageImageExtendedFormats       = true;
     core10_.shaderStorageImageMultisample           = false;
     core10_.shaderStorageImageReadWithoutFormat     = true;
     core10_.shaderStorageImageWriteWithoutFormat    = true;
-    core10_.shaderUniformBufferArrayDynamicIndexing = true;
-    core10_.shaderSampledImageArrayDynamicIndexing  = true;
-    core10_.shaderStorageBufferArrayDynamicIndexing = true;
-    core10_.shaderStorageImageArrayDynamicIndexing  = true;
-    core10_.shaderClipDistance                      = true;
-    core10_.shaderCullDistance                      = true;
-    core10_.shaderFloat64                           = true;
-    core10_.shaderInt64                             = true;
-    core10_.shaderInt16                             = true;
-    core10_.shaderResourceResidency                 = true;
-    core10_.shaderResourceMinLod                    = true;
-    core10_.variableMultisampleRate                 = true;
+    core10_.shaderUniformBufferArrayDynamicIndexing = false;
+    core10_.shaderSampledImageArrayDynamicIndexing  = false;
+    core10_.shaderStorageBufferArrayDynamicIndexing = false;
+    core10_.shaderStorageImageArrayDynamicIndexing  = false;
+    core10_.shaderClipDistance                      = false;
+    core10_.shaderCullDistance                      = false;
+    core10_.shaderFloat64                           = false;
+    core10_.shaderInt64                             = false;
+    core10_.shaderInt16                             = false;
+    core10_.shaderResourceResidency                 = false;
+    core10_.shaderResourceMinLod                    = false;
     core10_.sparseBinding                           = false;
     core10_.sparseResidencyBuffer                   = false;
     core10_.sparseResidencyImage2D                  = false;
@@ -122,6 +123,7 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core10_.sparseResidency8Samples                 = false;
     core10_.sparseResidency16Samples                = false;
     core10_.sparseResidencyAliased                  = false;
+    core10_.variableMultisampleRate                 = true;
     core10_.inheritedQueries                        = false;
 
     core10_members_as_strings_ = { "robustBufferAccess",
@@ -180,18 +182,18 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
                                    "variableMultisampleRate",
                                    "inheritedQueries" };
 
-    core11_.storageBuffer16BitAccess           = true;
-    core11_.uniformAndStorageBuffer16BitAccess = true;
-    core11_.storagePushConstant16              = true;
-    core11_.storageInputOutput16               = true;
+    core11_.storageBuffer16BitAccess           = false;
+    core11_.uniformAndStorageBuffer16BitAccess = false;
+    core11_.storagePushConstant16              = false;
+    core11_.storageInputOutput16               = false;
     core11_.multiview                          = true;
     core11_.multiviewGeometryShader            = true;
     core11_.multiviewTessellationShader        = true;
-    core11_.variablePointersStorageBuffer      = true;
-    core11_.variablePointers                   = true;
+    core11_.variablePointersStorageBuffer      = false;
+    core11_.variablePointers                   = false;
     core11_.protectedMemory                    = true;
     core11_.samplerYcbcrConversion             = true;
-    core11_.shaderDrawParameters               = true;
+    core11_.shaderDrawParameters               = false;
 
     core11_members_as_strings_ = { "storageBuffer16BitAccess",
                                    "uniformAndStorageBuffer16BitAccess",
@@ -208,24 +210,24 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
 
     core12_.samplerMirrorClampToEdge                           = false;
     core12_.drawIndirectCount                                  = false;
-    core12_.storageBuffer8BitAccess                            = true;
-    core12_.uniformAndStorageBuffer8BitAccess                  = true;
-    core12_.storagePushConstant8                               = true;
+    core12_.storageBuffer8BitAccess                            = false;
+    core12_.uniformAndStorageBuffer8BitAccess                  = false;
+    core12_.storagePushConstant8                               = false;
     core12_.shaderBufferInt64Atomics                           = true;
     core12_.shaderSharedInt64Atomics                           = true;
-    core12_.shaderFloat16                                      = true;
-    core12_.shaderInt8                                         = true;
+    core12_.shaderFloat16                                      = false;
+    core12_.shaderInt8                                         = false;
     core12_.descriptorIndexing                                 = true;
-    core12_.shaderInputAttachmentArrayDynamicIndexing          = true;
-    core12_.shaderUniformTexelBufferArrayDynamicIndexing       = true;
-    core12_.shaderStorageTexelBufferArrayDynamicIndexing       = true;
-    core12_.shaderUniformBufferArrayNonUniformIndexing         = true;
-    core12_.shaderSampledImageArrayNonUniformIndexing          = true;
-    core12_.shaderStorageBufferArrayNonUniformIndexing         = true;
-    core12_.shaderStorageImageArrayNonUniformIndexing          = true;
-    core12_.shaderInputAttachmentArrayNonUniformIndexing       = true;
-    core12_.shaderUniformTexelBufferArrayNonUniformIndexing    = true;
-    core12_.shaderStorageTexelBufferArrayNonUniformIndexing    = true;
+    core12_.shaderInputAttachmentArrayDynamicIndexing          = false;
+    core12_.shaderUniformTexelBufferArrayDynamicIndexing       = false;
+    core12_.shaderStorageTexelBufferArrayDynamicIndexing       = false;
+    core12_.shaderUniformBufferArrayNonUniformIndexing         = false;
+    core12_.shaderSampledImageArrayNonUniformIndexing          = false;
+    core12_.shaderStorageBufferArrayNonUniformIndexing         = false;
+    core12_.shaderStorageImageArrayNonUniformIndexing          = false;
+    core12_.shaderInputAttachmentArrayNonUniformIndexing       = false;
+    core12_.shaderUniformTexelBufferArrayNonUniformIndexing    = false;
+    core12_.shaderStorageTexelBufferArrayNonUniformIndexing    = false;
     core12_.descriptorBindingUniformBufferUpdateAfterBind      = true;
     core12_.descriptorBindingSampledImageUpdateAfterBind       = true;
     core12_.descriptorBindingStorageImageUpdateAfterBind       = true;
@@ -235,7 +237,7 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core12_.descriptorBindingUpdateUnusedWhilePending          = true;
     core12_.descriptorBindingPartiallyBound                    = true;
     core12_.descriptorBindingVariableDescriptorCount           = true;
-    core12_.runtimeDescriptorArray                             = true;
+    core12_.runtimeDescriptorArray                             = false;
     core12_.samplerFilterMinmax                                = true;
     core12_.scalarBlockLayout                                  = true;
     core12_.imagelessFramebuffer                               = true;
@@ -243,15 +245,15 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core12_.shaderSubgroupExtendedTypes                        = true;
     core12_.separateDepthStencilLayouts                        = true;
     core12_.hostQueryReset                                     = false;
-    core12_.timelineSemaphore                                  = true;
-    core12_.bufferDeviceAddress                                = true;
-    core12_.bufferDeviceAddressCaptureReplay                   = true;
+    core12_.timelineSemaphore                                  = false;
+    core12_.bufferDeviceAddress                                = false;
+    core12_.bufferDeviceAddressCaptureReplay                   = false;
     core12_.bufferDeviceAddressMultiDevice                     = true;
-    core12_.vulkanMemoryModel                                  = true;
-    core12_.vulkanMemoryModelDeviceScope                       = true;
+    core12_.vulkanMemoryModel                                  = false;
+    core12_.vulkanMemoryModelDeviceScope                       = false;
     core12_.vulkanMemoryModelAvailabilityVisibilityChains      = true;
-    core12_.shaderOutputViewportIndex                          = true;
-    core12_.shaderOutputLayer                                  = true;
+    core12_.shaderOutputViewportIndex                          = false;
+    core12_.shaderOutputLayer                                  = false;
     core12_.subgroupBroadcastDynamicId                         = true;
 
     core12_members_as_strings_ = { "samplerMirrorClampToEdge",
@@ -305,15 +307,15 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
     core13_.descriptorBindingInlineUniformBlockUpdateAfterBind = true;
     core13_.pipelineCreationCacheControl                       = true;
     core13_.privateData                                        = true;
-    core13_.shaderDemoteToHelperInvocation                     = true;
+    core13_.shaderDemoteToHelperInvocation                     = false;
     core13_.shaderTerminateInvocation                          = true;
-    core13_.subgroupSizeControl                                = true;
+    core13_.subgroupSizeControl                                = false;
     core13_.computeFullSubgroups                               = true;
     core13_.synchronization2                                   = true;
     core13_.textureCompressionASTC_HDR                         = true;
     core13_.shaderZeroInitializeWorkgroupMemory                = true;
     core13_.dynamicRendering                                   = false;
-    core13_.shaderIntegerDotProduct                            = true;
+    core13_.shaderIntegerDotProduct                            = false;
     core13_.maintenance4                                       = true;
 
     core13_members_as_strings_ = { "robustImageAccess",
@@ -331,6 +333,50 @@ VulkanFeatureTrackerConsumerBase::VulkanFeatureTrackerConsumerBase()
                                    "dynamicRendering",
                                    "shaderIntegerDotProduct",
                                    "maintenance4" };
+
+    core14_.globalPriorityQuery                    = true;
+    core14_.shaderSubgroupRotate                   = false;
+    core14_.shaderSubgroupRotateClustered          = true;
+    core14_.shaderFloatControls2                   = false;
+    core14_.shaderExpectAssume                     = false;
+    core14_.rectangularLines                       = true;
+    core14_.bresenhamLines                         = true;
+    core14_.smoothLines                            = true;
+    core14_.stippledRectangularLines               = true;
+    core14_.stippledBresenhamLines                 = true;
+    core14_.stippledSmoothLines                    = true;
+    core14_.vertexAttributeInstanceRateDivisor     = true;
+    core14_.vertexAttributeInstanceRateZeroDivisor = true;
+    core14_.indexTypeUint8                         = false;
+    core14_.dynamicRenderingLocalRead              = true;
+    core14_.maintenance5                           = true;
+    core14_.maintenance6                           = true;
+    core14_.pipelineProtectedAccess                = true;
+    core14_.pipelineRobustness                     = true;
+    core14_.hostImageCopy                          = true;
+    core14_.pushDescriptor                         = true;
+
+    core14_members_as_strings_ = { "globalPriorityQuery",
+                                   "shaderSubgroupRotate",
+                                   "shaderSubgroupRotateClustered",
+                                   "shaderFloatControls2",
+                                   "shaderExpectAssume",
+                                   "rectangularLines",
+                                   "bresenhamLines",
+                                   "smoothLines",
+                                   "stippledRectangularLines",
+                                   "stippledBresenhamLines",
+                                   "stippledSmoothLines",
+                                   "vertexAttributeInstanceRateDivisor",
+                                   "vertexAttributeInstanceRateZeroDivisor",
+                                   "indexTypeUint8",
+                                   "dynamicRenderingLocalRead",
+                                   "maintenance5",
+                                   "maintenance6",
+                                   "pipelineProtectedAccess",
+                                   "pipelineRobustness",
+                                   "hostImageCopy",
+                                   "pushDescriptor" };
 
     // extensions & alias extensions
     supported_instance_extensions_map_ = { { VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false } };
@@ -458,6 +504,19 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateDevice(
                 output_core13_.back().pNext                 = ((VkPhysicalDeviceVulkan13Features*)pNext)->pNext;
                 *((VkPhysicalDeviceVulkan13Features*)pNext) = output_core13_.back();
                 output_core13_.pop_back();
+            }
+        }
+        else if (((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)
+        {
+            if (!IsModificationPass())
+            {
+                capture_core14_.push_back(*((VkPhysicalDeviceVulkan14Features*)pNext));
+            }
+            else
+            {
+                output_core14_.back().pNext                 = ((VkPhysicalDeviceVulkan14Features*)pNext)->pNext;
+                *((VkPhysicalDeviceVulkan14Features*)pNext) = output_core14_.back();
+                output_core14_.pop_back();
             }
         }
         pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
@@ -635,6 +694,16 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
             core10_.sampleRateShading = true;
         }
 
+        if (pCreateInfosDec[i].pRasterizationState && pCreateInfosDec[i].pRasterizationState->depthBiasClamp != 0.0)
+        {
+            core10_.depthBiasClamp = true;
+        }
+
+        if (pCreateInfosDec[i].pRasterizationState && pCreateInfosDec[i].pRasterizationState->lineWidth != 1.0)
+        {
+            core10_.wideLines = true;
+        }
+
         for (uint32_t j = 0; j < pCreateInfosDec[i].stageCount; j++)
         {
             if (pCreateInfosDec[i].pStages[j].stage == VK_SHADER_STAGE_GEOMETRY_BIT)
@@ -770,6 +839,89 @@ void VulkanFeatureTrackerConsumerBase::Process_vkCreateGraphicsPipelines(
             }
             pNext = ((void*)(((VkBaseInStructure*)pNext)->pNext));
         }
+    }
+
+    for (uint32_t i = 0; i < createInfoCount; i++)
+    {
+        for (uint32_t stage_index = 0; stage_index < pCreateInfosDec[i].stageCount; stage_index++)
+        {
+            Process_VkPipelineShaderStageCreateInfo(&pCreateInfosDec[i].pStages[stage_index]);
+        }
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCreateComputePipelines(
+    const ApiCallInfo&                                         call_info,
+    VkResult                                                   returnValue,
+    format::HandleId                                           device,
+    format::HandleId                                           pipelineCache,
+    uint32_t                                                   createInfoCount,
+    StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+    HandlePointerDecoder<VkPipeline>*                          pPipelines)
+{
+    VkComputePipelineCreateInfo* pCreateInfosDec = pCreateInfos->GetMetaStructPointer()->decoded_value;
+
+    for (uint32_t i = 0; i < createInfoCount; i++)
+    {
+        Process_VkPipelineShaderStageCreateInfo(&pCreateInfosDec[i].stage);
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCreateRayTracingPipelinesKHR(
+    const ApiCallInfo&                                               call_info,
+    VkResult                                                         returnValue,
+    format::HandleId                                                 device,
+    format::HandleId                                                 deferredOperation,
+    format::HandleId                                                 pipelineCache,
+    uint32_t                                                         createInfoCount,
+    StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoKHR>* pCreateInfos,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+    HandlePointerDecoder<VkPipeline>*                                pPipelines)
+{
+    VkRayTracingPipelineCreateInfoKHR* pCreateInfosDec = pCreateInfos->GetMetaStructPointer()->decoded_value;
+
+    for (uint32_t i = 0; i < createInfoCount; i++)
+    {
+        for (uint32_t stage_index = 0; stage_index < pCreateInfosDec[i].stageCount; stage_index++)
+        {
+            Process_VkPipelineShaderStageCreateInfo(&pCreateInfosDec[i].pStages[stage_index]);
+        }
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_VkPipelineShaderStageCreateInfo(
+    const VkPipelineShaderStageCreateInfo* info)
+{
+    if (info->stage == VK_SHADER_STAGE_GEOMETRY_BIT)
+    {
+        core10_.geometryShader = true;
+    }
+    else if (info->stage == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ||
+             info->stage == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)
+    {
+        core10_.tessellationShader = true;
+    }
+    if (info->flags & VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT)
+    {
+        core13_.subgroupSizeControl = true;
+    }
+
+    const VkPipelineShaderStageRequiredSubgroupSizeCreateInfo*
+        pipeline_shader_stage_required_subgroup_size_create_info_khr =
+            graphics::vulkan_struct_get_pnext<VkPipelineShaderStageRequiredSubgroupSizeCreateInfo>(info);
+
+    const VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT*
+        pipeline_shader_stage_required_subgroup_size_create_info_ext =
+            graphics::vulkan_struct_get_pnext<VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT>(info);
+
+    const VkShaderRequiredSubgroupSizeCreateInfoEXT* shader_required_subgroup_size_create_info_ext =
+        graphics::vulkan_struct_get_pnext<VkShaderRequiredSubgroupSizeCreateInfoEXT>(info);
+
+    if (pipeline_shader_stage_required_subgroup_size_create_info_khr ||
+        pipeline_shader_stage_required_subgroup_size_create_info_ext || shader_required_subgroup_size_create_info_ext)
+    {
+        core13_.subgroupSizeControl = true;
     }
 }
 
@@ -1044,6 +1196,301 @@ void VulkanFeatureTrackerConsumerBase::checkSwapchainColorspaceEXT(VkColorSpaceK
     }
 }
 
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdBindIndexBuffer(const ApiCallInfo& call_info,
+                                                                    format::HandleId   commandBuffer,
+                                                                    format::HandleId   buffer,
+                                                                    VkDeviceSize       offset,
+                                                                    VkIndexType        indexType)
+{
+    if (indexType == VK_INDEX_TYPE_UINT32)
+    {
+        core10_.fullDrawIndexUint32 = true; // defensive assumption
+    }
+    if (indexType == VK_INDEX_TYPE_UINT8)
+    {
+        core14_.indexTypeUint8 = true;
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdBindIndexBuffer2(const ApiCallInfo& call_info,
+                                                                     format::HandleId   commandBuffer,
+                                                                     format::HandleId   buffer,
+                                                                     VkDeviceSize       offset,
+                                                                     VkDeviceSize       size,
+                                                                     VkIndexType        indexType)
+{
+    if (indexType == VK_INDEX_TYPE_UINT32)
+    {
+        core10_.fullDrawIndexUint32 = true; // defensive assumption
+    }
+    if (indexType == VK_INDEX_TYPE_UINT8)
+    {
+        core14_.indexTypeUint8 = true;
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdBindIndexBuffer2KHR(const ApiCallInfo& call_info,
+                                                                        format::HandleId   commandBuffer,
+                                                                        format::HandleId   buffer,
+                                                                        VkDeviceSize       offset,
+                                                                        VkDeviceSize       size,
+                                                                        VkIndexType        indexType)
+{
+    Process_vkCmdBindIndexBuffer2({}, commandBuffer, buffer, offset, size, indexType);
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdSetDepthBias(const ApiCallInfo& call_info,
+                                                                 format::HandleId   commandBuffer,
+                                                                 float              depthBiasConstantFactor,
+                                                                 float              depthBiasClamp,
+                                                                 float              depthBiasSlopeFactor)
+{
+    if (depthBiasClamp != 0.0)
+    {
+        core10_.depthBiasClamp = true;
+    }
+}
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdSetLineWidth(const ApiCallInfo& call_info,
+                                                                 format::HandleId   commandBuffer,
+                                                                 float              lineWidth)
+{
+    if (lineWidth != 1.0)
+    {
+        core10_.wideLines = true;
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCmdBeginQuery(const ApiCallInfo&  call_info,
+                                                               format::HandleId    commandBuffer,
+                                                               format::HandleId    queryPool,
+                                                               uint32_t            query,
+                                                               VkQueryControlFlags flags)
+{
+    if (flags & VK_QUERY_CONTROL_PRECISE_BIT)
+    {
+        core10_.occlusionQueryPrecise = true;
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCreateShaderModule(
+    const ApiCallInfo&                                      call_info,
+    VkResult                                                returnValue,
+    format::HandleId                                        device,
+    StructPointerDecoder<Decoded_VkShaderModuleCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
+    HandlePointerDecoder<VkShaderModule>*                   pShaderModule)
+{
+    const uint32_t* pCode     = pCreateInfo->GetPointer()->pCode;
+    uint32_t        code_size = pCreateInfo->GetPointer()->codeSize;
+
+    parse_SPIRV(pCode, code_size);
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkCreateSemaphore(
+    const ApiCallInfo&                                   call_info,
+    VkResult                                             returnValue,
+    format::HandleId                                     device,
+    StructPointerDecoder<Decoded_VkSemaphoreCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkSemaphore>*                   pSemaphore)
+{
+
+    VkSemaphoreTypeCreateInfo* semaphore_type_create_info =
+        graphics::vulkan_struct_get_pnext<VkSemaphoreTypeCreateInfo>((pCreateInfo->GetPointer()));
+    if (semaphore_type_create_info != nullptr &&
+        (semaphore_type_create_info->semaphoreType == VK_SEMAPHORE_TYPE_TIMELINE))
+    {
+        core12_.timelineSemaphore = true;
+    }
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkGetBufferDeviceAddress(
+    const ApiCallInfo&                                       call_info,
+    VkDeviceAddress                                          returnValue,
+    format::HandleId                                         device,
+    StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
+{
+    core12_.bufferDeviceAddress = true;
+}
+
+void VulkanFeatureTrackerConsumerBase::Process_vkGetBufferOpaqueCaptureAddress(
+    const ApiCallInfo&                                       call_info,
+    uint64_t                                                 returnValue,
+    format::HandleId                                         device,
+    StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo)
+{
+    core12_.bufferDeviceAddressCaptureReplay = true;
+}
+
+void VulkanFeatureTrackerConsumerBase::parse_SPIRV(const uint32_t* code, uint32_t code_size)
+{
+    uint16_t        opcode;
+    uint16_t        word_count;
+    const uint32_t* insn = code + 5;
+    code_size /= 4; // bytes to words
+    do
+    {
+        opcode     = uint16_t(insn[0]);
+        word_count = uint16_t(insn[0] >> 16);
+        if (opcode == SpvOpCapability)
+        {
+            switch (insn[1])
+            {
+                case SpvCapabilityImageGatherExtended:
+                    core10_.shaderImageGatherExtended = true;
+                    break;
+                case SpvCapabilityUniformBufferArrayDynamicIndexing:
+                    core10_.shaderUniformBufferArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilitySampledImageArrayDynamicIndexing:
+                    core10_.shaderSampledImageArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityStorageBufferArrayDynamicIndexing:
+                    core10_.shaderStorageBufferArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityStorageImageArrayDynamicIndexing:
+                    core10_.shaderStorageImageArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityClipDistance:
+                    core10_.shaderClipDistance = true;
+                    break;
+                case SpvCapabilityCullDistance:
+                    core10_.shaderCullDistance = true;
+                    break;
+                case SpvCapabilityFloat64:
+                    core10_.shaderFloat64 = true;
+                    break;
+                case SpvCapabilityInt64:
+                    core10_.shaderInt64 = true;
+                    break;
+                case SpvCapabilityInt16:
+                    core10_.shaderInt16 = true;
+                    break;
+                case SpvCapabilityMinLod:
+                    core10_.shaderResourceMinLod = true;
+                    break;
+                case SpvCapabilitySampledCubeArray:
+                    core10_.imageCubeArray = true;
+                    break;
+                case SpvCapabilityImageCubeArray:
+                    core10_.imageCubeArray = true;
+                    break;
+                case SpvCapabilitySparseResidency:
+                    core10_.shaderResourceResidency = true;
+                    break;
+                case SpvCapabilityStorageBuffer16BitAccess:
+                    core11_.storageBuffer16BitAccess = true;
+                    break;
+                case SpvCapabilityUniformAndStorageBuffer16BitAccess:
+                    core11_.uniformAndStorageBuffer16BitAccess = true;
+                    break;
+                case SpvCapabilityStoragePushConstant16:
+                    core11_.storagePushConstant16 = true;
+                    break;
+                case SpvCapabilityStorageInputOutput16:
+                    core11_.storageInputOutput16 = true;
+                    break;
+                case SpvCapabilityVariablePointersStorageBuffer:
+                    core11_.variablePointersStorageBuffer = true;
+                    break;
+                case SpvCapabilityVariablePointers:
+                    core11_.variablePointers = true;
+                    break;
+                case SpvCapabilityDrawParameters:
+                    core11_.shaderDrawParameters = true;
+                    break;
+                case SpvOpDemoteToHelperInvocationEXT:
+                    core13_.shaderDemoteToHelperInvocation = true;
+                    break;
+                case SpvCapabilityDotProductInputAllKHR:
+                    core13_.shaderIntegerDotProduct = true;
+                    break;
+                case SpvCapabilityDotProductInput4x8BitKHR:
+                    core13_.shaderIntegerDotProduct = true;
+                    break;
+                case SpvCapabilityDotProductInput4x8BitPackedKHR:
+                    core13_.shaderIntegerDotProduct = true;
+                    break;
+                case SpvCapabilityDotProductKHR:
+                    core13_.shaderIntegerDotProduct = true;
+                    break;
+                case SpvCapabilityGroupNonUniformRotateKHR:
+                    core14_.shaderSubgroupRotate = true;
+                    break;
+                case SpvCapabilityExpectAssumeKHR:
+                    core14_.shaderExpectAssume = true;
+                    break;
+                case SpvCapabilityFloatControls2:
+                    core14_.shaderFloatControls2 = true;
+                    break;
+                case SpvCapabilityStorageBuffer8BitAccess:
+                    core12_.storageBuffer8BitAccess = true;
+                    break;
+                case SpvCapabilityUniformAndStorageBuffer8BitAccess:
+                    core12_.uniformAndStorageBuffer8BitAccess = true;
+                    break;
+                case SpvCapabilityStoragePushConstant8:
+                    core12_.storagePushConstant8 = true;
+                    break;
+                case SpvCapabilityFloat16:
+                    core12_.shaderFloat16 = true;
+                    break;
+                case SpvCapabilityInt8:
+                    core12_.shaderInt8 = true;
+                    break;
+                case SpvCapabilityInputAttachmentArrayDynamicIndexing:
+                    core12_.shaderInputAttachmentArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityUniformTexelBufferArrayDynamicIndexing:
+                    core12_.shaderUniformTexelBufferArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityStorageTexelBufferArrayDynamicIndexing:
+                    core12_.shaderStorageTexelBufferArrayDynamicIndexing = true;
+                    break;
+                case SpvCapabilityUniformBufferArrayNonUniformIndexing:
+                    core12_.shaderUniformBufferArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilitySampledImageArrayNonUniformIndexing:
+                    core12_.shaderSampledImageArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityStorageBufferArrayNonUniformIndexing:
+                    core12_.shaderStorageBufferArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityStorageImageArrayNonUniformIndexing:
+                    core12_.shaderStorageImageArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityInputAttachmentArrayNonUniformIndexing:
+                    core12_.shaderInputAttachmentArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityUniformTexelBufferArrayNonUniformIndexing:
+                    core12_.shaderUniformTexelBufferArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityStorageTexelBufferArrayNonUniformIndexing:
+                    core12_.shaderStorageTexelBufferArrayNonUniformIndexing = true;
+                    break;
+                case SpvCapabilityRuntimeDescriptorArray:
+                    core12_.runtimeDescriptorArray = true;
+                    break;
+                case SpvCapabilityVulkanMemoryModel:
+                    core12_.vulkanMemoryModel = true;
+                    break;
+                case SpvCapabilityVulkanMemoryModelDeviceScope:
+                    core12_.vulkanMemoryModelDeviceScope = true;
+                    break;
+                case SpvCapabilityShaderViewportIndex:
+                    core12_.shaderOutputViewportIndex = true;
+                    break;
+                case SpvCapabilityShaderLayer:
+                    core12_.shaderOutputLayer = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+        insn += word_count;
+    } while (insn != code + code_size && opcode != SpvOpMemoryModel);
+}
+
 bool VulkanFeatureTrackerConsumerBase::CanOptimize()
 {
     bool result = false;
@@ -1052,12 +1499,14 @@ bool VulkanFeatureTrackerConsumerBase::CanOptimize()
     bool core11_detected_unused_feature = ProcessCore11Features();
     bool core12_detected_unused_feature = ProcessCore12Features();
     bool core13_detected_unused_feature = ProcessCore13Features();
+    bool core14_detected_unused_feature = ProcessCore14Features();
 
     bool detected_device_unused_extensions   = ProcessDeviceExtensions();
     bool detected_instance_unused_extensions = ProcessInstanceExtensions();
 
     result = core10_detected_unused_feature || core11_detected_unused_feature || core12_detected_unused_feature ||
-             core13_detected_unused_feature || detected_device_unused_extensions || detected_instance_unused_extensions;
+             core13_detected_unused_feature || core14_detected_unused_feature || detected_device_unused_extensions ||
+             detected_instance_unused_extensions;
 
     if (result)
     {
@@ -1362,6 +1811,57 @@ bool VulkanFeatureTrackerConsumerBase::ProcessCore13Features()
     }
 
     std::reverse(output_core13_.begin(), output_core13_.end());
+
+    return detected_unused_feature_global;
+}
+
+bool VulkanFeatureTrackerConsumerBase::ProcessCore14Features()
+{
+    // TODO: improve/rewrite logging
+    bool detected_unused_feature_global = false;
+    bool detected_unused_feature_local  = false;
+
+    std::string output_log{};
+
+    for (uint64_t i = 0; i < capture_core14_.size(); i++)
+    {
+        detected_unused_feature_local = false;
+        output_log += "\tFrom vkCreateDevice encounter number " + std::to_string(i + 1) + ":\r\n";
+
+        output_core14_.push_back(capture_core14_[i]);
+
+        // bitwise AND every member except sType and pNext
+        // iterate through struct members, this is a workaround until this function will be generated
+        VkBool32* p_output_core14   = (VkBool32*)(&(output_core14_[i].globalPriorityQuery));
+        VkBool32* p_core14          = (VkBool32*)(&core14_.globalPriorityQuery);
+        VkBool32* p_capture_core14_ = (VkBool32*)(&(capture_core14_[i].globalPriorityQuery));
+
+        for (uint64_t j = 0; j < core14_members_as_strings_.size(); j++)
+        {
+            *p_output_core14 = (*p_core14) & (*p_capture_core14_);
+            if ((*p_output_core14) != (*p_capture_core14_))
+            {
+                output_log += "\t\t" + core14_members_as_strings_[j] + "\r\n";
+                detected_unused_feature_global = true;
+                detected_unused_feature_local  = true;
+            }
+            p_output_core14++;
+            p_core14++;
+            p_capture_core14_++;
+        }
+
+        if (!detected_unused_feature_local)
+        {
+            output_log += "\t\tNone\r\n";
+        }
+    }
+
+    if (detected_unused_feature_global)
+    {
+        consumer_output_log_ += "Core14 Features to be removed:\r\n" + output_log;
+    }
+
+    std::reverse(output_core14_.begin(), output_core14_.end());
 
     return detected_unused_feature_global;
 }
