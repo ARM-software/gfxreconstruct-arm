@@ -680,16 +680,15 @@ void Dx12StateTracker::TrackPrivateData(IUnknown_Wrapper* wrapper, REFGUID name,
     }
 }
 
-void Dx12StateTracker::TrackPrivateDataInterface(IUnknown_Wrapper*                wrapper,
-                                                 REFGUID                          name,
-                                                 Microsoft::WRL::ComPtr<IUnknown> data)
+void Dx12StateTracker::TrackPrivateDataInterface(IUnknown_Wrapper* wrapper, REFGUID name, const IUnknown* data)
 {
     GFXRECON_ASSERT(wrapper != nullptr);
 
     auto* info = GetWrapperInfo(wrapper);
     if (info)
     {
-        info->private_data_interface[name] = std::move(data);
+        Microsoft::WRL::ComPtr<IUnknown> private_data = const_cast<IUnknown*>(data);
+        info->private_data_interface[name]            = std::move(private_data);
     }
 }
 

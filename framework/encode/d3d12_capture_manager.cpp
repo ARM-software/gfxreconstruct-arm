@@ -2836,7 +2836,7 @@ void D3D12CaptureManager::PostProcess_SetPrivateDataInterface(IUnknown_Wrapper* 
 {
     if (IsCaptureModeTrack())
     {
-        state_tracker_->TrackPrivateDataInterface(wrapper, Name, const_cast<IUnknown*>(pData));
+        state_tracker_->TrackPrivateDataInterface(wrapper, Name, pData);
     }
 }
 

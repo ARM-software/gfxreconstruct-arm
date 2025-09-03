@@ -568,7 +568,7 @@ void Dx12StateWriter::WritePrivateDataInterface(format::HandleId handle_id, cons
         else
         {
             WriteMethodCall(
-                format::ApiCallId::ApiCall_IDXGIObject_SetPrivateDataInterface, handle_id, &parameter_stream_);
+                format::ApiCallId::ApiCall_ID3D12Object_SetPrivateDataInterface, handle_id, &parameter_stream_);
         }
         parameter_stream_.Clear();
     }

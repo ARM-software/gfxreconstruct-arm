@@ -1021,8 +1021,9 @@ void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT ca
             {
                 DXGI_QUERY_VIDEO_MEMORY_INFO memInfo = {};
                 adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
-                GFXRECON_LOG_INFO(
-                    "GPU Memory Usage: %llu KB / %llu KB ", memInfo.CurrentUsage / 1024, memInfo.Budget / 1024);
+                GFXRECON_LOG_INFO("GPU Memory Usage: %" PRIu64 " KB / %" PRIu64 " KB ",
+                                  memInfo.CurrentUsage / 1024,
+                                  memInfo.Budget / 1024);
             }
         }
 
@@ -2056,7 +2057,8 @@ void Dx12ReplayConsumerBase::SetResourceReplayRequiredSize(DxObjectInfo* replay_
             auto iter = parameter_resource_size_map_.find(desc_pointer->Width);
             if (iter != parameter_resource_size_map_.end())
             {
-                GFXRECON_LOG_INFO("Adjusting resource width from %llu to %llu for parameter resource size",
+                GFXRECON_LOG_INFO("Adjusting resource width from %" PRIu64 " to %" PRIu64
+                                  " for parameter resource size",
                                   desc_pointer->Width,
                                   iter->second);
                 const_cast<D3D12_RESOURCE_DESC*>(desc_pointer)->Width = iter->second;
@@ -2094,7 +2096,8 @@ void Dx12ReplayConsumerBase::SetResourceReplayRequiredSize(DxObjectInfo* replay_
             auto iter = parameter_resource_size_map_.find(desc_pointer->Width);
             if (iter != parameter_resource_size_map_.end())
             {
-                GFXRECON_LOG_INFO("Adjusting resource width from %llu to %llu for parameter resource size",
+                GFXRECON_LOG_INFO("Adjusting resource width from %" PRIu64 " to %" PRIu64
+                                  " for parameter resource size",
                                   desc_pointer->Width,
                                   iter->second);
                 const_cast<D3D12_RESOURCE_DESC1*>(desc_pointer)->Width = iter->second;
@@ -3659,7 +3662,7 @@ void Dx12ReplayConsumerBase::OverrideSetPipelineStackSize(DxObjectInfo* replay_o
     UINT64 ps_size = state_object->GetPipelineStackSize();
     if (ps_size != pipeline_stack_size_in_bytes)
     {
-        GFXRECON_LOG_DEBUG("Setting pipeline stack size to %llu bytes (was %llu) for state object %d",
+        GFXRECON_LOG_DEBUG("Setting pipeline stack size to %" PRIu64 " bytes (was %" PRIu64 ") for state object %d",
                            ps_size,
                            pipeline_stack_size_in_bytes,
                            replay_object->capture_id);
@@ -5095,8 +5098,8 @@ Dx12ReplayConsumerBase::OverrideGetRequiredParameterResourceSize(DxObjectInfo*  
 
     if (replay_size > return_value)
     {
-        GFXRECON_LOG_WARNING("GetRequiredParameterResourceSize (object_id=%llu, Stage=%d, ParameterIndex=%u): "
-                             "replay_size (%llu) > return_value (%llu)",
+        GFXRECON_LOG_WARNING("GetRequiredParameterResourceSize (object_id=%" PRIu64 ", Stage=%d, ParameterIndex=%u): "
+                             "replay_size (%" PRIu64 ") > return_value (%" PRIu64 ")",
                              replay_object->capture_id,
                              Stage,
                              ParameterIndex,
@@ -5137,7 +5140,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideSerialize(DxObjectInfo*            repla
     }
     else
     {
-        GFXRECON_LOG_ERROR("pData is null or not allocated for object_id %llu", replay_object->capture_id);
+        GFXRECON_LOG_ERROR("pData is null or not allocated for object_id %" PRIu64, replay_object->capture_id);
         return E_FAIL;
     }
 }
@@ -5289,7 +5292,8 @@ void Dx12ReplayConsumerBase::OverrideBuildRaytracingAccelerationStructure(
     if (support_memory_allocator_ && (accel_struct_builder != nullptr))
     {
         auto command_list_id = command_list4_object_info->capture_id;
-        accel_struct_builder->PreBuildRaytracingAccelerationStructure(command_list_id, desc->GetPointer());
+        accel_struct_builder->PreBuildRaytracingAccelerationStructure(
+            command_list_id, command_list4, desc->GetPointer());
     }
 
     command_list4->BuildRaytracingAccelerationStructure(
@@ -5849,12 +5853,12 @@ void Dx12ReplayConsumerBase::ApplyFillMemoryResourceAddressCommand(uint64_t offs
                         auto address_value_ptr = reinterpret_cast<UINT64*>(old_value_ptr);
                         if (*address_value_ptr != adjusted_value)
                         {
-                            GFXRECON_LOG_ERROR(
-                                "Unexpected GPU VA value found in memory for object_id %llu. Expected: 0x%016" PRIx64
-                                ", Found: 0x%016" PRIx64 ". Replay may fail.",
-                                object_id,
-                                adjusted_value,
-                                *address_value_ptr);
+                            GFXRECON_LOG_ERROR("Unexpected GPU VA value found in memory for object_id %" PRIu64
+                                               ". Expected: 0x%016" PRIx64 ", Found: 0x%016" PRIx64
+                                               ". Replay may fail.",
+                                               object_id,
+                                               adjusted_value,
+                                               *address_value_ptr);
                             break;
                         }
 
@@ -5868,8 +5872,9 @@ void Dx12ReplayConsumerBase::ApplyFillMemoryResourceAddressCommand(uint64_t offs
                         replay_base_address = gpu_va_map_.GetReplayGpuVirtualBaseAddress(object_id, start_value);
                         if (replay_base_address == 0)
                         {
-                            GFXRECON_LOG_ERROR(
-                                "Failed to find GPU VA base address for object_id %llu. Replay may fail.", object_id);
+                            GFXRECON_LOG_ERROR("Failed to find GPU VA base address for object_id %" PRIu64
+                                               ". Replay may fail.",
+                                               object_id);
                             break;
                         }
 
@@ -5882,7 +5887,7 @@ void Dx12ReplayConsumerBase::ApplyFillMemoryResourceAddressCommand(uint64_t offs
                         if (*address_value_ptr != adjusted_value)
                         {
                             GFXRECON_LOG_ERROR("Unexpected GPU Descriptor Handle value found in memory for object_id "
-                                               "%llu. Expected: 0x%016" PRIx64 ", Found: 0x%016" PRIx64
+                                               "%" PRIu64 ". Expected: 0x%016" PRIx64 ", Found: 0x%016" PRIx64
                                                ". Replay may fail.",
                                                object_id,
                                                adjusted_value,
@@ -5895,9 +5900,10 @@ void Dx12ReplayConsumerBase::ApplyFillMemoryResourceAddressCommand(uint64_t offs
                             descriptor_map_.GetReplayGpuDescriptorBaseAddress(start_value, capture_offset);
                         if (replay_offset_address == 0)
                         {
-                            GFXRECON_LOG_ERROR("Failed to find GPU Descriptor Handle base address for object_id %llu. "
-                                               "Replay may fail.",
-                                               object_id);
+                            GFXRECON_LOG_ERROR(
+                                "Failed to find GPU Descriptor Handle base address for object_id %" PRIu64 ". "
+                                "Replay may fail.",
+                                object_id);
                             break;
                         }
 
@@ -5910,9 +5916,9 @@ void Dx12ReplayConsumerBase::ApplyFillMemoryResourceAddressCommand(uint64_t offs
                                              fill_memory_resource_address_info_.resource_addresses[i].shader_id,
                                              D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES))
                         {
-                            GFXRECON_LOG_ERROR(
-                                "Unexpected shader identifier found in memory for object_id %llu. Replay may fail.",
-                                object_id);
+                            GFXRECON_LOG_ERROR("Unexpected shader identifier found in memory for object_id %" PRIu64
+                                               ". Replay may fail.",
+                                               object_id);
                             break;
                         }
 
@@ -6319,6 +6325,17 @@ void Dx12ReplayConsumerBase::PreCall_ID3D12GraphicsCommandList_ResourceBarrier(
             else
             {
                 it->second.emplace_back(std::move(state));
+            }
+        }
+        else if (barriers[i].decoded_value->Type == D3D12_RESOURCE_BARRIER_TYPE_UAV)
+        {
+            GFXRECON_ASSERT(object_info->object != nullptr);
+            auto command_list_ptr = reinterpret_cast<ID3D12GraphicsCommandList*>(object_info->object);
+
+            auto accel_struct_builder = GetAccelerationStructureBuilder(object_info);
+            if (support_memory_allocator_ && (accel_struct_builder != nullptr))
+            {
+                accel_struct_builder->PreCmdResourceBarrier(command_list_ptr, barriers[i].UAV->pResource);
             }
         }
     }
@@ -6738,7 +6755,8 @@ void Dx12ReplayConsumerBase::PreCall_ID3D12PipelineLibrary_Serialize(const ApiCa
         SIZE_T alloc_size = std::max(DataSizeInBytes, current_size);
         if (current_size != DataSizeInBytes)
         {
-            GFXRECON_LOG_DEBUG("Size mismatch for object_id %llu: serialized_size (%zu) != DataSizeInBytes (%zu), due "
+            GFXRECON_LOG_DEBUG("Size mismatch for object_id %" PRIu64
+                               ": serialized_size (%zu) != DataSizeInBytes (%zu), due "
                                "to cross-GPU difference.",
                                object_info->capture_id,
                                current_size,
@@ -6747,7 +6765,7 @@ void Dx12ReplayConsumerBase::PreCall_ID3D12PipelineLibrary_Serialize(const ApiCa
     }
     else
     {
-        GFXRECON_LOG_WARNING("pData is null for object_id %llu", object_info->capture_id);
+        GFXRECON_LOG_WARNING("pData is null for object_id %" PRIu64, object_info->capture_id);
     }
 }
 

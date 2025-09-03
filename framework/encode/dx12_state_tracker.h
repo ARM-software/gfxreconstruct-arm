@@ -196,7 +196,7 @@ class Dx12StateTracker
 
     void TrackPrivateData(IUnknown_Wrapper* wrapper, REFGUID name, UINT data_size, const void* data);
 
-    void TrackPrivateDataInterface(IUnknown_Wrapper* wrapper, REFGUID name, Microsoft::WRL::ComPtr<IUnknown> data);
+    void TrackPrivateDataInterface(IUnknown_Wrapper* wrapper, REFGUID name, const IUnknown* data);
 
     void TrackResidencyPriority(ID3D12Device1_Wrapper*          device_wrapper,
                                 UINT                            num_objects,
