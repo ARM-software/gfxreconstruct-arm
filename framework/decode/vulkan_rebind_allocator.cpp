@@ -605,6 +605,11 @@ void VulkanRebindAllocator::FreeMemory(VkDeviceMemory               memory,
             entry.second->memory_info = nullptr;
         }
 
+        for (const auto& entry : memory_alloc_info->original_tensors)
+        {
+            entry.second->memory_info = nullptr;
+        }
+
         delete memory_alloc_info;
     }
 }
@@ -1517,6 +1522,11 @@ VkResult VulkanRebindAllocator::WriteMappedMemoryRange(MemoryData     allocator_
                 UpdateBoundResource(entry.second, write_start, write_end, data);
             }
 
+            for (const auto& entry : memory_alloc_info->original_tensors)
+            {
+                UpdateBoundResource(entry.second, write_start, write_end, data);
+            }
+
             result = VK_SUCCESS;
         }
         else
@@ -1593,7 +1603,8 @@ void VulkanRebindAllocator::ReportBindVideoSessionIncompatibility(VkVideoSession
 void VulkanRebindAllocator::WriteBoundResourceDirect(
     ResourceAllocInfo* resource_alloc_info, size_t src_offset, size_t dst_offset, size_t data_size, const uint8_t* data)
 {
-    if (resource_alloc_info->object_type == ObjectType::buffer)
+    if (resource_alloc_info->object_type == ObjectType::buffer ||
+        resource_alloc_info->object_type == ObjectType::tensor)
     {
         util::platform::MemoryCopy(static_cast<uint8_t*>(resource_alloc_info->mapped_pointer) + dst_offset,
                                    data_size,
@@ -1661,6 +1672,13 @@ void VulkanRebindAllocator::WriteBoundResourceStaging(
     {
         // TODO: implement stagging video session copy
         GFXRECON_LOG_WARNING("Skipping video session in staging write: support not yet implemented");
+        return;
+    }
+
+    if (resource_alloc_info->object_type == ObjectType::tensor)
+    {
+        // TODO: implement staging tensor copy
+        GFXRECON_LOG_WARNING("Skipping tensor in staging write: support not yet implemented");
         return;
     }
 
@@ -2144,6 +2162,64 @@ VmaMemoryUsage VulkanRebindAllocator::GetBufferMemoryUsage(VkBufferUsageFlags   
     return AdjustMemoryUsage(memory_usage, replay_requirements);
 }
 
+VmaMemoryUsage VulkanRebindAllocator::GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
+                                                           VkMemoryPropertyFlags       capture_properties,
+                                                           const VkMemoryRequirements& replay_requirements)
+{
+    // Start with CPU_TO_GPU usage.
+    VmaMemoryUsage memory_usage        = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    bool           prefer_device_local = false;
+
+    // Adjust memory usage based on buffer usage flags.
+    if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)
+    {
+        // For exclusive TRANSFER_SRC usage, assume CPU_ONLY for staging copies.
+        memory_usage = VMA_MEMORY_USAGE_CPU_ONLY;
+    }
+    else if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM)
+    {
+        // For exclusive TRANSFER_DST usage, assume GPU_TO_CPU for read back.
+        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    }
+    else if ((capture_device_type_ == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) &&
+             ((tensor_usage & VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) &&
+             (((tensor_usage & VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM) != VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)))
+    {
+        prefer_device_local = true;
+    }
+
+    // Adjust memory usage based on capture memory properties.
+    // If present, remove AMD device extension property flags and perform checks using only the core property flags.
+    capture_properties &= ~(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD | VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD);
+
+    if ((memory_usage != VMA_MEMORY_USAGE_GPU_TO_CPU) &&
+        (capture_properties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+    {
+        // If the resource was bound to HOST_CACHED memory, make it GPU_TO_CPU usage to continue using HOST_CACHED.
+        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    }
+    else if (memory_usage != VMA_MEMORY_USAGE_GPU_ONLY)
+    {
+        if (capture_properties == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+        {
+            // If the resource was bound to memory that was exclusively DEVICE_LOCAL, make it GPU_ONLY.
+            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        }
+        else if (((capture_properties & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) ==
+                  (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) &&
+                 prefer_device_local)
+        {
+            // If the resource was bound to memory the was a combination of DEVICE_LOCAL and HOST_VISIBLE, make it
+            // GPU_ONLY if the usage flags indicated a preference for DEVICE_LOCAL memory (eg. resource was created
+            // with TRANSFER_DST usage on an integrated GPU).
+            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        }
+    }
+
+    // Adjust memory usage based on replay memory requirements.
+    return AdjustMemoryUsage(memory_usage, replay_requirements);
+}
+
 VmaMemoryUsage VulkanRebindAllocator::GetImageMemoryUsage(VkImageUsageFlags           image_usage,
                                                           VkImageTiling               tiling,
                                                           VkMemoryPropertyFlags       capture_properties,
@@ -2444,6 +2520,167 @@ void VulkanRebindAllocator::ClearStagingResources()
     functions_.free_command_buffers(device_, cmd_pool_, cmd_buffers_to_delete.size(), cmd_buffers_to_delete.data());
 
     staging_resources_.clear();
+}
+
+VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                             const VkAllocationCallbacks* allocation_callbacks,
+                                             format::HandleId             capture_id,
+                                             VkTensorARM*                 tensor,
+                                             ResourceData*                allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+
+    if ((create_info != nullptr) && (tensor != nullptr) && (allocator_data != nullptr))
+    {
+        result = functions_.create_tensor(device_, create_info, nullptr, tensor);
+
+        if (result >= 0)
+        {
+            auto resource_alloc_info         = new ResourceAllocInfo;
+            resource_alloc_info->usage       = create_info->pDescription->usage;
+            resource_alloc_info->object_type = ObjectType::tensor;
+            (*allocator_data)                = reinterpret_cast<uintptr_t>(resource_alloc_info);
+
+            if (create_info->pNext != nullptr)
+            {
+                resource_alloc_info->uses_extensions = true;
+            }
+        }
+    }
+
+    return result;
+}
+
+void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
+                                          const VkAllocationCallbacks* allocation_callbacks,
+                                          ResourceData                 allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+
+    if (allocator_data != 0)
+    {
+        assert(tensor != VK_NULL_HANDLE);
+
+        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        auto memory_alloc_info   = resource_alloc_info->memory_info;
+
+        if (memory_alloc_info != nullptr)
+        {
+            memory_alloc_info->original_tensors.erase(tensor);
+        }
+
+        if (resource_alloc_info->mapped_pointer != nullptr)
+        {
+            vmaUnmapMemory(allocator_, resource_alloc_info->allocation);
+        }
+        functions_.destroy_tensor(device_, tensor, nullptr);
+        vmaFreeMemory(allocator_, resource_alloc_info->allocation);
+
+        delete resource_alloc_info;
+    }
+}
+VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                         bindInfoCount,
+                                                 const VkBindTensorMemoryInfoARM* pBindInfos,
+                                                 const ResourceData*              allocator_buffer_datas,
+                                                 const MemoryData*                allocator_memory_datas,
+                                                 VkMemoryPropertyFlags*           bind_memory_properties)
+{
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+    for (uint32_t i = 0; i < bindInfoCount; ++i)
+    {
+        VkTensorARM tensor                = pBindInfos[i].tensor;
+        uintptr_t   allocator_tensor_data = allocator_buffer_datas[i];
+        uintptr_t   allocator_memory_data = allocator_memory_datas[i];
+
+        if ((tensor != VK_NULL_HANDLE) && (allocator_tensor_data != 0) && (allocator_memory_data != 0))
+        {
+            VmaAllocation allocation          = VK_NULL_HANDLE;
+            auto          resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_tensor_data);
+            auto          memory_alloc_info   = reinterpret_cast<MemoryAllocInfo*>(allocator_memory_data);
+
+            // Query tensor memory requirements.
+            VkTensorMemoryRequirementsInfoARM tensor_memory_info = {};
+            tensor_memory_info.sType  = VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM;
+            tensor_memory_info.tensor = tensor;
+            VkMemoryRequirements2 requirements;
+            requirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+            requirements.pNext = &tensor_memory_info;
+            functions_.get_tensor_memory_requirements(device_, &tensor_memory_info, &requirements);
+
+            // Fill in allocation info similar to buffers.
+            VmaAllocationCreateInfo create_info = {};
+            create_info.flags                   = 0;
+            create_info.usage                   = GetTensorMemoryUsage(
+                resource_alloc_info->usage,
+                capture_memory_properties_.memoryTypes[memory_alloc_info->original_index].propertyFlags,
+                requirements.memoryRequirements);
+            create_info.requiredFlags  = 0;
+            create_info.preferredFlags = 0;
+            create_info.memoryTypeBits = 0;
+            create_info.pool           = VK_NULL_HANDLE;
+            create_info.pUserData      = nullptr;
+
+            VmaAllocationInfo allocation_info = {};
+            result                            = vmaAllocateMemory(
+                allocator_, &requirements.memoryRequirements, &create_info, &allocation, &allocation_info);
+            if (result >= 0)
+            {
+                VkBindTensorMemoryInfoARM bind_tensor_memory_info = { VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM };
+                bind_tensor_memory_info.tensor                    = tensor;
+                bind_tensor_memory_info.memory                    = allocation_info.deviceMemory;
+                bind_tensor_memory_info.memoryOffset              = allocation_info.offset;
+                result = functions_.bind_tensor_memory(device_, 1, &bind_tensor_memory_info);
+                if (result >= 0)
+                {
+                    resource_alloc_info->allocation      = allocation;
+                    resource_alloc_info->mapped_pointer  = nullptr;
+                    resource_alloc_info->memory_info     = memory_alloc_info;
+                    resource_alloc_info->original_offset = pBindInfos[i].memoryOffset;
+                    resource_alloc_info->rebind_offset   = allocation_info.offset;
+                    resource_alloc_info->rebind_size     = allocation_info.size;
+
+                    VkMemoryPropertyFlags property_flags =
+                        replay_memory_properties_.memoryTypes[allocation_info.memoryType].propertyFlags;
+                    if ((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                    {
+                        resource_alloc_info->is_host_visible = true;
+                    }
+                    memory_alloc_info->original_tensors.insert(std::make_pair(tensor, resource_alloc_info));
+                    if (memory_alloc_info->original_content != nullptr)
+                    {
+                        // Copy original content to the new allocation.
+                        VkDeviceSize copy_size = std::min(
+                            allocation_info.size, memory_alloc_info->allocation_size - pBindInfos[i].memoryOffset);
+                        WriteBoundResource(resource_alloc_info,
+                                           pBindInfos[i].memoryOffset,
+                                           0,
+                                           copy_size,
+                                           memory_alloc_info->original_content.get());
+                    }
+
+                    bind_memory_properties[i] = property_flags;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+void VulkanRebindAllocator::GetTensorMemoryRequirementsARM(
+    VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+    VkMemoryRequirements2*             memory_requirements,
+    ResourceData                       allocator_data)
+{
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info           = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        resource_alloc_info->original_size = memory_requirements->memoryRequirements.size;
+    }
+
+    functions_.get_tensor_memory_requirements(device_, tensor_memory_requirements, memory_requirements);
 }
 
 GFXRECON_END_NAMESPACE(decode)

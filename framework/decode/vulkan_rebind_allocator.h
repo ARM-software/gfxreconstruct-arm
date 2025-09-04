@@ -353,24 +353,18 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                   const VkAllocationCallbacks* allocation_callbacks,
                                   format::HandleId             capture_id,
                                   VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data) override
-    {
-        return VK_SUCCESS;
-    }
+                                  ResourceData*                allocator_data) override;
+
     virtual void DestroyTensor(VkTensorARM                  tensor,
                                const VkAllocationCallbacks* allocation_callbacks,
-                               ResourceData                 allocator_data) override
-    {
-        return;
-    }
+                               ResourceData                 allocator_data) override;
+
     virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
                                       const VkBindTensorMemoryInfoARM* pBindInfos,
                                       const ResourceData*              allocator_buffer_data,
                                       const MemoryData*                allocator_memory_data,
-                                      VkMemoryPropertyFlags*           bind_memory_properties) override
-    {
-        return VK_SUCCESS;
-    }
+                                      VkMemoryPropertyFlags*           bind_memory_properties) override;
+
     virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
                                         const VkAllocationCallbacks* allocation_callbacks,
                                         VkTensorARM*                 tensor,
@@ -385,12 +379,11 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     {
         DestroyTensor(tensor, allocation_callbacks, allocator_data);
     }
+
     virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
                                                 VkMemoryRequirements2*             memory_requirements,
-                                                ResourceData                       allocator_data) override
-    {
-        return;
-    }
+                                                ResourceData                       allocator_data) override;
+
     virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
                                             const VkBindTensorMemoryInfoARM* pBindInfos,
                                             const ResourceData*              allocator_buffer_data,
@@ -416,7 +409,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         none          = 0,
         buffer        = 1,
         image         = 2,
-        video_session = 3
+        video_session = 3,
+        tensor        = 4,
     };
 
     struct ResourceAllocInfo
@@ -448,15 +442,16 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     struct MemoryAllocInfo
     {
-        VkDeviceSize                                     allocation_size{ 0 };
-        uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
-        bool                                             is_mapped{ false };
-        VkDeviceSize                                     mapped_offset{ 0 };
-        AHardwareBuffer*                                 ahb{ nullptr };
-        VkDeviceMemory                                   ahb_memory{ VK_NULL_HANDLE };
-        std::unique_ptr<uint8_t[]>                       original_content;
-        std::unordered_map<VkBuffer, ResourceAllocInfo*> original_buffers;
-        std::unordered_map<VkImage, ResourceAllocInfo*>  original_images;
+        VkDeviceSize                                        allocation_size{ 0 };
+        uint32_t                                            original_index{ std::numeric_limits<uint32_t>::max() };
+        bool                                                is_mapped{ false };
+        VkDeviceSize                                        mapped_offset{ 0 };
+        AHardwareBuffer*                                    ahb{ nullptr };
+        VkDeviceMemory                                      ahb_memory{ VK_NULL_HANDLE };
+        std::unique_ptr<uint8_t[]>                          original_content;
+        std::unordered_map<VkBuffer, ResourceAllocInfo*>    original_buffers;
+        std::unordered_map<VkImage, ResourceAllocInfo*>     original_images;
+        std::unordered_map<VkTensorARM, ResourceAllocInfo*> original_tensors;
 
         std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*>     original_sessions;
         std::unordered_map<VkImage, VulkanAndroidHardwareBufferInfo*> original_ahardwarebuffers;
@@ -523,6 +518,10 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                       VkResult (*update_func)(VmaAllocator, VmaAllocation, VkDeviceSize, VkDeviceSize));
 
     VmaMemoryUsage GetBufferMemoryUsage(VkBufferUsageFlags          buffer_usage,
+                                        VkMemoryPropertyFlags       capture_properties,
+                                        const VkMemoryRequirements& replay_requirements);
+
+    VmaMemoryUsage GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
                                         VkMemoryPropertyFlags       capture_properties,
                                         const VkMemoryRequirements& replay_requirements);
 
