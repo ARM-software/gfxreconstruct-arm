@@ -1274,15 +1274,33 @@ void VulkanStateWriter::WriteSurfaceKhrState(const VulkanStateTable& state_table
 
         for (const auto& entry : wrapper->surface_capabilities)
         {
-            WriteResizeWindowCmd(wrapper->handle_id,
-                                 entry.second.surface_capabilities.surfaceCapabilities.currentExtent.width,
-                                 entry.second.surface_capabilities.surfaceCapabilities.currentExtent.height);
-            WriteGetPhysicalDeviceSurfaceCapabilities(entry.first, wrapper->handle_id, entry.second, state_table);
+            if (auto capabilities = std::get_if<vulkan_wrappers::SurfaceCapabilities>(&entry.second))
+            {
+                WriteResizeWindowCmd(wrapper->handle_id,
+                                     capabilities->surface_capabilities.currentExtent.width,
+                                     capabilities->surface_capabilities.currentExtent.height);
+                WriteGetPhysicalDeviceSurfaceCapabilities(entry.first, wrapper->handle_id, *capabilities, state_table);
+            }
+            else if (auto capabilities2 = std::get_if<vulkan_wrappers::SurfaceCapabilities2>(&entry.second))
+            {
+                WriteResizeWindowCmd(wrapper->handle_id,
+                                     capabilities2->surface_capabilities.surfaceCapabilities.currentExtent.width,
+                                     capabilities2->surface_capabilities.surfaceCapabilities.currentExtent.height);
+                WriteGetPhysicalDeviceSurfaceCapabilities2(
+                    entry.first, wrapper->handle_id, *capabilities2, state_table);
+            }
         }
 
         for (const auto& entry : wrapper->surface_formats)
         {
-            WriteGetPhysicalDeviceSurfaceFormats(entry.first, wrapper->handle_id, entry.second, state_table);
+            if (auto formats = std::get_if<vulkan_wrappers::SurfaceFormats>(&entry.second))
+            {
+                WriteGetPhysicalDeviceSurfaceFormats(entry.first, wrapper->handle_id, *formats, state_table);
+            }
+            else if (auto formats2 = std::get_if<vulkan_wrappers::SurfaceFormats2>(&entry.second))
+            {
+                WriteGetPhysicalDeviceSurfaceFormats2(entry.first, wrapper->handle_id, *formats2, state_table);
+            }
         }
 
         for (const auto& entry : wrapper->surface_present_modes)
@@ -3963,10 +3981,25 @@ void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceCapabilities(
     const VkResult result = VK_SUCCESS;
 
     encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    EncodeStructPtr(&encoder_, &capabilities.surface_capabilities);
+    encoder_.EncodeEnumValue(result);
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceCapabilities2(
+    format::HandleId                             physical_device_id,
+    format::HandleId                             surface_id,
+    const vulkan_wrappers::SurfaceCapabilities2& capabilities,
+    const VulkanStateTable&                      state_table)
+{
+    const VkResult result = VK_SUCCESS;
+
+    encoder_.EncodeHandleIdValue(physical_device_id);
     EncodeStructPtr(&encoder_, &capabilities.surface_info);
     EncodeStructPtr(&encoder_, &capabilities.surface_capabilities);
     encoder_.EncodeEnumValue(result);
-
     WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceCapabilities2KHR, &parameter_stream_);
     parameter_stream_.Clear();
 }
@@ -3976,15 +4009,43 @@ void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceFormats(format::HandleId   
                                                              const vulkan_wrappers::SurfaceFormats& formats,
                                                              const VulkanStateTable&                state_table)
 {
-    const VkResult result = VK_SUCCESS;
+    const VkResult result       = VK_SUCCESS;
+    const uint32_t format_count = formats.surface_formats.size();
 
-    uint32_t format_count = formats.surface_format_count;
+    // First write the call to retrieve the size.
+    encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    encoder_.EncodeUInt32Ptr(&format_count);
+    EncodeStructArray<VkSurfaceFormatKHR>(&encoder_, nullptr, 0);
+    encoder_.EncodeEnumValue(result);
+
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormatsKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+
+    // Then write the call with the data.
+    encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    encoder_.EncodeUInt32Ptr(&format_count);
+    EncodeStructArray(&encoder_, formats.surface_formats.data(), format_count);
+    encoder_.EncodeEnumValue(result);
+
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormatsKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceFormats2(format::HandleId physical_device_id,
+                                                              format::HandleId surface_id,
+                                                              const vulkan_wrappers::SurfaceFormats2& formats,
+                                                              const VulkanStateTable&                 state_table)
+{
+    const VkResult result       = VK_SUCCESS;
+    uint32_t       format_count = formats.surface_format_count;
 
     // First write the call to retrieve the size.
     encoder_.EncodeHandleIdValue(physical_device_id);
     EncodeStructPtr(&encoder_, &formats.surface_info);
     encoder_.EncodeUInt32Ptr(&format_count);
-    EncodeStructArray<VkSurfaceFormatKHR>(&encoder_, nullptr, 0);
+    EncodeStructArray<VkSurfaceFormat2KHR>(&encoder_, nullptr, 0);
     encoder_.EncodeEnumValue(result);
 
     WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormats2KHR, &parameter_stream_);

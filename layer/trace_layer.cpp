@@ -37,7 +37,6 @@
 
 #include "vulkan/vk_layer.h"
 #include "vulkan/vulkan_ohos.h"
-
 #if ENABLE_OPENXR_SUPPORT
 #include "openxr/openxr_loader_negotiation.h"
 #endif

@@ -171,6 +171,7 @@
     "vkCmdBindDescriptorBuffersEXT": "OverrideCmdBindDescriptorBuffersEXT",
     "vkCreateSamplerYcbcrConversion": "OverrideCreateSamplerYcbcrConversion",
     "vkCreateSamplerYcbcrConversionKHR": "OverrideCreateSamplerYcbcrConversionKHR",
-    "vkCreatePipelineLayout": "OverrideCreatePipelineLayout"
+    "vkCreatePipelineLayout": "OverrideCreatePipelineLayout",
+    "vkCreateBufferView": "OverrideCreateBufferView"
   }
 }

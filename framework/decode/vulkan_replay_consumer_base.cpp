@@ -6357,6 +6357,31 @@ VulkanReplayConsumerBase::OverrideCreateBuffer(PFN_vkCreateBuffer               
     return result;
 }
 
+VkResult VulkanReplayConsumerBase::OverrideCreateBufferView(
+    PFN_vkCreateBufferView                                      func,
+    VkResult                                                    original_result,
+    const VulkanDeviceInfo*                                     device_info,
+    const StructPointerDecoder<Decoded_VkBufferViewCreateInfo>* pCreateInfo,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>*  pAllocator,
+    HandlePointerDecoder<VkBufferView>*                         pBufferView)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    auto     in_p_create_info = pCreateInfo->GetPointer();
+    auto     buffer_view      = pBufferView->GetHandlePointer();
+    VkResult result = func(device_info->handle, in_p_create_info, GetAllocationCallbacks(pAllocator), buffer_view);
+    if (result == VK_SUCCESS)
+    {
+        auto in_p_create_meta       = pCreateInfo->GetMetaStructPointer();
+        auto buffer_view_info       = reinterpret_cast<VulkanBufferViewInfo*>(pBufferView->GetConsumerData(0));
+        buffer_view_info->buffer_id = in_p_create_meta->buffer;
+        buffer_view_info->offset    = in_p_create_info->offset;
+        buffer_view_info->range     = in_p_create_info->range;
+    }
+
+    return result;
+}
+
 void VulkanReplayConsumerBase::OverrideDestroyBuffer(
     PFN_vkDestroyBuffer                                        func,
     const VulkanDeviceInfo*                                    device_info,
@@ -6908,108 +6933,14 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass(
         render_pass_info->attachment_descs.push_back(create_info->pAttachments[i]);
     }
 
-    // Copy subpass attachment references
-    render_pass_info->subpass_refs.reserve(create_info->subpassCount);
-    for (uint32_t i = 0; i < create_info->subpassCount; ++i)
+    if (original_result == VK_SUCCESS && options_.dumping_resources)
     {
-        VulkanRenderPassInfo::SubpassReferences sp_ref;
-        sp_ref.flags               = create_info->pSubpasses[i].flags;
-        sp_ref.pipeline_bind_point = create_info->pSubpasses[i].pipelineBindPoint;
+        const VkRenderPassCreateInfo* create_info = pCreateInfo->GetPointer();
+        uint32_t                      num_bytes   = graphics::vulkan_struct_deep_copy(create_info, 1, nullptr);
 
-        // Copy input attachment refs
-        for (uint32_t s = 0; s < create_info->pSubpasses[i].inputAttachmentCount; ++s)
-        {
-            if (create_info->pSubpasses[i].pInputAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
-            {
-                sp_ref.input_att_refs.push_back(create_info->pSubpasses[i].pInputAttachments[s]);
-            }
-        }
-
-        for (uint32_t s = 0; s < create_info->pSubpasses[i].colorAttachmentCount; ++s)
-        {
-            // Copy color attachment refs
-            if (create_info->pSubpasses[i].pColorAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
-            {
-                sp_ref.color_att_refs.push_back(create_info->pSubpasses[i].pColorAttachments[s]);
-            }
-
-            // Copy resolve attachment refs
-            if (create_info->pSubpasses[i].pResolveAttachments &&
-                create_info->pSubpasses[i].pResolveAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
-            {
-                sp_ref.resolve_att_refs.push_back(create_info->pSubpasses[i].pResolveAttachments[s]);
-            }
-        }
-
-        // Copy preserve attachment indices
-        sp_ref.preserve_att_refs.reserve(create_info->pSubpasses[i].preserveAttachmentCount);
-        for (uint32_t s = 0; s < create_info->pSubpasses[i].preserveAttachmentCount; ++s)
-        {
-            sp_ref.preserve_att_refs.push_back(create_info->pSubpasses[i].pPreserveAttachments[s]);
-        }
-
-        // Copy depth attachment ref
-        if (create_info->pSubpasses[i].pDepthStencilAttachment &&
-            create_info->pSubpasses[i].pDepthStencilAttachment->attachment != VK_ATTACHMENT_UNUSED)
-        {
-            sp_ref.has_depth     = true;
-            sp_ref.depth_att_ref = *create_info->pSubpasses[i].pDepthStencilAttachment;
-        }
-        else
-        {
-            sp_ref.has_depth = false;
-        }
-
-        render_pass_info->subpass_refs.push_back(std::move(sp_ref));
-    }
-
-    // Copy dependencies
-    render_pass_info->dependencies.resize(create_info->dependencyCount);
-    for (uint32_t i = 0; i < create_info->dependencyCount; ++i)
-    {
-        render_pass_info->dependencies[i] = create_info->pDependencies[i];
-    }
-
-    // Copy multiview information
-    render_pass_info->has_multiview  = false;
-    const VkBaseInStructure* current = reinterpret_cast<const VkBaseInStructure*>(create_info->pNext);
-    while (current != nullptr)
-    {
-        if (current->sType == VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO)
-        {
-            const VkRenderPassMultiviewCreateInfo* mv_ci =
-                reinterpret_cast<const VkRenderPassMultiviewCreateInfo*>(current);
-
-            render_pass_info->has_multiview = true;
-            if (mv_ci->subpassCount && mv_ci->pViewMasks != nullptr)
-            {
-                render_pass_info->multiview.view_masks.resize(mv_ci->subpassCount);
-                for (uint32_t i = 0; i < mv_ci->subpassCount; ++i)
-                {
-                    render_pass_info->multiview.view_masks[i] = mv_ci->pViewMasks[i];
-                }
-            }
-
-            if (mv_ci->dependencyCount && mv_ci->pViewOffsets != nullptr)
-            {
-                render_pass_info->multiview.view_offsets.resize(mv_ci->dependencyCount);
-                for (uint32_t i = 0; i < mv_ci->dependencyCount; ++i)
-                {
-                    render_pass_info->multiview.view_offsets[i] = mv_ci->pViewOffsets[i];
-                }
-            }
-
-            if (mv_ci->correlationMaskCount && mv_ci->pCorrelationMasks != nullptr)
-            {
-                render_pass_info->multiview.correlation_masks.resize(mv_ci->correlationMaskCount);
-                for (uint32_t i = 0; i < mv_ci->correlationMaskCount; ++i)
-                {
-                    render_pass_info->multiview.correlation_masks[i] = mv_ci->pCorrelationMasks[i];
-                }
-            }
-        }
-
-        current = current->pNext;
+        render_pass_info->func_version = VulkanRenderPassInfo::kCreateRenderPass;
+        render_pass_info->create_info.resize(num_bytes);
+        graphics::vulkan_struct_deep_copy(create_info, 1, render_pass_info->create_info.data());
     }
 
     return result;
@@ -7055,46 +6986,16 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRenderPass2(
         render_pass_info->attachment_descs[i].finalLayout    = create_info->pAttachments[i].finalLayout;
     }
 
-    render_pass_info->subpass_refs.reserve(create_info->subpassCount);
-    for (uint32_t i = 0; i < create_info->subpassCount; ++i)
+    if (original_result == VK_SUCCESS && options_.dumping_resources)
     {
-        VulkanRenderPassInfo::SubpassReferences sp_ref;
-        sp_ref.flags               = create_info->pSubpasses[i].flags;
-        sp_ref.pipeline_bind_point = create_info->pSubpasses[i].pipelineBindPoint;
+        const VkRenderPassCreateInfo2* create_info = pCreateInfo->GetPointer();
+        uint32_t                       num_bytes   = graphics::vulkan_struct_deep_copy(create_info, 1, nullptr);
 
-        for (uint32_t s = 0; s < create_info->pSubpasses[i].colorAttachmentCount; ++s)
-        {
-            if (create_info->pSubpasses[i].pColorAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
-            {
-                sp_ref.color_att_refs.emplace_back(
-                    VkAttachmentReference{ create_info->pSubpasses[i].pColorAttachments[s].attachment,
-                                           create_info->pSubpasses[i].pColorAttachments[s].layout });
-            }
-        }
-
-        for (uint32_t s = 0; s < create_info->pSubpasses[i].inputAttachmentCount; ++s)
-        {
-            if (create_info->pSubpasses[i].pInputAttachments[s].attachment != VK_ATTACHMENT_UNUSED)
-            {
-                sp_ref.input_att_refs.emplace_back(
-                    VkAttachmentReference{ create_info->pSubpasses[i].pInputAttachments[s].attachment,
-                                           create_info->pSubpasses[i].pInputAttachments[s].layout });
-            }
-        }
-
-        if (create_info->pSubpasses[i].pDepthStencilAttachment &&
-            create_info->pSubpasses[i].pDepthStencilAttachment->attachment != VK_ATTACHMENT_UNUSED)
-        {
-            sp_ref.has_depth                = true;
-            sp_ref.depth_att_ref.attachment = create_info->pSubpasses[i].pDepthStencilAttachment->attachment;
-            sp_ref.depth_att_ref.layout     = create_info->pSubpasses[i].pDepthStencilAttachment->layout;
-        }
-        else
-        {
-            sp_ref.has_depth = false;
-        }
-
-        render_pass_info->subpass_refs.push_back(std::move(sp_ref));
+        render_pass_info->func_version = (func == GetDeviceTable(device_info->handle)->CreateRenderPass2)
+                                             ? VulkanRenderPassInfo::kCreateRenderPass2
+                                             : VulkanRenderPassInfo::kCreateRenderPass2KHR;
+        render_pass_info->create_info.resize(num_bytes);
+        graphics::vulkan_struct_deep_copy(create_info, 1, render_pass_info->create_info.data());
     }
 
     return result;
@@ -10042,13 +9943,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
                               createInfoCount);
     }
 
-    if (result >= 0)
-    {
-        graphics::populate_shader_stages(pCreateInfos, pPipelines, GetObjectInfoTable());
-    }
-
     // If a pipeline cache was created, track it to know when to destroy it/save it to file
-
     if (in_pipelineCache != overridePipelineCache && result == VK_SUCCESS)
     {
         TrackNewPipelineCache(device_info,
@@ -10056,6 +9951,15 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
                               overridePipelineCache,
                               pPipelines->GetHandlePointer(),
                               createInfoCount);
+    }
+
+    // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
+    if (result == VK_SUCCESS)
+    {
+        if (options_.dumping_resources)
+        {
+            resource_dumper_->DumpRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
+        }
     }
 
     return result;
@@ -10240,7 +10144,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesNV(
     {
         if (options_.dumping_resources)
         {
-            resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
+            resource_dumper_->DumpRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
         }
     }
 
@@ -12391,7 +12295,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateComputePipelines(
     {
         if (options_.dumping_resources)
         {
-            resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, create_info_count, pPipelines);
+            resource_dumper_->DumpComputePipelineInfos(pCreateInfos, create_info_count, pPipelines);
         }
     }
 
@@ -12841,7 +12745,7 @@ std::function<handle_create_result_t<VkPipeline>()> VulkanReplayConsumerBase::As
     // Information is stored in the created PipelineInfos only when the dumping resources feature is in use
     if (returnValue == VK_SUCCESS && options_.dumping_resources)
     {
-        resource_dumper_->DumpComputeRayTracingPipelineInfos(pCreateInfos, createInfoCount, pPipelines);
+        resource_dumper_->DumpComputePipelineInfos(pCreateInfos, createInfoCount, pPipelines);
     }
 
     // populate VulkanPipelineInfo structs with information related to shader-modules

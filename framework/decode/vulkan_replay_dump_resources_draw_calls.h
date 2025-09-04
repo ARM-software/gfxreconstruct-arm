@@ -87,15 +87,15 @@ class DrawCallsDumpingContext
                                 const graphics::VulkanInstanceTable* inst_table,
                                 const VkCommandBufferBeginInfo*      begin_info);
 
-    VkResult CloneRenderPass(const VulkanRenderPassInfo*                         original_render_pass,
-                             const VulkanFramebufferInfo*                        fb_info,
-                             const std::optional<std::vector<format::HandleId>>& override_attachment_image_views);
+    VkResult CloneRenderPass(const VkRenderPassCreateInfo* original_render_pass_ci);
 
-    VkResult BeginRenderPass(const VulkanRenderPassInfo*                         render_pass_info,
-                             const VulkanFramebufferInfo*                        framebuffer_info,
-                             const VkRenderPassBeginInfo*                        renderpass_begin_info,
-                             VkSubpassContents                                   contents,
-                             const std::optional<std::vector<format::HandleId>>& override_attachment_image_views);
+    VkResult CloneRenderPass2(const VulkanRenderPassInfo*    render_pass_info,
+                              const VkRenderPassCreateInfo2* original_render_pass_ci);
+
+    VkResult BeginRenderPass(const VulkanRenderPassInfo*  render_pass_info,
+                             const VulkanFramebufferInfo* framebuffer_info,
+                             const VkRenderPassBeginInfo* renderpass_begin_info,
+                             VkSubpassContents            contents);
 
     void NextSubpass(VkSubpassContents contents);
 
@@ -655,7 +655,7 @@ class DrawCallsDumpingContext
         BoundIndexBuffer referenced_index_buffer;
 
         // Keep copies of the descriptor bindings referenced by each draw call
-        std::unordered_map<uint32_t, VulkanDescriptorSetInfo::VulkanDescriptorBindingsInfo> referenced_descriptors;
+        BoundDescriptorSets referenced_descriptors;
 
         // These are used to store information calculated when dumping vertex and index buffers.
         // This information is latter used when writting the output json file.

@@ -23,6 +23,7 @@
 #ifndef GFXRECON_VULKAN_REPLAY_DUMP_RESOURCES_DELEGATE_H
 #define GFXRECON_VULKAN_REPLAY_DUMP_RESOURCES_DELEGATE_H
 
+#include "decode/vulkan_object_info.h"
 #include "decode/vulkan_replay_dump_resources_draw_calls.h"
 #include "decode/vulkan_replay_dump_resources_compute_ray_tracing.h"
 #include "decode/vulkan_replay_dump_resources_json.h"
@@ -217,9 +218,17 @@ class DefaultVulkanDumpResourcesDelegate : public VulkanDumpResourcesDelegate
 
     // Keep track of images for which scalling failed so we can
     // note them in the output json
-    std::unordered_set<std::string> images_failed_scaling_;
+    std::unordered_set<const VulkanImageInfo*> images_failed_scaling_;
 
-    bool ImageFailedScaling(const std::string& filename) const { return images_failed_scaling_.count(filename); }
+    bool ImageFailedScaling(const VulkanImageInfo* img_info) const { return images_failed_scaling_.count(img_info); }
+
+    void GenerateDispatchTraceRaysDescriptorsJsonInfo(
+        const VulkanDumpDrawCallInfo&                                         draw_call_info,
+        nlohmann::ordered_json&                                               dispatch_json_entry,
+        const BoundDescriptorSets&                                            referenced_descriptors,
+        const DispatchTraceRaysDumpingContext::MutableResourcesBackupContext& cloned_resources,
+        const DispatchTraceRaysDumpingContext::MutableResourcesBackupContext& cloned_resources_before,
+        bool                                                                  is_dispatch);
 
     VulkanReplayDumpResourcesJson dump_json_;
     const VulkanReplayOptions&    options_;
