@@ -57,6 +57,8 @@ class VulkanFileOptimizer : public FileOptimizer
     virtual bool ProcessVulkanCopyAccelerationStructuresCommand(
         const format::VulkanCopyAccelerationStructuresCommandHeader& header) override;
     virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
+    virtual bool ProcessCreateHardwareBufferCommand(const format::CreateHardwareBufferCommandHeader& header) override;
+    virtual bool ProcessDestroyHardwareBufferCommand(const format::DestroyHardwareBufferCommand& header) override;
 
     void WriteFunctionCall(format::ApiCallId               call_id,
                            format::ThreadId                thread_id,

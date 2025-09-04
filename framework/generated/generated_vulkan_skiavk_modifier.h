@@ -4652,15 +4652,16 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
         uint32_t                                    stride){ CheckSkiavk(commandBuffer);}
 
   public: // meta data function
-    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
+    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
     virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,
-                                                const format::AddressLocationInfo*           infos);
+                                                const format::AddressLocationInfo*           infos) override;
     virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                    const format::ShaderHandleLocationInfo*          infos);
-    virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height);
+                                                    const format::ShaderHandleLocationInfo*          infos) override;
+    virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;
     virtual void
-    ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform);
-    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                memory_id,
+    ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform) override;
+    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                device_id,
+                                                format::HandleId                                    memory_id,
                                                 uint64_t                                            buffer_id,
                                                 uint32_t                                            format,
                                                 uint32_t                                            width,
@@ -4668,8 +4669,8 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
                                                 uint32_t                                            stride,
                                                 uint64_t                                            usage,
                                                 uint32_t                                            layers,
-                                                const std::vector<format::HardwareBufferPlaneInfo>& plane_info);
-    virtual void ProcessDestroyHardwareBufferCommand(uint64_t buffer_id);
+                                                const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;
+    virtual void ProcessDestroyHardwareBufferCommand(uint64_t buffer_id) override;
     virtual void ProcessSetDevicePropertiesCommand(format::HandleId   physical_device_id,
                                                uint32_t           api_version,
                                                uint32_t           driver_version,
@@ -4677,46 +4678,46 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
                                                uint32_t           device_id,
                                                uint32_t           device_type,
                                                const uint8_t      pipeline_cache_uuid[format::kUuidSize],
-                                               const std::string& device_name);
+                                               const std::string& device_name) override;
     virtual void ProcessSetDeviceMemoryPropertiesCommand(format::HandleId physical_device_id,
                                                      const std::vector<format::DeviceMemoryType>& memory_types,
-                                                     const std::vector<format::DeviceMemoryHeap>& memory_heaps);
+                                                     const std::vector<format::DeviceMemoryHeap>& memory_heaps) override;
     virtual void
-    ProcessSetOpaqueAddressCommand(format::HandleId device_id, format::HandleId object_id, uint64_t address);
+    ProcessSetOpaqueAddressCommand(format::HandleId device_id, format::HandleId object_id, uint64_t address) override;
     virtual void ProcessSetRayTracingShaderGroupHandlesCommand(format::HandleId device_id,
                                                            format::HandleId pipeline_id,
                                                            size_t           data_size,
-                                                           const uint8_t*   data);
+                                                           const uint8_t*   data) override;
     virtual void ProcessSetSwapchainImageStateCommand(format::HandleId device_id,
                                                   format::HandleId swapchain_id,
                                                   uint32_t         last_presented_image,
-                                                  const std::vector<format::SwapchainImageStateInfo>& image_state);
+                                                  const std::vector<format::SwapchainImageStateInfo>& image_state) override;
     virtual void
-    ProcessBeginResourceInitCommand(format::HandleId device_id, uint64_t max_resource_size, uint64_t max_copy_size);
-    virtual void ProcessEndResourceInitCommand(format::HandleId device_id);
+    ProcessBeginResourceInitCommand(format::HandleId device_id, uint64_t max_resource_size, uint64_t max_copy_size) override;
+    virtual void ProcessEndResourceInitCommand(format::HandleId device_id) override;
     virtual void ProcessInitBufferCommand(format::HandleId device_id,
                                       format::HandleId buffer_id,
                                       uint64_t         data_size,
-                                      const uint8_t*   data);
+                                      const uint8_t*   data) override;
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                      format::HandleId             image_id,
                                      uint64_t                     data_size,
                                      uint32_t                     aspect,
                                      uint32_t                     layout,
                                      const std::vector<uint64_t>& level_sizes,
-                                     const uint8_t*               data);
+                                     const uint8_t*               data) override;
     virtual void ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
-                                           const uint8_t*                              data);
+                                           const uint8_t*                              data) override;
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
     format::HandleId                                                           device_id,
     uint32_t                                                                   info_count,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* geometry_infos,
     StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,
-    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data);
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;
     virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(
-    format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos);
+    format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
-    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id);
+    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
     virtual void ProcessFrameEndMarker(uint64_t frame_number) override;
 
   private:
