@@ -349,6 +349,58 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->rebind_size;
     }
 
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override
+    {
+        return;
+    }
+    virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
+                                      const VkBindTensorMemoryInfoARM* pBindInfos,
+                                      const ResourceData*              allocator_buffer_data,
+                                      const MemoryData*                allocator_memory_data,
+                                      VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
+    virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
+                                        const VkAllocationCallbacks* allocation_callbacks,
+                                        VkTensorARM*                 tensor,
+                                        ResourceData*                allocator_data) override
+    {
+        return CreateTensor(create_info, allocation_callbacks, format::kNullHandleId, tensor, allocator_data);
+    }
+
+    virtual void DestroyTensorDirect(VkTensorARM                  tensor,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     ResourceData                 allocator_data) override
+    {
+        DestroyTensor(tensor, allocation_callbacks, allocator_data);
+    }
+    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                                VkMemoryRequirements2*             memory_requirements,
+                                                ResourceData                       allocator_data) override
+    {
+        return;
+    }
+    virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
+                                            const VkBindTensorMemoryInfoARM* pBindInfos,
+                                            const ResourceData*              allocator_buffer_data,
+                                            const MemoryData*                allocator_memory_data,
+                                            VkMemoryPropertyFlags*           bind_memory_properties)
+    {
+        return BindTensorMemory(
+            bindInfoCount, pBindInfos, allocator_buffer_data, allocator_memory_data, bind_memory_properties);
+    }
+
   private:
     struct MemoryAllocInfo;
 

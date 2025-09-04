@@ -358,6 +358,52 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
     }
 
     virtual bool SupportBindVideoSessionMemory() { return true; }
+
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override
+    {}
+    virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
+                                      const VkBindTensorMemoryInfoARM* pBindInfos,
+                                      const ResourceData*              allocator_buffer_data,
+                                      const MemoryData*                allocator_memory_data,
+                                      VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
+                                        const VkAllocationCallbacks* allocation_callbacks,
+                                        VkTensorARM*                 tensor,
+                                        ResourceData*                allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual void DestroyTensorDirect(VkTensorARM                  tensor,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     ResourceData                 allocator_data) override
+    {}
+    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                                VkMemoryRequirements2*             memory_requirements,
+                                                ResourceData                       allocator_data) override
+    {}
+    virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
+                                            const VkBindTensorMemoryInfoARM* pBindInfos,
+                                            const ResourceData*              allocator_buffer_data,
+                                            const MemoryData*                allocator_memory_data,
+                                            VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
 };
 
 GFXRECON_END_NAMESPACE(decode)

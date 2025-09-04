@@ -775,5 +775,80 @@ VkResult VulkanDefaultAllocator::Allocate(const VkMemoryAllocateInfo*  allocate_
     return result;
 }
 
+VkResult VulkanDefaultAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                              const VkAllocationCallbacks* allocation_callbacks,
+                                              format::HandleId             capture_id,
+                                              VkTensorARM*                 tensor,
+                                              ResourceData*                allocator_data)
+{
+    if (allocator_data != nullptr)
+    {
+        auto resource_alloc_info        = new ResourceAllocInfo;
+        resource_alloc_info->capture_id = capture_id;
+        (*allocator_data)               = reinterpret_cast<ResourceData>(resource_alloc_info);
+        return functions_.create_tensor(device_, create_info, allocation_callbacks, tensor);
+    }
+
+    return VK_ERROR_INITIALIZATION_FAILED;
+}
+void VulkanDefaultAllocator::DestroyTensor(VkTensorARM                  tensor,
+                                           const VkAllocationCallbacks* allocation_callbacks,
+                                           ResourceData                 allocator_data)
+{
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        delete resource_alloc_info;
+    }
+
+    functions_.destroy_tensor(device_, tensor, allocation_callbacks);
+}
+
+VkResult VulkanDefaultAllocator::BindTensorMemory(uint32_t                         bindInfoCount,
+                                                  const VkBindTensorMemoryInfoARM* pBindInfos,
+                                                  const ResourceData*              allocator_tensor_data,
+                                                  const MemoryData*                allocator_memory_data,
+                                                  VkMemoryPropertyFlags*           bind_memory_properties)
+{
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+
+    if (bind_memory_properties != nullptr)
+    {
+        result = functions_.bind_tensor_memory(device_, bindInfoCount, pBindInfos);
+
+        if (result == VK_SUCCESS)
+        {
+            for (int i = 0; i < bindInfoCount; ++i)
+            {
+                if ((allocator_tensor_data != 0) && (allocator_memory_data != 0))
+                {
+                    auto resource_alloc_info          = reinterpret_cast<ResourceAllocInfo*>(allocator_tensor_data[i]);
+                    resource_alloc_info->bound_memory = pBindInfos[i].memory;
+                    resource_alloc_info->bound_offset = pBindInfos[i].memoryOffset;
+
+                    auto memory_alloc_info    = reinterpret_cast<MemoryAllocInfo*>(allocator_memory_data[i]);
+                    (*bind_memory_properties) = memory_alloc_info->property_flags;
+                }
+                else
+                {
+                    GFXRECON_LOG_WARNING(
+                        "VulkanDefaultAllocator binding a VkTensorARM object to a VkDeviceMemory object "
+                        "without allocator data");
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+void VulkanDefaultAllocator::GetTensorMemoryRequirementsARM(
+    VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+    VkMemoryRequirements2*             memory_requirements,
+    ResourceData                       allocator_data)
+{
+    functions_.get_tensor_memory_requirements(device_, tensor_memory_requirements, memory_requirements);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
