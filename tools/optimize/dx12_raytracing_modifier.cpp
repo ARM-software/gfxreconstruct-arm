@@ -74,7 +74,7 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_GetGPUVirtualAddress(const A
     }
     else
     {
-        GFXRECON_LOG_ERROR("Failed to find resource object id %llu in resource_entries_ map.", object_id);
+        GFXRECON_LOG_ERROR("Failed to find resource object id %" PRIu64 " in resource_entries_ map.", object_id);
     }
 }
 
@@ -108,7 +108,8 @@ void Dx12RayTracingModifier::Process_ID3D12DescriptorHeap_GetGPUDescriptorHandle
 
     if (descriptor_heap_infos_.find(object_id) == descriptor_heap_infos_.end())
     {
-        GFXRECON_LOG_ERROR("Failed to find descriptor heap object id %llu in descriptor_heap_infos_ map.", object_id);
+        GFXRECON_LOG_ERROR("Failed to find descriptor heap object id %" PRIu64 " in descriptor_heap_infos_ map.",
+                           object_id);
         return;
     }
 
@@ -448,27 +449,37 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
     UINT                                                                                       NumPostbuildInfoDescs,
     StructPointerDecoder<Decoded_D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC>* pPostbuildInfoDescs)
 {
-    const auto       pDesc_struct = pDesc->GetPointer();
-    format::HandleId src_id       = format::kNullHandleId;
-    format::HandleId dst_id       = format::kNullHandleId;
+    Process_BuildRaytracingAccelerationStructure(
+        call_info, object_id, pDesc->GetPointer(), NumPostbuildInfoDescs, pPostbuildInfoDescs->GetPointer());
+}
 
-    if (pDesc_struct->Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
+void Dx12RayTracingModifier::Process_BuildRaytracingAccelerationStructure(
+    const ApiCallInfo&                                                 call_info,
+    format::HandleId                                                   object_id,
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*          desc,
+    UINT                                                               num_post_build_descs,
+    const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* post_build_descs)
+{
+    format::HandleId src_id = format::kNullHandleId;
+    format::HandleId dst_id = format::kNullHandleId;
+
+    if (desc->Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
     {
-        format::HandleId instance_id = FindBaseResourceFromGPUAddress(pDesc_struct->Inputs.InstanceDescs);
+        format::HandleId instance_id = FindBaseResourceFromGPUAddress(desc->Inputs.InstanceDescs);
         if (instance_id != format::kNullHandleId)
         {
-            auto offset = pDesc_struct->Inputs.InstanceDescs - resource_entries_[instance_id].start_virtual_address;
+            auto offset = desc->Inputs.InstanceDescs - resource_entries_[instance_id].start_virtual_address;
 
             ResourceValueInfo resource_value;
             resource_value.offset = offset;
-            resource_value.size   = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * pDesc_struct->Inputs.NumDescs;
+            resource_value.size   = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * desc->Inputs.NumDescs;
             resource_value.type   = ResourceValueType::kRaytracingInstanceDescPointer;
             command_list_related_infos_[object_id].related_resource_values[instance_id] = resource_value;
         }
     }
 
-    auto src_address = pDesc_struct->SourceAccelerationStructureData;
-    auto dst_address = pDesc_struct->DestAccelerationStructureData;
+    auto src_address = desc->SourceAccelerationStructureData;
+    auto dst_address = desc->DestAccelerationStructureData;
     if (src_address != 0)
     {
         FindAccelerationStructureResourceFromGPUAddress(src_address);
@@ -496,19 +507,20 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
     if (dst_id != format::kNullHandleId)
     {
         AccelerationStructureBuildDesc build_desc;
-        build_desc.handle_id            = dst_id;
-        build_desc.object_id            = resource_entries_[dst_id].object_id;
-        build_desc.is_first_built       = true;
-        build_desc.is_meta_copy         = false;
-        build_desc.source_of_compaction = 0;
-        build_desc.build_inputs         = pDesc_struct->Inputs;
-        build_desc.real_prebuild_info   = {};
-        build_desc.postbuild_info       = {};
-        build_desc.geometry_descs.resize(pDesc_struct->Inputs.NumDescs);
+        build_desc.handle_id                = dst_id;
+        build_desc.object_id                = resource_entries_[dst_id].object_id;
+        build_desc.is_first_built           = true;
+        build_desc.is_meta_copy             = false;
+        build_desc.source_of_compaction     = 0;
+        build_desc.build_inputs             = desc->Inputs;
+        build_desc.real_prebuild_info       = {};
+        build_desc.postbuild_info           = {};
+        build_desc.geometry_descs           = {};
+        build_desc.build_inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
         if (real_device5_ != nullptr)
         {
-            real_device5_->GetRaytracingAccelerationStructurePrebuildInfo(&(pDesc_struct->Inputs),
+            real_device5_->GetRaytracingAccelerationStructurePrebuildInfo(&(desc->Inputs),
                                                                           &(build_desc.real_prebuild_info));
         }
 
@@ -517,8 +529,7 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
             GFXRECON_LOG_ERROR("Failed to get real prebuild info for dest address 0x%" PRIx64, dst_address);
         }
 
-        const auto post_build_descs = pPostbuildInfoDescs->GetPointer();
-        for (UINT i = 0; i < NumPostbuildInfoDescs; i++)
+        for (UINT i = 0; i < num_post_build_descs; i++)
         {
             if (post_build_descs[i].InfoType == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE)
             {
@@ -527,9 +538,10 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
             }
         }
 
-        auto& acceleration_structure_inputs = pDesc_struct->Inputs;
+        auto& acceleration_structure_inputs = desc->Inputs;
         if (acceleration_structure_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
         {
+            build_desc.geometry_descs.resize(desc->Inputs.NumDescs);
             for (UINT i = 0; i < acceleration_structure_inputs.NumDescs; i++)
             {
                 if (acceleration_structure_inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY)
@@ -547,7 +559,7 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
                         geometry_desc.AABBs.AABBs.StartAddress = 0;
                     }
 
-                    build_desc.geometry_descs[i] = acceleration_structure_inputs.pGeometryDescs[i];
+                    build_desc.geometry_descs[i] = geometry_desc;
                 }
                 else
                 {
@@ -564,17 +576,64 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
                         geometry_desc->AABBs.AABBs.StartAddress = 0;
                     }
 
-                    build_desc.geometry_descs[i] = *acceleration_structure_inputs.ppGeometryDescs[i];
+                    build_desc.geometry_descs[i] = *geometry_desc;
                 }
             }
         }
         else
         {
-            acceleration_structure_inputs.InstanceDescs = 0;
+            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS&>(acceleration_structure_inputs)
+                .InstanceDescs = 0;
         }
 
-        auto build_desc_iter = acceleration_structure_build_desc_.find(dst_address);
+        bool need_insert_prebuild_info = false;
+        auto build_desc_iter           = acceleration_structure_build_desc_.find(dst_address);
         if (build_desc_iter == acceleration_structure_build_desc_.end())
+        {
+            need_insert_prebuild_info = true;
+        }
+        else
+        {
+            const auto old_va_bytes = build_desc_iter->second.real_prebuild_info.ResultDataMaxSizeInBytes;
+            const auto new_va_bytes = build_desc.real_prebuild_info.ResultDataMaxSizeInBytes;
+            if ((old_va_bytes == 0) || (new_va_bytes == 0))
+            {
+                GFXRECON_LOG_ERROR("Failed to process real prebuild info for dest address 0x%" PRIx64, dst_address);
+                return;
+            }
+
+            if ((build_desc_iter->second.build_inputs.Type ==
+                 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL) &&
+                (build_desc.build_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL))
+            {
+                if (((build_desc.build_inputs.Flags &
+                      D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE) == 0) ||
+                    (new_va_bytes > old_va_bytes))
+                {
+                    build_desc.geometry_descs.insert(build_desc.geometry_descs.end(),
+                                                     build_desc_iter->second.geometry_descs.begin(),
+                                                     build_desc_iter->second.geometry_descs.end());
+                    build_desc.build_inputs.NumDescs = build_desc.geometry_descs.size();
+                    build_desc.build_inputs.Flags &=
+                        ~D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+
+                    acceleration_structure_build_desc_.erase(dst_address);
+                    prebuild_info_insert_values_[resource_entries_[dst_id].block_index].erase(dst_address);
+                    need_insert_prebuild_info = true;
+                }
+            }
+            else
+            {
+                if (new_va_bytes > old_va_bytes)
+                {
+                    acceleration_structure_build_desc_.erase(dst_address);
+                    prebuild_info_insert_values_[resource_entries_[dst_id].block_index].erase(dst_address);
+                    need_insert_prebuild_info = true;
+                }
+            }
+        }
+
+        if (need_insert_prebuild_info)
         {
             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
             if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
@@ -589,43 +648,39 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
             prebuild_desc.object_id = resource_entries_[dst_id].object_id;
             prebuild_desc.get_prebuild_info.Clear();
 
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS build_inputs = build_desc.build_inputs;
+            if (build_desc.build_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
+            {
+                build_inputs.pGeometryDescs = build_desc.geometry_descs.data();
+            }
+            else if (build_desc.build_inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
+            {
+                build_inputs.InstanceDescs = 0;
+            }
+            else
+            {
+                GFXRECON_LOG_ERROR(
+                    "Unsupported acceleration structure type %d for BuildRaytracingAccelerationStructure.",
+                    build_desc.build_inputs.Type);
+                return;
+            }
+
+            if (real_device5_ != nullptr)
+            {
+                real_device5_->GetRaytracingAccelerationStructurePrebuildInfo(&(build_inputs),
+                                                                              &(build_desc.real_prebuild_info));
+                if (build_desc.real_prebuild_info.ResultDataMaxSizeInBytes == 0)
+                {
+                    GFXRECON_LOG_ERROR("Failed to get real prebuild info for dest address 0x%" PRIx64, dst_address);
+                }
+            }
+
             gfxrecon::encode::ParameterEncoder encoder(&prebuild_desc.get_prebuild_info);
-            encode::EncodeStructPtr(&encoder, &(pDesc_struct->Inputs));
+            encode::EncodeStructPtr(&encoder, &(build_inputs));
             encode::EncodeStructPtr(&encoder, &prebuild_info);
 
             acceleration_structure_build_desc_.emplace(dst_address, build_desc);
             prebuild_info_insert_values_[resource_entries_[dst_id].block_index].emplace(dst_address, prebuild_desc);
-        }
-        else
-        {
-            const auto iter_bytes = build_desc_iter->second.real_prebuild_info.ResultDataMaxSizeInBytes;
-            const auto new_bytes  = build_desc.real_prebuild_info.ResultDataMaxSizeInBytes;
-
-            if ((iter_bytes != 0) && (new_bytes != 0) && (new_bytes > iter_bytes))
-            {
-                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
-                if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
-                {
-                    // Set dst_id and dst_address with offset to prebuild_info just to create a new resource
-                    prebuild_info.ResultDataMaxSizeInBytes     = dst_address;
-                    prebuild_info.UpdateScratchDataSizeInBytes = dst_id;
-                }
-
-                AccelerationStructurePreBuildDesc prebuild_desc;
-                prebuild_desc.handle_id = dst_id;
-                prebuild_desc.object_id = resource_entries_[dst_id].object_id;
-                prebuild_desc.get_prebuild_info.Clear();
-
-                gfxrecon::encode::ParameterEncoder encoder(&prebuild_desc.get_prebuild_info);
-                encode::EncodeStructPtr(&encoder, &(pDesc_struct->Inputs));
-                encode::EncodeStructPtr(&encoder, &prebuild_info);
-
-                acceleration_structure_build_desc_.erase(dst_address);
-                acceleration_structure_build_desc_.emplace(dst_address, build_desc);
-
-                prebuild_info_insert_values_[resource_entries_[dst_id].block_index].erase(dst_address);
-                prebuild_info_insert_values_[resource_entries_[dst_id].block_index].emplace(dst_address, prebuild_desc);
-            }
         }
     }
     else
@@ -640,7 +695,98 @@ void Dx12RayTracingModifier::ProcessInitDx12AccelerationStructureCommand(
     std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
     const uint8_t*                                                  build_inputs_data)
 {
-    return;
+    const ApiCallInfo      call_info   = { GetCurrentBlockIndex(), command_header.thread_id };
+    const format::HandleId object_id   = format::kNullHandleId;
+    const auto             src_address = command_header.copy_source_gpu_va;
+    const auto             dst_address = command_header.dest_acceleration_structure_data;
+
+    bool build = true;
+    bool copy  = false;
+    if (command_header.copy_source_gpu_va != 0)
+    {
+        copy = true;
+        if (command_header.copy_source_gpu_va != command_header.dest_acceleration_structure_data)
+        {
+            build = false;
+        }
+    }
+
+    if (build)
+    {
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc           = {};
+        std::vector<D3D12_RAYTRACING_GEOMETRY_DESC>        build_geometry_descs = {};
+
+        // Reconstruct acceleration structure build descs.
+        build_desc.DestAccelerationStructureData    = command_header.dest_acceleration_structure_data;
+        build_desc.SourceAccelerationStructureData  = 0;
+        build_desc.ScratchAccelerationStructureData = 0;
+        build_desc.Inputs.Type = static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE>(command_header.inputs_type);
+        build_desc.Inputs.Flags =
+            static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(command_header.inputs_flags);
+        build_desc.Inputs.DescsLayout     = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        build_desc.Inputs.InstanceDescs   = 0;
+        build_desc.Inputs.pGeometryDescs  = nullptr;
+        build_desc.Inputs.ppGeometryDescs = nullptr;
+
+        if (build_desc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
+        {
+            build_geometry_descs.resize(command_header.inputs_num_geometry_descs);
+
+            build_desc.Inputs.NumDescs = command_header.inputs_num_geometry_descs;
+            GFXRECON_ASSERT(command_header.inputs_num_geometry_descs == geometry_descs.size());
+            for (UINT i = 0; i < geometry_descs.size(); ++i)
+            {
+                const auto&                     init_geom_desc = geometry_descs[i];
+                D3D12_RAYTRACING_GEOMETRY_DESC& geom_desc      = build_geometry_descs[i];
+
+                geom_desc.Type  = static_cast<D3D12_RAYTRACING_GEOMETRY_TYPE>(init_geom_desc.geometry_type);
+                geom_desc.Flags = static_cast<D3D12_RAYTRACING_GEOMETRY_FLAGS>(init_geom_desc.geometry_flags);
+                if (geom_desc.Type == D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES)
+                {
+                    auto& tris_desc        = geom_desc.Triangles;
+                    tris_desc.Transform3x4 = 0;
+                    tris_desc.IndexFormat  = static_cast<DXGI_FORMAT>(init_geom_desc.triangles_index_format);
+                    tris_desc.VertexFormat = static_cast<DXGI_FORMAT>(init_geom_desc.triangles_vertex_format);
+                    tris_desc.IndexCount   = init_geom_desc.triangles_index_count;
+                    tris_desc.VertexCount  = init_geom_desc.triangles_vertex_count;
+                    tris_desc.IndexBuffer  = 0;
+                    tris_desc.VertexBuffer.StartAddress  = 0;
+                    tris_desc.VertexBuffer.StrideInBytes = init_geom_desc.triangles_vertex_stride;
+                }
+                else if (geom_desc.Type == D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS)
+                {
+                    geom_desc.AABBs.AABBCount           = init_geom_desc.aabbs_count;
+                    geom_desc.AABBs.AABBs.StartAddress  = 0;
+                    geom_desc.AABBs.AABBs.StrideInBytes = init_geom_desc.aabbs_stride;
+                }
+                else
+                {
+                    GFXRECON_ASSERT(false && "Invalid D3D12_RAYTRACING_GEOMETRY_TYPE.");
+                }
+            }
+
+            build_desc.Inputs.pGeometryDescs = build_geometry_descs.data();
+        }
+        else if (build_desc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
+        {
+            build_desc.Inputs.NumDescs      = command_header.inputs_num_instance_descs;
+            build_desc.Inputs.InstanceDescs = 0;
+        }
+        else
+        {
+            GFXRECON_ASSERT(false && "Invalid D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE.");
+        }
+
+        Process_BuildRaytracingAccelerationStructure(call_info, object_id, &build_desc, 0, nullptr);
+    }
+
+    if (copy)
+    {
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode =
+            static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE>(command_header.copy_mode);
+
+        Process_CopyRaytracingAccelerationStructure(call_info, object_id, dst_address, src_address, mode);
+    }
 }
 
 void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAccelerationStructure(
@@ -650,11 +796,22 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAc
     D3D12_GPU_VIRTUAL_ADDRESS                         SourceAccelerationStructureData,
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE Mode)
 {
+    Process_CopyRaytracingAccelerationStructure(
+        call_info, object_id, DestAccelerationStructureData, SourceAccelerationStructureData, Mode);
+}
+
+void Dx12RayTracingModifier::Process_CopyRaytracingAccelerationStructure(
+    const ApiCallInfo&                                call_info,
+    format::HandleId                                  object_id,
+    D3D12_GPU_VIRTUAL_ADDRESS                         dest_acceleration_structure_data,
+    D3D12_GPU_VIRTUAL_ADDRESS                         source_acceleration_structure_data,
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode)
+{
     format::HandleId src_id = format::kNullHandleId;
     format::HandleId dst_id = format::kNullHandleId;
 
-    auto src_address = SourceAccelerationStructureData;
-    auto dst_address = DestAccelerationStructureData;
+    auto src_address = source_acceleration_structure_data;
+    auto dst_address = dest_acceleration_structure_data;
     if (src_address != 0)
     {
         FindAccelerationStructureResourceFromGPUAddress(src_address);
@@ -676,31 +833,60 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAc
 
     if ((dst_id != format::kNullHandleId) && (src_id != format::kNullHandleId))
     {
+        bool need_insert_prebuild_info = false;
         if ((acceleration_structure_build_desc_.find(src_address) != acceleration_structure_build_desc_.end()) &&
             (acceleration_structure_build_desc_.find(dst_address) == acceleration_structure_build_desc_.end()))
         {
-            if (Mode == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)
-            {
-                AccelerationStructureBuildDesc build_desc;
-                build_desc.handle_id            = dst_id;
-                build_desc.object_id            = resource_entries_[dst_id].object_id;
-                build_desc.is_first_built       = false;
-                build_desc.is_meta_copy         = true;
-                build_desc.source_of_compaction = src_address;
-                build_desc.build_inputs         = {};
-                build_desc.real_prebuild_info   = {};
-                build_desc.postbuild_info       = {};
-                build_desc.geometry_descs       = {};
+            need_insert_prebuild_info = true;
+        }
+        else if ((acceleration_structure_build_desc_.find(src_address) != acceleration_structure_build_desc_.end()) &&
+                 (acceleration_structure_build_desc_.find(dst_address) != acceleration_structure_build_desc_.end()))
+        {
+            const auto src_va_bytes =
+                acceleration_structure_build_desc_[src_address].real_prebuild_info.ResultDataMaxSizeInBytes;
+            const auto dst_va_bytes =
+                acceleration_structure_build_desc_[dst_address].real_prebuild_info.ResultDataMaxSizeInBytes;
 
+            if ((src_va_bytes != 0) && (dst_va_bytes != 0) && (dst_va_bytes < src_va_bytes))
+            {
+                acceleration_structure_build_desc_.erase(dst_address);
+                prebuild_info_insert_values_[resource_entries_[dst_id].block_index].erase(dst_address);
+                need_insert_prebuild_info = true;
+            }
+            else if ((src_va_bytes == 0) || (dst_va_bytes == 0))
+            {
+                GFXRECON_LOG_ERROR("Failed to process real prebuild info for dest address 0x%" PRIx64, dst_address);
+            }
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to find build desc for src address 0x%" PRIx64, src_address);
+        }
+
+        if (need_insert_prebuild_info)
+        {
+            AccelerationStructureBuildDesc build_desc;
+            build_desc.handle_id            = dst_id;
+            build_desc.object_id            = resource_entries_[dst_id].object_id;
+            build_desc.is_first_built       = false;
+            build_desc.is_meta_copy         = true;
+            build_desc.source_of_compaction = 0;
+            build_desc.build_inputs         = acceleration_structure_build_desc_[src_address].build_inputs;
+            build_desc.geometry_descs       = acceleration_structure_build_desc_[src_address].geometry_descs;
+            build_desc.real_prebuild_info   = acceleration_structure_build_desc_[src_address].real_prebuild_info;
+            build_desc.postbuild_info       = {};
+
+            if (mode == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)
+            {
+                build_desc.source_of_compaction = src_address;
                 acceleration_structure_build_desc_.emplace(dst_address, build_desc);
             }
             else
             {
-                acceleration_structure_build_desc_.emplace(
-                    std::make_pair(dst_address, acceleration_structure_build_desc_[src_address]));
+                acceleration_structure_build_desc_.emplace(dst_address, build_desc);
             }
 
-            // TODO: current insert GetRaytracingAccelerationStructurePrebuildInfo of source VA
+            // TODO: current insert prebuild info of source VA
             // The compacted resource size should be obtained from the post-build info
             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info{ 0, 0, 0 };
             if (gpu_virtual_address_resource_.find(dst_address) == gpu_virtual_address_resource_.end())
@@ -1357,7 +1543,7 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
             if (shader_id_iter != shader_id_to_properties_id_.end() && shader_id_iter->second != format::kNullHandleId)
             {
                 auto properties_id = shader_id_iter->second;
-                GFXRECON_LOG_DEBUG("Found shader identifier : 0x%" PRIx64 " offset %llu in resource ID: %" PRIu64
+                GFXRECON_LOG_DEBUG("Found shader identifier : 0x%" PRIx64 " offset %" PRIu64 " in resource ID: %" PRIu64
                                    ", data_offset %" PRIu64 " data_size %" PRIu64 " GetCurrentBlockIndex(%" PRIu64 ")",
                                    (uint64_t*)shader_id_ptr,
                                    i,
@@ -1405,9 +1591,10 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
 
                 if (entry != descriptor_start_address_info_.end())
                 {
-                    GFXRECON_LOG_DEBUG("Found GPU descriptor handle: 0x%" PRIx64 " offset %llu in resource ID: %" PRIu64
-                                       ", data_offset %" PRIu64 " data_size %" PRIu64 " start handle: 0x%" PRIx64
-                                       ", end handle: 0x%" PRIx64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                    GFXRECON_LOG_DEBUG("Found GPU descriptor handle: 0x%" PRIx64 " offset %" PRIu64
+                                       " in resource ID: %" PRIu64 ", data_offset %" PRIu64 " data_size %" PRIu64
+                                       " start handle: 0x%" PRIx64 ", end handle: 0x%" PRIx64
+                                       " GetCurrentBlockIndex(%" PRIu64 ")",
                                        old_descriptor.ptr,
                                        i,
                                        mapped_resource_id,
@@ -1449,9 +1636,9 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
                 auto accel_struct_iter = accel_struct_address_resource_.find(old_address);
                 if (accel_struct_iter != accel_struct_address_resource_.end())
                 {
-                    GFXRECON_LOG_DEBUG("Found acceleration structure address: 0x%" PRIx64
-                                       " offset %llu in resource ID: %" PRIu64 ", data_offset %" PRIu64
-                                       " data_size %" PRIu64 "  start address: 0x%" PRIx64 ", end address: 0x%" PRIx64
+                    GFXRECON_LOG_DEBUG("Found acceleration structure address: 0x%" PRIx64 " offset %" PRIu64
+                                       " in resource ID: %" PRIu64 ", data_offset %" PRIu64 " data_size %" PRIu64
+                                       "  start address: 0x%" PRIx64 ", end address: 0x%" PRIx64
                                        " GetCurrentBlockIndex(%" PRIu64 ")",
                                        old_address,
                                        i,
@@ -1483,10 +1670,10 @@ void Dx12RayTracingModifier::FindResourceRemapValues(
 
                     if (entry != gpu_virtual_address_resource_.end())
                     {
-                        GFXRECON_LOG_DEBUG("Found GPU virtual address: 0x%" PRIx64
-                                           " offset %llu in resource ID: %" PRIu64 ", data_offset %" PRIu64
-                                           " data_size %" PRIu64 "  start address: 0x%" PRIx64
-                                           ", end address: 0x%" PRIx64 " GetCurrentBlockIndex(%" PRIu64 ")",
+                        GFXRECON_LOG_DEBUG("Found GPU virtual address: 0x%" PRIx64 " offset %" PRIu64
+                                           " in resource ID: %" PRIu64 ", data_offset %" PRIu64 " data_size %" PRIu64
+                                           "  start address: 0x%" PRIx64 ", end address: 0x%" PRIx64
+                                           " GetCurrentBlockIndex(%" PRIu64 ")",
                                            old_address,
                                            i,
                                            mapped_resource_id,

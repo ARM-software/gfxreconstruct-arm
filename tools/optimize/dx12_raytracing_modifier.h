@@ -416,6 +416,19 @@ class Dx12RayTracingModifier : public decode::Dx12Consumer
                                  const uint64_t                               data_size,
                                  std::vector<Dx12FillCommandResourceAddress>* found_resource_addresses);
 
+    void Process_BuildRaytracingAccelerationStructure(
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   object_id,
+        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*          desc,
+        UINT                                                               num_post_build_descs,
+        const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* post_build_descs);
+
+    void Process_CopyRaytracingAccelerationStructure(const ApiCallInfo&        call_info,
+                                                     format::HandleId          object_id,
+                                                     D3D12_GPU_VIRTUAL_ADDRESS dest_acceleration_structure_data,
+                                                     D3D12_GPU_VIRTUAL_ADDRESS source_acceleration_structure_data,
+                                                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode);
+
   private:
     struct ResourceObject
     {

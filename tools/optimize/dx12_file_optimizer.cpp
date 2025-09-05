@@ -39,7 +39,7 @@ void Dx12FileOptimizer::SetFillCommandResourceValues(
     {
         // A NOOP RV optimization block should only be added if there weren't any real fill_command_resource_values
         // found.
-        GFXRECON_ASSERT((inject_noop_resource_value_optimization_ == false) || fill_command_resource_values->empty());
+        GFXRECON_ASSERT((inject_noop_resource_value_optimization_ == false) || !fill_command_resource_values->empty());
 
         resource_values_iter_ = fill_command_resource_values_->begin();
     }
@@ -51,7 +51,7 @@ void Dx12FileOptimizer::SetFillCommandResourceAddresses(
     fill_command_resource_addresses_ = fill_command_resource_addresses;
     if (fill_command_resource_addresses_ != nullptr)
     {
-        GFXRECON_ASSERT(fill_command_resource_addresses->empty());
+        GFXRECON_ASSERT(!fill_command_resource_addresses->empty());
         resource_addresses_iter_ = fill_command_resource_addresses_->begin();
     }
 }
