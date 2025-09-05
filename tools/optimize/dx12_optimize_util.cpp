@@ -27,6 +27,7 @@
 
 #include "dx12_file_optimizer.h"
 #include "dx12_raytracing_modifier.h"
+#include "dx12_redundancy_detector.h"
 #include "decode/dx12_object_info.h"
 #include "generated/generated_dx12_replay_consumer.h"
 #include "decode/dx12_resource_value_tracker.h"
@@ -52,6 +53,9 @@ struct Dx12OptimizationInfo
     // PSO removal
     std::unordered_set<uint64_t>         unreferenced_blocks;
     decode::UnreferencedPsoCreationCalls calls_info{};
+
+    // Redundant fence removal
+    std::unordered_set<uint64_t> redundant_fence_calls;
 
     // DXR optimization
     decode::Dx12FillCommandResourceValueMap  fill_command_resource_values;
@@ -194,6 +198,43 @@ bool GetPsoOptimizationInfo(const std::string&               input_filename,
     }
 
     return pso_scan_result;
+}
+
+bool GetFenceOptimizationInfo(const std::string&               input_filename,
+                              decode::Dx12OptimizationOptions& options,
+                              Dx12OptimizationInfo&            info)
+{
+    bool get_fence_scan_result = false;
+
+    decode::FileProcessor file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        gfxrecon::decode::Dx12Decoder            decoder;
+        gfxrecon::decode::Dx12RedundancyDetector redundancy_detector;
+        GFXRECON_WRITE_CONSOLE("Scanning D3D12 capture %s for redundant fence related calls.", input_filename.c_str());
+        decoder.AddConsumer(&redundancy_detector);
+        file_processor.AddDecoder(&decoder);
+        file_processor.ProcessAllFrames();
+        if (FileProcessorSucceeded(file_processor))
+        {
+            redundancy_detector.GetRedundantCalls(info.redundant_fence_calls);
+        }
+        else if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
+        {
+            GFXRECON_WRITE_CONSOLE("A failure has occurred during scanning file for redundant fence related calls.");
+        }
+        else if (!file_processor.EntireFileWasProcessed())
+        {
+            GFXRECON_WRITE_CONSOLE("Failed to process the entire capture file for redundant fence related calls.");
+        }
+        else
+        {
+            GFXRECON_WRITE_CONSOLE("Redundant fence related calls optimization detected invalid capture. "
+                                   "Please ensure that traces input to the optimizer already replay on their own.");
+        }
+    }
+
+    return get_fence_scan_result;
 }
 
 bool GetDxrOfflineOptimizationInfo(const std::string&               input_filename,
@@ -353,6 +394,7 @@ bool GetDx12OptimizationInfo(const std::string&               input_filename,
 {
     bool pso_scan_result = true;
     bool dxr_scan_result = true;
+    bool get_fence_scan_result = false;
 
     if (options.remove_redundant_psos)
     {
@@ -383,7 +425,12 @@ bool GetDx12OptimizationInfo(const std::string&               input_filename,
         dxr_scan_result = GetDxrOfflineOptimizationInfo(input_filename, info, options);
     }
 
-    return pso_scan_result || dxr_scan_result;
+    if (options.remove_redundant_fence_calls)
+    {
+        get_fence_scan_result = GetFenceOptimizationInfo(input_filename, options, info);
+    }
+
+    return pso_scan_result || dxr_scan_result || get_fence_scan_result;
 }
 
 bool ApplyDx12OptimizationInfo(const std::string&                     input_filename,
@@ -466,6 +513,20 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
             GFXRECON_WRITE_CONSOLE("Found no DXR or EI optimization info. Skipping DXR/EI optimization.");
         }
     }
+    // Log info about redundant fence related removal
+    if (options.remove_redundant_fence_calls)
+    {
+        if (info.redundant_fence_calls.size() > 0)
+        {
+            found_optimization_data = true;
+            GFXRECON_WRITE_CONSOLE("Removing %" PRIu64 " redundant fence related calls.",
+                                   info.redundant_fence_calls.size());
+        }
+        else
+        {
+            GFXRECON_WRITE_CONSOLE("No redundant fence related calls detected. Skipping removal.");
+        }
+    }
 
     // Verify that some optimization info was found.
     if (!found_optimization_data)
@@ -487,6 +548,7 @@ bool ApplyDx12OptimizationInfo(const std::string&                     input_file
             file_optimizer.SetFillCommandResourceValues(&info.fill_command_resource_values,
                                                         info.inject_noop_resource_value_optimization);
             file_optimizer.SetFillCommandResourceAddresses(&info.fill_command_resource_addresses);
+            file_optimizer.SetRedundantBlocks(info.redundant_fence_calls);
 
             file_optimizer.Process();
 
@@ -543,7 +605,7 @@ bool Dx12OptimizeFile(std::string input_filename, std::string output_filename, d
 {
     // Return early if no DX12 optimizations were enabled.
     if (!options.remove_redundant_psos && !options.optimize_resource_values &&
-        !options.optimize_resource_values_offline)
+        !options.optimize_resource_values_offline && !options.remove_redundant_fence_calls)
     {
         return true;
     }

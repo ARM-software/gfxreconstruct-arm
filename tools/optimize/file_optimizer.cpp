@@ -55,6 +55,11 @@ uint64_t FileOptimizer::GetUnreferencedBlocksSize()
     return unreferenced_blocks_.size();
 }
 
+void FileOptimizer::SetRedundantBlocks(const std::unordered_set<uint64_t>& redundant_blocks)
+{
+    redundant_blocks_ = redundant_blocks;
+}
+
 bool FileOptimizer::ProcessFunctionCall(const format::FunctionCallHeader& header)
 {
     if (removed_threads_ids_.find(header.thread_id) == removed_threads_ids_.end())
@@ -88,6 +93,26 @@ bool FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, ui
         if (unreferenced_blocks_.find(block_index) != unreferenced_blocks_.end())
         {
             unreferenced_blocks_.erase(block_index);
+            ignore_call = true;
+        }
+    }
+
+    if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Fence_GetCompletedValue)
+    {
+        // If the buffer is in the unused list, omit the call block from the file.
+        if (redundant_blocks_.find(block_index) != redundant_blocks_.end())
+        {
+            redundant_blocks_.erase(block_index);
+            ignore_call = true;
+        }
+    }
+
+    if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_GetDeviceRemovedReason)
+    {
+        // If the buffer is in the unused list, omit the call block from the file.
+        if (redundant_blocks_.find(block_index) != redundant_blocks_.end())
+        {
+            redundant_blocks_.erase(block_index);
             ignore_call = true;
         }
     }
