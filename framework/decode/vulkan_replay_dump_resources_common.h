@@ -138,6 +138,10 @@ std::string ShaderStageFlagsToString(VkShaderStageFlags flags);
 
 void ShaderStageFlagsToStageNames(VkShaderStageFlags flags, std::vector<std::string>& stage_names);
 
+std::vector<VkPipelineBindPoint> ShaderStageFlagsToPipelineBindPoints(VkShaderStageFlags flags);
+
+uint32_t FindQueueFamilyIndex(const VulkanDeviceInfo::EnabledQueueFamilyFlags& families, VkQueueFlags flags);
+
 class VulkanDumpResourcesDelegate;
 class DefaultVulkanDumpResourcesDelegate;
 

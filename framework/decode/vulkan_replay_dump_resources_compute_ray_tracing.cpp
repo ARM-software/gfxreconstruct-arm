@@ -1174,6 +1174,9 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
     const VulkanDeviceInfo* device_info = object_info_table_.GetVkDeviceInfo(original_command_buffer_info_->parent_id);
     assert(device_info);
 
+    const uint32_t transfer_queue_index =
+        FindQueueFamilyIndex(device_info->enabled_queue_family_flags, VK_QUEUE_TRANSFER_BIT);
+
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table_.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
@@ -1182,7 +1185,8 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
                                                 *device_table_,
                                                 *instance_table_,
                                                 *phys_dev_info->replay_device_info->memory_properties);
-    VulkanDumpResourceInfo        res_info_base{};
+
+    VulkanDumpResourceInfo res_info_base{};
     res_info_base.device_info                  = device_info;
     res_info_base.device_table                 = device_table_;
     res_info_base.instance_table               = instance_table_;
@@ -1230,7 +1234,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
             VkResult res = resource_util.ReadFromBufferResource(mutable_resources_clones_before.buffers[i].buffer,
                                                                 mutable_resources_clones_before.buffers[i].cloned_size,
                                                                 0,
-                                                                buffer_info->queue_family_index,
+                                                                transfer_queue_index,
                                                                 res_info.data);
             if (res != VK_SUCCESS)
             {
@@ -1288,7 +1292,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpMutableResources(uint64_t bcb_inde
         VkResult               res = resource_util.ReadFromBufferResource(mutable_resources_clones.buffers[i].buffer,
                                                             buffer_info->replay_size,
                                                             0,
-                                                            buffer_info->queue_family_index,
+                                                            transfer_queue_index,
                                                             res_info.data);
         if (res != VK_SUCCESS)
         {
@@ -1471,6 +1475,9 @@ VkResult DispatchTraceRaysDumpingContext::DumpDescriptors(uint64_t qs_index,
         }
     }
 
+    const uint32_t transfer_queue_index =
+        FindQueueFamilyIndex(device_info->enabled_queue_family_flags, VK_QUEUE_TRANSFER_BIT);
+
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table_.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
@@ -1489,7 +1496,7 @@ VkResult DispatchTraceRaysDumpingContext::DumpDescriptors(uint64_t qs_index,
         const VkDeviceSize size         = range == VK_WHOLE_SIZE ? res_info.buffer_info->replay_size - offset : range;
 
         VkResult res = resource_util.ReadFromBufferResource(
-            res_info.buffer_info->handle, size, offset, res_info.buffer_info->queue_family_index, res_info.data);
+            res_info.buffer_info->handle, size, offset, transfer_queue_index, res_info.data);
         if (res != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Reading from buffer resource failed (%s)", util::ToString<VkResult>(res).c_str())
@@ -1695,6 +1702,9 @@ VkResult DispatchTraceRaysDumpingContext::FetchIndirectParams()
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table_.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
 
+    const uint32_t transfer_queue_index =
+        FindQueueFamilyIndex(device_info->enabled_queue_family_flags, VK_QUEUE_TRANSFER_BIT);
+
     graphics::VulkanResourcesUtil resource_util(device_info->handle,
                                                 device_info->parent,
                                                 *device_table_,
@@ -1717,7 +1727,7 @@ VkResult DispatchTraceRaysDumpingContext::FetchIndirectParams()
         const VkDeviceSize   size = sizeof(VkDispatchIndirectCommand);
         std::vector<uint8_t> data;
         VkResult             res =
-            resource_util.ReadFromBufferResource(i_params.new_params_buffer, size, 0, VK_QUEUE_FAMILY_IGNORED, data);
+            resource_util.ReadFromBufferResource(i_params.new_params_buffer, size, 0, transfer_queue_index, data);
         if (res != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Reading from buffer resources failed (%s)", util::ToString<VkResult>(res).c_str())
@@ -1725,7 +1735,7 @@ VkResult DispatchTraceRaysDumpingContext::FetchIndirectParams()
         }
 
         assert(data.size() == sizeof(VkDispatchIndirectCommand));
-        util::platform::MemoryCopy(&i_params.dispatch_params, size, data.data(), size);
+        util::platform::MemoryCopy(&i_params.fetched_dispatch_params, size, data.data(), size);
     }
 
     for (auto& params : trace_rays_params_)
@@ -1745,7 +1755,7 @@ VkResult DispatchTraceRaysDumpingContext::FetchIndirectParams()
         const VkDeviceSize   size = tr_params.type == kTraceRaysIndirect ? sizeof(VkTraceRaysIndirectCommandKHR)
                                                                          : sizeof(VkTraceRaysIndirectCommand2KHR);
         std::vector<uint8_t> data;
-        VkResult res = resource_util.ReadFromBufferResource(new_params_buffer, size, 0, VK_QUEUE_FAMILY_IGNORED, data);
+        VkResult res = resource_util.ReadFromBufferResource(new_params_buffer, size, 0, transfer_queue_index, data);
         if (res != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Reading from buffer resources failed (%s)", util::ToString<VkResult>(res).c_str())

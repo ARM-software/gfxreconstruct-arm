@@ -159,14 +159,16 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define FENCE_QUERY_DELAY_LIMIT_UPPER                        "FENCE_QUERY_DELAY_LIMIT"
 #define BUFFER_USAGES_TO_IGNORE_LOWER                        "buffer_usages_to_ignore"
 #define BUFFER_USAGES_TO_IGNORE_UPPER                        "BUFFER_USAGES_TO_IGNORE"
-#define CAPTURE_PACKAGE_NAME_LOWER                           "capture_package_name"
-#define CAPTURE_PACKAGE_NAME_UPPER                           "CAPTURE_PACKAGE_NAME"
 #define FORCE_FIFO_PRESENT_MODE_LOWER                        "force_fifo_present_mode"
 #define FORCE_FIFO_PRESENT_MODE_UPPER                        "FORCE_FIFO_PRESENT_MODE"
 #define IGNORE_FRAME_BOUNDARY_ANDROID_LOWER                  "ignore_frame_boundary_android"
 #define IGNORE_FRAME_BOUNDARY_ANDROID_UPPER                  "IGNORE_FRAME_BOUNDARY_ANDROID"
 #define SKIP_THREADS_WITH_INVALID_DATA_LOWER                 "skip_threads_with_invalid_data"
 #define SKIP_THREADS_WITH_INVALID_DATA_UPPER                 "SKIP_THREADS_WITH_INVALID_DATA"
+#define CAPTURE_ENVIRONMENT_LOWER                            "capture_environment"
+#define CAPTURE_ENVIRONMENT_UPPER                            "CAPTURE_ENVIRONMENT"
+#define CAPTURE_PROCESS_NAME_LOWER                           "capture_process_name"
+#define CAPTURE_PROCESS_NAME_UPPER                           "CAPTURE_PROCESS_NAME"
 
 #if defined(__ANDROID__)
 #define GFXRECON_ENV_VAR_PREFIX "debug.gfxrecon."
@@ -240,10 +242,11 @@ const char kFenceQueryDelayUnitEnvVar[]                      = GFXRECON_OPTION_S
 const char kFenceQueryDelayTimeoutThresholdEnvVar[]          = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD);
 const char kFenceQueryDelayLimitEnvVar[]                     = GFXRECON_OPTION_STR(FENCE_QUERY_DELAY_LIMIT);
 const char kBufferUsagesToIgnoreEnvVar[]                     = GFXRECON_OPTION_STR(BUFFER_USAGES_TO_IGNORE);
-const char kCapturePackageNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PACKAGE_NAME);
 const char kForceFifoPresentModeEnvVar[]                     = GFXRECON_OPTION_STR(FORCE_FIFO_PRESENT_MODE);
 const char kIgnoreFrameBoundaryAndroidEnvVar[]               = GFXRECON_OPTION_STR(IGNORE_FRAME_BOUNDARY_ANDROID);
 const char kSkipThreadsWithInvalidDataEnvVar[]               = GFXRECON_OPTION_STR(SKIP_THREADS_WITH_INVALID_DATA);
+const char kCaptureEnvironmentEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_ENVIRONMENT);
+const char kCaptureProcessNameEnvVar[]                       = GFXRECON_OPTION_STR(CAPTURE_PROCESS_NAME);
 
 #if defined(__ANDROID__)
 // Android-specific capture options
@@ -310,10 +313,11 @@ const std::string kOptionFenceQueryDelayUnit                         = std::stri
 const std::string kOptionFenceQueryDelayTimeoutThreshold             = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_TIMEOUT_THRESHOLD_LOWER);
 const std::string kOptionFenceQueryDelayLimit                        = std::string(kSettingsFilter) + std::string(FENCE_QUERY_DELAY_LIMIT_LOWER);
 const std::string kOptionBufferUsagesToIgnore                        = std::string(kSettingsFilter) + std::string(BUFFER_USAGES_TO_IGNORE_LOWER);
-const std::string kOptionCapturePackageName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PACKAGE_NAME_LOWER);
-const std::string kOptionForceFifoPresentModeEnvVar                  = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
+const std::string kOptionForceFifoPresentMode                        = std::string(kSettingsFilter) + std::string(FORCE_FIFO_PRESENT_MODE_LOWER);
 const std::string kOptionIgnoreFrameBoundaryAndroid                  = std::string(kSettingsFilter) + std::string(IGNORE_FRAME_BOUNDARY_ANDROID_LOWER);
 const std::string kOptionSkipThreadsWithInvalidData                  = std::string(kSettingsFilter) + std::string(SKIP_THREADS_WITH_INVALID_DATA_LOWER);
+const std::string kOptionCaptureEnvironment                          = std::string(kSettingsFilter) + std::string(CAPTURE_ENVIRONMENT_LOWER);
+const std::string kOptionCaptureProcessName                          = std::string(kSettingsFilter) + std::string(CAPTURE_PROCESS_NAME_LOWER);
 
 #if defined(GFXRECON_ENABLE_LZ4_COMPRESSION)
 const format::CompressionType kDefaultCompressionType = format::CompressionType::kLz4;
@@ -494,13 +498,14 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options)
 
     LoadSingleOptionEnvVar(options, kBufferUsagesToIgnoreEnvVar, kOptionBufferUsagesToIgnore);
 
-    LoadSingleOptionEnvVar(options, kCapturePackageNameEnvVar, kOptionCapturePackageName);
-
-    LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentModeEnvVar);
+    LoadSingleOptionEnvVar(options, kForceFifoPresentModeEnvVar, kOptionForceFifoPresentMode);
 
     LoadSingleOptionEnvVar(options, kIgnoreFrameBoundaryAndroidEnvVar, kOptionIgnoreFrameBoundaryAndroid);
 
     LoadSingleOptionEnvVar(options, kSkipThreadsWithInvalidDataEnvVar, kOptionSkipThreadsWithInvalidData);
+
+    LoadSingleOptionEnvVar(options, kCaptureEnvironmentEnvVar, kOptionCaptureEnvironment);
+    LoadSingleOptionEnvVar(options, kCaptureProcessNameEnvVar, kOptionCaptureProcessName);
 }
 
 void CaptureSettings::LoadOptionsFile(OptionsMap* options)
@@ -740,11 +745,8 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     settings->trace_settings_.buffer_usages_to_ignore =
         ParseBufferUsages(FindOption(options, kOptionBufferUsagesToIgnore));
 
-    settings->trace_settings_.capture_package_name =
-        FindOption(options, kOptionCapturePackageName, settings->trace_settings_.capture_package_name);
-
     settings->trace_settings_.force_fifo_present_mode = ParseBoolString(
-        FindOption(options, kOptionForceFifoPresentModeEnvVar), settings->trace_settings_.force_fifo_present_mode);
+        FindOption(options, kOptionForceFifoPresentMode), settings->trace_settings_.force_fifo_present_mode);
 
     settings->trace_settings_.ignore_frame_boundary_android =
         ParseBoolString(FindOption(options, kOptionIgnoreFrameBoundaryAndroid),
@@ -754,6 +756,12 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
     settings->trace_settings_.skip_threads_with_invalid_data =
         ParseBoolString(FindOption(options, kOptionSkipThreadsWithInvalidData),
                         settings->trace_settings_.skip_threads_with_invalid_data);
+
+    // Capture environment variables
+    settings->trace_settings_.capture_environment =
+        util::strings::SplitString(FindOption(options, kOptionCaptureEnvironment), ',');
+    settings->trace_settings_.capture_process_name =
+        FindOption(options, kOptionCaptureProcessName, settings->trace_settings_.capture_process_name);
 }
 
 void CaptureSettings::ProcessLogOptions(OptionsMap* options, CaptureSettings* settings)

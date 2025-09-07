@@ -25,10 +25,16 @@
 #include <acquired_image_app.h>
 #include <host_image_copy_app.h>
 #include <pipeline_binaries_app.h>
+#ifndef __ANDROID__
+#include <set_environment_app.h>
+#endif
 #include <shader_objects_app.h>
 #include <sparse_resources_app.h>
 #include <triangle_app.h>
 #include <triangle_extra_device_app.h>
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+#include <ahb_app.h>
+#endif
 
 #ifdef __linux__
 #include <external_memory_fd_export_app.h>
@@ -45,31 +51,34 @@
 #include <tools/tool_settings.h>
 
 #if defined(__ANDROID__)
-#include <ahb_app.h>
-
 #include <util/android/activity.h>
 #include <util/android/intent.h>
 #endif
 
-const char kOptions[] = "-h|--help";
+const char kOptions[]   = "-h|--help";
 const char kArguments[] = "--wsi";
 
-static const char* kAppNames[] = { "acquired-image",
-                                   "host-image-copy",
-                                   "multisample-depth",
-                                   "pipeline-binaries",
-                                   "shader-objects",
-                                   "sparse-resources",
-                                   "triangle",
-                                   "triangle-extra-device",
+static const char* kAppNames[] = {
+    "acquired-image",
+    "host-image-copy",
+    "multisample-depth",
+    "pipeline-binaries",
+#ifndef __ANDROID__
+    "set-environment",
+#endif
+    "shader-objects",
+    "sparse-resources",
+    "triangle",
+    "triangle-extra-device",
 #ifdef __linux__
-                                   "external-memory-fd-export",
-                                   "external-memory-fd-import",
-                                   "wait-for-present",
+    "external-memory-fd-export",
+    "external-memory-fd-import",
+    "wait-for-present",
 #endif
-#ifdef __ANDROID__
-                                   "ahb"
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    "ahb"
 #endif
+    // Add more test apps here as needed.
 };
 
 void PrintUsage(const char* exe_name)
@@ -146,6 +155,12 @@ CreateTestApp(std::unique_ptr<gfxrecon::application::Application> application,
     {
         app = std::make_unique<gfxrecon::test_app::pipeline_binaries::App>();
     }
+#ifndef __ANDROID__
+    else if (app_name == "set-environment")
+    {
+        app = std::make_unique<gfxrecon::test_app::set_environment::App>();
+    }
+#endif // __ANDROID__
     else if (app_name == "shader-objects")
     {
         app = std::make_unique<gfxrecon::test_app::shader_objects::App>();
@@ -168,12 +183,14 @@ CreateTestApp(std::unique_ptr<gfxrecon::application::Application> application,
         app = std::make_unique<gfxrecon::test_app::wait_for_present::App>();
     }
 #endif // __linux__
-#if defined(__ANDROID__)
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
     else if (app_name == "ahb")
     {
         app = std::make_unique<gfxrecon::test_app::ahb::App>();
     }
+#endif
 
+#if defined(__ANDROID__)
     app->set_android_app(android_app);
 #endif // __ANDROID__
 
@@ -209,12 +226,12 @@ int inner_main(
     const auto& app_name             = positional_arguments[0];
 
 #ifdef __ANDROID__
-    auto application = std::make_unique<gfxrecon::application::Application>(kApplicationName, nullptr);
-    application->InitializeWsiContext(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, android_app);
+    auto application = std::make_unique<gfxrecon::application::Application>(
+        kApplicationName, nullptr, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, android_app);
 #else
     // Select WSI context based on CLI
     std::string wsi_extension = GetFirstWsiExtensionName(GetWsiPlatform(arg_parser));
-    auto        application   = std::make_unique<gfxrecon::application::Application>(app_name, wsi_extension, nullptr);
+    auto application = std::make_unique<gfxrecon::application::Application>(app_name, nullptr, wsi_extension, nullptr);
 #endif
 
     std::unique_ptr<gfxrecon::test::TestAppBase> app = CreateTestApp(std::move(application),
