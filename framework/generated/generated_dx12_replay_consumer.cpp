@@ -8534,10 +8534,8 @@ void Dx12ReplayConsumer::Process_ID3D12MetaCommand_GetRequiredParameterResourceS
             replay_object,
             Stage,
             ParameterIndex);
-        auto replay_result = OverrideGetRequiredParameterResourceSize(replay_object,
-                                                                      return_value,
-                                                                      Stage,
-                                                                      ParameterIndex);
+        auto replay_result = reinterpret_cast<ID3D12MetaCommand*>(replay_object->object)->GetRequiredParameterResourceSize(Stage,
+                                                                                                                           ParameterIndex);
         CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12MetaCommand_GetRequiredParameterResourceSize>::Dispatch(
             this,
             call_info,

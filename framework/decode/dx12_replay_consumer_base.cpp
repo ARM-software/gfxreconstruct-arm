@@ -2053,16 +2053,6 @@ void Dx12ReplayConsumerBase::SetResourceReplayRequiredSize(DxObjectInfo* replay_
                     const_cast<D3D12_RESOURCE_DESC*>(desc_pointer)->Width = accel_struct_size;
                 }
             }
-
-            auto iter = parameter_resource_size_map_.find(desc_pointer->Width);
-            if (iter != parameter_resource_size_map_.end())
-            {
-                GFXRECON_LOG_INFO("Adjusting resource width from %" PRIu64 " to %" PRIu64
-                                  " for parameter resource size",
-                                  desc_pointer->Width,
-                                  iter->second);
-                const_cast<D3D12_RESOURCE_DESC*>(desc_pointer)->Width = iter->second;
-            }
         }
     }
     else if (support_memory_allocator_ && (pDesc1 != nullptr))
@@ -2091,16 +2081,6 @@ void Dx12ReplayConsumerBase::SetResourceReplayRequiredSize(DxObjectInfo* replay_
                 {
                     const_cast<D3D12_RESOURCE_DESC1*>(desc_pointer)->Width = accel_struct_size;
                 }
-            }
-
-            auto iter = parameter_resource_size_map_.find(desc_pointer->Width);
-            if (iter != parameter_resource_size_map_.end())
-            {
-                GFXRECON_LOG_INFO("Adjusting resource width from %" PRIu64 " to %" PRIu64
-                                  " for parameter resource size",
-                                  desc_pointer->Width,
-                                  iter->second);
-                const_cast<D3D12_RESOURCE_DESC1*>(desc_pointer)->Width = iter->second;
             }
         }
     }
@@ -5085,35 +5065,6 @@ void Dx12ReplayConsumerBase::OverrideCopyResource(DxObjectInfo* command_list_obj
     }
 }
 
-UINT64
-Dx12ReplayConsumerBase::OverrideGetRequiredParameterResourceSize(DxObjectInfo*                      replay_object,
-                                                                 UINT64                             return_value,
-                                                                 D3D12_META_COMMAND_PARAMETER_STAGE Stage,
-                                                                 UINT                               ParameterIndex)
-{
-    assert((replay_object != nullptr) && (replay_object->object != nullptr));
-    auto replay_meta_command = static_cast<ID3D12MetaCommand*>(replay_object->object);
-
-    UINT64 replay_size = replay_meta_command->GetRequiredParameterResourceSize(Stage, ParameterIndex);
-
-    if (replay_size > return_value)
-    {
-        GFXRECON_LOG_WARNING("GetRequiredParameterResourceSize (object_id=%" PRIu64 ", Stage=%d, ParameterIndex=%u): "
-                             "replay_size (%" PRIu64 ") > return_value (%" PRIu64 ")",
-                             replay_object->capture_id,
-                             Stage,
-                             ParameterIndex,
-                             replay_size,
-                             return_value);
-        if (support_memory_allocator_)
-        {
-            parameter_resource_size_map_[return_value] = replay_size;
-        }
-    }
-
-    return replay_size;
-}
-
 HRESULT Dx12ReplayConsumerBase::OverrideSerialize(DxObjectInfo*            replay_object,
                                                   HRESULT                  return_value,
                                                   PointerDecoder<uint8_t>* pData,
@@ -5124,15 +5075,22 @@ HRESULT Dx12ReplayConsumerBase::OverrideSerialize(DxObjectInfo*            repla
     auto library_extra_info = GetExtraInfo<D3D12PipelineLibraryInfo>(replay_object);
 
     SIZE_T adjusted_size = DataSizeInBytes;
-    if ((library_extra_info != nullptr) && (library_extra_info->serialized_size > 0))
+    if (library_extra_info != nullptr)
     {
-        adjusted_size = library_extra_info->serialized_size;
+        library_extra_info->serialized_size = replay_library->GetSerializedSize();
+        adjusted_size                       = std::max(adjusted_size, library_extra_info->serialized_size);
     }
 
     if (!pData->IsNull() && pData->GetOutputPointer())
     {
         if (adjusted_size > DataSizeInBytes)
         {
+            GFXRECON_LOG_DEBUG("Size mismatch for object_id %" PRIu64
+                               ": serialized_size (%zu) != DataSizeInBytes (%zu), due "
+                               "to cross-GPU difference.",
+                               replay_object->capture_id,
+                               adjusted_size,
+                               DataSizeInBytes);
             pData->AllocateOutputData(adjusted_size);
         }
 
@@ -6738,34 +6696,6 @@ void Dx12ReplayConsumerBase::PostCall_ID3D12Device_CopyDescriptorsSimple(
         {
             dest_heap_extra_info->dsv_infos[dest_idx] = src_heap_extra_info->dsv_infos[src_idx];
         }
-    }
-}
-
-void Dx12ReplayConsumerBase::PreCall_ID3D12PipelineLibrary_Serialize(const ApiCallInfo&       call_info,
-                                                                     DxObjectInfo*            object_info,
-                                                                     PointerDecoder<uint8_t>* pData,
-                                                                     SIZE_T                   DataSizeInBytes)
-{
-    auto library_extra_info = GetExtraInfo<D3D12PipelineLibraryInfo>(object_info);
-
-    SIZE_T current_size = reinterpret_cast<ID3D12PipelineLibrary*>(object_info->object)->GetSerializedSize();
-    library_extra_info->serialized_size = current_size;
-    if (!pData->IsNull())
-    {
-        SIZE_T alloc_size = std::max(DataSizeInBytes, current_size);
-        if (current_size != DataSizeInBytes)
-        {
-            GFXRECON_LOG_DEBUG("Size mismatch for object_id %" PRIu64
-                               ": serialized_size (%zu) != DataSizeInBytes (%zu), due "
-                               "to cross-GPU difference.",
-                               object_info->capture_id,
-                               current_size,
-                               DataSizeInBytes);
-        }
-    }
-    else
-    {
-        GFXRECON_LOG_WARNING("pData is null for object_id %" PRIu64, object_info->capture_id);
     }
 }
 

@@ -160,9 +160,9 @@ void WrapStruct(const D3D12_DEVICE_REMOVED_EXTENDED_DATA* value)
 
 void WrapStruct(const D3D12_DRED_ALLOCATION_NODE1* value)
 {
-    IUnknown* casted = const_cast<IUnknown*>(value->pObject);
     if(value->pObject)
     {
+        IUnknown* casted = const_cast<IUnknown*>(value->pObject);
         WrapObject(IID_IUnknown, reinterpret_cast<void**>(&casted), nullptr);
     }
 }

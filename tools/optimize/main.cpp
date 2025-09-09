@@ -410,7 +410,6 @@ int main(int argc, const char** argv)
                 dx12_options.optimize_resource_values         = true;
                 dx12_options.remove_redundant_psos            = true;
                 dx12_options.optimize_resource_values_offline = true;
-                dx12_options.remove_redundant_fence_calls     = true;
                 RunDx12Optimizations(input_filename, output_filename, dx12_options);
             }
             else if (detected_vulkan)

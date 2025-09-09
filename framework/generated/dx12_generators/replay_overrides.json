@@ -91,9 +91,6 @@
       "Wait": "OverrideCommandQueueWait",
       "UpdateTileMappings": "OverrideUpdateTileMappings"
     },
-    "ID3D12MetaCommand": {
-      "GetRequiredParameterResourceSize": "OverrideGetRequiredParameterResourceSize"
-    },
     "ID3D12Fence": {
       "GetCompletedValue": "OverrideGetCompletedValue",
       "SetEventOnCompletion": "OverrideSetEventOnCompletion",
