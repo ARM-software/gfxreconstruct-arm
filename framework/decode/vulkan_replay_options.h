@@ -66,25 +66,6 @@ static constexpr int kUnspecifiedColorAttachment = -1;
 
 struct VulkanReplayOptions : public ReplayOptions
 {
-    bool                                   enable_vulkan{ true };
-    bool                                   omit_pipeline_cache_data{ false };
-    bool                                   remove_unsupported_features{ false };
-    bool                                   disable_subpass_fusion{ false };
-    bool                                   use_ext_frame_boundary{ false };
-    bool                                   use_colorspace_fallback{ true };
-    bool                                   offscreen_swapchain_frame_boundary{ false };
-    util::SwapchainOption                  swapchain_option{ util::SwapchainOption::kVirtual };
-    bool                                   virtual_swapchain_skip_blit{ false };
-    int32_t                                override_gpu_group_index{ -1 };
-    int32_t                                surface_index{ -1 };
-    CreateResourceAllocator                create_resource_allocator;
-    uint32_t                               screenshot_width, screenshot_height;
-    float                                  screenshot_scale;
-    std::string                            replace_shader_dir;
-    SkipGetFenceStatus                     skip_get_fence_status{ SkipGetFenceStatus::NoSkip };
-    std::vector<util::UintRange>           skip_get_fence_ranges;
-    bool                                   wait_before_present{ false };
-    VkDebugUtilsMessageSeverityFlagBitsEXT debug_message_severity{ VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT };
     bool                         enable_vulkan{ true };
     bool                         omit_pipeline_cache_data{ false };
     bool                         remove_unsupported_features{ false };
