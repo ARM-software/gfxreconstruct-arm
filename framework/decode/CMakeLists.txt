@@ -298,7 +298,6 @@ target_sources(gfxrecon_decode
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_json.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.cpp
-                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_feature_util.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.cpp

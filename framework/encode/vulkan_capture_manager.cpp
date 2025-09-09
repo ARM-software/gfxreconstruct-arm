@@ -1,7 +1,7 @@
 /*
  ** Copyright (c) 2018-2021 Valve Corporation
  ** Copyright (c) 2018-2025 LunarG, Inc.
- ** Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+ ** Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
  **
  ** Permission is hereby granted, free of charge, to any person obtaining a
  ** copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_state_writer.h"
 #include "encode/vulkan_capture_common.h"
+#include "encode/vulkan_capture_layer_settings.h"
 #include "format/format_util.h"
 #include "generated/generated_vulkan_struct_handle_wrappers.h"
 #include "generated/generated_vulkan_api_call_encoders.h"
@@ -66,12 +67,12 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 
+std::mutex                 VulkanCaptureManager::instance_lock_;
 VulkanCaptureManager*      VulkanCaptureManager::singleton_ = nullptr;
 graphics::VulkanLayerTable VulkanCaptureManager::vulkan_layer_table_;
 
 bool VulkanCaptureManager::CreateInstance()
 {
-
     bool result = CommonCaptureManager::CreateInstance<VulkanCaptureManager>();
     GFXRECON_ASSERT(singleton_);
 
@@ -85,6 +86,8 @@ bool VulkanCaptureManager::CreateInstance()
 
 VulkanCaptureManager* VulkanCaptureManager::InitSingleton()
 {
+    std::lock_guard<std::mutex> instance_lock(instance_lock_);
+
     if (!singleton_)
     {
         singleton_ = new VulkanCaptureManager();
@@ -556,6 +559,12 @@ VkResult VulkanCaptureManager::OverrideCreateInstance(const VkInstanceCreateInfo
 {
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
+    if (InitSingleton() == nullptr)
+    {
+        return result;
+    }
+    singleton_->layer_settings_ = GetVulkanLayerTraceSettings(pCreateInfo);
+
     if (CreateInstance())
     {
         VkInstanceCreateInfo     create_info_copy = (*pCreateInfo);
@@ -585,7 +594,8 @@ VkResult VulkanCaptureManager::OverrideCreateInstance(const VkInstanceCreateInfo
 
                 if (fpEnumerateInstanceExtensionProperties)
                 {
-                    feature_util::GetInstanceExtensions(fpEnumerateInstanceExtensionProperties, &supported_extensions);
+                    graphics::feature_util::GetInstanceExtensions(fpEnumerateInstanceExtensionProperties,
+                                                                  &supported_extensions);
                 }
             }
         }
@@ -595,22 +605,22 @@ VkResult VulkanCaptureManager::OverrideCreateInstance(const VkInstanceCreateInfo
             assert(pCreateInfo != nullptr);
 
             // TODO: Only enable KHR_get_physical_device_properties_2 for 1.0 API version.
-            if (!feature_util::IsSupportedExtension(modified_extensions,
-                                                    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
+            if (!graphics::feature_util::IsSupportedExtension(modified_extensions,
+                                                              VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
             {
                 modified_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
             }
-            if (!feature_util::IsSupportedExtension(modified_extensions,
-                                                    VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
+            if (!graphics::feature_util::IsSupportedExtension(modified_extensions,
+                                                              VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
             {
                 modified_extensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
             }
         }
 
         bool debug_utils_is_not_supported =
-            !feature_util::IsSupportedExtension(supported_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            !graphics::feature_util::IsSupportedExtension(supported_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         bool debug_utils_is_requested =
-            feature_util::IsSupportedExtension(modified_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            graphics::feature_util::IsSupportedExtension(modified_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
         if (debug_utils_is_requested && debug_utils_is_not_supported)
         {
@@ -672,7 +682,7 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
     std::vector<const char*> modified_extensions;
 
     std::vector<VkExtensionProperties> supported_extensions;
-    feature_util::GetDeviceExtensions(
+    graphics::feature_util::GetDeviceExtensions(
         physicalDevice, instance_table->EnumerateDeviceExtensionProperties, &supported_extensions);
 
     bool has_ext_mem      = false;
@@ -713,8 +723,8 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
     // Check if VK_EXT_frame_boundary need to be faked (querried but not actually supported by the capture device)
     VkBaseOutStructure*                       frame_boundary_features_parent = nullptr;
     VkPhysicalDeviceFrameBoundaryFeaturesEXT* frame_boundary_features        = nullptr;
-    if (feature_util::IsSupportedExtension(modified_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME) &&
-        !feature_util::IsSupportedExtension(supported_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
+    if (graphics::feature_util::IsSupportedExtension(modified_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME) &&
+        !graphics::feature_util::IsSupportedExtension(supported_extensions, VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME))
     {
         auto iter = std::find_if(modified_extensions.begin(), modified_extensions.end(), [](const char* extension) {
             return util::platform::StringCompare(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME, extension) == 0;
@@ -740,6 +750,8 @@ VkResult VulkanCaptureManager::OverrideCreateDevice(VkPhysicalDevice            
             frame_boundary_features =
                 reinterpret_cast<VkPhysicalDeviceFrameBoundaryFeaturesEXT*>(frame_boundary_features_parent->pNext);
             frame_boundary_features_parent->pNext = frame_boundary_features_parent->pNext->pNext;
+            GFXRECON_LOG_WARNING(
+                "VkPhysicalDeviceFrameBoundaryFeaturesEXT instance was removed from capture device creation");
         }
     }
 
@@ -1953,6 +1965,8 @@ void VulkanCaptureManager::DeferredOperationPostProcess(VkDevice               d
                     device_wrapper->property_feature_info.property_shaderGroupHandleCaptureReplaySize *
                     deferred_operation_wrapper->create_infos[i].groupCount;
 
+                pipeline_wrapper->num_shader_group_handles = deferred_operation_wrapper->create_infos[i].groupCount;
+
                 std::vector<uint8_t> data(data_size);
                 result = device_table->GetRayTracingCaptureReplayShaderGroupHandlesKHR(
                     device_wrapper->handle,
@@ -2197,7 +2211,7 @@ VkResult VulkanCaptureManager::OverrideGetFenceStatus(VkDevice device, VkFence f
 
 bool VulkanCaptureManager::IsExtensionBeingFaked(const char* extension)
 {
-    return feature_util::IsSupportedExtension(faked_extensions_, extension);
+    return graphics::feature_util::IsSupportedExtension(faked_extensions_, extension);
 }
 
 void VulkanCaptureManager::OverrideCmdBeginDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,

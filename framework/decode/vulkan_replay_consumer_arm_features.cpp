@@ -333,7 +333,7 @@ void VulkanReplayConsumerArmFeatures::EnableMarkingLayerExtension(
 {
     for (const std::string& name : consumer_->options_.marking_layers_names)
     {
-        if (feature_util::IsSupportedLayer(available_layers, name.c_str()))
+        if (graphics::feature_util::IsSupportedLayer(available_layers, name.c_str()))
         {
             modified_layers.push_back(name.c_str());
         }

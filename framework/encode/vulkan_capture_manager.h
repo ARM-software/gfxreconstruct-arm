@@ -2000,6 +2000,11 @@ class VulkanCaptureManager : public ApiCaptureManager
         view->tensor = tensor;
     }
 
+    CaptureSettings::TraceSettings GetDefaultTraceSettings() override
+    {
+        return layer_settings_;
+    }
+
   private:
     struct HardwareBufferInfo
     {
@@ -2068,6 +2073,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     void QueueSubmitWriteFillMemoryCmd();
     void MapMemoryWriteFixShadowMemoryCmd(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory);
 
+    static std::mutex                               instance_lock_;
     static VulkanCaptureManager*                    singleton_;
     static graphics::VulkanLayerTable               vulkan_layer_table_;
     std::set<vulkan_wrappers::DeviceMemoryWrapper*> mapped_memory_; // Track mapped memory for unassisted tracking mode.
@@ -2092,6 +2098,8 @@ class VulkanCaptureManager : public ApiCaptureManager
 #if ENABLE_OPENXR_SUPPORT
     std::set<VkFence> valid_fences_;
 #endif
+
+    CaptureSettings::TraceSettings layer_settings_;
 };
 
 GFXRECON_END_NAMESPACE(encode)
