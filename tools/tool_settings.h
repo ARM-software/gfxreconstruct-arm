@@ -40,6 +40,7 @@
 #include "decode/vulkan_resource_tracking_consumer.h"
 #include "decode/vulkan_tracked_object_info_table.h"
 #include "generated/generated_vulkan_decoder.h"
+#include "format/format.h"
 
 #if ENABLE_OPENXR_SUPPORT
 #include "generated/generated_openxr_decoder.h"
@@ -83,6 +84,7 @@ const char kOverrideGpuArgument[]                = "--gpu";
 const char kOverrideGpuGroupArgument[]           = "--gpu-group";
 const char kPausedOption[]                       = "--paused";
 const char kPauseFrameArgument[]                 = "--pause-frame";
+const char kCaptureOption[]                      = "--capture";
 const char kSkipFailedAllocationShortOption[]    = "--sfa";
 const char kSkipFailedAllocationLongOption[]     = "--skip-failed-allocations";
 const char kDiscardCachedPsosShortOption[]       = "--dcp";
@@ -163,24 +165,26 @@ const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
-const char kDumpResourcesArgument[]                 = "--dump-resources";
-const char kDumpResourcesBeforeDrawOption[]         = "--dump-resources-before-draw";
-const char kDumpResourcesImageFormat[]              = "--dump-resources-image-format";
-const char kDumpResourcesScaleArgument[]            = "--dump-resources-scale";
-const char kDumpResourcesDepth[]                    = "--dump-resources-dump-depth-attachment";
-const char kDumpResourcesDirArgument[]              = "--dump-resources-dir";
-const char kDumpResourcesModifiableStateOnly[]      = "--dump-resources-modifiable-state-only";
-const char kDumpResourcesColorAttIdxArg[]           = "--dump-resources-dump-color-attachment-index";
-const char kDumpResourcesDumpVertexIndexBuffers[]   = "--dump-resources-dump-vertex-index-buffers";
-const char kDumpResourcesJsonPerCommand[]           = "--dump-resources-json-output-per-command";
-const char kDumpResourcesDumpImmutableResources[]   = "--dump-resources-dump-immutable-resources";
-const char kDumpResourcesDumpImageSubresources[]    = "--dump-resources-dump-all-image-subresources";
-const char kDumpResourcesDumpRawImages[]            = "--dump-resources-dump-raw-images";
-const char kDumpResourcesDumpSeparateAlpha[]        = "--dump-resources-dump-separate-alpha";
-const char kDumpResourcesDumpUnusedVertexBindings[] = "--dump-resources-dump-unused-vertex-bindigs";
-const char kVerboseOption[]                         = "--verbose";
-const char kChecksumOption[]                        = "--checksum";
-const char kChecksumTriggerOption[]                 = "--checksum-trigger";
+const char kDumpResourcesArgument[]                    = "--dump-resources";
+const char kDumpResourcesBeforeDrawOption[]            = "--dump-resources-before-draw";
+const char kDumpResourcesImageFormat[]                 = "--dump-resources-image-format";
+const char kDumpResourcesScaleArgument[]               = "--dump-resources-scale";
+const char kDumpResourcesDepth[]                       = "--dump-resources-dump-depth-attachment";
+const char kDumpResourcesDirArgument[]                 = "--dump-resources-dir";
+const char kDumpResourcesModifiableStateOnly[]         = "--dump-resources-modifiable-state-only";
+const char kDumpResourcesColorAttIdxArg[]              = "--dump-resources-dump-color-attachment-index";
+const char kDumpResourcesDumpVertexIndexBuffers[]      = "--dump-resources-dump-vertex-index-buffers";
+const char kDumpResourcesJsonPerCommand[]              = "--dump-resources-json-output-per-command";
+const char kDumpResourcesDumpImmutableResources[]      = "--dump-resources-dump-immutable-resources";
+const char kDumpResourcesDumpImageSubresources[]       = "--dump-resources-dump-all-image-subresources";
+const char kDumpResourcesDumpRawImages[]               = "--dump-resources-dump-raw-images";
+const char kDumpResourcesDumpSeparateAlpha[]           = "--dump-resources-dump-separate-alpha";
+const char kDumpResourcesDumpUnusedVertexBindings[]    = "--dump-resources-dump-unused-vertex-bindigs";
+const char kDumpResourcesBinaryFileCompressionMethod[] = "--dump-resources-binary-file-compression-type";
+
+const char kVerboseOption[]         = "--verbose";
+const char kChecksumOption[]        = "--checksum";
+const char kChecksumTriggerOption[] = "--checksum-trigger";
 
 enum class WsiPlatform
 {
@@ -214,6 +218,11 @@ const char kSwapchainOffscreen[] = "offscreen";
 
 const char kScreenshotFormatBmp[] = "bmp";
 const char kScreenshotFormatPng[] = "png";
+
+const char kCompressionTypeNone[] = "none";
+const char kCompressionTypeLz4[]  = "lz4";
+const char kCompressionTypeZlib[] = "zlib";
+const char kCompressionTypeZstd[] = "zstd";
 
 #if defined(__ANDROID__)
 const char kDefaultScreenshotDir[]    = "/sdcard";
@@ -612,6 +621,39 @@ static gfxrecon::util::ScreenshotFormat GetDumpresourcesImageFormat(const gfxrec
     }
 
     return format;
+}
+
+static gfxrecon::format::CompressionType
+GetDumpResourcesCompressionType(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    const auto& value = arg_parser.GetArgumentValue(kDumpResourcesBinaryFileCompressionMethod);
+
+    gfxrecon::format::CompressionType type = gfxrecon::format::CompressionType::kNone;
+    if (!value.empty())
+    {
+        if (gfxrecon::util::platform::StringCompareNoCase(kCompressionTypeNone, value.c_str()) == 0)
+        {
+            type = gfxrecon::format::CompressionType::kNone;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase(kCompressionTypeLz4, value.c_str()) == 0)
+        {
+            type = gfxrecon::format::CompressionType::kLz4;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase(kCompressionTypeZlib, value.c_str()) == 0)
+        {
+            type = gfxrecon::format::CompressionType::kZlib;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase(kCompressionTypeZstd, value.c_str()) == 0)
+        {
+            type = gfxrecon::format::CompressionType::kZstd;
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Unrecognized compression method \"%s\"", value.c_str());
+        }
+    }
+
+    return type;
 }
 
 static std::string GetScreenshotDir(const gfxrecon::util::ArgumentParser& arg_parser)
@@ -1082,6 +1124,11 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     gfxrecon::decode::VulkanReplayOptions replay_options;
     GetReplayOptions(replay_options, arg_parser, filename);
 
+    if (arg_parser.IsOptionSet(kCaptureOption))
+    {
+        replay_options.capture = true;
+    }
+
     const auto& override_gpu_group = arg_parser.GetArgumentValue(kOverrideGpuGroupArgument);
     if (!override_gpu_group.empty())
     {
@@ -1334,6 +1381,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.dump_resources_dump_separate_alpha = arg_parser.IsOptionSet(kDumpResourcesDumpSeparateAlpha);
     replay_options.dump_resources_dump_unused_vertex_bindings =
         arg_parser.IsOptionSet(kDumpResourcesDumpUnusedVertexBindings);
+    replay_options.dump_resources_binary_file_compression_type = GetDumpResourcesCompressionType(arg_parser);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())

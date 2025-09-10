@@ -65,8 +65,8 @@ class VulkanResourcesUtil
 
     VkResult CreateStagingTensor(const VkTensorDescriptionARM* desc);
 
-    // Will return the size requirements and offsets for each subresource contained in the specified image.
-    // Sizes and offsets are calculated in such a way that the each subresource will be tightly packed.
+    // Will return the size requirements and offsets for each subresource contained for an image with the specified
+    // attributes. Sizes and offsets are calculated in such a way that the each subresource will be tightly packed.
     //
     // The sizes are returned in the subresource_sizes vector and will be in the order:
     //    M0 L0 L1 ... La M1 L0 L1 ... La ... Mm L0 L1 ... La
@@ -75,8 +75,7 @@ class VulkanResourcesUtil
     // all_layers_per_level boolean determines if all array layer per mip map level will be accounted as one.
     //
     // Return value is the total size of the image.
-    uint64_t GetImageResourceSizesOptimal(VkImage                image,
-                                          VkFormat               format,
+    uint64_t GetImageResourceSizesOptimal(VkFormat               format,
                                           VkImageType            type,
                                           const VkExtent3D&      extent,
                                           uint32_t               mip_levels,

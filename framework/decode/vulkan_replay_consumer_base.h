@@ -90,6 +90,15 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void SetCurrentFrameNumber(uint64_t frame_number) override;
 
+    // Provide a custom implementation of vkGetInstanceProcAddr for the replay consumer to use to find Vulkan functions.
+    // For example, this is used during recapture to return the capture layer's Vulkan functions.
+    void SetGetInstanceProcAddrOverride(PFN_vkGetInstanceProcAddr get_instance_proc_addr)
+    {
+        GFXRECON_ASSERT((get_instance_proc_addr_ == nullptr) &&
+                        "SetGetInstanceProcAddrOverride should be called before InitializeLoader().")
+        get_instance_proc_addr_ = get_instance_proc_addr;
+    }
+
     void Process_ExeFileInfo(util::filepath::FileInfo& info_record) override
     {
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
@@ -1499,6 +1508,15 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                             uint32_t                                                       width,
                             uint32_t                                                       height,
                             uint32_t                                                       depth);
+
+    void OverrideCmdTraceRaysIndirectKHR(
+        PFN_vkCmdTraceRaysIndirectKHR                                  func,
+        VulkanCommandBufferInfo*                                       command_buffer_info,
+        StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pRaygenShaderBindingTable,
+        StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pMissShaderBindingTable,
+        StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pHitShaderBindingTable,
+        StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
+        VkDeviceAddress                                                indirectDeviceAddress);
 
     void
     OverrideCmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2                            func,

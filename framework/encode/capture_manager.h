@@ -447,6 +447,7 @@ class CommonCaptureManager
     {
         return ignore_frame_boundary_android_;
     }
+
     util::Compressor* GetCompressor()
     {
         return compressor_.get();
@@ -544,6 +545,7 @@ class CommonCaptureManager
     {
         return block_index_.load();
     }
+
     void SetWriteAssets()
     {
         write_assets_ = true;

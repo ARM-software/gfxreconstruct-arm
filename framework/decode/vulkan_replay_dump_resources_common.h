@@ -25,8 +25,8 @@
 
 #include "decode/common_object_info_table.h"
 #include "vulkan/vulkan_core.h"
+#include "util/compressor.h"
 #include "util/defines.h"
-#include "util/image_writer.h"
 #include "util/options.h"
 #include <vector>
 
@@ -111,6 +111,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
                          float                                scale,
                          bool&                                scaling_supported,
                          util::ScreenshotFormat               image_file_format,
+                         const util::Compressor*              compressor            = nullptr,
                          bool                                 dump_all_subresources = false,
                          bool                                 dump_image_raw        = false,
                          bool                                 dump_separate_alpha   = false,
@@ -140,7 +141,7 @@ void ShaderStageFlagsToStageNames(VkShaderStageFlags flags, std::vector<std::str
 
 std::vector<VkPipelineBindPoint> ShaderStageFlagsToPipelineBindPoints(VkShaderStageFlags flags);
 
-uint32_t FindQueueFamilyIndex(const VulkanDeviceInfo::EnabledQueueFamilyFlags& families, VkQueueFlags flags);
+uint32_t FindTransferQueueFamilyIndex(const VulkanDeviceInfo::EnabledQueueFamilyFlags& families);
 
 class VulkanDumpResourcesDelegate;
 class DefaultVulkanDumpResourcesDelegate;

@@ -27,6 +27,7 @@
 #include "decode/replay_options.h"
 
 #include "decode/vulkan_resource_allocator.h"
+#include "format/format.h"
 #include "util/defines.h"
 
 #include <cstdint>
@@ -67,6 +68,7 @@ static constexpr int kUnspecifiedColorAttachment = -1;
 struct VulkanReplayOptions : public ReplayOptions
 {
     bool                         enable_vulkan{ true };
+    bool                         capture{ false };
     bool                         omit_pipeline_cache_data{ false };
     bool                         remove_unsupported_features{ false };
     bool                         disable_subpass_fusion{ false };
@@ -115,6 +117,7 @@ struct VulkanReplayOptions : public ReplayOptions
     bool  dump_resources_dump_unused_vertex_bindings{ false };
 
     std::vector<std::string> marking_layers_names;
+    format::CompressionType  dump_resources_binary_file_compression_type{ format::CompressionType::kNone };
 
     bool preload_measurement_range{ false };
 

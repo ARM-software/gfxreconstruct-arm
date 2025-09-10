@@ -361,22 +361,23 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     screenshot_format_      = trace_settings.screenshot_format;
     screenshot_indices_   = CalcScreenshotIndices(trace_settings.screenshot_ranges, trace_settings.screenshot_interval);
     screenshot_prefix_    = PrepScreenshotPrefix(trace_settings.screenshot_dir);
-    disable_dxr_          = trace_settings.disable_dxr;
+    disable_dxr_            = trace_settings.disable_dxr;
     disable_meta_command_   = trace_settings.disable_meta_command;
     accel_struct_padding_   = trace_settings.accel_struct_padding;
     iunknown_wrapping_      = trace_settings.iunknown_wrapping;
-    force_command_serialization_         = trace_settings.force_command_serialization;
-    queue_zero_only_                     = trace_settings.queue_zero_only;
-    allow_pipeline_compile_required_     = trace_settings.allow_pipeline_compile_required;
+    force_command_serialization_     = trace_settings.force_command_serialization;
+    queue_zero_only_                 = trace_settings.queue_zero_only;
+    allow_pipeline_compile_required_ = trace_settings.allow_pipeline_compile_required;
+    force_fifo_present_mode_         = trace_settings.force_fifo_present_mode;
+    use_asset_file_                  = trace_settings.use_asset_file;
+    ignore_frame_boundary_android_   = trace_settings.ignore_frame_boundary_android;
+    skip_threads_with_invalid_data_  = trace_settings.skip_threads_with_invalid_data;
+
     fence_query_delay_                   = trace_settings.fence_query_delay;
     fence_query_delay_unit_              = trace_settings.fence_query_delay_unit;
     fence_query_delay_timeout_threshold_ = trace_settings.fence_query_delay_timeout_threshold;
     fence_query_delay_limit_             = trace_settings.fence_query_delay_limit;
     buffer_usages_to_ignore_             = trace_settings.buffer_usages_to_ignore;
-    force_fifo_present_mode_             = trace_settings.force_fifo_present_mode;
-    use_asset_file_                      = trace_settings.use_asset_file;
-    ignore_frame_boundary_android_       = trace_settings.ignore_frame_boundary_android;
-    skip_threads_with_invalid_data_      = trace_settings.skip_threads_with_invalid_data;
 
     rv_annotation_info_.gpuva_mask      = trace_settings.rv_anotation_info.gpuva_mask;
     rv_annotation_info_.descriptor_mask = trace_settings.rv_anotation_info.descriptor_mask;

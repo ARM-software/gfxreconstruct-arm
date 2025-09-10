@@ -388,7 +388,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                             const VkBindTensorMemoryInfoARM* pBindInfos,
                                             const ResourceData*              allocator_buffer_data,
                                             const MemoryData*                allocator_memory_data,
-                                            VkMemoryPropertyFlags*           bind_memory_properties)
+                                            VkMemoryPropertyFlags*           bind_memory_properties) override
     {
         return BindTensorMemory(
             bindInfoCount, pBindInfos, allocator_buffer_data, allocator_memory_data, bind_memory_properties);

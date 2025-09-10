@@ -22,6 +22,7 @@
 
 #include "decode/vulkan_replay_dump_resources_common.h"
 #include "decode/vulkan_object_info.h"
+#include "util/compressor.h"
 #include "util/logging.h"
 #include "util/image_writer.h"
 #include "util/buffer_writer.h"
@@ -428,6 +429,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
                          float                                scale,
                          bool&                                scaling_supported,
                          util::ScreenshotFormat               image_file_format,
+                         const util::Compressor*              compressor,
                          bool                                 dump_all_subresources,
                          bool                                 dump_image_raw,
                          bool                                 dump_separate_alpha,
@@ -502,8 +504,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
         };
 
         image_resource.resource_size =
-            resource_util.GetImageResourceSizesOptimal(image_resource.image,
-                                                       use_blit ? dst_format : image_resource.format,
+            resource_util.GetImageResourceSizesOptimal(use_blit ? dst_format : image_resource.format,
                                                        image_resource.type,
                                                        use_blit ? scaled_extent : image_resource.extent,
                                                        image_resource.level_count,
@@ -638,7 +639,8 @@ VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
                             util::ToString<VkFormat>(image_info->format).c_str());
                     }
 
-                    util::bufferwriter::WriteBuffer(filename, offsetted_data, subresource_sizes[sub_res_idx]);
+                    util::bufferwriter::WriteBuffer(
+                        filename, offsetted_data, subresource_sizes[sub_res_idx], compressor);
                 }
 
                 if (!dump_all_subresources)
@@ -1171,21 +1173,32 @@ std::vector<VkPipelineBindPoint> ShaderStageFlagsToPipelineBindPoints(VkShaderSt
     return bind_points;
 }
 
-uint32_t FindQueueFamilyIndex(const VulkanDeviceInfo::EnabledQueueFamilyFlags& families, VkQueueFlags flags)
+uint32_t FindTransferQueueFamilyIndex(const VulkanDeviceInfo::EnabledQueueFamilyFlags& families)
 {
-    for (uint32_t index = 0; index < static_cast<uint32_t>(families.queue_family_index_enabled.size()); ++index)
+    uint32_t index = VK_QUEUE_FAMILY_IGNORED;
+
+    for (uint32_t i = 0; i < static_cast<uint32_t>(families.queue_family_index_enabled.size()); ++i)
     {
-        if (families.queue_family_index_enabled[index])
+        if (families.queue_family_index_enabled[i])
         {
-            const auto& flags_entry = families.queue_family_properties_flags.find(index);
-            if ((flags_entry != families.queue_family_properties_flags.end()) && (flags_entry->second & flags) == flags)
+            const auto& flags_entry = families.queue_family_properties_flags.find(i);
+            if ((flags_entry != families.queue_family_properties_flags.end()))
             {
-                return index;
+                if ((flags_entry->second & VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_TRANSFER_BIT)
+                {
+                    return i;
+                }
+                else if ((flags_entry->second & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)))
+                {
+                    // Apparently some implementations (i.e. Adreno) don't have a transfer queue. According to spec,
+                    // graphics and compute queues also support transfer operations.
+                    index = i;
+                }
             }
         }
     }
 
-    return VK_QUEUE_FAMILY_IGNORED;
+    return index;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)
