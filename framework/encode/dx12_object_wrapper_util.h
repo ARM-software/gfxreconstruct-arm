@@ -255,7 +255,7 @@ void RemoveWrapperMapEntry(Object* object, Map& object_map, std::mutex& object_m
 template <typename Wrapper, typename Object, typename Map>
 Wrapper* FindMapEntry(Object* object, Map& object_map, std::mutex& object_map_lock)
 {
-    Wrapper*            wrapper = nullptr;
+    Wrapper*                     wrapper = nullptr;
     typename Map::const_iterator entry;
 
     {

@@ -392,8 +392,8 @@ bool GetDx12OptimizationInfo(const std::string&               input_filename,
                              decode::Dx12OptimizationOptions& options,
                              Dx12OptimizationInfo&            info)
 {
-    bool pso_scan_result = true;
-    bool dxr_scan_result = true;
+    bool pso_scan_result       = true;
+    bool dxr_scan_result       = true;
     bool get_fence_scan_result = false;
 
     if (options.remove_redundant_psos)
