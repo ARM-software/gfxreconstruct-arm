@@ -1395,7 +1395,7 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChain(DxObjectInfo*                   
     if (format != DXGI_FORMAT_R8G8B8A8_UNORM && format != DXGI_FORMAT_R10G10B10A2_UNORM &&
         format != DXGI_FORMAT_R16G16B16A16_FLOAT)
     {
-        GFXRECON_LOG_ERROR(
+        GFXRECON_LOG_WARNING(
             "SwapChain uses uncommon DXGI_FORMAT: %s. This may affect image capture or display fidelity.",
             gfxrecon::util::ToString(format).c_str());
     }
