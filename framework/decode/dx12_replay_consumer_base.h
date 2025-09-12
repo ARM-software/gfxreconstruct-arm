@@ -458,6 +458,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         }
     }
 
+    void LogFrameDebugInfo();
+
     void CheckReplayResult(const char* call_name, HRESULT capture_result, HRESULT replay_result);
 
     FARPROC GetReplayCallback(uint64_t callback_id, format::ApiCallId call_id, const char* call_name);

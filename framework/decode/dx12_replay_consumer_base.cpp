@@ -1004,6 +1004,50 @@ void Dx12ReplayConsumerBase::SetDumpTarget(TrackDumpDrawCall& track_dump_target)
     dump_resources_->SetDumpTarget(track_dump_target);
 }
 
+void Dx12ReplayConsumerBase::LogFrameDebugInfo()
+{
+    if (util::Log::WillOutputMessage(util::Log::kDebugSeverity))
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3 = nullptr;
+        IDXGIAdapter*                         adapter  = GetAdapter();
+        if (adapter == nullptr)
+        {
+            GFXRECON_LOG_DEBUG("Completed frame %d", application_->GetCurrentFrameNumber() + 1);
+            return;
+        }
+
+        adapter->QueryInterface(IID_PPV_ARGS(&adapter3));
+        if (adapter3 != nullptr)
+        {
+            DXGI_QUERY_VIDEO_MEMORY_INFO local_mem_info     = {};
+            DXGI_QUERY_VIDEO_MEMORY_INFO non_local_mem_info = {};
+
+            adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &local_mem_info);
+            adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local_mem_info);
+
+            const double f = 1024.0 * 1024.0;
+            GFXRECON_LOG_DEBUG("Frame %d local memory (mb): %.02f Budget, %.02f current Usage, %.02f current "
+                               "Reservation, %.02f available Reservation",
+                               application_->GetCurrentFrameNumber() + 1,
+                               (double)local_mem_info.Budget / f,
+                               (double)local_mem_info.CurrentUsage / f,
+                               (double)local_mem_info.CurrentReservation / f,
+                               (double)local_mem_info.AvailableForReservation / f);
+            GFXRECON_LOG_DEBUG("Frame %d non local memory (mb): %.02f Budget, %.02f current Usage, %.02f current "
+                               "Reservation, %.02f available Reservation",
+                               application_->GetCurrentFrameNumber() + 1,
+                               (double)non_local_mem_info.Budget / f,
+                               (double)non_local_mem_info.CurrentUsage / f,
+                               (double)non_local_mem_info.CurrentReservation / f,
+                               (double)non_local_mem_info.AvailableForReservation / f);
+        }
+        else
+        {
+            GFXRECON_LOG_DEBUG("Completed frame %d", application_->GetCurrentFrameNumber() + 1);
+        }
+    }
+}
+
 void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT capture_result, HRESULT replay_result)
 {
     if (capture_result != replay_result)
@@ -1262,6 +1306,7 @@ void Dx12ReplayConsumerBase::PrePresent(DxObjectInfo* swapchain_object_info, UIN
 void Dx12ReplayConsumerBase::PostPresent()
 {
     ReadDebugMessages();
+    LogFrameDebugInfo();
 }
 
 HRESULT Dx12ReplayConsumerBase::OverridePresent(DxObjectInfo* replay_object_info,
