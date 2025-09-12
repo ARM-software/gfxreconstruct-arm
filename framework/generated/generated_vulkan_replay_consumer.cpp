@@ -382,11 +382,11 @@ void VulkanReplayConsumer::Process_vkGetDeviceMemoryCommitment(
     format::HandleId                            memory,
     PointerDecoder<VkDeviceSize>*               pCommittedMemoryInBytes)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    VkDeviceMemory in_memory = MapHandle<VulkanDeviceMemoryInfo>(memory, &CommonObjectInfoTable::GetVkDeviceMemoryInfo);
-    VkDeviceSize* out_pCommittedMemoryInBytes = pCommittedMemoryInBytes->IsNull() ? nullptr : pCommittedMemoryInBytes->AllocateOutputData(1, static_cast<VkDeviceSize>(0));
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    auto in_memory = GetObjectInfoTable().GetVkDeviceMemoryInfo(memory);
+    pCommittedMemoryInBytes->IsNull() ? nullptr : pCommittedMemoryInBytes->AllocateOutputData(1, static_cast<VkDeviceSize>(0));
 
-    GetDeviceTable(in_device)->GetDeviceMemoryCommitment(in_device, in_memory, out_pCommittedMemoryInBytes);
+    OverrideGetDeviceMemoryCommitment(GetDeviceTable(in_device->handle)->GetDeviceMemoryCommitment, in_device, in_memory, pCommittedMemoryInBytes);
 }
 
 void VulkanReplayConsumer::Process_vkBindBufferMemory(
@@ -3020,11 +3020,11 @@ void VulkanReplayConsumer::Process_vkGetDeviceMemoryOpaqueCaptureAddress(
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkDeviceMemoryOpaqueCaptureAddressInfo>* pInfo)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkDeviceMemoryOpaqueCaptureAddressInfo* in_pInfo = pInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    GetDeviceTable(in_device)->GetDeviceMemoryOpaqueCaptureAddress(in_device, in_pInfo);
+    OverrideGetDeviceMemoryOpaqueCaptureAddress(GetDeviceTable(in_device->handle)->GetDeviceMemoryOpaqueCaptureAddress, in_device, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkGetPhysicalDeviceToolProperties(
@@ -3677,17 +3677,17 @@ void VulkanReplayConsumer::Process_vkMapMemory2(
     StructPointerDecoder<Decoded_VkMemoryMapInfo>* pMemoryMapInfo,
     PointerDecoder<uint64_t, void*>*            ppData)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryMapInfo* in_pMemoryMapInfo = pMemoryMapInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pMemoryMapInfo->GetMetaStructPointer(), GetObjectInfoTable());
     void** out_ppData = ppData->IsNull() ? nullptr : ppData->AllocateOutputData(1);
 
-    VkResult replay_result = GetDeviceTable(in_device)->MapMemory2(in_device, in_pMemoryMapInfo, out_ppData);
+    VkResult replay_result = OverrideMapMemory2(GetDeviceTable(in_device->handle)->MapMemory2, returnValue, in_device, pMemoryMapInfo, out_ppData);
     CheckResult("vkMapMemory2", returnValue, replay_result, call_info);
 
     PostProcessExternalObject(replay_result, (*ppData->GetPointer()), *ppData->GetOutputPointer(), format::ApiCallId::ApiCall_vkMapMemory2, "vkMapMemory2");
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkUnmapMemory2(
@@ -3696,14 +3696,14 @@ void VulkanReplayConsumer::Process_vkUnmapMemory2(
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkMemoryUnmapInfo>* pMemoryUnmapInfo)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryUnmapInfo* in_pMemoryUnmapInfo = pMemoryUnmapInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pMemoryUnmapInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->UnmapMemory2(in_device, in_pMemoryUnmapInfo);
+    VkResult replay_result = OverrideUnmapMemory2(GetDeviceTable(in_device->handle)->UnmapMemory2, returnValue, in_device, pMemoryUnmapInfo);
     CheckResult("vkUnmapMemory2", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkCmdBindIndexBuffer2(
@@ -5056,15 +5056,15 @@ void VulkanReplayConsumer::Process_vkGetMemoryFdKHR(
     StructPointerDecoder<Decoded_VkMemoryGetFdInfoKHR>* pGetFdInfo,
     PointerDecoder<int>*                        pFd)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryGetFdInfoKHR* in_pGetFdInfo = pGetFdInfo->GetPointer();
-    MapStructHandles(pGetFdInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    int* out_pFd = pFd->IsNull() ? nullptr : pFd->AllocateOutputData(1, static_cast<int>(0));
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
 
-    VkResult replay_result = GetDeviceTable(in_device)->GetMemoryFdKHR(in_device, in_pGetFdInfo, out_pFd);
+    MapStructHandles(pGetFdInfo->GetMetaStructPointer(), GetObjectInfoTable());
+    pFd->IsNull() ? nullptr : pFd->AllocateOutputData(1, static_cast<int>(0));
+
+    VkResult replay_result = OverrideGetMemoryFdKHR(GetDeviceTable(in_device->handle)->GetMemoryFdKHR, returnValue, in_device, pGetFdInfo, pFd);
     CheckResult("vkGetMemoryFdKHR", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkGetMemoryFdPropertiesKHR(
@@ -5943,11 +5943,11 @@ void VulkanReplayConsumer::Process_vkGetDeviceMemoryOpaqueCaptureAddressKHR(
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkDeviceMemoryOpaqueCaptureAddressInfo>* pInfo)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkDeviceMemoryOpaqueCaptureAddressInfo* in_pInfo = pInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    GetDeviceTable(in_device)->GetDeviceMemoryOpaqueCaptureAddressKHR(in_device, in_pInfo);
+    OverrideGetDeviceMemoryOpaqueCaptureAddress(GetDeviceTable(in_device->handle)->GetDeviceMemoryOpaqueCaptureAddressKHR, in_device, pInfo);
 }
 
 void VulkanReplayConsumer::Process_vkCreateDeferredOperationKHR(
@@ -6099,17 +6099,17 @@ void VulkanReplayConsumer::Process_vkMapMemory2KHR(
     StructPointerDecoder<Decoded_VkMemoryMapInfo>* pMemoryMapInfo,
     PointerDecoder<uint64_t, void*>*            ppData)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryMapInfo* in_pMemoryMapInfo = pMemoryMapInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pMemoryMapInfo->GetMetaStructPointer(), GetObjectInfoTable());
     void** out_ppData = ppData->IsNull() ? nullptr : ppData->AllocateOutputData(1);
 
-    VkResult replay_result = GetDeviceTable(in_device)->MapMemory2KHR(in_device, in_pMemoryMapInfo, out_ppData);
+    VkResult replay_result = OverrideMapMemory2(GetDeviceTable(in_device->handle)->MapMemory2KHR, returnValue, in_device, pMemoryMapInfo, out_ppData);
     CheckResult("vkMapMemory2KHR", returnValue, replay_result, call_info);
 
     PostProcessExternalObject(replay_result, (*ppData->GetPointer()), *ppData->GetOutputPointer(), format::ApiCallId::ApiCall_vkMapMemory2KHR, "vkMapMemory2KHR");
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkUnmapMemory2KHR(
@@ -6118,14 +6118,14 @@ void VulkanReplayConsumer::Process_vkUnmapMemory2KHR(
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkMemoryUnmapInfo>* pMemoryUnmapInfo)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryUnmapInfo* in_pMemoryUnmapInfo = pMemoryUnmapInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pMemoryUnmapInfo->GetMetaStructPointer(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->UnmapMemory2KHR(in_device, in_pMemoryUnmapInfo);
+    VkResult replay_result = OverrideUnmapMemory2(GetDeviceTable(in_device->handle)->UnmapMemory2KHR, returnValue, in_device, pMemoryUnmapInfo);
     CheckResult("vkUnmapMemory2KHR", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkGetPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR(
@@ -8028,19 +8028,19 @@ void VulkanReplayConsumer::Process_vkCreateAccelerationStructureNV(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkAccelerationStructureNV>* pAccelerationStructure)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkAccelerationStructureCreateInfoNV* in_pCreateInfo = pCreateInfo->GetPointer();
-    MapStructHandles(pCreateInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
-    if (!pAccelerationStructure->IsNull()) { pAccelerationStructure->SetHandleLength(1); }
-    VkAccelerationStructureNV* out_pAccelerationStructure = pAccelerationStructure->GetHandlePointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
 
-    VkResult replay_result = GetDeviceTable(in_device)->CreateAccelerationStructureNV(in_device, in_pCreateInfo, in_pAllocator, out_pAccelerationStructure);
+    MapStructHandles(pCreateInfo->GetMetaStructPointer(), GetObjectInfoTable());
+    if (!pAccelerationStructure->IsNull()) { pAccelerationStructure->SetHandleLength(1); }
+    VulkanAccelerationStructureNVInfo handle_info;
+    pAccelerationStructure->SetConsumerData(0, &handle_info);
+
+    VkResult replay_result = OverrideCreateAccelerationStructureNV(GetDeviceTable(in_device->handle)->CreateAccelerationStructureNV, returnValue, in_device, pCreateInfo, pAllocator, pAccelerationStructure);
     CheckResult("vkCreateAccelerationStructureNV", returnValue, replay_result, call_info);
 
-    AddHandle<VulkanAccelerationStructureNVInfo>(device, pAccelerationStructure->GetPointer(), out_pAccelerationStructure, &CommonObjectInfoTable::AddVkAccelerationStructureNVInfo);
+    AddHandle<VulkanAccelerationStructureNVInfo>(device, pAccelerationStructure->GetPointer(), pAccelerationStructure->GetHandlePointer(), std::move(handle_info), &CommonObjectInfoTable::AddVkAccelerationStructureNVInfo);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkDestroyAccelerationStructureNV(
@@ -8049,11 +8049,10 @@ void VulkanReplayConsumer::Process_vkDestroyAccelerationStructureNV(
     format::HandleId                            accelerationStructure,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    VkAccelerationStructureNV in_accelerationStructure = MapHandle<VulkanAccelerationStructureNVInfo>(accelerationStructure, &CommonObjectInfoTable::GetVkAccelerationStructureNVInfo);
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    auto in_accelerationStructure = GetObjectInfoTable().GetVkAccelerationStructureNVInfo(accelerationStructure);
 
-    GetDeviceTable(in_device)->DestroyAccelerationStructureNV(in_device, in_accelerationStructure, in_pAllocator);
+    OverrideDestroyAccelerationStructureNV(GetDeviceTable(in_device->handle)->DestroyAccelerationStructureNV, in_device, in_accelerationStructure, pAllocator);
     RemoveHandle(accelerationStructure, &CommonObjectInfoTable::RemoveVkAccelerationStructureNVInfo);
 }
 
@@ -8063,12 +8062,12 @@ void VulkanReplayConsumer::Process_vkGetAccelerationStructureMemoryRequirementsN
     StructPointerDecoder<Decoded_VkAccelerationStructureMemoryRequirementsInfoNV>* pInfo,
     StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkAccelerationStructureMemoryRequirementsInfoNV* in_pInfo = pInfo->GetPointer();
-    MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    VkMemoryRequirements2KHR* out_pMemoryRequirements = pMemoryRequirements->IsNull() ? nullptr : pMemoryRequirements->AllocateOutputData(1);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
 
-    GetDeviceTable(in_device)->GetAccelerationStructureMemoryRequirementsNV(in_device, in_pInfo, out_pMemoryRequirements);
+    MapStructHandles(pInfo->GetMetaStructPointer(), GetObjectInfoTable());
+    pMemoryRequirements->IsNull() ? nullptr : pMemoryRequirements->AllocateOutputData(1);
+
+    OverrideGetAccelerationStructureMemoryRequirementsNV(GetDeviceTable(in_device->handle)->GetAccelerationStructureMemoryRequirementsNV, in_device, pInfo, pMemoryRequirements);
 }
 
 void VulkanReplayConsumer::Process_vkBindAccelerationStructureMemoryNV(
@@ -8078,14 +8077,14 @@ void VulkanReplayConsumer::Process_vkBindAccelerationStructureMemoryNV(
     uint32_t                                    bindInfoCount,
     StructPointerDecoder<Decoded_VkBindAccelerationStructureMemoryInfoNV>* pBindInfos)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkBindAccelerationStructureMemoryInfoNV* in_pBindInfos = pBindInfos->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructArrayHandles(pBindInfos->GetMetaStructPointer(), pBindInfos->GetLength(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->BindAccelerationStructureMemoryNV(in_device, bindInfoCount, in_pBindInfos);
+    VkResult replay_result = OverrideBindAccelerationStructureMemoryNV(GetDeviceTable(in_device->handle)->BindAccelerationStructureMemoryNV, returnValue, in_device, bindInfoCount, pBindInfos);
     CheckResult("vkBindAccelerationStructureMemoryNV", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkCmdBuildAccelerationStructureNV(
@@ -9843,17 +9842,17 @@ void VulkanReplayConsumer::Process_vkGetMemoryRemoteAddressNV(
     StructPointerDecoder<Decoded_VkMemoryGetRemoteAddressInfoNV>* pMemoryGetRemoteAddressInfo,
     PointerDecoder<uint64_t, void*>*            pAddress)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkMemoryGetRemoteAddressInfoNV* in_pMemoryGetRemoteAddressInfo = pMemoryGetRemoteAddressInfo->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructHandles(pMemoryGetRemoteAddressInfo->GetMetaStructPointer(), GetObjectInfoTable());
     VkRemoteAddressNV* out_pAddress = pAddress->IsNull() ? nullptr : reinterpret_cast<VkRemoteAddressNV*>(pAddress->AllocateOutputData(1));
 
-    VkResult replay_result = GetDeviceTable(in_device)->GetMemoryRemoteAddressNV(in_device, in_pMemoryGetRemoteAddressInfo, out_pAddress);
+    VkResult replay_result = OverrideGetMemoryRemoteAddressNV(GetDeviceTable(in_device->handle)->GetMemoryRemoteAddressNV, returnValue, in_device, pMemoryGetRemoteAddressInfo, out_pAddress);
     CheckResult("vkGetMemoryRemoteAddressNV", returnValue, replay_result, call_info);
 
     PostProcessExternalObject(replay_result, (*pAddress->GetPointer()), static_cast<void*>(*out_pAddress), format::ApiCallId::ApiCall_vkGetMemoryRemoteAddressNV, "vkGetMemoryRemoteAddressNV");
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkCmdSetPatchControlPointsEXT(
@@ -10313,10 +10312,10 @@ void VulkanReplayConsumer::Process_vkSetDeviceMemoryPriorityEXT(
     format::HandleId                            memory,
     float                                       priority)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    VkDeviceMemory in_memory = MapHandle<VulkanDeviceMemoryInfo>(memory, &CommonObjectInfoTable::GetVkDeviceMemoryInfo);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    auto in_memory = GetObjectInfoTable().GetVkDeviceMemoryInfo(memory);
 
-    GetDeviceTable(in_device)->SetDeviceMemoryPriorityEXT(in_device, in_memory, priority);
+    OverrideSetDeviceMemoryPriorityEXT(GetDeviceTable(in_device->handle)->SetDeviceMemoryPriorityEXT, in_device, in_memory, priority);
 }
 
 void VulkanReplayConsumer::Process_vkGetDescriptorSetLayoutHostMappingInfoVALVE(
