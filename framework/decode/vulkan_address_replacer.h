@@ -47,7 +47,7 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
     VulkanAddressReplacer(const VulkanDeviceInfo*              device_info,
                           const graphics::VulkanDeviceTable*   device_table,
                           const graphics::VulkanInstanceTable* instance_table,
-                          const decode::CommonObjectInfoTable& object_table);
+                          decode::CommonObjectInfoTable&       object_table);
 
     //! prevent copying
     VulkanAddressReplacer(const VulkanAddressReplacer&) = delete;
@@ -426,7 +426,7 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
     bool swap_acceleration_structure_handle(VkAccelerationStructureKHR& handle);
 
     const graphics::VulkanDeviceTable*                             device_table_      = nullptr;
-    const decode::CommonObjectInfoTable*                           object_table_      = nullptr;
+    decode::CommonObjectInfoTable*                                 object_table_      = nullptr;
     VkPhysicalDeviceMemoryProperties                               memory_properties_ = {};
     std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> capture_ray_properties_{}, replay_ray_properties_{};
     std::optional<VkPhysicalDeviceAccelerationStructurePropertiesKHR> replay_acceleration_structure_properties_{};

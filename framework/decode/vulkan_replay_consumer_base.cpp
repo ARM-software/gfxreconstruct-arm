@@ -1383,7 +1383,7 @@ void VulkanReplayConsumerBase::ProcessBeginResourceInitCommand(format::HandleId 
             have_shader_stencil_write = true;
         }
 
-        device_info->resource_initializer = std::make_unique<VulkanResourceInitializer>(
+        device_info->resource_initializer = std::make_shared<VulkanResourceInitializer>(
             device_info, max_copy_size, properties, have_shader_stencil_write, allocator, table);
     }
 }
@@ -2594,46 +2594,46 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.get_physical_device_memory_properties = instance_table->GetPhysicalDeviceMemoryProperties;
     functions.get_instance_proc_addr                = instance_table->GetInstanceProcAddr;
 
-    functions.allocate_memory                             = device_table->AllocateMemory;
-    functions.free_memory                                 = device_table->FreeMemory;
-    functions.get_device_memory_commitment                = device_table->GetDeviceMemoryCommitment;
-    functions.map_memory                                  = device_table->MapMemory;
-    functions.unmap_memory                                = device_table->UnmapMemory;
-    functions.flush_memory_ranges                         = device_table->FlushMappedMemoryRanges;
-    functions.invalidate_memory_ranges                    = device_table->InvalidateMappedMemoryRanges;
-    functions.create_buffer                               = device_table->CreateBuffer;
-    functions.destroy_buffer                              = device_table->DestroyBuffer;
-    functions.get_buffer_memory_requirements              = device_table->GetBufferMemoryRequirements;
-    functions.bind_buffer_memory                          = device_table->BindBufferMemory;
-    functions.create_image                                = device_table->CreateImage;
-    functions.destroy_image                               = device_table->DestroyImage;
-    functions.get_image_memory_requirements               = device_table->GetImageMemoryRequirements;
-    functions.get_image_subresource_layout                = device_table->GetImageSubresourceLayout;
-    functions.bind_image_memory                           = device_table->BindImageMemory;
-    functions.get_device_proc_addr                        = device_table->GetDeviceProcAddr;
-    functions.get_device_queue                            = device_table->GetDeviceQueue;
-    functions.create_command_pool                         = device_table->CreateCommandPool;
-    functions.allocate_command_buffers                    = device_table->AllocateCommandBuffers;
-    functions.begin_command_buffer                        = device_table->BeginCommandBuffer;
-    functions.cmd_copy_buffer                             = device_table->CmdCopyBuffer;
-    functions.cmd_copy_buffer_to_image                    = device_table->CmdCopyBufferToImage;
-    functions.end_command_buffer                          = device_table->EndCommandBuffer;
-    functions.queue_submit                                = device_table->QueueSubmit;
-    functions.queue_wait_idle                             = device_table->QueueWaitIdle;
-    functions.reset_command_buffer                        = device_table->ResetCommandBuffer;
-    functions.free_command_buffers                        = device_table->FreeCommandBuffers;
-    functions.destroy_command_pool                        = device_table->DestroyCommandPool;
-    functions.create_video_session                        = device_table->CreateVideoSessionKHR;
-    functions.destroy_video_session                       = device_table->DestroyVideoSessionKHR;
-    functions.bind_video_session_memory                   = device_table->BindVideoSessionMemoryKHR;
-    functions.get_video_session_memory_requirements       = device_table->GetVideoSessionMemoryRequirementsKHR;
-    functions.map_memory2                                 = device_table->MapMemory2KHR;
-    functions.unmap_memory2                               = device_table->UnmapMemory2KHR;
-    functions.set_device_memory_priority                  = device_table->SetDeviceMemoryPriorityEXT;
-    functions.get_memory_remote_address_nv                = device_table->GetMemoryRemoteAddressNV;
-    functions.create_acceleration_structure_nv            = device_table->CreateAccelerationStructureNV;
-    functions.destroy_acceleration_structure_nv           = device_table->DestroyAccelerationStructureNV;
-    functions.bind_acceleration_structure_memory_nv       = device_table->BindAccelerationStructureMemoryNV;
+    functions.allocate_memory                       = device_table->AllocateMemory;
+    functions.free_memory                           = device_table->FreeMemory;
+    functions.get_device_memory_commitment          = device_table->GetDeviceMemoryCommitment;
+    functions.map_memory                            = device_table->MapMemory;
+    functions.unmap_memory                          = device_table->UnmapMemory;
+    functions.flush_memory_ranges                   = device_table->FlushMappedMemoryRanges;
+    functions.invalidate_memory_ranges              = device_table->InvalidateMappedMemoryRanges;
+    functions.create_buffer                         = device_table->CreateBuffer;
+    functions.destroy_buffer                        = device_table->DestroyBuffer;
+    functions.get_buffer_memory_requirements        = device_table->GetBufferMemoryRequirements;
+    functions.bind_buffer_memory                    = device_table->BindBufferMemory;
+    functions.create_image                          = device_table->CreateImage;
+    functions.destroy_image                         = device_table->DestroyImage;
+    functions.get_image_memory_requirements         = device_table->GetImageMemoryRequirements;
+    functions.get_image_subresource_layout          = device_table->GetImageSubresourceLayout;
+    functions.bind_image_memory                     = device_table->BindImageMemory;
+    functions.get_device_proc_addr                  = device_table->GetDeviceProcAddr;
+    functions.get_device_queue                      = device_table->GetDeviceQueue;
+    functions.create_command_pool                   = device_table->CreateCommandPool;
+    functions.allocate_command_buffers              = device_table->AllocateCommandBuffers;
+    functions.begin_command_buffer                  = device_table->BeginCommandBuffer;
+    functions.cmd_copy_buffer                       = device_table->CmdCopyBuffer;
+    functions.cmd_copy_buffer_to_image              = device_table->CmdCopyBufferToImage;
+    functions.end_command_buffer                    = device_table->EndCommandBuffer;
+    functions.queue_submit                          = device_table->QueueSubmit;
+    functions.queue_wait_idle                       = device_table->QueueWaitIdle;
+    functions.reset_command_buffer                  = device_table->ResetCommandBuffer;
+    functions.free_command_buffers                  = device_table->FreeCommandBuffers;
+    functions.destroy_command_pool                  = device_table->DestroyCommandPool;
+    functions.create_video_session                  = device_table->CreateVideoSessionKHR;
+    functions.destroy_video_session                 = device_table->DestroyVideoSessionKHR;
+    functions.bind_video_session_memory             = device_table->BindVideoSessionMemoryKHR;
+    functions.get_video_session_memory_requirements = device_table->GetVideoSessionMemoryRequirementsKHR;
+    functions.map_memory2                           = device_table->MapMemory2KHR;
+    functions.unmap_memory2                         = device_table->UnmapMemory2KHR;
+    functions.set_device_memory_priority            = device_table->SetDeviceMemoryPriorityEXT;
+    functions.get_memory_remote_address_nv          = device_table->GetMemoryRemoteAddressNV;
+    functions.create_acceleration_structure_nv      = device_table->CreateAccelerationStructureNV;
+    functions.destroy_acceleration_structure_nv     = device_table->DestroyAccelerationStructureNV;
+    functions.bind_acceleration_structure_memory_nv = device_table->BindAccelerationStructureMemoryNV;
     functions.get_acceleration_structure_memory_requirements_nv =
         device_table->GetAccelerationStructureMemoryRequirementsNV;
     functions.queue_bind_sparse                           = device_table->QueueBindSparse;
@@ -2644,8 +2644,6 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.get_physical_device_queue_family_properties = instance_table->GetPhysicalDeviceQueueFamilyProperties;
     functions.set_debug_utils_object_name                 = instance_table->SetDebugUtilsObjectNameEXT;
     functions.set_debug_utils_object_tag                  = instance_table->SetDebugUtilsObjectTagEXT;
-    functions.create_semaphore                            = device_table->CreateSemaphore;
-    functions.destroy_semaphore                           = device_table->DestroySemaphore;
     functions.create_fence                                = device_table->CreateFence;
     functions.wait_for_fences                             = device_table->WaitForFences;
     functions.destroy_fence                               = device_table->DestroyFence;
@@ -3650,7 +3648,7 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
                                                     create_state.modified_create_info.enabledExtensionCount);
     InitializeResourceAllocator(physical_device_info, replay_device, enabled_extensions, allocator);
 
-    device_info->allocator = std::unique_ptr<VulkanResourceAllocator>(allocator);
+    device_info->allocator = std::shared_ptr<VulkanResourceAllocator>(allocator);
 
     // Track state of physical device properties and features at device creation
     device_info->property_feature_info = create_state.property_feature_info;
@@ -3732,6 +3730,30 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
     return VK_SUCCESS;
 }
 
+VulkanDeviceInfo*
+VulkanReplayConsumerBase::FindkDuplicateDeviceInfo(const VulkanPhysicalDeviceInfo* physical_device_info,
+                                                   const StructPointerDecoder<Decoded_VkDeviceCreateInfo>* create_info)
+{
+    auto it = device_phy_id_map_.find(physical_device_info->capture_id);
+    if (it != device_phy_id_map_.end())
+    {
+        auto* extant_device_info = object_info_table_->GetVkDeviceInfo(it->second);
+        // TODO: It might have to check if two create info are the same.
+        return extant_device_info;
+    }
+    return nullptr;
+}
+
+VkResult VulkanReplayConsumerBase::SetDuplicateDeviceInfo(VkDevice*         replay_device,
+                                                          VulkanDeviceInfo* device_info,
+                                                          VulkanDeviceInfo* extant_device_info)
+{
+    *replay_device = extant_device_info->handle;
+    device_info->copy_characteristics(extant_device_info);
+
+    return VK_SUCCESS;
+}
+
 VkResult
 VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  original_result,
                                                VulkanPhysicalDeviceInfo* physical_device_info,
@@ -3748,20 +3770,13 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  origina
     GFXRECON_ASSERT(device_info);
 
     // If we're doing device deduplication, check if we've already seen this create device request
-    std::bitset<VK_UUID_SIZE * 8> casted_uuid;
-    util::platform::MemoryCopy(
-        &casted_uuid, format::kUuidSize, physical_device_info->capture_pipeline_cache_uuid, VK_UUID_SIZE);
     if (options_.do_device_deduplication)
     {
-        auto it = device_uuid_map_.find(casted_uuid);
-        if (it != device_uuid_map_.end())
+        auto* extant_device_info = FindkDuplicateDeviceInfo(physical_device_info, pCreateInfo);
+        if (extant_device_info)
         {
             // We have seen this device before
-            VkDevice& extant_device   = device_uuid_map_[casted_uuid];
-            device_info->is_duplicate = true;
-            VkDevice* replay_device   = pDevice->GetHandlePointer();
-            *replay_device            = extant_device;
-            return VK_SUCCESS;
+            return SetDuplicateDeviceInfo(pDevice->GetHandlePointer(), device_info, extant_device_info);
         }
     }
 
@@ -3800,7 +3815,8 @@ VulkanReplayConsumerBase::OverrideCreateDevice(VkResult                  origina
     if (options_.do_device_deduplication)
     {
         // Insert this device info into map
-        device_uuid_map_.insert(std::pair(casted_uuid, *replay_device));
+        auto capture_id = *pDevice->GetPointer();
+        device_phy_id_map_.insert(std::pair(physical_device_info->capture_id, capture_id));
     }
 
     return result;
@@ -3813,7 +3829,7 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
 {
     VkDevice device = VK_NULL_HANDLE;
 
-    if (device_info != nullptr && !device_info->is_duplicate)
+    if (device_info != nullptr && device_info->duplicate_source_id == format::kNullHandleId)
     {
         device            = device_info->handle;
         auto device_table = GetDeviceTable(device);
@@ -4357,17 +4373,18 @@ VkResult VulkanReplayConsumerBase::OverrideGetFenceStatus(PFN_vkGetFenceStatus  
         return result;
     }
 
-    result = func(device, fence);
-
-    // We don't want the replay to continue if fence was ready at capture time but is not at replay time because
-    // future calls might use the resources depending on that fence...
-    if (original_result == VK_SUCCESS && result == VK_NOT_READY)
+    if (original_result == VK_SUCCESS)
     {
-        const graphics::VulkanDeviceTable* device_table = GetDeviceTable(device);
-        GFXRECON_ASSERT(device_table != nullptr);
-
-        result = device_table->WaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+        // Replay is usually faster than the original application, so there is a good chance the fence is still not
+        // ready. In this case, we make sure the fence is signaled by waiting for it.
+        util::MarkingLayersUtil::instance().BeginInjected(device_info);
+        result =
+            GetDeviceTable(device)->WaitForFences(device, 1, &fence, VK_TRUE, std::numeric_limits<uint64_t>::max());
+        util::MarkingLayersUtil::instance().EndInjected(device_info);
+        GFXRECON_ASSERT(result == VK_SUCCESS);
     }
+
+    result = func(device, fence);
 
     if (use_acceleration_structure_builder_)
     {
@@ -4534,7 +4551,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit        
                 sync_wait_semaphores |= !command_buffer_info->addresses_to_replace.empty();
                 if (cmd_buf_info == nullptr)
                 {
-                    cmd_buf_info = cmd_buf_info;
+                    cmd_buf_info = command_buffer_info;
                 }
             }
 
@@ -4544,11 +4561,13 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit        
                 auto          wait_semaphores = graphics::StripWaitSemaphores(&submit_info_mut);
 
                 auto& address_replacer = GetDeviceAddressReplacer(device_info);
-                semaphores[i] = address_replacer.UpdateBufferAddresses(wait_semaphores.empty() ? nullptr : cmd_buf_info,
+                semaphores[i]          = address_replacer.UpdateBufferAddresses(cmd_buf_info,
                                                                        addresses_to_replace.data(),
                                                                        addresses_to_replace.size(),
                                                                        GetDeviceAddressTracker(device_info),
                                                                        wait_semaphores);
+                GFXRECON_ASSERT(semaphores[i] != VK_NULL_HANDLE);
+
                 // inject wait-semaphore into submit-info
                 submit_info_mut.waitSemaphoreCount = 1;
                 submit_info_mut.pWaitSemaphores    = &semaphores[i];
@@ -4793,13 +4812,13 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2      
                 semaphore_info.value                  = 1;
 
                 // runs replacer, sync via semaphore
-                auto& address_replacer = GetDeviceAddressReplacer(device_info);
-                semaphore_info.semaphore =
-                    address_replacer.UpdateBufferAddresses(wait_semaphores.empty() ? nullptr : cmd_buf_info,
-                                                           addresses_to_replace.data(),
-                                                           addresses_to_replace.size(),
-                                                           GetDeviceAddressTracker(device_info),
-                                                           wait_semaphores);
+                auto& address_replacer   = GetDeviceAddressReplacer(device_info);
+                semaphore_info.semaphore = address_replacer.UpdateBufferAddresses(cmd_buf_info,
+                                                                                  addresses_to_replace.data(),
+                                                                                  addresses_to_replace.size(),
+                                                                                  GetDeviceAddressTracker(device_info),
+                                                                                  wait_semaphores);
+                GFXRECON_ASSERT(semaphore_info.semaphore != VK_NULL_HANDLE);
 
                 // inject wait-semaphores into submit-info
                 submit_info_mut.waitSemaphoreInfoCount = 1;
@@ -6761,8 +6780,8 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
     GFXRECON_ASSERT(pCreateInfo != nullptr);
 
     VulkanResourceAllocator::ResourceData allocator_data;
-    auto                                  replay_image         = pImage->GetHandlePointer();
-    auto                                  capture_id           = (*pImage->GetPointer());
+    auto                                  replay_image = pImage->GetHandlePointer();
+    auto                                  capture_id   = (*pImage->GetPointer());
 
     auto              replay_create_info   = pCreateInfo->GetPointer();
     VkImageCreateInfo modified_create_info = *replay_create_info;
@@ -12291,17 +12310,14 @@ void VulkanReplayConsumerBase::ProcessBuildVulkanAccelerationStructuresMetaComma
         VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(device);
         GFXRECON_ASSERT(device_info != nullptr);
 
-        if (UseAddressReplacement(device_info))
-        {
-            MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
+        MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());
 
-            VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos = pInfos->GetPointer();
-            VkAccelerationStructureBuildRangeInfoKHR**   range_infos          = ppRangeInfos->GetPointer();
+        VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos = pInfos->GetPointer();
+        VkAccelerationStructureBuildRangeInfoKHR**   range_infos          = ppRangeInfos->GetPointer();
 
-            GetDeviceAddressReplacer(device_info)
-                .ProcessBuildVulkanAccelerationStructuresMetaCommand(
-                    info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), GetDeviceAddressTracker(device_info));
-        }
+        GetDeviceAddressReplacer(device_info)
+            .ProcessBuildVulkanAccelerationStructuresMetaCommand(
+                info_count, pInfos->GetPointer(), ppRangeInfos->GetPointer(), GetDeviceAddressTracker(device_info));
     }
     ******************** UPSTREAM CODE ********************/
     if (!use_acceleration_structure_builder_)
@@ -12477,30 +12493,20 @@ void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(
                     break;
 
                     case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
-                    {
-                        const VkBaseOutStructure* pnext = reinterpret_cast<const VkBaseOutStructure*>(write->pNext);
-                        while (pnext != nullptr)
+                        if (auto* inline_uniform_block_write =
+                                graphics::vulkan_struct_get_pnext<VkWriteDescriptorSetInlineUniformBlock>(write))
                         {
-                            if (pnext->sType == VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_INLINE_UNIFORM_BLOCK)
-                            {
-                                const VkWriteDescriptorSetInlineUniformBlock* inline_uni_block_write =
-                                    reinterpret_cast<const VkWriteDescriptorSetInlineUniformBlock*>(pnext);
-
-                                const uint32_t offset = write->dstArrayElement;
-                                const uint32_t size   = write->descriptorCount;
-                                assert(dst_desc_set_info->descriptors[binding].inline_uniform_block.size() >=
-                                       offset + size);
-                                util::platform::MemoryCopy(
-                                    dst_desc_set_info->descriptors[binding].inline_uniform_block.data() + offset,
-                                    size,
-                                    inline_uni_block_write->pData,
-                                    size);
-                                break;
-                            }
-                            pnext = pnext->pNext;
+                            const uint32_t offset = write->dstArrayElement;
+                            const uint32_t size   = write->descriptorCount;
+                            GFXRECON_ASSERT(dst_desc_set_info->descriptors[binding].inline_uniform_block.size() >=
+                                            offset + size);
+                            util::platform::MemoryCopy(
+                                dst_desc_set_info->descriptors[binding].inline_uniform_block.data() + offset,
+                                size,
+                                inline_uniform_block_write->pData,
+                                size);
                         }
-                    }
-                    break;
+                        break;
 
                     default:
                         break;

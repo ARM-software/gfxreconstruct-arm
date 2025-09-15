@@ -652,6 +652,7 @@ gfxrecon-replay         [-h | --help] [--version] [--cpu-mask <binary-mask>] [--
                         [--dump-resources-dump-raw-images]
                         [--pbi-all] [--pbis <index1,index2>]
                         [--pipeline-creation-jobs | --pcj <num_jobs>]
+                        [--deduplicate-device]
                         <file>
 
 
@@ -733,7 +734,8 @@ Optional arguments:
                         unspecified screenshots will use the swapchain images
                         dimensions. If --screenshot-scale is also specified then
                         this option is ignored.
-  --capture             Capture the replaying GFXR file. Capture option behavior and
+  --capture             Capture the replaying GFXR file. Capture uses the same log
+                        options as replay. All other capture option behavior and
                         usage is the same as when capturing with the GFXR layer. The
                         capture functionality is included in the `gfxrecon-replay`
                         executable--no GFXR capture layer is added to the Vulkan layer
@@ -948,6 +950,9 @@ Optional arguments:
                         `--load-pipeline-cache`.
   --quit-after-frame
               Specify a frame after which replay will terminate.
+
+  --deduplicate-device
+              If set, at most one VkDevice will be created for each VkPhysicalDevice for RenderDoc and DXVK case.
 ```
 
 ### Key Controls

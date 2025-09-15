@@ -166,6 +166,9 @@ enum class MetaDataType : uint16_t
     kFixShadowMemoryCommand                             = 39,
     kFixShaderGroupHandleCommand                        = 40,
     kFillMemoryResourceAddressCommand                   = 41,
+
+    //! reserve values with highest-bit for special purposes
+    kBeginExperimentalReservedRange = 1U << 15U
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
