@@ -25,7 +25,6 @@
 #include "dx12_raytracing_modifier.h"
 #include "encode/struct_pointer_encoder.h"
 #include "encode/parameter_encoder.h"
-#include "encode/custom_ags_api_call_encoders.h"
 #include "encode/custom_dx12_struct_encoders.h"
 #include "generated/generated_dx12_api_call_encoders.h"
 
@@ -1706,7 +1705,7 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_Map(const ApiCallInfo&      
                                                         StructPointerDecoder<Decoded_D3D12_RANGE>* pReadRange,
                                                         PointerDecoder<uint64_t, void*>*           ppData)
 {
-    if (return_value != S_OK)
+    if ((return_value != S_OK) || (ppData == nullptr) || (ppData->GetPointer() == nullptr))
     {
         return;
     }

@@ -27,16 +27,11 @@
 
 #include <unordered_map>
 #include <map>
-#include <set>
 #include <vector>
 #include <algorithm>
 
 #include "decode/dx12_consumer_base.h"
-#include "decode/dx12_descriptor_map.h"
 #include "decode/dx12_resource_value_tracker.h"
-#include "graphics/dx12_util.h"
-#include "graphics/dx12_gpu_va_map.h"
-#include "graphics/dx12_shader_id_map.h"
 #include "generated/generated_dx12_consumer.h"
 #include "util/memory_output_stream.h"
 #include "util/defines.h"
