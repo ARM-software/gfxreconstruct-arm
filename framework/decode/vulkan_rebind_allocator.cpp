@@ -790,6 +790,11 @@ VkResult VulkanRebindAllocator::BindBufferMemory(VkBuffer                       
                                 *bind_memory_properties);
             }
         }
+        else
+        {
+            GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindBufferMemory.",
+                                 util::ToString<VkResult>(result).c_str());
+        }
     }
 
     return result;
@@ -843,6 +848,11 @@ VkResult VulkanRebindAllocator::BindBufferMemory2(uint32_t                      
                                         *memory_alloc_info,
                                         bind_memory_properties[i]);
                     }
+                }
+                else
+                {
+                    GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindBufferMemory2.",
+                                         util::ToString<VkResult>(result).c_str());
                 }
             }
         }
@@ -967,6 +977,11 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
                                     *bind_memory_properties);
                 }
             }
+            else
+            {
+                GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindImageMemory.",
+                                     util::ToString<VkResult>(result).c_str());
+            }
         }
     }
 
@@ -1040,6 +1055,11 @@ VkResult VulkanRebindAllocator::BindImageMemory2(uint32_t                     bi
                                             *memory_alloc_info,
                                             bind_memory_properties[i]);
                         }
+                    }
+                    else
+                    {
+                        GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindImageMemory2.",
+                                             util::ToString<VkResult>(result).c_str());
                     }
                 }
             }
@@ -1134,6 +1154,11 @@ VkResult VulkanRebindAllocator::BindVideoSessionMemory(VkVideoSessionKHR        
                                     *memory_alloc_info,
                                     bind_memory_properties[bind_i]);
                 }
+            }
+            else
+            {
+                GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindVideoSessionMemory.",
+                                     util::ToString<VkResult>(result).c_str());
             }
         }
     }
@@ -3196,7 +3221,15 @@ VkResult VulkanRebindAllocator::QueueBindSparse(VkQueue                 queue,
 
                         result = VmaAllocateMemory(requirements, usage, allocation);
 
-                        allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        if (result >= 0)
+                        {
+                            allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        }
+                        else
+                        {
+                            GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind QueueBindSparse buffer.",
+                                                 util::ToString<VkResult>(result).c_str());
+                        }
                     }
 
                     if (result == VK_SUCCESS || mem_alloc_info == nullptr || is_bound)
@@ -3267,7 +3300,15 @@ VkResult VulkanRebindAllocator::QueueBindSparse(VkQueue                 queue,
 
                         result = VmaAllocateMemory(requirements, usage, allocation);
 
-                        allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        if (result >= 0)
+                        {
+                            allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        }
+                        else
+                        {
+                            GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind QueueBindSparse imageOpaque.",
+                                                 util::ToString<VkResult>(result).c_str());
+                        }
                     }
 
                     if (result == VK_SUCCESS || mem_alloc_info == nullptr || is_bound)
@@ -3337,7 +3378,15 @@ VkResult VulkanRebindAllocator::QueueBindSparse(VkQueue                 queue,
 
                         result = VmaAllocateMemory(requirements, usage, allocation);
 
-                        allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        if (result >= 0)
+                        {
+                            allocator_->GetAllocationInfo(allocation, &allocation_info);
+                        }
+                        else
+                        {
+                            GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind QueueBindSparse image",
+                                                 util::ToString<VkResult>(result).c_str());
+                        }
                     }
 
                     if (result == VK_SUCCESS || mem_alloc_info == nullptr || is_bound)

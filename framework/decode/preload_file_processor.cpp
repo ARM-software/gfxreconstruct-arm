@@ -59,7 +59,7 @@ size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t desti
 void PreloadFileProcessor::PreloadBuffer::Reset()
 {
     allocated_size_ = 0;
-    replay_offset_ = 0;
+    replay_offset_  = 0;
     free(container_);
     container_ = nullptr;
 }
@@ -332,22 +332,17 @@ bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
     if (status_ == PreloadStatus::kReplay)
     {
         bytes_read = preload_buffer_.Read(buffer, buffer_size);
+        bytes_read_ += bytes_read;
         if (preload_buffer_.ReplayFinished())
         {
             status_ = PreloadStatus::kInactive;
         }
+        return bytes_read == buffer_size;
     }
     else
     {
-        bool success = util::platform::FileRead(buffer, buffer_size, GetFileDescriptor());
-        if (success)
-        {
-            bytes_read = buffer_size;
-        }
+        return Base::ReadBytes(buffer, buffer_size);
     }
-
-    bytes_read_ += bytes_read;
-    return bytes_read == buffer_size;
 }
 
 bool PreloadFileProcessor::IsFileValid() const

@@ -248,6 +248,7 @@ class VulkanResourcesUtil
                           VkImage           image,
                           VkFormat          format,
                           VkImageType       type,
+                          VkImageTiling     tiling,
                           const VkExtent3D& extent,
                           uint32_t          array_layers,
                           VkImageLayout     current_layout,

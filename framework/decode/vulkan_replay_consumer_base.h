@@ -1600,21 +1600,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      VulkanShaderModuleInfo*                                    shader_module_info,
                                      const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
-    VkResult OverrideGetPastPresentationTimingGOOGLE(
-        PFN_vkGetPastPresentationTimingGOOGLE                         func,
-        VkResult                                                      original_result,
-        const VulkanDeviceInfo*                                       device_info,
-        const VulkanSwapchainKHRInfo*                                 swapchain_info,
-        PointerDecoder<uint32_t>*                                     pPresentationTimingCount,
-        StructPointerDecoder<Decoded_VkPastPresentationTimingGOOGLE>* pPresentationTimings);
-
-    VkResult OverrideGetRefreshCycleDurationGOOGLE(
-        PFN_vkGetRefreshCycleDurationGOOGLE                         func,
-        VkResult                                                    original_result,
-        const VulkanDeviceInfo*                                     device_info,
-        const VulkanSwapchainKHRInfo*                               swapchain_info,
-        StructPointerDecoder<Decoded_VkRefreshCycleDurationGOOGLE>* pDisplayTimingProperties);
-
     void OverrideGetDescriptorEXT(PFN_vkGetDescriptorEXT                                func,
                                   VulkanDeviceInfo*                                     device,
                                   StructPointerDecoder<Decoded_VkDescriptorGetInfoEXT>* pDescriptorInfo,
@@ -1708,6 +1693,21 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         const VulkanDeviceInfo*                                               device_info,
         StructPointerDecoder<Decoded_VkDeviceMemoryOpaqueCaptureAddressInfo>* pInfo);
 
+    VkResult OverrideGetPastPresentationTimingGOOGLE(
+        PFN_vkGetPastPresentationTimingGOOGLE                         func,
+        VkResult                                                      original_result,
+        const VulkanDeviceInfo*                                       device_info,
+        const VulkanSwapchainKHRInfo*                                 swapchain_info,
+        PointerDecoder<uint32_t>*                                     pPresentationTimingCount,
+        StructPointerDecoder<Decoded_VkPastPresentationTimingGOOGLE>* pPresentationTimings);
+
+    VkResult OverrideGetRefreshCycleDurationGOOGLE(
+        PFN_vkGetRefreshCycleDurationGOOGLE                         func,
+        VkResult                                                    original_result,
+        const VulkanDeviceInfo*                                     device_info,
+        const VulkanSwapchainKHRInfo*                               swapchain_info,
+        StructPointerDecoder<Decoded_VkRefreshCycleDurationGOOGLE>* pDisplayTimingProperties);
+
     std::function<handle_create_result_t<VkPipeline>()>
     AsyncCreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines                               func,
                                  VkResult                                                    returnValue,
@@ -1773,9 +1773,9 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      const VkPhysicalDeviceProperties* capture_properties,
                                      const VkPhysicalDeviceProperties* replay_properties);
 
-    void SetPhysicalDeviceProperties(VulkanPhysicalDeviceInfo*          physical_device_info,
-                                     const VkPhysicalDeviceProperties2* capture_properties,
-                                     const VkPhysicalDeviceProperties2* replay_properties);
+    void SetPhysicalDeviceProperties2(VulkanPhysicalDeviceInfo*          physical_device_info,
+                                      const VkPhysicalDeviceProperties2* capture_properties,
+                                      const VkPhysicalDeviceProperties2* replay_properties);
 
     void SetPhysicalDeviceMemoryProperties(VulkanPhysicalDeviceInfo*               physical_device_info,
                                            const VkPhysicalDeviceMemoryProperties* capture_properties,
@@ -1928,7 +1928,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                           VkPipelineCache         pipelineCache,
                                           VkPipeline*             pipelines,
                                           uint32_t                pipelineCount);
-    bool            IsExtensionBeingFaked(const char* extension);
+
+    bool IsExtensionBeingFaked(const char* extension);
 
     void DestroyInternalInstanceResources(const VulkanInstanceInfo* instance_info);
 
@@ -2015,7 +2016,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::vector<uint32_t>                   capture_image_indices_;
     std::vector<VulkanSwapchainKHRInfo*>    swapchain_infos_;
 
+    // faked extensions is a list of currently bypassed extensions.
+    // goal is to allow replay when 'benign' extensions are missing during replay.
     std::vector<const char*> faked_extensions_;
+
     // map acceleration structure builders for each device
     std::unordered_map<const decode::VulkanDeviceInfo*, VulkanAccelerationStructureBuilder>
                                                                                acceleration_structure_builders_;

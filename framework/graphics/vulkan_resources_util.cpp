@@ -21,6 +21,7 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
+#include "decode/vulkan_replay_dump_resources_common.h"
 #include "util/to_string.h"
 #include "vulkan_util.h"
 #include "Vulkan-Utility-Libraries/vk_format_utils.h"
@@ -1629,6 +1630,7 @@ VkResult VulkanResourcesUtil::ResolveImage(VkCommandBuffer   command_buffer,
                                            VkImage           image,
                                            VkFormat          format,
                                            VkImageType       type,
+                                           VkImageTiling     tiling,
                                            const VkExtent3D& extent,
                                            uint32_t          array_layers,
                                            VkImageLayout     current_layout,
@@ -1639,8 +1641,12 @@ VkResult VulkanResourcesUtil::ResolveImage(VkCommandBuffer   command_buffer,
 
     VkFormatProperties format_properties{};
     instance_table_.GetPhysicalDeviceFormatProperties(physical_device_, format, &format_properties);
-    if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) !=
-        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
+    if ((tiling == VK_IMAGE_TILING_OPTIMAL &&
+         (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) !=
+             VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) ||
+        (((tiling == VK_IMAGE_TILING_LINEAR &&
+           (format_properties.linearTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) !=
+               VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))))
     {
         GFXRECON_LOG_WARNING_ONCE(
             "Multisampled images that do not support VK_FORMAT_FEATURE_COLOR_ATTACHMENT will not be resolved");
@@ -1965,6 +1971,8 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
         return result;
     }
 
+    VkResult last_error = VK_SUCCESS;
+
     // accumulate timing data
     uint32_t gpu_micros = 0, cpu_micros = 0;
 
@@ -1990,7 +1998,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
                 command_buffer = cmd_buf_it->second;
             }
 
-            VkImage copy_image = tmp_data[i].resolve_image != VK_NULL_HANDLE ? tmp_data[i].resolve_image : img.image;
+            VkImage copy_image = img.image;
 
             if (img.sample_count != VK_SAMPLE_COUNT_1_BIT)
             {
@@ -1998,6 +2006,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
                                       img.image,
                                       img.format,
                                       img.type,
+                                      img.tiling,
                                       img.extent,
                                       img.layer_count,
                                       img.layout,
@@ -2005,10 +2014,15 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
                                       &tmp_data[i].resolve_memory);
                 if (result != VK_SUCCESS)
                 {
+                    last_error = result;
+
                     // free temporary resource, continue
                     tmp_data[i] = {};
                     continue;
                 }
+
+                GFXRECON_ASSERT(tmp_data[i].resolve_image != VK_NULL_HANDLE);
+                copy_image = tmp_data[i].resolve_image;
             }
 
             tmp_data[i].transition_aspect = img.aspect;
@@ -2034,9 +2048,8 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
             // Blit image to change dimensions or convert format
             if (tmp_data[i].use_blit)
             {
-                VkImage blit_src = tmp_data[i].resolve_image ? tmp_data[i].resolve_image : img.image;
-                result           = BlitImage(command_buffer,
-                                   blit_src,
+                result = BlitImage(command_buffer,
+                                   copy_image,
                                    img.format,
                                    dst_format,
                                    img.type,
@@ -2051,14 +2064,17 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
                                    tmp_data[i].scaled_image,
                                    tmp_data[i].scaled_image_memory);
 
-                copy_image = tmp_data[i].scaled_image != VK_NULL_HANDLE ? tmp_data[i].scaled_image : copy_image;
-
                 if (result != VK_SUCCESS)
                 {
+                    last_error = result;
+
                     // free temporary resource, continue
                     tmp_data[i] = {};
                     continue;
                 }
+
+                GFXRECON_ASSERT(tmp_data[i].scaled_image != VK_NULL_HANDLE);
+                copy_image = tmp_data[i].scaled_image;
             }
 
             if (!img.external_format)
@@ -2161,7 +2177,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
         cpu_micros += batch_micros - gpu_micros;
     } // batch_ranges
     GFXRECON_LOG_DEBUG("gpu: %d ms - cpu: %d ms", gpu_micros / 1000, cpu_micros / 1000);
-    return VK_SUCCESS;
+    return last_error;
 }
 
 VkResult VulkanResourcesUtil::ReadImageResource(const VulkanResourcesUtil::ImageResource& image_resource,
@@ -2566,8 +2582,10 @@ bool VulkanResourcesUtil::IsScalingSupported(VkFormat          src_format,
                                                                0,
                                                                &dst_img_format_props);
 
-        if (dst_img_format_props.maxExtent.width < static_cast<uint32_t>(static_cast<float>(extent.width) * scale) ||
-            dst_img_format_props.maxExtent.height < static_cast<uint32_t>(static_cast<float>(extent.height) * scale))
+        const VkExtent3D scaled_extent = decode::ScaleExtent(extent, scale);
+        if ((dst_img_format_props.maxExtent.width < scaled_extent.width) ||
+            (dst_img_format_props.maxExtent.height < scaled_extent.height) ||
+            (dst_img_format_props.maxExtent.depth < scaled_extent.depth))
         {
             return false;
         }
