@@ -24,6 +24,7 @@
 
 #include "compression_converter.h"
 
+#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 
@@ -188,7 +189,8 @@ bool CompressionConverter::ProcessMetaData(const format::MetaDataHeader& meta_he
 {
     // Only the meta data blocks that contain resource data support compression.  The rest of the meta data block types
     // can be copied directly to the new file.
-    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
+    auto meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_header.meta_data_id);
+    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_data_id);
     switch (meta_data_type)
     {
         case format::MetaDataType::kFillMemoryCommand:
@@ -197,8 +199,8 @@ bool CompressionConverter::ProcessMetaData(const format::MetaDataHeader& meta_he
         case format::MetaDataType::kInitSubresourceCommand:
         case format::MetaDataType::kInitDx12AccelerationStructureCommand:
         case format::MetaDataType::kFillMemoryResourceValueCommand:
-        case format::MetaDataType::kFillMemoryResourceAddressCommand:
-        case format::MetaDataType::kInitTensorCommand:
+        case format::arm::MetaDataType::kFillMemoryResourceAddressCommand:
+        case format::arm::MetaDataType::kInitTensorCommand:
         {
             break;
         }

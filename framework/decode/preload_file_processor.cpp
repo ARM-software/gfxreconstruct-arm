@@ -22,6 +22,7 @@
 */
 
 #include "decode/preload_file_processor.h"
+#include "format/format_arm.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -179,9 +180,12 @@ bool PreloadFileProcessor::ProcessBlocks()
 
                         success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
 
+                        auto versioned_meta_data_id =
+                            format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
+
                         if (success)
                         {
-                            success = ProcessMetaData(block_header, meta_data_id);
+                            success = ProcessMetaData(block_header, versioned_meta_data_id);
                         }
                         else
                         {

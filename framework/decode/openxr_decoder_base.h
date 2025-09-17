@@ -105,8 +105,8 @@ class OpenXrDecoderBase : public ApiDecoder
                                                 const format::AddressLocationInfo*           infos) override
     {}
 
-    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                  const format::ShaderHandleLocationInfo*          infos) override
+    virtual void DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                     const format::ShaderHandleLocationInfo*          infos) override
     {}
 
     virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,

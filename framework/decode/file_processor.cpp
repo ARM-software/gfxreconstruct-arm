@@ -27,6 +27,7 @@
 #include "decode/decode_allocator.h"
 #include "format/format.h"
 #include "format/format_util.h"
+#include "format/format_arm.h"
 #include "util/compressor.h"
 #include "util/file_path.h"
 #include "util/logging.h"
@@ -215,20 +216,19 @@ bool FileProcessor::ContinueDecoding()
 
 bool FileProcessor::ProcessFileHeader()
 {
-    bool               success = false;
-    format::FileHeader file_header{};
+    bool success = false;
 
     ActiveFiles& active_file = active_files_[file_stack_.front().filename];
 
-    if (ReadBytes(&file_header, sizeof(file_header)))
+    if (ReadBytes(&file_header_, sizeof(file_header_)))
     {
-        success = format::ValidateFileHeader(file_header);
+        success = format::ValidateFileHeader(file_header_);
 
         if (success)
         {
-            file_options_.resize(file_header.num_options);
+            file_options_.resize(file_header_.num_options);
 
-            size_t option_data_size = file_header.num_options * sizeof(format::FileOptionPair);
+            size_t option_data_size = file_header_.num_options * sizeof(format::FileOptionPair);
 
             success = ReadBytes(file_options_.data(), option_data_size);
 
@@ -393,6 +393,8 @@ bool FileProcessor::ProcessBlocks()
                         format::ApiFamilyId::ApiFamily_None, format::MetaDataType::kUnknownMetaDataType);
 
                     success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
+
+                    meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
 
                     if (success)
                     {
@@ -917,7 +919,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             }
         }
     }
-    else if (meta_data_type == format::MetaDataType::kFixShaderGroupHandleCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kFixShaderGroupHandleCommand)
     {
         format::FixShaderGroupHandleCommandHeader header;
         success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
@@ -930,11 +932,11 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         {
             if (decoder->SupportsMetaDataId(meta_data_id))
             {
-                decoder->DispatchShaderGroupHandleCommand(header, locations.data());
+                decoder->DispatchFixShaderGroupHandleCommand(header, locations.data());
             }
         }
     }
-    else if (meta_data_type == format::MetaDataType::kFixDescriptorDataCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kFixDescriptorDataCommand)
     {
         format::FixDescriptorDataCommandHeader header;
         success = ReadBytes(&header.memory_id, sizeof(header.memory_id));
@@ -950,7 +952,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             }
         }
     }
-    else if (meta_data_type == format::MetaDataType::kFixShadowMemoryCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kFixShadowMemoryCommand)
     {
         format::FixShadowMemoryCommand cmd;
         success = ReadBytes(&cmd.thread_id, sizeof(cmd.thread_id));
@@ -1777,7 +1779,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
         }
     }
-    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kInitTensorCommand)
     {
         format::InitTensorCommandHeader header;
         success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
@@ -2467,7 +2469,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                                  "Failed to read init subresource data meta-data block header");
         }
     }
-    else if (meta_data_type == format::MetaDataType::kFillMemoryResourceAddressCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kFillMemoryResourceAddressCommand)
     {
         format::FillMemoryResourceAddressCommandHeader header;
 

@@ -161,11 +161,6 @@ enum class MetaDataType : uint16_t
     kExecuteBlocksFromFile                              = 34,
     kCreateHardwareBufferCommand                        = 35,
     kInitializeMetaCommand                              = 36,
-    kInitTensorCommand                                  = 37,
-    kFixDescriptorDataCommand                           = 38,
-    kFixShadowMemoryCommand                             = 39,
-    kFixShaderGroupHandleCommand                        = 40,
-    kFillMemoryResourceAddressCommand                   = 41,
 
     //! reserve values with highest-bit for special purposes
     kBeginExperimentalReservedRange = 1U << 15U

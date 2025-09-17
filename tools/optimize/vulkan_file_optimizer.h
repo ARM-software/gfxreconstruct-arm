@@ -50,6 +50,7 @@ class VulkanFileOptimizer : public FileOptimizer
 
     virtual bool ProcessFillMemoryCommand(const format::FillMemoryCommandHeader& header) override;
     virtual bool ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header) override;
+    virtual bool ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header) override;
     virtual bool ProcessInitBufferCommand(const format::InitBufferCommandHeader& header) override;
     virtual bool ProcessSetOpaqueAddressCommand(const format::SetOpaqueAddressCommand& header) override;
     virtual bool ProcessVulkanBuildAccelerationStructuresCommand(

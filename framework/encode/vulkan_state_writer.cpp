@@ -30,6 +30,7 @@
 #include "encode/custom_vulkan_array_size_2d.h"
 #include "encode/vulkan_capture_common.h"
 #include "format/format.h"
+#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "custom_vulkan_array_size_2d.h"
@@ -2562,12 +2563,12 @@ void VulkanStateWriter::ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper
             format::InitTensorCommandHeader upload_cmd;
 
             upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
-            upload_cmd.meta_header.meta_data_id =
-                format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitTensorCommand);
-            upload_cmd.thread_id = thread_data_->thread_id_;
-            upload_cmd.device_id = device_wrapper->handle_id;
-            upload_cmd.tensor_id = tensor_wrapper->handle_id;
-            upload_cmd.data_size = data_size;
+            upload_cmd.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
+                                                                         format::arm::MetaDataType::kInitTensorCommand);
+            upload_cmd.thread_id                     = thread_data_->thread_id_;
+            upload_cmd.device_id                     = device_wrapper->handle_id;
+            upload_cmd.tensor_id                     = tensor_wrapper->handle_id;
+            upload_cmd.data_size                     = data_size;
 
             if (compressor_ != nullptr)
             {

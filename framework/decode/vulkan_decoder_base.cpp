@@ -93,8 +93,8 @@ void VulkanDecoderBase::DispatchFixDeviceAddresCommand(const format::FixDeviceAd
     }
 }
 
-void VulkanDecoderBase::DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                         const format::ShaderHandleLocationInfo*          infos)
+void VulkanDecoderBase::DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                            const format::ShaderHandleLocationInfo*          infos)
 {
     for (auto consumer : consumers_)
     {

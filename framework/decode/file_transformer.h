@@ -198,6 +198,7 @@ class FileTransformer
     std::vector<uint8_t>                compressed_parameter_buffer_;
     std::unique_ptr<util::Compressor>   compressor_;
     uint64_t                            block_index_{ 0 };
+    format::FileHeader                  file_header_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

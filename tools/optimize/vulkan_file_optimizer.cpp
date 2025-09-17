@@ -428,6 +428,88 @@ bool VulkanFileOptimizer::ProcessFixDeviceAddressCommand(const format::FixDevice
     return true;
 }
 
+bool VulkanFileOptimizer::ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header)
+{
+    uint64_t                index                 = GetCurrentBlockIndex();
+    uint64_t                parameter_buffer_size = 0;
+    encode::ParameterBuffer buffer;
+    bool                    delete_current_call = false;
+
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_pre_calls;
+    std::vector<std::unique_ptr<util::CallModifierBase::NewCallData>> new_post_calls;
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        modifier->SetCurrentBlockIndex(index);
+    }
+
+    parameter_buffer_size = header.num_of_locations * sizeof(format::ShaderHandleLocationInfo);
+    bool success =
+        ReadParameterBuffer(static_cast<size_t>(header.num_of_locations * sizeof(format::ShaderHandleLocationInfo)));
+
+    if (success)
+    {
+        for (auto& modifier : optimization_data_->modifiers)
+        {
+            modifier->SetParameterBuffer(&buffer);
+            decoder.AddConsumer(modifier.get());
+            decoder.DispatchFixShaderGroupHandleCommand(
+                header, reinterpret_cast<const format::ShaderHandleLocationInfo*>(GetParameterBuffer().data()));
+            decoder.RemoveConsumer(modifier.get());
+            modifier->AppendPreCalls(new_pre_calls);
+            modifier->AppendPostCalls(new_post_calls);
+        }
+    }
+    else
+    {
+        parameter_buffer_size = 0;
+        HandleBlockReadError(kErrorReadingBlockData, "Failed to read fix shader group handle meta-data block");
+        return false;
+    }
+
+    for (auto& modifier : optimization_data_->modifiers)
+    {
+        delete_current_call |= modifier->GetDeleteCurrentCall();
+    }
+
+    for (auto& new_call : new_pre_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+                WriteFunctionCall(new_call->call_id, new_call->thread_id, &(new_call->parameter_buffer));
+                break;
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PreCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (!delete_current_call)
+    {
+        WriteBytes(&header, sizeof(header));
+        WriteBytes(GetParameterBuffer().data(), parameter_buffer_size);
+    }
+
+    for (auto& new_call : new_post_calls)
+    {
+        switch (new_call->type)
+        {
+            case util::CallModifierBase::NewCallDataType::MetaDataCall:
+                WriteMetaCommand(&(new_call->parameter_buffer));
+                break;
+            case util::CallModifierBase::NewCallDataType::ApiCall:
+            default:
+                GFXRECON_LOG_ERROR("Unprocessed PostCall NewCallDataType %d", new_call->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    return true;
+}
+
 bool VulkanFileOptimizer::ProcessInitBufferCommand(const format::InitBufferCommandHeader& header)
 {
     if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())

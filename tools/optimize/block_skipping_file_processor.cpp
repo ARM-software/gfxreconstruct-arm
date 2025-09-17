@@ -25,6 +25,7 @@
 
 #include "decode/decode_allocator.h"
 #include "format/format_util.h"
+#include "format/format_arm.h"
 #include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -120,6 +121,8 @@ bool BlockSkippingFileProcessor::ProcessBlocks()
                         format::ApiFamilyId::ApiFamily_None, format::MetaDataType::kUnknownMetaDataType);
 
                     success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
+
+                    meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
 
                     if (success)
                     {

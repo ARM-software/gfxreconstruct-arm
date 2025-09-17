@@ -175,6 +175,7 @@ class FileProcessor
     Error                    error_state_;
     uint64_t                 bytes_read_;
     bool                     capture_uses_frame_markers_;
+    format::FileHeader       file_header_;
 
     /// @brief Incremented at the end of every block successfully processed.
     uint64_t block_index_;

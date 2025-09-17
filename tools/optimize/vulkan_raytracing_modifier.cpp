@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "format/format.h"
+#include "format/format_arm.h"
 #include "tools/optimize/vulkan_optimize_options.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
@@ -364,7 +365,7 @@ void VulkanRayTracingModifier::WriteFixShaderGroupHandleCmd(format::HandleId    
     fix_cmd.meta_header.block_header.size =
         format::GetMetaDataBlockBaseSize(fix_cmd) + (num_of_locations * sizeof(format::ShaderHandleLocationInfo));
     fix_cmd.meta_header.meta_data_id = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
-                                                              format::MetaDataType::kFixShaderGroupHandleCommand);
+                                                              format::arm::MetaDataType::kFixShaderGroupHandleCommand);
     fix_cmd.relation_id              = relation_id;
     fix_cmd.num_of_locations         = num_of_locations;
 

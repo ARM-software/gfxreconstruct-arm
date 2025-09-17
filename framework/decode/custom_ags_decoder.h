@@ -63,8 +63,8 @@ class AgsDecoder : public ApiDecoder
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos)
     {}
-    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                  const format::ShaderHandleLocationInfo*          infos)
+    virtual void DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                     const format::ShaderHandleLocationInfo*          infos)
     {}
     virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
                                                   const format::DescriptorDataLocationInfo*     infos) override

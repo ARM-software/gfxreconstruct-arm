@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "format/format.h"
+#include "format/format_arm.h"
 #include "tools/optimize/vulkan_optimize_options.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
@@ -71,8 +72,8 @@ void VulkanDescriptorBufferModifier::WriteFixDescriptorDataCmd(format::HandleId 
     fix_cmd_header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
     fix_cmd_header.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(fix_cmd_header) +
                                                    num_of_locations * sizeof(format::DescriptorDataLocationInfo);
-    fix_cmd_header.meta_header.meta_data_id =
-        format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kFixDescriptorDataCommand);
+    fix_cmd_header.meta_header.meta_data_id = format::MakeMetaDataId(
+        format::ApiFamilyId::ApiFamily_Vulkan, format::arm::MetaDataType::kFixDescriptorDataCommand);
     fix_cmd_header.memory_id        = memory_id;
     fix_cmd_header.num_of_locations = num_of_locations;
 

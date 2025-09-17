@@ -93,8 +93,8 @@ class ApiDecoder
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) = 0;
 
-    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                  const format::ShaderHandleLocationInfo*          infos) = 0;
+    virtual void DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                     const format::ShaderHandleLocationInfo*          infos) = 0;
 
     virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
                                                   const format::DescriptorDataLocationInfo*     info) = 0;

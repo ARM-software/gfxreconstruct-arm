@@ -23,6 +23,7 @@
 */
 
 #include "encode/capture_settings.h"
+#include "format/format_arm.h"
 #include <string>
 #include PROJECT_VERSION_HEADER_FILE
 
@@ -1365,8 +1366,8 @@ void CommonCaptureManager::WriteFileHeader(util::FileOutputStream* file_stream)
 
     format::FileHeader file_header;
     file_header.fourcc        = GFXRECON_FOURCC;
-    file_header.major_version = 0;
-    file_header.minor_version = 0;
+    file_header.major_version = GFXRECON_TRACE_VERSION_MAJOR;
+    file_header.minor_version = GFXRECON_TRACE_VERSION_MINOR;
     file_header.num_options   = static_cast<uint32_t>(option_list.size());
 
     CombineAndWriteToFile({ { &file_header, sizeof(file_header) },
@@ -1670,7 +1671,7 @@ void CommonCaptureManager::WriteFixShadowMemoryCmd(format::ApiFamilyId api_famil
         fix_cmd.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
         fix_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(fix_cmd);
         fix_cmd.meta_header.meta_data_id =
-            format::MakeMetaDataId(api_family, format::MetaDataType::kFixShadowMemoryCommand);
+            format::MakeMetaDataId(api_family, format::arm::MetaDataType::kFixShadowMemoryCommand);
         fix_cmd.thread_id     = thread_data->thread_id_;
         fix_cmd.memory_id     = memory_id;
         fix_cmd.map_memory    = map_memory;
