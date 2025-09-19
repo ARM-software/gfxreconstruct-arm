@@ -22,6 +22,7 @@
 
 #include "file_transformer.h"
 
+#include PROJECT_VERSION_HEADER_FILE
 #include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
@@ -170,7 +171,7 @@ bool FileTransformer::Process()
 
 bool FileTransformer::ProcessFileHeader()
 {
-    bool               success = false;
+    bool success = false;
 
     if (ReadBytes(&file_header_, sizeof(file_header_)))
     {
@@ -204,8 +205,14 @@ bool FileTransformer::ProcessFileHeader()
 
             if (success)
             {
+                format::FileHeader modified_header = file_header_;
+
+                // Set the output trace version to the optimizer version.
+                modified_header.major_version = GFXRECON_TRACE_VERSION_MAJOR;
+                modified_header.minor_version = GFXRECON_TRACE_VERSION_MINOR;
+
                 // Write header to output file.
-                success = WriteFileHeader(file_header_, file_options_);
+                success = WriteFileHeader(modified_header, file_options_);
             }
         }
         else
