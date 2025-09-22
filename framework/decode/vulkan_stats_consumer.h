@@ -32,21 +32,6 @@
 #include "generated/generated_vulkan_consumer.h"
 #include "util/defines.h"
 
-// vulkan_hash.hpp includes <ciso646>, which is deprecated on C++17 and
-// is a warning on gcc 15, treated as error in our build.  So silence that
-// deprecation for now.  TODO remove the dependency on deprecated header.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcpp"
-#endif
-
-#include "vulkan/vulkan_hash.hpp"
-#include "vulkan/vulkan_structs.hpp"
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
 #include "util/platform.h"
 
 #include "vulkan/vulkan.h"
@@ -474,7 +459,21 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
         if (!pCreateInfo->IsNull())
         {
             const auto& extent = pCreateInfo->GetPointer()->imageExtent;
-            resolutions_.insert(extent);
+
+            bool res_found = false;
+            for (const VkExtent2D& res : resolutions_)
+            {
+                if (res.width == extent.width && res.height == extent.height)
+                {
+                    res_found = true;
+                    break;
+                }
+            }
+
+            if (!res_found)
+            {
+                resolutions_.push_back(extent);
+            }
         }
     }
 
@@ -492,7 +491,21 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
             for (uint32_t i = 0; i < swapchainCount; ++i)
             {
                 const auto& extent = pCreateInfos->GetPointer()[i].imageExtent;
-                resolutions_.insert(extent);
+
+                bool res_found = false;
+                for (const VkExtent2D& res : resolutions_)
+                {
+                    if (res.width == extent.width && res.height == extent.height)
+                    {
+                        res_found = true;
+                        break;
+                    }
+                }
+
+                if (!res_found)
+                {
+                    resolutions_.push_back(extent);
+                }
             }
         }
     }
@@ -529,7 +542,7 @@ class VulkanStatsConsumer : public gfxrecon::decode::VulkanConsumer
     std::vector<std::string> operation_annotation_datas_;
     uint64_t                 annotation_count_{ 0 };
 
-    std::unordered_set<vk::Extent2D> resolutions_;
+    std::vector<VkExtent2D> resolutions_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

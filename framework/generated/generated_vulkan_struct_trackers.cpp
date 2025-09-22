@@ -5203,232 +5203,6 @@ VkVideoEncodeH264GopRemainingFrameInfoKHR* TrackStruct(const VkVideoEncodeH264Go
     return unwrapped_struct;
 }
 
-VkVideoEncodeH265CapabilitiesKHR* TrackStruct(const VkVideoEncodeH265CapabilitiesKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265CapabilitiesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265SessionCreateInfoKHR* TrackStruct(const VkVideoEncodeH265SessionCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265SessionCreateInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265QualityLevelPropertiesKHR* TrackStruct(const VkVideoEncodeH265QualityLevelPropertiesKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265QualityLevelPropertiesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265SessionParametersAddInfoKHR* TrackStruct(const VkVideoEncodeH265SessionParametersAddInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265SessionParametersAddInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-    if (unwrapped_struct->pStdVPSs)
-    {
-        unwrapped_struct->pStdVPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdVPSs, unwrapped_struct->stdVPSCount, unwrap_memory);
-    }
-    if (unwrapped_struct->pStdSPSs)
-    {
-        unwrapped_struct->pStdSPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdSPSs, unwrapped_struct->stdSPSCount, unwrap_memory);
-    }
-    if (unwrapped_struct->pStdPPSs)
-    {
-        unwrapped_struct->pStdPPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdPPSs, unwrapped_struct->stdPPSCount, unwrap_memory);
-    }
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265SessionParametersCreateInfoKHR* TrackStruct(const VkVideoEncodeH265SessionParametersCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265SessionParametersCreateInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265SessionParametersGetInfoKHR* TrackStruct(const VkVideoEncodeH265SessionParametersGetInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265SessionParametersGetInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265SessionParametersFeedbackInfoKHR* TrackStruct(const VkVideoEncodeH265SessionParametersFeedbackInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265SessionParametersFeedbackInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265NaluSliceSegmentInfoKHR* TrackStruct(const VkVideoEncodeH265NaluSliceSegmentInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265NaluSliceSegmentInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265PictureInfoKHR* TrackStruct(const VkVideoEncodeH265PictureInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265PictureInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-    if (unwrapped_struct->pNaluSliceSegmentEntries)
-    {
-        unwrapped_struct->pNaluSliceSegmentEntries = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pNaluSliceSegmentEntries, unwrapped_struct->naluSliceSegmentEntryCount, unwrap_memory);
-    }
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265DpbSlotInfoKHR* TrackStruct(const VkVideoEncodeH265DpbSlotInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265DpbSlotInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265ProfileInfoKHR* TrackStruct(const VkVideoEncodeH265ProfileInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265ProfileInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265RateControlInfoKHR* TrackStruct(const VkVideoEncodeH265RateControlInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265RateControlInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265RateControlLayerInfoKHR* TrackStruct(const VkVideoEncodeH265RateControlLayerInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265RateControlLayerInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoEncodeH265GopRemainingFrameInfoKHR* TrackStruct(const VkVideoEncodeH265GopRemainingFrameInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoEncodeH265GopRemainingFrameInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
 VkVideoDecodeH264ProfileInfoKHR* TrackStruct(const VkVideoDecodeH264ProfileInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -6167,112 +5941,6 @@ VkPhysicalDeviceShaderClockFeaturesKHR* TrackStruct(const VkPhysicalDeviceShader
     return unwrapped_struct;
 }
 
-VkVideoDecodeH265ProfileInfoKHR* TrackStruct(const VkVideoDecodeH265ProfileInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265ProfileInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265CapabilitiesKHR* TrackStruct(const VkVideoDecodeH265CapabilitiesKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265CapabilitiesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265SessionParametersAddInfoKHR* TrackStruct(const VkVideoDecodeH265SessionParametersAddInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265SessionParametersAddInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-    if (unwrapped_struct->pStdVPSs)
-    {
-        unwrapped_struct->pStdVPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdVPSs, unwrapped_struct->stdVPSCount, unwrap_memory);
-    }
-    if (unwrapped_struct->pStdSPSs)
-    {
-        unwrapped_struct->pStdSPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdSPSs, unwrapped_struct->stdSPSCount, unwrap_memory);
-    }
-    if (unwrapped_struct->pStdPPSs)
-    {
-        unwrapped_struct->pStdPPSs = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pStdPPSs, unwrapped_struct->stdPPSCount, unwrap_memory);
-    }
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265SessionParametersCreateInfoKHR* TrackStruct(const VkVideoDecodeH265SessionParametersCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265SessionParametersCreateInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265PictureInfoKHR* TrackStruct(const VkVideoDecodeH265PictureInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265PictureInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-    if (unwrapped_struct->pSliceSegmentOffsets)
-    {
-        unwrapped_struct->pSliceSegmentOffsets = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pSliceSegmentOffsets, unwrapped_struct->sliceSegmentCount, unwrap_memory);
-    }
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265DpbSlotInfoKHR* TrackStruct(const VkVideoDecodeH265DpbSlotInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265DpbSlotInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
 VkFragmentShadingRateAttachmentInfoKHR* TrackStruct(const VkFragmentShadingRateAttachmentInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -6796,6 +6464,21 @@ VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR* TrackStruct(const VkPhysicalD
     }
 
     VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceShaderUntypedPointersFeaturesKHR* TrackStruct(const VkPhysicalDeviceShaderUntypedPointersFeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceShaderUntypedPointersFeaturesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
 
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
@@ -8059,21 +7742,6 @@ VkPhysicalDeviceLayeredApiVulkanPropertiesKHR* TrackStruct(const VkPhysicalDevic
     return unwrapped_struct;
 }
 
-VkPhysicalDeviceMaintenance8FeaturesKHR* TrackStruct(const VkPhysicalDeviceMaintenance8FeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkPhysicalDeviceMaintenance8FeaturesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
 VkMemoryBarrierAccessFlags3KHR* TrackStruct(const VkMemoryBarrierAccessFlags3KHR* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -8082,6 +7750,21 @@ VkMemoryBarrierAccessFlags3KHR* TrackStruct(const VkMemoryBarrierAccessFlags3KHR
     }
 
     VkMemoryBarrierAccessFlags3KHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceMaintenance8FeaturesKHR* TrackStruct(const VkPhysicalDeviceMaintenance8FeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceMaintenance8FeaturesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
 
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
@@ -8127,66 +7810,6 @@ VkQueueFamilyOwnershipTransferPropertiesKHR* TrackStruct(const VkQueueFamilyOwne
     }
 
     VkQueueFamilyOwnershipTransferPropertiesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkPhysicalDeviceVideoMaintenance2FeaturesKHR* TrackStruct(const VkPhysicalDeviceVideoMaintenance2FeaturesKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkPhysicalDeviceVideoMaintenance2FeaturesKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH264InlineSessionParametersInfoKHR* TrackStruct(const VkVideoDecodeH264InlineSessionParametersInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH264InlineSessionParametersInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeH265InlineSessionParametersInfoKHR* TrackStruct(const VkVideoDecodeH265InlineSessionParametersInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeH265InlineSessionParametersInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkVideoDecodeAV1InlineSessionParametersInfoKHR* TrackStruct(const VkVideoDecodeAV1InlineSessionParametersInfoKHR* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkVideoDecodeAV1InlineSessionParametersInfoKHR* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
 
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
@@ -17069,34 +16692,6 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkVideoEncodeH264RateControlLayerInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_GOP_REMAINING_FRAME_INFO_KHR:
             return TrackStruct(reinterpret_cast<const VkVideoEncodeH264GopRemainingFrameInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_CAPABILITIES_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265CapabilitiesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_CREATE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265SessionCreateInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_QUALITY_LEVEL_PROPERTIES_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265QualityLevelPropertiesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265SessionParametersAddInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_PARAMETERS_CREATE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265SessionParametersCreateInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_PARAMETERS_GET_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265SessionParametersGetInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_PARAMETERS_FEEDBACK_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265SessionParametersFeedbackInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_NALU_SLICE_SEGMENT_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265NaluSliceSegmentInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_PICTURE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265PictureInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_DPB_SLOT_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265DpbSlotInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_PROFILE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265ProfileInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_RATE_CONTROL_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265RateControlInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_RATE_CONTROL_LAYER_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265RateControlLayerInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_GOP_REMAINING_FRAME_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoEncodeH265GopRemainingFrameInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PROFILE_INFO_KHR:
             return TrackStruct(reinterpret_cast<const VkVideoDecodeH264ProfileInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_CAPABILITIES_KHR:
@@ -17189,18 +16784,6 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkPhysicalDevicePortabilitySubsetPropertiesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceShaderClockFeaturesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PROFILE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265ProfileInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_CAPABILITIES_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265CapabilitiesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265SessionParametersAddInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_CREATE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265SessionParametersCreateInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PICTURE_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265PictureInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_DPB_SLOT_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265DpbSlotInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR:
             return TrackStruct(reinterpret_cast<const VkFragmentShadingRateAttachmentInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PIPELINE_FRAGMENT_SHADING_RATE_STATE_CREATE_INFO_KHR:
@@ -17269,6 +16852,8 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceShaderUntypedPointersFeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR:
@@ -17429,24 +17014,16 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceLayeredApiPropertiesListKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_VULKAN_PROPERTIES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceLayeredApiVulkanPropertiesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR:
-            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceMaintenance8FeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_MEMORY_BARRIER_ACCESS_FLAGS_3_KHR:
             return TrackStruct(reinterpret_cast<const VkMemoryBarrierAccessFlags3KHR*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceMaintenance8FeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceMaintenance9FeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_PROPERTIES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceMaintenance9PropertiesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_QUEUE_FAMILY_OWNERSHIP_TRANSFER_PROPERTIES_KHR:
             return TrackStruct(reinterpret_cast<const VkQueueFamilyOwnershipTransferPropertiesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_MAINTENANCE_2_FEATURES_KHR:
-            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceVideoMaintenance2FeaturesKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_INLINE_SESSION_PARAMETERS_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH264InlineSessionParametersInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_INLINE_SESSION_PARAMETERS_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeH265InlineSessionParametersInfoKHR*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_INLINE_SESSION_PARAMETERS_INFO_KHR:
-            return TrackStruct(reinterpret_cast<const VkVideoDecodeAV1InlineSessionParametersInfoKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLAMP_ZERO_ONE_FEATURES_KHR:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceDepthClampZeroOneFeaturesKHR*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_KHR:

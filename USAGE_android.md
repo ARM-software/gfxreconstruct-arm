@@ -276,6 +276,18 @@ adb shell setprop debug.vulkan.layer.1 VK_LAYER_LUNARG_gfxreconstruct
 adb shell setprop debug.gfxrecon.capture_process_name ${Package name}
 ```
 
+You can also restrict the layer to a specific application using these three steps:
+1. Push the GFXReconstruct capture layer to `/data/local/debug/vulkan` directory.
+2. Enable the global layer.
+3. Set the `capture_process_name` capture option.
+
+For example like this:
+```
+adb shell setprop debug.vulkan.layer.1 VK_LAYER_LUNARG_gfxreconstruct
+adb shell setprop debug.gfxrecon.capture_process_name ${Package name}
+```
+
+
 If you attempt to capture and nothing is happening, check the `logcat` output.
 A successful run of GFXReconstruct should show a message like the following:
 

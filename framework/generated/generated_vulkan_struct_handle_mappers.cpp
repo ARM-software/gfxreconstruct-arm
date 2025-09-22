@@ -2088,11 +2088,6 @@ void MapStructHandles(Decoded_VkDataGraphPipelineShaderModuleCreateInfoARM* wrap
     {
         VkDataGraphPipelineShaderModuleCreateInfoARM* value = wrapper->decoded_value;
 
-        if (wrapper->pNext)
-        {
-            MapPNextStructHandles(wrapper->pNext, object_info_table);
-        }
-
         value->module = handle_mapping::MapHandle<VulkanShaderModuleInfo>(wrapper->module, object_info_table, &CommonObjectInfoTable::GetVkShaderModuleInfo);
     }
 }
