@@ -1071,7 +1071,7 @@ void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT ca
         }
 
         if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == D3D12_ERROR_INVALID_REDIST) ||
-            (replay_result == DXGI_ERROR_DEVICE_RESET))
+            (replay_result == DXGI_ERROR_DEVICE_RESET) || (replay_result == DXGI_ERROR_DEVICE_HUNG))
         {
             GFXRECON_LOG_FATAL(
                 "%s returned %s, which does not match the value returned at capture %s. Replay cannot continue.",
@@ -4512,6 +4512,20 @@ void Dx12ReplayConsumerBase::Process_ID3D12Device_CheckFeatureSupport(format::Ha
     if ((replay_object != nullptr) && (replay_feature_data != nullptr))
     {
         auto replay_result = replay_object->CheckFeatureSupport(feature, replay_feature_data, feature_data_size);
+
+        if (feature == D3D12_FEATURE_D3D12_OPTIONS5)
+        {
+            auto capture_features = reinterpret_cast<const D3D12_FEATURE_DATA_D3D12_OPTIONS5*>(capture_feature_data);
+            auto replay_features  = reinterpret_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS5*>(replay_feature_data);
+
+            if ((capture_features->RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) &&
+                (replay_features->RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED))
+            {
+                GFXRECON_LOG_ERROR("The capture device supports DirectX Raytracing, but the replay device does not "
+                                   "support DirectX Raytracing. The replay may fail.");
+            }
+        }
+
         CheckReplayResult("ID3D12Device::CheckFeatureSupport", original_result, replay_result);
     }
 }

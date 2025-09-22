@@ -173,7 +173,7 @@ class Dx12JsonConsumerBodyGenerator(Dx12JsonConsumerHeaderGenerator, Dx12JsonCom
         ## Special case for pointers to flag sets defined by enums:
         ## (easier than having pointer decoder versions of each flagset type's FieldToString)
         if value_info.is_pointer and function_name.startswith("FieldToJson_"):
-            src = "*" + src + "->GetPointer()"
+            src = "({0} && {0}->GetPointer() != nullptr) ? (*{0}->GetPointer()) : NULL".format(src)
         field_to_json = '{0}({1}["{2}"], {3}, {4});'.format(function_name, parent_name, value_info.name, src, options_name)
         if "anon-union" in value_info.base_type:
             field_to_json += "// [anon-union] "

@@ -519,7 +519,7 @@ void Dx12JsonConsumer::Process_ID3D12Resource_GetHeapProperties(
     nlohmann::ordered_json& args = method[format::kNameArgs];
     {
         FieldToJson(args["pHeapProperties"], pHeapProperties, options);
-        FieldToJson_D3D12_HEAP_FLAGS(args["pHeapFlags"], *pHeapFlags->GetPointer(), options);
+        FieldToJson_D3D12_HEAP_FLAGS(args["pHeapFlags"], (pHeapFlags && pHeapFlags->GetPointer() != nullptr) ? (*pHeapFlags->GetPointer()) : NULL, options);
     }
     writer_->WriteBlockEnd();
 }
@@ -1863,7 +1863,7 @@ void Dx12JsonConsumer::Process_ID3D12CommandQueue_UpdateTileMappings(
         FieldToJson(args["pResourceRegionSizes"], pResourceRegionSizes, options);
         FieldToJson(args["pHeap"], pHeap, options);
         FieldToJson(args["NumRanges"], NumRanges, options);
-        FieldToJson_D3D12_TILE_RANGE_FLAGS(args["pRangeFlags"], *pRangeFlags->GetPointer(), options);
+        FieldToJson_D3D12_TILE_RANGE_FLAGS(args["pRangeFlags"], (pRangeFlags && pRangeFlags->GetPointer() != nullptr) ? (*pRangeFlags->GetPointer()) : NULL, options);
         FieldToJson(args["pHeapRangeStartOffsets"], pHeapRangeStartOffsets, options);
         FieldToJson(args["pRangeTileCounts"], pRangeTileCounts, options);
         FieldToJson_D3D12_TILE_MAPPING_FLAGS(args["Flags"], Flags, options);
