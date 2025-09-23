@@ -10,31 +10,39 @@ def is_auto_mergeable(commit: str) -> bool:
         subprocess.run(['git', 'merge', '--abort'], capture_output=True)
         return False
     else:
-        subprocess.run(['git', 'reset', '--hard', 'HEAD~1'], capture_output=True)
+        if out != ['Already up to date.']:
+            subprocess.run(['git', 'reset', '--hard', 'HEAD~1'], capture_output=True)
         return True
 
 def main() -> int:
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
-        '-b', '--branch',
-        help='Branch to merge into the current branch.',
-        required=True,
-        dest='branch'
+        'commit',
+        help='Commit hash or alias (like FETCH_HEAD, a tag or the tip of a local branch) to merge into the current branch.',
+        metavar='<commit>'
     )
-
     args = arg_parser.parse_args()
 
-    if subprocess.run(['git', 'diff'], capture_output=True).stdout.decode():
-        print('The working directory has uncomitted changes. Aborting auto-merge.')
+    if subprocess.run(['git', 'cat-file', '-t', args.commit], capture_output=True).stdout.decode().strip() != 'commit':
+        print(args.commit, 'is not a valid commit. Aborting.')
         return -1
 
-    if is_auto_mergeable(args.branch):
-        subprocess.run(['git', 'merge', '--no-edit', args.branch], capture_output=True)
-        print('Successfully merged all commits from', args.branch)
+    if subprocess.run(['git', 'diff'], capture_output=True).stdout.decode().strip():
+        print('The working directory has uncomitted changes. Aborting.')
+        return -1
+
+    out = subprocess.run(['git', 'merge', '--no-edit', args.commit], capture_output=True).stdout.decode().strip().split('\n')
+    if out[-1] == 'Automatic merge failed; fix conflicts and then commit the result.':
+        subprocess.run(['git', 'merge', '--abort'], capture_output=True)
+    elif out == ['Already up to date.']:
+        print(args.commit, 'has already been merged in the current working directory. Aborting.')
+        return -1
+    else:
+        print('Successfully merged all commits from', args.commit)
         return 0
 
-    upstream_commits = subprocess.run(['git', 'rev-list', args.branch], capture_output=True).stdout.decode().strip().split('\n')
+    upstream_commits = subprocess.run(['git', 'rev-list', args.commit], capture_output=True).stdout.decode().strip().split('\n')
     current_merge_commits = subprocess.run(['git', 'rev-list', '--merges', 'HEAD'], capture_output=True).stdout.decode().strip().split('\n')
 
     last_common_commit = str()
@@ -44,23 +52,24 @@ def main() -> int:
             last_common_commit = parent_commits[1]
             break
 
-    commits_to_merge = subprocess.run(['git', 'rev-list', last_common_commit + '..' + args.branch], capture_output=True).stdout.decode().strip().split('\n')
+    commits_to_merge = subprocess.run(['git', 'rev-list', last_common_commit + '..' + args.commit], capture_output=True).stdout.decode().strip().split('\n')
     commits_to_merge.reverse()
 
     if not is_auto_mergeable(commits_to_merge[0]):
         print(f'Cannot merge any commit automatically ({len(commits_to_merge)} commits to merge). Next commit needs to be merged manually: {commits_to_merge[0]}')
-    else:
-        a = 0
-        b = len(commits_to_merge) - 1
+        return -1
+
+    a = 0
+    b = len(commits_to_merge) - 1
+    i = (a + b) // 2
+    while i != a:
+        if is_auto_mergeable(commits_to_merge[i]):
+            a = i
+        else:
+            b = i
         i = (a + b) // 2
-        while i != a:
-            if is_auto_mergeable(commits_to_merge[i]):
-                a = i
-            else:
-                b = i
-            i = (a + b) // 2
-        subprocess.run(['git', 'merge', '--no-edit', commits_to_merge[i]], capture_output=True)
-        print(f'Successfully merged {i+1}/{len(commits_to_merge)} commits. Next commit needs to be merged manually: {commits_to_merge[i+1]}')
+    subprocess.run(['git', 'merge', '--no-edit', commits_to_merge[i]], capture_output=True)
+    print(f'Successfully merged {i+1}/{len(commits_to_merge)} commits. Next commit needs to be merged manually: {commits_to_merge[i+1]}')
 
     return 0
 
