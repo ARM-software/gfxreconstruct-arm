@@ -1049,6 +1049,20 @@ void Dx12ReplayConsumerBase::LogFrameDebugInfo()
 
 void Dx12ReplayConsumerBase::CheckReplayResult(const char* call_name, HRESULT capture_result, HRESULT replay_result)
 {
+    if ((options_.enable_debug_device_lost) && (replay_result == DXGI_ERROR_DEVICE_REMOVED))
+    {
+        for (const auto& [id, device] : active_devices_)
+        {
+            auto device_ptr = reinterpret_cast<ID3D12Device*>(const_cast<void*>(device));
+
+            HRESULT reason = device_ptr->GetDeviceRemovedReason();
+            if (reason != S_OK)
+            {
+                gfxrecon::graphics::dx12::AnalyzeDeviceRemoved(device_ptr);
+            }
+        }
+    }
+
     if (capture_result != replay_result)
     {
         if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == E_OUTOFMEMORY))
@@ -1238,6 +1252,8 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
             {
                 acceleration_structure_builders_.erase(device_ptr.GetInterfacePtr());
             }
+
+            active_devices_.erase(object_id);
         }
 
         if ((replay_object_info->extra_info != nullptr) &&
@@ -1714,6 +1730,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideD3D12CreateDevice(HRESULT               
         format::HandleId device_id     = *(device->GetPointer());
         void*            device_handle = *(device->GetHandlePointer());
         InitializeResourceAllocator(adapter, device_handle, device);
+        active_devices_.emplace(device_id, device_handle);
     }
 
     return replay_result;
@@ -1742,6 +1759,7 @@ HRESULT Dx12ReplayConsumerBase::OverrideD3D12DeviceFactoryCreateDevice(DxObjectI
         format::HandleId device_id     = *(device->GetPointer());
         void*            device_handle = *(device->GetHandlePointer());
         InitializeResourceAllocator(adapter, device_handle, device);
+        active_devices_.emplace(device_id, device_handle);
     }
 
     return replay_result;
@@ -3241,25 +3259,6 @@ void Dx12ReplayConsumerBase::OverrideExecuteCommandLists(DxObjectInfo*          
     if (!is_complete)
     {
         replay_object->ExecuteCommandLists(num_command_lists, command_lists->GetHandlePointer());
-        ReadDebugMessages();
-
-        if (options_.enable_debug_device_lost)
-        {
-            auto          command_queue_info = GetExtraInfo<D3D12CommandQueueInfo>(replay_object_info);
-            auto          device_id          = command_queue_info->parent_id;
-            DxObjectInfo* info               = GetObjectInfo(device_id);
-
-            if (info && info->object)
-            {
-                auto device_ptr = static_cast<ID3D12Device*>(info->object);
-
-                HRESULT reason = device_ptr->GetDeviceRemovedReason();
-                if (reason != S_OK)
-                {
-                    gfxrecon::graphics::dx12::AnalyzeDeviceRemoved(device_ptr);
-                }
-            }
-        }
     }
 
     if (resource_value_mapper_ != nullptr)

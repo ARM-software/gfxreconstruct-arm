@@ -1460,6 +1460,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     // map dx12 acceleration structure builders for each device
     std::unordered_map<const ID3D12Device*, std::unique_ptr<Dx12AccelerationStructureBuilder>>
         acceleration_structure_builders_;
+    std::unordered_map<format::HandleId, const void*> active_devices_;
 };
 
 GFXRECON_END_NAMESPACE(decode)
