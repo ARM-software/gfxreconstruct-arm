@@ -37,10 +37,13 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_modifier_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/buffer_writer.h
                     ${CMAKE_CURRENT_LIST_DIR}/buffer_writer.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/clock_cache.h
                     ${CMAKE_CURRENT_LIST_DIR}/compressor.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.h
                     ${CMAKE_CURRENT_LIST_DIR}/date_time.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/defines.h
+                    ${CMAKE_CURRENT_LIST_DIR}/file_input_stream.h
+                    ${CMAKE_CURRENT_LIST_DIR}/file_input_stream.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/file_output_stream.h
                     ${CMAKE_CURRENT_LIST_DIR}/file_output_stream.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/driver_info.h
