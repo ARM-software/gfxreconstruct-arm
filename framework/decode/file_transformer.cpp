@@ -22,6 +22,8 @@
 
 #include "file_transformer.h"
 
+#include PROJECT_VERSION_HEADER_FILE
+#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "util/platform.h"
@@ -169,18 +171,17 @@ bool FileTransformer::Process()
 
 bool FileTransformer::ProcessFileHeader()
 {
-    bool               success = false;
-    format::FileHeader file_header{};
+    bool success = false;
 
-    if (ReadBytes(&file_header, sizeof(file_header)))
+    if (ReadBytes(&file_header_, sizeof(file_header_)))
     {
-        success = format::ValidateFileHeader(file_header);
+        success = format::ValidateFileHeader(file_header_);
 
         if (success)
         {
-            file_options_.resize(file_header.num_options);
+            file_options_.resize(file_header_.num_options);
 
-            size_t option_data_size = file_header.num_options * sizeof(format::FileOptionPair);
+            size_t option_data_size = file_header_.num_options * sizeof(format::FileOptionPair);
 
             success = ReadBytes(file_options_.data(), option_data_size);
 
@@ -204,8 +205,14 @@ bool FileTransformer::ProcessFileHeader()
 
             if (success)
             {
+                format::FileHeader modified_header = file_header_;
+
+                // Set the output trace version to the optimizer version.
+                modified_header.major_version = GFXRECON_TRACE_VERSION_MAJOR;
+                modified_header.minor_version = GFXRECON_TRACE_VERSION_MINOR;
+
                 // Write header to output file.
-                success = WriteFileHeader(file_header, file_options_);
+                success = WriteFileHeader(modified_header, file_options_);
             }
         }
         else
@@ -425,8 +432,10 @@ bool FileTransformer::ReadCompressedParameterBuffer(size_t  compressed_buffer_si
             parameter_buffer_.resize(expected_uncompressed_size);
         }
 
-        size_t uncompressed_size = compressor_->Decompress(
-            compressed_buffer_size, compressed_parameter_buffer_, expected_uncompressed_size, &parameter_buffer_);
+        size_t uncompressed_size = compressor_->Decompress(compressed_buffer_size,
+                                                           compressed_parameter_buffer_.data(),
+                                                           expected_uncompressed_size,
+                                                           &parameter_buffer_);
         if ((0 < uncompressed_size) && (uncompressed_size == expected_uncompressed_size))
         {
             *uncompressed_buffer_size = uncompressed_size;
@@ -588,7 +597,8 @@ bool FileTransformer::ProcessMethodCall(const format::MethodCallHeader& header, 
 
 bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 {
-    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
+    auto meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_header.meta_data_id);
+    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_data_id);
 
     switch (meta_data_type)
     {
@@ -730,7 +740,12 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
         case format::MetaDataType::kCreateHardwareBufferCommand_deprecated:
         {
             format::CreateHardwareBufferCommandHeader header;
-            header.meta_header = meta_header;
+            header.meta_header.block_header.size = meta_header.block_header.size + sizeof(header) -
+                                                   sizeof(format::CreateHardwareBufferCommandHeader_deprecated);
+            header.meta_header.block_header.type = meta_header.block_header.type;
+            header.meta_header.meta_data_id      = format::MakeMetaDataId(
+                format::GetMetaDataApi(meta_header.meta_data_id), format::MetaDataType::kCreateHardwareBufferCommand);
+            header.device_id = format::kNullHandleId;
 
             uint32_t usage = 0;
 
@@ -980,10 +995,15 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 
             return false;
         }
-        case format::MetaDataType::kCreateHardwareBufferCommand:
+        case format::MetaDataType::kCreateHardwareBufferCommand_deprecated2:
         {
             format::CreateHardwareBufferCommandHeader header;
-            header.meta_header = meta_header;
+            header.meta_header.block_header.size = meta_header.block_header.size + sizeof(header) -
+                                                   sizeof(format::CreateHardwareBufferCommandHeader_deprecated2);
+            header.meta_header.block_header.type = meta_header.block_header.type;
+            header.meta_header.meta_data_id      = format::MakeMetaDataId(
+                format::GetMetaDataApi(meta_header.meta_data_id), format::MetaDataType::kCreateHardwareBufferCommand);
+            header.device_id = format::kNullHandleId;
 
             bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
             success      = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
@@ -1068,6 +1088,33 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 
             return false;
         }
+        case format::arm::MetaDataType::kFixDescriptorDataCommand:
+        {
+            format::FixDescriptorDataCommandHeader header;
+            header.meta_header = meta_header;
+            bool success       = ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success            = success && ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+            if (success)
+            {
+                return ProcessFixDescriptorDataCommand(header);
+            }
+            return false;
+        }
+        case format::arm::MetaDataType::kFixShadowMemoryCommand:
+        {
+            format::FixShadowMemoryCommand header;
+            header.meta_header = meta_header;
+            bool success       = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success            = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success            = success && ReadBytes(&header.map_memory, sizeof(header.map_memory));
+            success            = success && ReadBytes(&header.shadow_memory, sizeof(header.shadow_memory));
+            if (success)
+            {
+                return ProcessFixShadowMemoryCommand(header);
+            }
+            return false;
+        }
         case format::MetaDataType::kSetEnvironmentVariablesCommand:
         {
             format::SetEnvironmentVariablesCommand header;
@@ -1100,7 +1147,32 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 
             return false;
         }
-        case format::MetaDataType::kFixShaderGroupHandleCommand:
+
+        case format::MetaDataType::kCreateHardwareBufferCommand:
+        {
+            format::CreateHardwareBufferCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success      = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+            success      = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+            success      = success && ReadBytes(&header.format, sizeof(header.format));
+            success      = success && ReadBytes(&header.width, sizeof(header.width));
+            success      = success && ReadBytes(&header.height, sizeof(header.height));
+            success      = success && ReadBytes(&header.stride, sizeof(header.stride));
+            success      = success && ReadBytes(&header.usage, sizeof(header.usage));
+            success      = success && ReadBytes(&header.layers, sizeof(header.layers));
+            success      = success && ReadBytes(&header.planes, sizeof(header.planes));
+
+            if (success)
+            {
+                return ProcessCreateHardwareBufferCommand(header);
+            }
+
+            return false;
+        }
+        case format::arm::MetaDataType::kFixShaderGroupHandleCommand:
         {
             format::FixShaderGroupHandleCommandHeader header;
             header.meta_header = meta_header;
@@ -1115,19 +1187,31 @@ bool FileTransformer::ProcessMetaData(const format::MetaDataHeader& meta_header)
 
             return false;
         }
-        case format::MetaDataType::kInitTensorCommand:
+        case format::arm::MetaDataType::kInitTensorCommand:
         {
             format::InitTensorCommandHeader header;
             header.meta_header = meta_header;
-
-            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
-            success      = success && ReadBytes(&header.device_id, sizeof(header.device_id));
-            success      = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
-            success      = success && ReadBytes(&header.data_size, sizeof(header.data_size));
-
+            bool success       = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success            = success && ReadBytes(&header.device_id, sizeof(header.device_id));
+            success            = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
+            success            = success && ReadBytes(&header.data_size, sizeof(header.data_size));
             if (success)
             {
                 return ProcessInitTensorCommand(header);
+            }
+            return false;
+        }
+        case format::arm::MetaDataType::kFillMemoryResourceAddressCommand:
+        {
+            format::FillMemoryResourceAddressCommandHeader header;
+            header.meta_header = meta_header;
+
+            bool success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+            success      = success && ReadBytes(&header.resource_address_count, sizeof(header.resource_address_count));
+
+            if (success)
+            {
+                return ProcessFillMemoryResourceAddressCommand(header);
             }
 
             return false;
@@ -1641,6 +1725,38 @@ bool FileTransformer::ProcessFixDeviceAddressCommand(const format::FixDeviceAddr
 
     return true;
 }
+bool FileTransformer::ProcessFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
+bool FileTransformer::ProcessFixShadowMemoryCommand(const format::FixShadowMemoryCommand& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+
+    return true;
+}
 bool FileTransformer::ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header)
 {
     if (!WriteBytes(&header, sizeof(header)))
@@ -1689,7 +1805,24 @@ bool FileTransformer::ProcessFixShaderGroupHandleCommand(const format::FixShader
 
     return true;
 }
+
 bool FileTransformer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
+{
+    if (!WriteBytes(&header, sizeof(header)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write meta-data block header");
+        return false;
+    }
+    if (!CopyBytes(header.meta_header.block_header.size + sizeof(header.meta_header.block_header) - sizeof(header)))
+    {
+        HandleBlockCopyError(kErrorCopyingBlockData, "Failed to copy meta-data block data");
+        return false;
+    }
+    return true;
+}
+
+bool FileTransformer::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& header)
 {
     if (!WriteBytes(&header, sizeof(header)))
     {

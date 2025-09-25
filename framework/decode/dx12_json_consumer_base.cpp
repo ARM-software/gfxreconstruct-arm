@@ -179,6 +179,22 @@ void Dx12JsonConsumerBase::ProcessDx12RuntimeInfo(const format::Dx12RuntimeInfoC
     writer_->WriteBlockEnd();
 }
 
+void Dx12JsonConsumerBase::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& command_header, const uint8_t* data)
+{
+    const util::JsonOptions& json_options = writer_->GetOptions();
+    auto&                    jdata        = writer_->WriteMetaCommandStart("FillMemoryResourceAddressCommand");
+    FieldToJson(jdata["thread_id"], command_header.thread_id, json_options);
+    FieldToJson(jdata["resource_address_count"], command_header.resource_address_count, json_options);
+    // There are two blocks of values in data so we need to add together their sizes to know how big the blob to dump
+    // is:
+    const auto info_bytes = command_header.resource_address_count * sizeof(format::Dx12FillMemoryResourceAddressInfo);
+    RepresentBinaryFile(
+        *(this->writer_), jdata[format::kNameData], "fillmemoryresourceaddresscommand.bin", info_bytes, data);
+
+    writer_->WriteBlockEnd();
+}
+
 void Dx12JsonConsumerBase::Process_ID3D12Device_CheckFeatureSupport(format::HandleId object_id,
                                                                     HRESULT          original_result,
                                                                     D3D12_FEATURE    feature,

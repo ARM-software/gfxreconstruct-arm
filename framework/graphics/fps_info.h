@@ -59,7 +59,7 @@ class FpsInfo
     [[nodiscard]] uint64_t ShouldPreloadFrames(uint64_t current_frame) const;
 
   private:
-    uint64_t start_time_{};
+    uint64_t start_time_;
 
     int64_t replay_start_time_;
     int64_t replay_end_time_;

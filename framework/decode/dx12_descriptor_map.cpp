@@ -85,6 +85,49 @@ void Dx12DescriptorMap::GetGpuAddress(D3D12_GPU_DESCRIPTOR_HANDLE& descriptor, b
     }
 }
 
+uint64_t Dx12DescriptorMap::GetReplayGpuDescriptorBaseAddress(const uint64_t descriptor_ptr,
+                                                              const uint64_t capture_offset)
+{
+    if (descriptor_ptr == kNullGpuAddress)
+    {
+        return kNullGpuAddress;
+    }
+
+    auto entry = descriptor_gpu_addresses_.find(descriptor_ptr);
+    if (entry != descriptor_gpu_addresses_.end())
+    {
+        auto info = entry->second;
+        assert(info.capture_begin == entry->first);
+
+        auto type              = info.descriptor_type;
+        auto start_addr        = info.capture_begin;
+        auto capture_increment = (*info.capture_increments)[type];
+        auto replay_increment  = (*info.replay_increments)[type];
+        auto replay_addr       = info.replay_begin;
+
+        assert((capture_increment != 0) && (replay_increment != 0));
+
+        if (capture_offset != 0)
+        {
+            if (capture_increment == replay_increment)
+            {
+                replay_addr += capture_offset;
+            }
+            else
+            {
+                replay_addr += (capture_offset / capture_increment) * replay_increment;
+            }
+        }
+
+        return replay_addr;
+    }
+    else
+    {
+        GFXRECON_LOG_ERROR("Failed to find replay GPU descriptor base address for 0x%" PRIx64, descriptor_ptr);
+        return kNullGpuAddress;
+    }
+}
+
 void Dx12DescriptorMap::RemoveCpuDescriptorHeap(const size_t capture_cpu_addr_begin)
 {
     descriptor_cpu_addresses_.erase(capture_cpu_addr_begin);

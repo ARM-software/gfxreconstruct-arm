@@ -22,10 +22,10 @@
 # IN THE SOFTWARE.
 
 import sys
-from base_generator import BaseGenerator, BaseGeneratorOptions, write
+from vulkan_base_generator import *
 
 
-class VulkanStructTrackersBodyGeneratorOptions(BaseGeneratorOptions):
+class VulkanStructTrackersBodyGeneratorOptions(VulkanBaseGeneratorOptions):
     """Options for generating function definitions to track (deepcopy) Vulkan structs at API capture for trimming."""
 
     def __init__(
@@ -39,7 +39,7 @@ class VulkanStructTrackersBodyGeneratorOptions(BaseGeneratorOptions):
         protect_feature=True,
         extra_headers=[]
     ):
-        BaseGeneratorOptions.__init__(
+        VulkanBaseGeneratorOptions.__init__(
             self,
             blacklists,
             platform_types,
@@ -50,9 +50,15 @@ class VulkanStructTrackersBodyGeneratorOptions(BaseGeneratorOptions):
             protect_feature,
             extra_headers=extra_headers
         )
+        self.begin_end_file_data.specific_headers.extend((
+            'generated/generated_vulkan_struct_handle_wrappers.h',
+            'generated/generated_vulkan_struct_trackers.h',
+        ))
+        self.begin_end_file_data.namespaces.extend(('gfxrecon', 'encode', 'vulkan_trackers'))
+        self.begin_end_file_data.common_api_headers = []
 
 
-class VulkanStructTrackersBodyGenerator(BaseGenerator):
+class VulkanStructTrackersBodyGenerator(VulkanBaseGenerator):
     """VulkanStructTrackersHeaderGenerator - subclass of BaseGenerator.
     Generates C++ function definitions to track (deepcopy) Vulkan structs
     at API capture for trimming.
@@ -61,7 +67,7 @@ class VulkanStructTrackersBodyGenerator(BaseGenerator):
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
-        BaseGenerator.__init__(
+        VulkanBaseGenerator.__init__(
             self,
             err_file=err_file,
             warn_file=warn_file,
@@ -70,21 +76,6 @@ class VulkanStructTrackersBodyGenerator(BaseGenerator):
 
         # Map of typename to VkStructureType for each struct that is not an alias and has a VkStructureType associated
         self.struct_type_enums = dict()
-
-    def beginFile(self, gen_opts):
-        """Method override."""
-        BaseGenerator.beginFile(self, gen_opts)
-
-        write(
-            '#include "generated/generated_vulkan_struct_handle_wrappers.h"',
-            file=self.outFile
-        )
-        write('#include "generated/generated_vulkan_struct_trackers.h"', file=self.outFile)
-        self.newline()
-        write('GFXRECON_BEGIN_NAMESPACE(gfxrecon)', file=self.outFile)
-        write('GFXRECON_BEGIN_NAMESPACE(encode)', file=self.outFile)
-        write('GFXRECON_BEGIN_NAMESPACE(vulkan_trackers)', file=self.outFile)
-        self.newline()
 
     def endFile(self):
         """Method override."""
@@ -109,18 +100,14 @@ class VulkanStructTrackersBodyGenerator(BaseGenerator):
         self.newline()
         write('    return nullptr;', file=self.outFile)
         write('}', file=self.outFile)
-
         self.newline()
-        write('GFXRECON_END_NAMESPACE(vulkan_trackers)', file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(encode)', file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
 
         # Finish processing in superclass
-        BaseGenerator.endFile(self)
+        VulkanBaseGenerator.endFile(self)
 
     def genStruct(self, typeinfo, typename, alias):
         """Method override."""
-        BaseGenerator.genStruct(self, typeinfo, typename, alias)
+        VulkanBaseGenerator.genStruct(self, typeinfo, typename, alias)
 
         if alias:
             return

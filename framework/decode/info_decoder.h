@@ -90,8 +90,18 @@ class InfoDecoder : public ApiDecoder
                                                 const format::AddressLocationInfo*           infos) override
     {}
 
-    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                  const format::ShaderHandleLocationInfo*          infos) override
+    virtual void DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                     const format::ShaderHandleLocationInfo*          infos) override
+    {}
+
+    virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                  const format::DescriptorDataLocationInfo*     info) override
+    {}
+
+    virtual void DispatchFixShadowMemoryCommand(format::ThreadId thread_id,
+                                                format::HandleId memory_id,
+                                                uint64_t         map_memory,
+                                                uint64_t         shadow_memory) override
     {}
 
     virtual void DispatchResizeWindowCommand(format::ThreadId thread_id,
@@ -109,6 +119,7 @@ class InfoDecoder : public ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -181,13 +192,6 @@ class InfoDecoder : public ApiDecoder
                                            const uint8_t*   data) override
     {}
 
-    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
-                                           format::HandleId device_id,
-                                           format::HandleId tensor_id,
-                                           uint64_t         data_size,
-                                           const uint8_t*   data) override
-    {}
-
     virtual void DispatchInitImageCommand(format::ThreadId             thread_id,
                                           format::HandleId             device_id,
                                           format::HandleId             image_id,
@@ -210,6 +214,11 @@ class InfoDecoder : public ApiDecoder
 
     virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
                                                         const char*                             env_string) override;
+
+    virtual void
+    DispatchFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                             const uint8_t*                                        data) override
+    {}
 
   private:
     std::vector<InfoConsumer*> consumers_;

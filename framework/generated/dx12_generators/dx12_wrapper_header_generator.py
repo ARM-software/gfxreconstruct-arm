@@ -89,7 +89,9 @@ class Dx12WrapperHeaderGenerator(Dx12BaseGenerator):
             self.newline()
 
             for m in v.functions:
-                if self.is_required_function_data(m):
+                if self.is_required_function_data(m) and (
+                    not self.is_cmd_black_listed(m['name'])
+                ):
                     self.write_function_decl(m)
 
             for class_name, class_value in v.classes.items():
@@ -103,8 +105,6 @@ class Dx12WrapperHeaderGenerator(Dx12BaseGenerator):
 
         for name in self.class_names:
             if name not in self.class_parent_names:
-                final_class_names.append(name)
-            if name in self.PARENT_CLASSES_EXECPTION:
                 final_class_names.append(name)
 
         return final_class_names

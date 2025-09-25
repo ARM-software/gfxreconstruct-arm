@@ -262,6 +262,82 @@ struct Decoded_VkIndirectCommandsLayoutTokenEXT
     uint32_t                                offset;
 };
 
+struct Decoded_VkDescriptorDataEXT
+{
+    using struct_type = VkDescriptorDataEXT;
+
+    VkDescriptorDataEXT* decoded_value{ nullptr };
+
+    HandlePointerDecoder<VkSampler>                           pSampler;
+    StructPointerDecoder<Decoded_VkDescriptorImageInfo>*      pCombinedImageSampler{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorImageInfo>*      pInputAttachmentImage{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorImageInfo>*      pSampledImage{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorImageInfo>*      pStorageImage{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>* pUniformTexelBuffer{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>* pStorageTexelBuffer{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>* pUniformBuffer{ nullptr };
+    StructPointerDecoder<Decoded_VkDescriptorAddressInfoEXT>* pStorageBuffer{ nullptr };
+};
+
+struct Decoded_VkDescriptorGetInfoEXT
+{
+    using struct_type = VkDescriptorGetInfoEXT;
+
+    VkDescriptorGetInfoEXT* decoded_value{ nullptr };
+
+    PNextNode*                   pNext{ nullptr };
+    VkDescriptorType             decoded_type;
+    Decoded_VkDescriptorDataEXT* data{ nullptr };
+};
+
+struct Decoded_VkCopyMemoryToImageInfo
+{
+    using struct_type = VkCopyMemoryToImageInfo;
+
+    VkCopyMemoryToImageInfo* decoded_value{ nullptr };
+
+    PNextNode*                                         pNext{ nullptr };
+    format::HandleId                                   dstImage{ format::kNullHandleId };
+    StructPointerDecoder<Decoded_VkMemoryToImageCopy>* pRegions{ nullptr };
+};
+
+struct Decoded_VkMemoryToImageCopy
+{
+    using struct_type = VkMemoryToImageCopy;
+
+    VkMemoryToImageCopy* decoded_value{ nullptr };
+
+    PNextNode*                        pNext{ nullptr };
+    PointerDecoder<uint8_t>           pHostPointer;
+    Decoded_VkImageSubresourceLayers* imageSubresource{ nullptr };
+    Decoded_VkOffset3D*               imageOffset{ nullptr };
+    Decoded_VkExtent3D*               imageExtent{ nullptr };
+};
+
+struct Decoded_VkCopyImageToMemoryInfo
+{
+    using struct_type = VkCopyImageToMemoryInfo;
+
+    VkCopyImageToMemoryInfo* decoded_value{ nullptr };
+
+    PNextNode*                                         pNext{ nullptr };
+    format::HandleId                                   srcImage{ format::kNullHandleId };
+    StructPointerDecoder<Decoded_VkImageToMemoryCopy>* pRegions{ nullptr };
+};
+
+struct Decoded_VkImageToMemoryCopy
+{
+    using struct_type = VkImageToMemoryCopy;
+
+    VkImageToMemoryCopy* decoded_value{ nullptr };
+
+    PNextNode*                        pNext{ nullptr };
+    PointerDecoder<uint8_t>           pHostPointer;
+    Decoded_VkImageSubresourceLayers* imageSubresource{ nullptr };
+    Decoded_VkOffset3D*               imageOffset{ nullptr };
+    Decoded_VkExtent3D*               imageExtent{ nullptr };
+};
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

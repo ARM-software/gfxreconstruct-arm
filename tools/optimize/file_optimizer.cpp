@@ -55,6 +55,11 @@ uint64_t FileOptimizer::GetUnreferencedBlocksSize()
     return unreferenced_blocks_.size();
 }
 
+void FileOptimizer::SetRedundantBlocks(const std::unordered_set<uint64_t>& redundant_blocks)
+{
+    redundant_blocks_ = redundant_blocks;
+}
+
 bool FileOptimizer::ProcessFunctionCall(const format::FunctionCallHeader& header)
 {
     if (removed_threads_ids_.find(header.thread_id) == removed_threads_ids_.end())
@@ -88,6 +93,26 @@ bool FileOptimizer::ProcessMethodCall(const format::MethodCallHeader& header, ui
         if (unreferenced_blocks_.find(block_index) != unreferenced_blocks_.end())
         {
             unreferenced_blocks_.erase(block_index);
+            ignore_call = true;
+        }
+    }
+
+    if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Fence_GetCompletedValue)
+    {
+        // If the buffer is in the unused list, omit the call block from the file.
+        if (redundant_blocks_.find(block_index) != redundant_blocks_.end())
+        {
+            redundant_blocks_.erase(block_index);
+            ignore_call = true;
+        }
+    }
+
+    if (header.api_call_id == format::ApiCallId::ApiCall_ID3D12Device_GetDeviceRemovedReason)
+    {
+        // If the buffer is in the unused list, omit the call block from the file.
+        if (redundant_blocks_.find(block_index) != redundant_blocks_.end())
+        {
+            redundant_blocks_.erase(block_index);
             ignore_call = true;
         }
     }
@@ -429,6 +454,19 @@ bool FileOptimizer::ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFrom
     return FileTransformer::ProcessExecuteBlocksFromFile(header);
 }
 
+bool FileOptimizer::RemoveThreadBlock(const format::BlockHeader& header, size_t size_read)
+{
+    const uint64_t unread_bytes = header.size - (size_read - sizeof(header));
+
+    if (!SkipBytes(unread_bytes))
+    {
+        HandleBlockReadError(kErrorSeekingFile, "Failed to skip thread-removed block");
+        return false;
+    }
+
+    return true;
+}
+
 bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
 {
     // If the tensor is in the unused list, omit its initialization data from the file.
@@ -437,30 +475,25 @@ bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHead
         // In its place insert a dummy annotation meta command. This should keep the block index when
         // replaying an optimized trimmed capture in in alignment with the block index calculated
         // at capture time
-        const char*       label = format::kAnnotationLabelRemovedResource;
-        const std::string data  = "Removed tensor " + std::to_string(header.tensor_id);
-
-        const size_t label_length = util::platform::StringLength(label);
-        const size_t data_length  = data.length();
-
+        const char*              label        = format::kAnnotationLabelRemovedResource;
+        const std::string        data         = "Removed tensor " + std::to_string(header.tensor_id);
+        const size_t             label_length = util::platform::StringLength(label);
+        const size_t             data_length  = data.length();
         format::AnnotationHeader annotation;
         annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
         annotation.block_header.type = format::BlockType::kAnnotation;
         annotation.annotation_type   = format::kText;
         annotation.label_length      = static_cast<uint32_t>(label_length);
         annotation.data_length       = static_cast<uint64_t>(data.length());
-
         if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
             !WriteBytes(data.c_str(), data_length))
         {
             HandleBlockWriteError(kErrorReadingBlockHeader, "Failed to write annotation meta-data block");
             return false;
         }
-
         // Total number of bytes remaining to be read for the current block.
         const uint64_t unread_bytes =
             header.meta_header.block_header.size - (sizeof(header) - sizeof(header.meta_header.block_header));
-
         if (!SkipBytes(unread_bytes))
         {
             HandleBlockReadError(kErrorSeekingFile, "Failed to skip init bimage data meta-data block data");
@@ -475,21 +508,17 @@ bool FileOptimizer::ProcessInitTensorCommand(const format::InitTensorCommandHead
     {
         return FileTransformer::ProcessInitTensorCommand(header);
     }
-
     return true;
 }
 
-bool FileOptimizer::RemoveThreadBlock(const format::BlockHeader& header, size_t size_read)
+bool FileOptimizer::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& header)
 {
-    const uint64_t unread_bytes = header.size - (size_read - sizeof(header));
-
-    if (!SkipBytes(unread_bytes))
+    if (removed_threads_ids_.find(header.thread_id) != removed_threads_ids_.end())
     {
-        HandleBlockReadError(kErrorSeekingFile, "Failed to skip thread-removed block");
-        return false;
+        return RemoveThreadBlock(header.meta_header.block_header, sizeof(header));
     }
-
-    return true;
+    return FileTransformer::ProcessFillMemoryResourceAddressCommand(header);
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

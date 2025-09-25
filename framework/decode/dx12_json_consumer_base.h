@@ -60,6 +60,9 @@ class Dx12JsonConsumerBase : public Dx12Consumer
     virtual void ProcessDxgiAdapterInfo(const format::DxgiAdapterInfoCommandHeader& adapter_info_header) override;
     virtual void Process_DriverInfo(const char* info_record) override;
     virtual void ProcessDx12RuntimeInfo(const format::Dx12RuntimeInfoCommandHeader& runtime_info_header) override;
+    virtual void
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                            const uint8_t*                                        data) override;
     /// @}
 
     /// @defGroup CustomFunctions DX12 functions and methods which require fully custom handling.

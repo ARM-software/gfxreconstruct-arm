@@ -123,6 +123,22 @@ void FieldToJson(nlohmann::ordered_json&                               jdata,
                  const Decoded_VkIndirectCommandsLayoutTokenEXT* const pData,
                  const util::JsonOptions&                              options = util::JsonOptions());
 
+void FieldToJson(nlohmann::ordered_json&                jdata,
+                 const Decoded_VkCopyMemoryToImageInfo* data,
+                 const util::JsonOptions&               options);
+
+void FieldToJson(nlohmann::ordered_json&            jdata,
+                 const Decoded_VkMemoryToImageCopy* data,
+                 const util::JsonOptions&           options);
+
+void FieldToJson(nlohmann::ordered_json&                jdata,
+                 const Decoded_VkCopyImageToMemoryInfo* data,
+                 const util::JsonOptions&               options);
+
+void FieldToJson(nlohmann::ordered_json&            jdata,
+                 const Decoded_VkImageToMemoryCopy* data,
+                 const util::JsonOptions&           options);
+
 void FieldToJson(nlohmann::ordered_json&         jdata,
                  const format::DeviceMemoryType& data,
                  const util::JsonOptions&        options = util::JsonOptions());
@@ -134,6 +150,15 @@ void FieldToJson(nlohmann::ordered_json&         jdata,
 void FieldToJson(nlohmann::ordered_json&                       jdata,
                  const Decoded_VkDataGraphPipelineConstantARM* data,
                  const util::JsonOptions&                      options = util::JsonOptions());
+
+void FieldToJson(nlohmann::ordered_json&            jdata,
+                 VkDescriptorType                   discriminant,
+                 const Decoded_VkDescriptorDataEXT* data,
+                 const util::JsonOptions&           options = util::JsonOptions());
+
+void FieldToJson(nlohmann::ordered_json&               jdata,
+                 const Decoded_VkDescriptorGetInfoEXT* data,
+                 const util::JsonOptions&              options = util::JsonOptions());
 
 template <typename T>
 void FieldToJson(nlohmann::ordered_json&  jdata,

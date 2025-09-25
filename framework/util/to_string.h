@@ -28,12 +28,14 @@
 
 #include "format/format.h"
 #include "util/defines.h"
+#include "util/logging.h"
 
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <cmath>
+#include <functional>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
@@ -80,6 +82,81 @@ std::string uuid_to_string(uint32_t size, const uint8_t* uuid);
 
 /// @brief Convert an annotation to its string representation.
 std::string AnnotationTypeToString(const format::AnnotationType& type);
+
+/// @brief Convert the non utf8 to utf8 string.
+
+inline bool is_valid_utf8(const std::string& str)
+{
+    size_t i = 0, len = str.size();
+    while (i < len)
+    {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        size_t        n = 0;
+        if (c <= 0x7F)
+            n = 1;
+        else if ((c & 0xE0) == 0xC0)
+            n = 2;
+        else if ((c & 0xF0) == 0xE0)
+            n = 3;
+        else if ((c & 0xF8) == 0xF0)
+            n = 4;
+        else
+            return false;
+        if (i + n > len)
+            return false;
+        for (size_t j = 1; j < n; ++j)
+            if ((static_cast<unsigned char>(str[i + j]) & 0xC0) != 0x80)
+                return false;
+        i += n;
+    }
+    return true;
+}
+
+inline std::string latin1_to_utf8(const std::string& input)
+{
+    std::string out;
+    for (unsigned char c : input)
+    {
+        if (c < 0x80)
+        {
+            out += c;
+        }
+        else
+        {
+            out += 0xC0 | (c >> 6);
+            out += 0x80 | (c & 0x3F);
+        }
+    }
+    return out;
+}
+
+inline std::string NormalizeUtf8(const std::string& input)
+{
+    if (is_valid_utf8(input))
+    {
+        return input;
+    }
+    else
+    {
+        // Convert from Latin-1 to UTF-8
+        GFXRECON_LOG_WARNING("Invalid UTF-8 detected, attempting conversion.(Latin1 to UTF-8)");
+        return latin1_to_utf8(input);
+    }
+}
+
+#if defined(D3D12_SUPPORT)
+inline std::string GUIDToString(const GUID& obj)
+{
+    std::ostringstream strStrm;
+    strStrm << std::hex << std::setfill('0') << std::setw(8) << obj.Data1 << '-' << std::setw(4) << obj.Data2 << '-'
+            << std::setw(4) << obj.Data3 << '-' << std::setw(2) << static_cast<int>(obj.Data4[0]) << std::setw(2)
+            << static_cast<int>(obj.Data4[1]) << '-' << std::setw(2) << static_cast<int>(obj.Data4[2]) << std::setw(2)
+            << static_cast<int>(obj.Data4[3]) << std::setw(2) << static_cast<int>(obj.Data4[4]) << std::setw(2)
+            << static_cast<int>(obj.Data4[5]) << std::setw(2) << static_cast<int>(obj.Data4[6]) << std::setw(2)
+            << static_cast<int>(obj.Data4[7]);
+    return strStrm.str();
+}
+#endif
 
 /// @deprecated Use the nlohmann JSON library instead.
 /// @brief  A template ToString to take care of simple POD cases like the many
@@ -170,8 +247,8 @@ inline std::string WCharArrayToString(const wchar_t* pStr)
 }
 #endif
 
-template <typename BitmaskType, typename FlagsType>
-inline std::string BitmaskToString(FlagsType flags)
+template <typename BitmaskType, typename FlagsType, typename ToString>
+inline std::string BitmaskToString(FlagsType flags, ToString&& to_string)
 {
     std::string str;
     FlagsType   index = 0;
@@ -183,16 +260,23 @@ inline std::string BitmaskToString(FlagsType flags)
             {
                 str.append("|");
             }
-            str.append(ToString(static_cast<BitmaskType>(1 << index)));
+            str.append(to_string(static_cast<BitmaskType>(FlagsType(1) << index)));
         }
         ++index;
         flags >>= 1;
     }
     if (str.empty())
     {
-        str.append(ToString(static_cast<BitmaskType>(0)));
+        str.append(to_string(static_cast<BitmaskType>(0)));
     }
     return str;
+}
+
+template <typename BitmaskType, typename FlagsType>
+inline std::string BitmaskToString(FlagsType flags)
+{
+    auto to_string = [](const BitmaskType& bit) { return ToString(bit); };
+    return BitmaskToString<BitmaskType>(flags, to_string);
 }
 
 template <typename PtrType>

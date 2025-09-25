@@ -50,12 +50,25 @@ class Dx12ShaderIdMap
 
     bool Map(uint8_t* dst_translated_shader_id, const uint8_t* src_translated_shader_id) const;
 
+    void Add(const format::HandleId object_id, const uint8_t* old_shader_id, const uint8_t* new_shader_id);
+
+    void Remove(const format::HandleId object_id);
+
+    bool Map(const format::HandleId object_id,
+             uint8_t*               dst_translated_shader_id,
+             const uint8_t*         src_translated_shader_id) const;
+
   private:
     // Key is old shader id. Value is new.
     typedef std::map<Dx12ShaderIdentifier, Dx12ShaderIdentifier> ShaderIdMap;
 
+    // Key is state property id. Value is ShaderIdMap.
+    typedef std::map<format::HandleId, ShaderIdMap> StatePropertyShaderIdMap;
+
   private:
     ShaderIdMap shader_id_map_;
+
+    StatePropertyShaderIdMap state_property_shader_id_map_;
 };
 
 GFXRECON_END_NAMESPACE(graphics)

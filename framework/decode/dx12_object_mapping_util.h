@@ -1,5 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -45,6 +46,8 @@ void MapGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE& handle, const Dx12Descr
 void MapGpuDescriptorHandles(D3D12_GPU_DESCRIPTOR_HANDLE* handles,
                              size_t                       handles_len,
                              const Dx12DescriptorMap&     descriptor_map);
+
+void MapCpuDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& handle, const Dx12DescriptorMap& descriptor_map);
 
 void MapGpuVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS& address, const graphics::Dx12GpuVaMap& gpu_va_map);
 
@@ -106,12 +109,6 @@ static T** MapObjectArray(HandlePointerDecoder<T*>* handles_pointer, const Dx12O
 }
 
 template <typename T>
-static void AddObject(const format::HandleId* p_id, T** pp_object, Dx12ObjectInfoTable* object_info_table)
-{
-    AddObject(p_id, pp_object, DxObjectInfo{}, object_info_table);
-}
-
-template <typename T>
 static void AddObject(const format::HandleId* p_id,
                       T**                     pp_object,
                       DxObjectInfo&&          initial_info,
@@ -141,6 +138,12 @@ static void AddObject(const format::HandleId* p_id,
         // Release the object to avoid leaking.
         reinterpret_cast<IUnknown*>(*pp_object)->Release();
     }
+}
+
+template <typename T>
+static void AddObject(const format::HandleId* p_id, T** pp_object, Dx12ObjectInfoTable* object_info_table)
+{
+    AddObject(p_id, pp_object, DxObjectInfo{}, object_info_table);
 }
 
 static void RemoveObject(format::HandleId id, Dx12ObjectInfoTable* object_info_table)

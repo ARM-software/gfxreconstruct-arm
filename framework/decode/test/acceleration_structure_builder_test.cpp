@@ -36,7 +36,7 @@ using namespace gfxrecon;
 // Contains reusable test objects, recreated for each scenario
 struct TestFixture
 {
-    encode::VulkanDeviceTable            device_table;
+    graphics::VulkanDeviceTable          device_table;
     decode::VulkanPhysicalDeviceInfo*    physical_device_info;
     VkDevice                             device;
     VkPhysicalDeviceMemoryProperties     properties;

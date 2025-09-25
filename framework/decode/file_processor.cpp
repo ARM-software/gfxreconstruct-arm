@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2020,2022 Valve Corporation
 ** Copyright (c) 2018-2020,2022 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -27,6 +27,7 @@
 #include "decode/decode_allocator.h"
 #include "format/format.h"
 #include "format/format_util.h"
+#include "format/format_arm.h"
 #include "util/compressor.h"
 #include "util/file_path.h"
 #include "util/logging.h"
@@ -63,11 +64,6 @@ FileProcessor::~FileProcessor()
         compressor_ = nullptr;
     }
 
-    for (auto& file : active_files_)
-    {
-        util::platform::FileClose(file.second.fd);
-    }
-
     DecodeAllocator::DestroyInstance();
 }
 
@@ -81,11 +77,10 @@ void FileProcessor::WaitDecodersIdle()
 
 bool FileProcessor::Initialize(const std::string& filename)
 {
-    bool success = OpenFile(filename);
+    bool success = SetActiveFile(filename, true);
 
     if (success)
     {
-        success = SetActiveFile(filename, true);
         success = success && ProcessFileHeader();
     }
     else
@@ -113,47 +108,21 @@ std::string FileProcessor::ApplyAbsolutePath(const std::string& file)
     return absolute_path_ + file;
 }
 
-bool FileProcessor::OpenFile(const std::string& filename)
-{
-    if (active_files_.find(filename) == active_files_.end())
-    {
-        FILE* fd;
-        int   result = util::platform::FileOpen(&fd, filename.c_str(), "rb");
-        if (result || fd == nullptr)
-        {
-            GFXRECON_LOG_ERROR("Failed to open file %s", filename.c_str());
-            error_state_ = kErrorOpeningFile;
-            return false;
-        }
-        else
-        {
-            active_files_.emplace(std::piecewise_construct, std::forward_as_tuple(filename), std::forward_as_tuple(fd));
-            error_state_ = kErrorNone;
-        }
-    }
-
-    return true;
-}
-
 bool FileProcessor::ProcessNextFrame()
 {
     bool success = IsFileValid();
 
     if (success)
     {
+        for (ApiDecoder* decoder : decoders_)
+        {
+            decoder->SetCurrentFrameNumber(current_frame_number_);
+        }
         success = ProcessBlocks();
     }
     else
     {
-        // If not EOF, determine reason for invalid state.
-        if (GetFileDescriptor() == nullptr)
-        {
-            error_state_ = kErrorInvalidFileDescriptor;
-        }
-        else if (ferror(GetFileDescriptor()))
-        {
-            error_state_ = kErrorReadingFile;
-        }
+        error_state_ = CheckFileStatus();
     }
 
     return success;
@@ -211,20 +180,19 @@ bool FileProcessor::ContinueDecoding()
 
 bool FileProcessor::ProcessFileHeader()
 {
-    bool               success = false;
-    format::FileHeader file_header{};
+    bool success = false;
 
-    ActiveFiles& active_file = active_files_[file_stack_.front().filename];
+    assert(file_stack_.front().active_file);
 
-    if (ReadBytes(&file_header, sizeof(file_header)))
+    if (ReadBytes(&file_header_, sizeof(file_header_)))
     {
-        success = format::ValidateFileHeader(file_header);
+        success = format::ValidateFileHeader(file_header_);
 
         if (success)
         {
-            file_options_.resize(file_header.num_options);
+            file_options_.resize(file_header_.num_options);
 
-            size_t option_data_size = file_header.num_options * sizeof(format::FileOptionPair);
+            size_t option_data_size = file_header_.num_options * sizeof(format::FileOptionPair);
 
             success = ReadBytes(file_options_.data(), option_data_size);
 
@@ -390,6 +358,8 @@ bool FileProcessor::ProcessBlocks()
 
                     success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
 
+                    meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
+
                     if (success)
                     {
                         success = ProcessMetaData(block_header, meta_data_id);
@@ -475,7 +445,7 @@ bool FileProcessor::ProcessBlocks()
             }
             else
             {
-                if (!feof(GetFileDescriptor()))
+                if (!AtEof())
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as it
                     // assumes that the block header has been successfully read and will print an incomplete block at
@@ -539,12 +509,18 @@ bool FileProcessor::ReadCompressedParameterBuffer(size_t  compressed_buffer_size
     // This should only be null if initialization failed.
     assert(compressor_ != nullptr);
 
+    const uint8_t* compressed_data = nullptr;
+
     if (compressed_buffer_size > compressed_parameter_buffer_.size())
     {
         compressed_parameter_buffer_.resize(compressed_buffer_size);
     }
-
     if (ReadBytes(compressed_parameter_buffer_.data(), compressed_buffer_size))
+    {
+        compressed_data = compressed_parameter_buffer_.data();
+    }
+
+    if (compressed_data)
     {
         if (parameter_buffer_.size() < expected_uncompressed_size)
         {
@@ -552,7 +528,7 @@ bool FileProcessor::ReadCompressedParameterBuffer(size_t  compressed_buffer_size
         }
 
         size_t uncompressed_size = compressor_->Decompress(
-            compressed_buffer_size, compressed_parameter_buffer_, expected_uncompressed_size, &parameter_buffer_);
+            compressed_buffer_size, compressed_data, expected_uncompressed_size, &parameter_buffer_);
         if ((0 < uncompressed_size) && (uncompressed_size == expected_uncompressed_size))
         {
             *uncompressed_buffer_size = uncompressed_size;
@@ -564,10 +540,12 @@ bool FileProcessor::ReadCompressedParameterBuffer(size_t  compressed_buffer_size
 
 bool FileProcessor::ReadBytes(void* buffer, size_t buffer_size)
 {
-    auto file_entry = active_files_.find(file_stack_.back().filename);
-    assert(file_entry != active_files_.end());
+    // File entry is non-const to allow read bytes to be non-const (i.e. potentially reflect a stateful operation)
+    // without forcing use of mutability
+    const auto& active_file = file_stack_.back().active_file;
+    GFXRECON_ASSERT(active_file);
 
-    if (util::platform::FileRead(buffer, buffer_size, file_entry->second.fd))
+    if (active_file->ReadBytes(buffer, buffer_size))
     {
         bytes_read_ += buffer_size;
         return true;
@@ -577,10 +555,10 @@ bool FileProcessor::ReadBytes(void* buffer, size_t buffer_size)
 
 bool FileProcessor::SkipBytes(size_t skip_size)
 {
-    auto file_entry = active_files_.find(file_stack_.back().filename);
-    assert(file_entry != active_files_.end());
+    const auto& active_file = file_stack_.back().active_file;
+    GFXRECON_ASSERT(active_file);
 
-    bool success = util::platform::FileSeek(file_entry->second.fd, skip_size, util::platform::FileSeekCurrent);
+    bool success = active_file->FileSeek(skip_size, util::platform::FileSeekCurrent);
 
     if (success)
     {
@@ -591,12 +569,13 @@ bool FileProcessor::SkipBytes(size_t skip_size)
     return success;
 }
 
-bool FileProcessor::SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin)
+bool FileProcessor::SeekActiveFile(const FileInputStreamPtr&      active_file,
+                                   int64_t                        offset,
+                                   util::platform::FileSeekOrigin origin)
 {
-    auto file_entry = active_files_.find(file_stack_.back().filename);
-    assert(file_entry != active_files_.end());
+    GFXRECON_ASSERT(active_file);
 
-    bool success = util::platform::FileSeek(file_entry->second.fd, offset, origin);
+    bool success = active_file->FileSeek(offset, origin);
 
     if (success && origin == util::platform::FileSeekCurrent)
     {
@@ -609,20 +588,46 @@ bool FileProcessor::SeekActiveFile(const std::string& filename, int64_t offset, 
 
 bool FileProcessor::SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin)
 {
-    return SeekActiveFile(file_stack_.back().filename, offset, origin);
+    return SeekActiveFile(file_stack_.back().active_file, offset, origin);
 }
 
 bool FileProcessor::SetActiveFile(const std::string& filename, bool execute_till_eof)
 {
-    if (active_files_.find(filename) != active_files_.end())
+
+    // Look for the name stream in the cache
+    auto cached_stream = stream_cache_.Lookup(filename);
+
+    FileInputStreamPtr active_file;
+    if (cached_stream.has_value())
     {
-        file_stack_.emplace_back(filename, execute_till_eof);
-        return true;
+        active_file = std::move(*cached_stream);
+
+        // Only valid streams in the cache
+        GFXRECON_ASSERT(active_file);
+        GFXRECON_ASSERT(active_file->IsOpen());
     }
     else
     {
-        return false;
+        // No stream in cache, create one
+        active_file = std::make_shared<FileInputStream>();
+        bool opened = active_file->Open(filename);
+
+        if (!opened || !active_file->IsOpen())
+        {
+            GFXRECON_LOG_ERROR("Failed to open file %s", filename.c_str());
+            error_state_ = kErrorOpeningFile;
+            return false;
+        }
+
+        // It's possible we'll want to use the input streams more than once, (kExecuteBlocksFromFile, usage often
+        // does in test cases), so we'll stash off the stream's shared pointer to a cache
+        stream_cache_.Insert(active_file);
     }
+
+    // Now that we have a new stream or old, push it on the stack
+    file_stack_.emplace_back(std::move(active_file), execute_till_eof);
+    error_state_ = kErrorNone;
+    return true;
 }
 
 bool FileProcessor::SetActiveFile(const std::string&             filename,
@@ -630,10 +635,10 @@ bool FileProcessor::SetActiveFile(const std::string&             filename,
                                   util::platform::FileSeekOrigin origin,
                                   bool                           execute_till_eof)
 {
-    if (active_files_.find(filename) != active_files_.end())
+    bool success = SetActiveFile(filename, execute_till_eof);
+    if (success)
     {
-        file_stack_.emplace_back(filename, execute_till_eof);
-        return SeekActiveFile(filename, offset, origin);
+        return SeekActiveFile(file_stack_.back().active_file, offset, origin);
     }
     else
     {
@@ -643,11 +648,11 @@ bool FileProcessor::SetActiveFile(const std::string&             filename,
 
 void FileProcessor::HandleBlockReadError(Error error_code, const char* error_message)
 {
-    auto file_entry = active_files_.find(file_stack_.back().filename);
-    assert(file_entry != active_files_.end());
+    GFXRECON_ASSERT(!file_stack_.empty());
+    const auto& active_file = file_stack_.back().active_file;
 
     // Report incomplete block at end of file as a warning, other I/O errors as an error.
-    if (feof(file_entry->second.fd) && !ferror(file_entry->second.fd))
+    if (active_file->IsEof() && !active_file->IsError())
     {
         GFXRECON_LOG_WARNING("Incomplete block at end of file");
     }
@@ -913,7 +918,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             }
         }
     }
-    else if (meta_data_type == format::MetaDataType::kFixShaderGroupHandleCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kFixShaderGroupHandleCommand)
     {
         format::FixShaderGroupHandleCommandHeader header;
         success = ReadBytes(&header.relation_id, sizeof(header.relation_id));
@@ -926,7 +931,39 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         {
             if (decoder->SupportsMetaDataId(meta_data_id))
             {
-                decoder->DispatchShaderGroupHandleCommand(header, locations.data());
+                decoder->DispatchFixShaderGroupHandleCommand(header, locations.data());
+            }
+        }
+    }
+    else if (meta_data_type == format::arm::MetaDataType::kFixDescriptorDataCommand)
+    {
+        format::FixDescriptorDataCommandHeader header;
+        success = ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success = ReadBytes(&header.num_of_locations, sizeof(header.num_of_locations));
+
+        std::vector<format::DescriptorDataLocationInfo> locations(header.num_of_locations);
+        success = ReadBytes(locations.data(), header.num_of_locations * sizeof(format::DescriptorDataLocationInfo));
+        for (auto decoder : decoders_)
+        {
+            if (decoder->SupportsMetaDataId(meta_data_id))
+            {
+                decoder->DispatchFixDescriptorDataCommand(header, locations.data());
+            }
+        }
+    }
+    else if (meta_data_type == format::arm::MetaDataType::kFixShadowMemoryCommand)
+    {
+        format::FixShadowMemoryCommand cmd;
+        success = ReadBytes(&cmd.thread_id, sizeof(cmd.thread_id));
+        success = ReadBytes(&cmd.memory_id, sizeof(cmd.memory_id));
+        success = ReadBytes(&cmd.map_memory, sizeof(cmd.map_memory));
+        success = ReadBytes(&cmd.shadow_memory, sizeof(cmd.shadow_memory));
+        for (auto decoder : decoders_)
+        {
+            if (decoder->SupportsMetaDataId(meta_data_id))
+            {
+                decoder->DispatchFixShadowMemoryCommand(
+                    cmd.thread_id, cmd.memory_id, cmd.map_memory, cmd.shadow_memory);
             }
         }
     }
@@ -935,7 +972,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         format::FillMemoryResourceValueCommandHeader header;
 
         success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
-        success = ReadBytes(&header.resource_value_count, sizeof(header.resource_value_count));
+        success = success && ReadBytes(&header.resource_value_count, sizeof(header.resource_value_count));
 
         if (success)
         {
@@ -1163,6 +1200,79 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                     if (decoder->SupportsMetaDataId(meta_data_id))
                     {
                         decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     0u,
+                                                                     header.memory_id,
+                                                                     header.buffer_id,
+                                                                     header.format,
+                                                                     header.width,
+                                                                     header.height,
+                                                                     header.stride,
+                                                                     header.usage,
+                                                                     header.layers,
+                                                                     entries);
+                    }
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read create hardware buffer meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData,
+                                         "Failed to read create hardware buffer meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read create hardware buffer meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kCreateHardwareBufferCommand_deprecated2)
+    {
+        format::CreateHardwareBufferCommandHeader_deprecated2 header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+        success = success && ReadBytes(&header.format, sizeof(header.format));
+        success = success && ReadBytes(&header.width, sizeof(header.width));
+        success = success && ReadBytes(&header.height, sizeof(header.height));
+        success = success && ReadBytes(&header.stride, sizeof(header.stride));
+        success = success && ReadBytes(&header.usage, sizeof(header.usage));
+        success = success && ReadBytes(&header.layers, sizeof(header.layers));
+        success = success && ReadBytes(&header.planes, sizeof(header.planes));
+
+        if (success)
+        {
+            std::vector<format::HardwareBufferPlaneInfo> entries;
+
+            for (uint64_t i = 0; i < header.planes; ++i)
+            {
+                format::HardwareBufferPlaneInfo entry;
+
+                if (!ReadBytes(&entry, sizeof(entry)))
+                {
+                    success = false;
+                    break;
+                }
+
+                entries.emplace_back(std::move(entry));
+            }
+
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     0u,
                                                                      header.memory_id,
                                                                      header.buffer_id,
                                                                      header.format,
@@ -1200,6 +1310,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         format::CreateHardwareBufferCommandHeader header;
 
         success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
         success = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
         success = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
         success = success && ReadBytes(&header.format, sizeof(header.format));
@@ -1234,6 +1345,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                     if (decoder->SupportsMetaDataId(meta_data_id))
                     {
                         decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     header.device_id,
                                                                      header.memory_id,
                                                                      header.buffer_id,
                                                                      header.format,
@@ -1666,25 +1778,21 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockHeader, "Failed to read init buffer data meta-data block header");
         }
     }
-    else if (meta_data_type == format::MetaDataType::kInitTensorCommand)
+    else if (meta_data_type == format::arm::MetaDataType::kInitTensorCommand)
     {
         format::InitTensorCommandHeader header;
-
         success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
         success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
         success = success && ReadBytes(&header.tensor_id, sizeof(header.tensor_id));
         success = success && ReadBytes(&header.data_size, sizeof(header.data_size));
-
         if (success)
         {
             GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, header.data_size);
-
             if (format::IsBlockCompressed(block_header.type))
             {
                 size_t uncompressed_size = 0;
                 size_t compressed_size =
                     static_cast<size_t>(block_header.size) - (sizeof(header) - sizeof(header.meta_header.block_header));
-
                 success = ReadCompressedParameterBuffer(
                     compressed_size, static_cast<size_t>(header.data_size), &uncompressed_size);
             }
@@ -1692,7 +1800,6 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             {
                 success = ReadParameterBuffer(static_cast<size_t>(header.data_size));
             }
-
             if (success)
             {
                 for (auto decoder : decoders_)
@@ -2240,13 +2347,14 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                 std::string filename = util::filepath::Join(absolute_path_, filename_c_str);
 
                 // Check for self references
-                if (!filename.compare(file_stack_.back().filename))
+                if (!filename.compare(file_stack_.back().active_file->GetFilename()))
                 {
                     GFXRECON_LOG_WARNING(
                         "ExecuteBlocksFromFile is referencing itself. Probably this is not intentional.");
                 }
 
-                success = OpenFile(filename);
+                success = SetActiveFile(
+                    filename, exec_from_file.offset, util::platform::FileSeekSet, exec_from_file.n_blocks == 0);
                 if (success)
                 {
                     for (auto decoder : decoders_)
@@ -2255,8 +2363,6 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                             exec_from_file.thread_id, exec_from_file.n_blocks, exec_from_file.offset, filename);
                     }
 
-                    SetActiveFile(
-                        filename, exec_from_file.offset, util::platform::FileSeekSet, exec_from_file.n_blocks == 0);
                     // We need to add 1 because it will be decremented right after this function returns
                     file_stack_.back().remaining_commands = exec_from_file.n_blocks + 1;
                 }
@@ -2268,10 +2374,150 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockData, "Failed to read runtime info meta-data block");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kViewRelativeLocation)
+    {
+        // This command does not support compression.
+        assert(block_header.type != format::BlockType::kCompressedMetaDataBlock);
+
+        format::ViewRelativeLocation Location;
+        format::ThreadId             thread_id;
+        success = ReadBytes(&thread_id, sizeof(thread_id));
+
+        format::ViewRelativeLocation location;
+        if (success)
+        {
+            success = ReadBytes(&location, sizeof(location));
+        }
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    decoder->DispatchViewRelativeLocation(thread_id, location);
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to ViewRelativeLocation meta-data block");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kInitializeMetaCommand)
+    {
+        format::InitializeMetaCommand header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.capture_id, sizeof(header.capture_id));
+        success = success && ReadBytes(&header.block_index, sizeof(header.block_index));
+        success = success && ReadBytes(&header.total_number_of_initializemetacommand,
+                                       sizeof(header.total_number_of_initializemetacommand));
+        success = success && ReadBytes(&header.initialization_parameters_data_size,
+                                       sizeof(header.initialization_parameters_data_size));
+
+        if (success)
+        {
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, header.initialization_parameters_data_size);
+            if (header.initialization_parameters_data_size > 0)
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    size_t uncompressed_size = 0;
+                    size_t compressed_size   = static_cast<size_t>(block_header.size) -
+                                             (sizeof(header) - sizeof(header.meta_header.block_header));
+
+                    success =
+                        ReadCompressedParameterBuffer(compressed_size,
+                                                      static_cast<size_t>(header.initialization_parameters_data_size),
+                                                      &uncompressed_size);
+                }
+                else
+                {
+                    success = ReadParameterBuffer(static_cast<size_t>(header.initialization_parameters_data_size));
+                }
+            }
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchInitializeMetaCommand(header, parameter_buffer_.data());
+                    }
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read init subresource data meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData,
+                                         "Failed to read init subresource data meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read init subresource data meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::arm::MetaDataType::kFillMemoryResourceAddressCommand)
+    {
+        format::FillMemoryResourceAddressCommandHeader header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = ReadBytes(&header.resource_address_count, sizeof(header.resource_address_count));
+
+        if (success)
+        {
+            uint64_t data_size = header.resource_address_count * sizeof(format::Dx12FillMemoryResourceAddressInfo);
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, data_size);
+
+            if (format::IsBlockCompressed(block_header.type))
+            {
+                size_t uncompressed_size = 0;
+                size_t compressed_size   = static_cast<size_t>(block_header.size) - sizeof(meta_data_id) -
+                                         sizeof(header.thread_id) - sizeof(header.resource_address_count);
+                size_t uncompressed_data = static_cast<size_t>(data_size);
+                success = ReadCompressedParameterBuffer(compressed_size, uncompressed_data, &uncompressed_size);
+            }
+            else
+            {
+                success = ReadParameterBuffer(static_cast<size_t>(data_size));
+            }
+
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchFillMemoryResourceAddressCommand(header, parameter_buffer_.data());
+                    }
+                }
+            }
+            else
+            {
+                HandleBlockReadError(kErrorReadingBlockData,
+                                     "Failed to read fill memory resource address meta-data block");
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read fill memory resource address meta-data block header");
+        }
+    }
     else
     {
-        if ((meta_data_type == format::MetaDataType::kReserved23) ||
-            (meta_data_type == format::MetaDataType::kReserved25))
+        if (meta_data_type >= format::MetaDataType::kBeginExperimentalReservedRange ||
+            meta_data_type == format::MetaDataType::kReserved23 || meta_data_type == format::MetaDataType::kReserved25)
         {
             // Only log a warning once if the capture file contains blocks that are a "reserved" meta data type.
             GFXRECON_LOG_WARNING_ONCE("This capture file contains meta-data block(s) with reserved type(s) that are "
@@ -2454,7 +2700,8 @@ bool FileProcessor::IsFrameDelimiter(format::ApiCallId call_id) const
         return ((call_id == format::ApiCallId::ApiCall_vkQueuePresentKHR) ||
                 (call_id == format::ApiCallId::ApiCall_vkFrameBoundaryANDROID) ||
                 (call_id == format::ApiCallId::ApiCall_IDXGISwapChain_Present) ||
-                (call_id == format::ApiCallId::ApiCall_IDXGISwapChain1_Present1));
+                (call_id == format::ApiCallId::ApiCall_IDXGISwapChain1_Present1) ||
+                (call_id == format::ApiCallId::ApiCall_xrEndFrame));
     }
 }
 

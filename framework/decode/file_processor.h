@@ -28,13 +28,16 @@
 #include "format/format.h"
 #include "decode/annotation_handler.h"
 #include "decode/api_decoder.h"
+#include "util/clock_cache.h"
 #include "util/compressor.h"
 #include "util/defines.h"
+#include "util/file_input_stream.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -42,6 +45,9 @@
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+using FileInputStream    = util::FStreamFileInputStream;
+using FileInputStreamPtr = std::shared_ptr<FileInputStream>;
 
 class FileProcessor
 {
@@ -118,15 +124,7 @@ class FileProcessor
             return true;
         }
 
-        const auto file_entry = active_files_.find(file_stack_.front().filename);
-        if (file_entry != active_files_.end())
-        {
-            return (feof(file_entry->second.fd) != 0);
-        }
-        else
-        {
-            return false;
-        }
+        return file_stack_.front().active_file->IsEof();
     }
 
     bool UsesFrameMarkers() const { return capture_uses_frame_markers_; }
@@ -175,26 +173,39 @@ class FileProcessor
     Error                    error_state_;
     uint64_t                 bytes_read_;
     bool                     capture_uses_frame_markers_;
+    format::FileHeader       file_header_;
 
     /// @brief Incremented at the end of every block successfully processed.
     uint64_t block_index_;
 
   protected:
-    FILE* GetFileDescriptor()
+    Error CheckFileStatus() const
     {
-        assert(!file_stack_.empty());
-
-        if (!file_stack_.empty())
+        if (file_stack_.empty())
         {
-            auto file_entry = active_files_.find(file_stack_.back().filename);
-            assert(file_entry != active_files_.end());
-
-            return file_entry->second.fd;
+            return kErrorInvalidFileDescriptor;
         }
-        else
+        const auto& active_file = file_stack_.back().active_file;
+        // If not EOF, determine reason for invalid state.
+        if (!active_file->IsOpen())
         {
-            return nullptr;
+            return kErrorInvalidFileDescriptor;
         }
+        else if (active_file->IsError())
+        {
+            return kErrorReadingFile;
+        }
+
+        return kErrorNone;
+    }
+
+    bool AtEof() const
+    {
+        if (file_stack_.empty())
+        {
+            return true;
+        }
+        return file_stack_.back().active_file->IsEof();
     }
 
   private:
@@ -213,10 +224,7 @@ class FileProcessor
     {
         if (!file_stack_.empty())
         {
-            auto file_entry = active_files_.find(file_stack_.back().filename);
-            assert(file_entry != active_files_.end());
-
-            return (file_entry->second.fd && !feof(file_entry->second.fd) && !ferror(file_entry->second.fd));
+            return file_stack_.back().active_file->IsValid();
         }
         else
         {
@@ -224,9 +232,7 @@ class FileProcessor
         }
     }
 
-    bool OpenFile(const std::string& filename);
-
-    bool SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin);
+    bool SeekActiveFile(const FileInputStreamPtr& file, int64_t offset, util::platform::FileSeekOrigin origin);
 
     bool SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
 
@@ -255,24 +261,12 @@ class FileProcessor
     int64_t                             block_index_to_{ 0 };
     bool                                loading_trimmed_capture_state_;
 
-    struct ActiveFiles
-    {
-        ActiveFiles() {}
-
-        ActiveFiles(FILE* fd_) : fd(fd_) {}
-
-        FILE* fd{ nullptr };
-    };
-
-    std::unordered_map<std::string, ActiveFiles> active_files_;
-
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
-        ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
+        ActiveFileContext(FileInputStreamPtr&& active_file_, bool execute_til_eof_ = false) :
+            active_file(std::move(active_file_)), execute_till_eof(execute_til_eof_){};
 
-        std::string filename;
+        FileInputStreamPtr active_file;
         uint32_t    remaining_commands{ 0 };
         bool        execute_till_eof{ false };
     };
@@ -287,6 +281,17 @@ class FileProcessor
 
         return file_stack_.back();
     }
+
+    struct InputStreamGetKey
+    {
+        const std::string& operator()(const FileInputStreamPtr& input_stream)
+        {
+            GFXRECON_ASSERT(input_stream);
+            return input_stream->GetFilename();
+        }
+    };
+    using ActiveStreamCache = util::ClockCache<FileInputStreamPtr, 3, std::string, InputStreamGetKey>;
+    ActiveStreamCache stream_cache_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

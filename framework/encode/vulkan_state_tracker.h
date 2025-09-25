@@ -500,7 +500,7 @@ class VulkanStateTracker
 
     void TrackSetLocalDimmingAMD(VkDevice device, VkSwapchainKHR swapChain, VkBool32 localDimmingEnable);
 
-    void TrackTlasToBlasDependencies(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
+    void TrackCommandBuffersSubmision(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
@@ -779,6 +779,8 @@ class VulkanStateTracker
                                         const VkDebugUtilsObjectTagInfoEXT* pTagInfo,
                                         const util::MemoryOutputStream*     object_tag_parameter_buffer);
 
+    void TrackBeginCommandBuffer(VkCommandBuffer command_buffer, VkCommandBufferUsageFlags flags);
+
   private:
     template <typename ParentHandle, typename SecondaryHandle, typename Wrapper, typename CreateInfo>
     void AddGroupHandles(ParentHandle                        parent_handle,
@@ -818,6 +820,7 @@ class VulkanStateTracker
                 // If it is a duplicate handle add, make sure that creation parameters are updated
                 else
                 {
+                    wrapper->create_call_id    = create_call_id;
                     wrapper->create_parameters = create_parameters;
                 }
             }

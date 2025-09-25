@@ -24,11 +24,13 @@
 #include "encode/vulkan_state_writer.h"
 
 #include "encode/struct_pointer_encoder.h"
+#include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_info.h"
 #include "encode/custom_vulkan_array_size_2d.h"
 #include "encode/vulkan_capture_common.h"
 #include "format/format.h"
+#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "custom_vulkan_array_size_2d.h"
@@ -163,7 +165,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     // Resource creation.
     WriteBufferState(state_table);
-    StandardCreateWrite<vulkan_wrappers::ImageWrapper>(state_table);
+    WriteImageState(state_table);
     StandardCreateWrite<vulkan_wrappers::DataGraphPipelineSessionARMWrapper>(state_table);
     StandardCreateWrite<vulkan_wrappers::TensorARMWrapper>(state_table);
     StandardCreateWrite<vulkan_wrappers::TensorViewARMWrapper>(state_table);
@@ -248,10 +250,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     auto done = std::chrono::high_resolution_clock::now();
     uint32_t time = std::chrono::duration_cast<std::chrono::milliseconds>(done - started).count();
-    GFXRECON_LOG_INFO("--------------------------------------")
-    GFXRECON_LOG_INFO("%s()", __func__)
-    GFXRECON_LOG_INFO("  saved in %u ms", time);
-    GFXRECON_LOG_INFO("--------------------------------------")
+    GFXRECON_LOG_INFO("%s() saved in %u ms", __func__, time);
 
     return blocks_written_;
     // clang-format on
@@ -321,10 +320,19 @@ void VulkanStateWriter::WriteDeviceState(const VulkanStateTable& state_table)
 
 void VulkanStateWriter::WriteCommandBufferState(const VulkanStateTable& state_table)
 {
-    std::set<util::MemoryOutputStream*>                       processed;
-    std::vector<const vulkan_wrappers::CommandBufferWrapper*> primary;
+    std::set<util::MemoryOutputStream*>                 processed;
+    std::vector<vulkan_wrappers::CommandBufferWrapper*> primary;
 
-    state_table.VisitWrappers([&](const vulkan_wrappers::CommandBufferWrapper* wrapper) {
+    // Because secondaries can reference other secondaries we need to do a first pass over all alive command buffers
+    // to detect all invalid secondaries.
+    state_table.VisitWrappers([&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
+        if (wrapper->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY && !CheckCommandHandles(wrapper, state_table))
+        {
+            wrapper->state = vulkan_wrappers::CommandBufferWrapper::kInvalid;
+        }
+    });
+
+    state_table.VisitWrappers([&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
         assert(wrapper != nullptr);
 
         // Filter duplicate calls to vkAllocateCommandBuffers for command buffers that were allocated by the same API
@@ -473,7 +481,7 @@ void VulkanStateWriter::WriteSemaphoreState(const VulkanStateTable& state_table)
             // Query current semaphore value
             uint64_t          semaphore_value;
             format::ApiCallId signal_call_id;
-            if (device_wrapper->physical_device->instance_api_version >= VK_MAKE_VERSION(1, 2, 0))
+            if (device_wrapper->physical_device->instance_info.api_version >= VK_MAKE_VERSION(1, 2, 0))
             {
                 device_wrapper->layer_table.GetSemaphoreCounterValue(
                     device_wrapper->handle, wrapper->handle, &semaphore_value);
@@ -555,7 +563,7 @@ void VulkanStateWriter::WriteFramebufferState(const VulkanStateTable& state_tabl
 
         if (IsFramebufferValid(wrapper, state_table))
         {
-            auto render_pass_wrapper = state_table.GetRenderPassWrapper(wrapper->render_pass_id);
+            auto render_pass_wrapper = state_table.GetVulkanRenderPassWrapper(wrapper->render_pass_id);
             if (render_pass_wrapper == nullptr)
             {
                 // The object no longer exists, so a temporary object must be created.
@@ -596,7 +604,7 @@ void VulkanStateWriter::WritePipelineLayoutState(const VulkanStateTable& state_t
         auto deps = wrapper->layout_dependencies;
         for (const auto& entry : deps->layouts)
         {
-            auto ds_layout_wrapper = state_table.GetDescriptorSetLayoutWrapper(entry.handle_id);
+            auto ds_layout_wrapper = state_table.GetVulkanDescriptorSetLayoutWrapper(entry.handle_id);
             if (ds_layout_wrapper == nullptr)
             {
                 // The layout object has been destroyed, so a temporary object must be created.
@@ -675,10 +683,12 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
     std::set<util::MemoryOutputStream*>    processed_compute_pipelines;
     std::set<util::MemoryOutputStream*>    processed_ray_tracing_pipelines_nv;
     std::set<util::MemoryOutputStream*>    processed_ray_tracing_pipelines_khr;
+    std::set<util::MemoryOutputStream*>    processed_data_graph_pipelines_arm;
     std::vector<util::MemoryOutputStream*> graphics_pipelines;
     std::vector<util::MemoryOutputStream*> compute_pipelines;
     std::vector<util::MemoryOutputStream*> ray_tracing_pipelines_nv;
     std::vector<util::MemoryOutputStream*> ray_tracing_pipelines_khr;
+    std::vector<util::MemoryOutputStream*> data_graph_pipelines_arm;
 
     std::unordered_map<format::HandleId, const util::MemoryOutputStream*> temp_shaders;
     std::unordered_map<format::HandleId, const util::MemoryOutputStream*> temp_render_passes;
@@ -704,7 +714,8 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
             if (wrapper->render_pass_dependency.create_call_id != format::ApiCallId::ApiCall_Unknown)
             {
                 // Check for graphics-specific creation dependencies that no longer exist.
-                auto render_pass_wrapper = state_table.GetRenderPassWrapper(wrapper->render_pass_dependency.handle_id);
+                auto render_pass_wrapper =
+                    state_table.GetVulkanRenderPassWrapper(wrapper->render_pass_dependency.handle_id);
                 if (render_pass_wrapper == nullptr)
                 {
                     // The object no longer exists, so a temporary object must be created.
@@ -776,11 +787,20 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
                 // vkCreateRayTracingPipelinesKHR. It needs to find a good way to destroy this VkDeferredOperation.
             }
         }
+        else if (wrapper->create_call_id == format::ApiCall_vkCreateDataGraphPipelinesARM)
+        {
+            if (processed_data_graph_pipelines_arm.find(wrapper->create_parameters.get()) ==
+                processed_data_graph_pipelines_arm.end())
+            {
+                data_graph_pipelines_arm.push_back(wrapper->create_parameters.get());
+                processed_data_graph_pipelines_arm.insert(wrapper->create_parameters.get());
+            }
+        }
 
         // Check for creation dependencies that no longer exist.
         for (const auto& entry : wrapper->shader_module_dependencies)
         {
-            auto shader_wrapper = state_table.GetShaderModuleWrapper(entry.handle_id);
+            auto shader_wrapper = state_table.GetVulkanShaderModuleWrapper(entry.handle_id);
             if (shader_wrapper == nullptr)
             {
                 // The object no longer exists, so a temporary object must be created.
@@ -797,7 +817,7 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
 
         if (wrapper->layout_dependency.handle_id != format::kNullHandleId)
         {
-            auto layout_wrapper = state_table.GetPipelineLayoutWrapper(wrapper->layout_dependency.handle_id);
+            auto layout_wrapper = state_table.GetVulkanPipelineLayoutWrapper(wrapper->layout_dependency.handle_id);
             if (layout_wrapper == nullptr)
             {
                 // The object no longer exists, so a temporary object must be created.
@@ -812,7 +832,7 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
                     auto deps = wrapper->layout_dependencies;
                     for (const auto& entry : deps->layouts)
                     {
-                        auto ds_layout_wrapper = state_table.GetDescriptorSetLayoutWrapper(entry.handle_id);
+                        auto ds_layout_wrapper = state_table.GetVulkanDescriptorSetLayoutWrapper(entry.handle_id);
                         if (ds_layout_wrapper == nullptr)
                         {
                             // The object no longer exists, so a temporary object must be created.
@@ -855,6 +875,11 @@ void VulkanStateWriter::WritePipelineState(const VulkanStateTable& state_table)
         WriteFunctionCall(format::ApiCall_vkCreateRayTracingPipelinesKHR, entry);
     }
 
+    for (const auto& entry : data_graph_pipelines_arm)
+    {
+        WriteFunctionCall(format::ApiCall_vkCreateDataGraphPipelinesARM, entry);
+    }
+
     for (const auto& entry : temp_deferred_operation_join_command)
     {
         WriteDeferredOperationJoinCommand(entry.second, entry.first);
@@ -891,7 +916,7 @@ void VulkanStateWriter::WriteRayTracingShaderGroupHandlesState(const VulkanState
 
         if (wrapper->create_call_id == format::ApiCall_vkCreateRayTracingPipelinesKHR)
         {
-            auto     device_wrapper = state_table.GetDeviceWrapper(wrapper->device_id);
+            auto     device_wrapper = state_table.GetVulkanDeviceWrapper(wrapper->device_id);
             uint32_t data_size      = device_wrapper->property_feature_info.property_shaderGroupHandleSize *
                                  wrapper->num_shader_group_handles;
             std::vector<uint8_t> data(data_size);
@@ -923,7 +948,8 @@ void VulkanStateWriter::WriteDescriptorSetState(const VulkanStateTable& state_ta
     state_table.VisitWrappers([&](const vulkan_wrappers::DescriptorSetWrapper* wrapper) {
         assert(wrapper != nullptr);
 
-        auto ds_layout_wrapper = state_table.GetDescriptorSetLayoutWrapper(wrapper->set_layout_dependency.handle_id);
+        auto ds_layout_wrapper =
+            state_table.GetVulkanDescriptorSetLayoutWrapper(wrapper->set_layout_dependency.handle_id);
         if (ds_layout_wrapper == nullptr)
         {
             // The object no longer exists, so a temporary object must be created.
@@ -1023,7 +1049,8 @@ void VulkanStateWriter::WriteDescriptorSetStateWithAssetFile(const VulkanStateTa
     state_table.VisitWrappers([&](const vulkan_wrappers::DescriptorSetWrapper* wrapper) {
         assert(wrapper != nullptr);
 
-        auto ds_layout_wrapper = state_table.GetDescriptorSetLayoutWrapper(wrapper->set_layout_dependency.handle_id);
+        auto ds_layout_wrapper =
+            state_table.GetVulkanDescriptorSetLayoutWrapper(wrapper->set_layout_dependency.handle_id);
         if (ds_layout_wrapper == nullptr)
         {
             // The object no longer exists, so a temporary object must be created.
@@ -1049,7 +1076,7 @@ void VulkanStateWriter::WriteDescriptorSetStateWithAssetFile(const VulkanStateTa
                 {
                     if (output_stream_ != nullptr)
                     {
-                        assert((*asset_file_offsets_).find(wrapper->handle_id) != (*asset_file_offsets_).end());
+                        assert(asset_file_offsets_->find(wrapper->handle_id) != asset_file_offsets_->end());
                         const int64_t offset = (*asset_file_offsets_)[wrapper->handle_id];
                         WriteExecuteFromFile(asset_file_name_, 1, offset);
                     }
@@ -1071,7 +1098,7 @@ void VulkanStateWriter::WriteDescriptorSetStateWithAssetFile(const VulkanStateTa
         }
         else
         {
-            assert((*asset_file_offsets_).find(wrapper->handle_id) != (*asset_file_offsets_).end());
+            assert(asset_file_offsets_->find(wrapper->handle_id) != asset_file_offsets_->end());
             offset = (*asset_file_offsets_)[wrapper->handle_id];
         }
 
@@ -1248,15 +1275,33 @@ void VulkanStateWriter::WriteSurfaceKhrState(const VulkanStateTable& state_table
 
         for (const auto& entry : wrapper->surface_capabilities)
         {
-            WriteResizeWindowCmd(wrapper->handle_id,
-                                 entry.second.surface_capabilities.surfaceCapabilities.currentExtent.width,
-                                 entry.second.surface_capabilities.surfaceCapabilities.currentExtent.height);
-            WriteGetPhysicalDeviceSurfaceCapabilities(entry.first, wrapper->handle_id, entry.second, state_table);
+            if (auto capabilities = std::get_if<vulkan_wrappers::SurfaceCapabilities>(&entry.second))
+            {
+                WriteResizeWindowCmd(wrapper->handle_id,
+                                     capabilities->surface_capabilities.currentExtent.width,
+                                     capabilities->surface_capabilities.currentExtent.height);
+                WriteGetPhysicalDeviceSurfaceCapabilities(entry.first, wrapper->handle_id, *capabilities, state_table);
+            }
+            else if (auto capabilities2 = std::get_if<vulkan_wrappers::SurfaceCapabilities2>(&entry.second))
+            {
+                WriteResizeWindowCmd(wrapper->handle_id,
+                                     capabilities2->surface_capabilities.surfaceCapabilities.currentExtent.width,
+                                     capabilities2->surface_capabilities.surfaceCapabilities.currentExtent.height);
+                WriteGetPhysicalDeviceSurfaceCapabilities2(
+                    entry.first, wrapper->handle_id, *capabilities2, state_table);
+            }
         }
 
         for (const auto& entry : wrapper->surface_formats)
         {
-            WriteGetPhysicalDeviceSurfaceFormats(entry.first, wrapper->handle_id, entry.second, state_table);
+            if (auto formats = std::get_if<vulkan_wrappers::SurfaceFormats>(&entry.second))
+            {
+                WriteGetPhysicalDeviceSurfaceFormats(entry.first, wrapper->handle_id, *formats, state_table);
+            }
+            else if (auto formats2 = std::get_if<vulkan_wrappers::SurfaceFormats2>(&entry.second))
+            {
+                WriteGetPhysicalDeviceSurfaceFormats2(entry.first, wrapper->handle_id, *formats2, state_table);
+            }
         }
 
         for (const auto& entry : wrapper->surface_present_modes)
@@ -1374,6 +1419,7 @@ void VulkanStateWriter::WriteDeviceMemoryState(const VulkanStateTable& state_tab
         const vulkan_wrappers::DeviceMemoryWrapper* wrapper            = hardware_buffer.second;
         bool                                        is_standard_format = false;
         CommonProcessHardwareBuffer(thread_data_->thread_id_,
+                                    wrapper->parent_device,
                                     wrapper->hardware_buffer_memory_id,
                                     wrapper->hardware_buffer,
                                     wrapper->allocation_size,
@@ -1405,9 +1451,9 @@ void VulkanStateWriter::WriteBufferDeviceAddressState(const VulkanStateTable& st
         if ((wrapper->device_id != format::kNullHandleId) && (wrapper->address != 0))
         {
             auto physical_device_wrapper = wrapper->bind_device->physical_device;
-            auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)
-                                               ? format::ApiCall_vkGetBufferDeviceAddress
-                                               : format::ApiCall_vkGetBufferDeviceAddressKHR;
+            auto call_id = physical_device_wrapper->instance_info.api_version >= VK_MAKE_VERSION(1, 2, 0)
+                               ? format::ApiCall_vkGetBufferDeviceAddress
+                               : format::ApiCall_vkGetBufferDeviceAddressKHR;
 
             parameter_stream_.Clear();
             encoder_.EncodeHandleIdValue(wrapper->bind_device->handle_id);
@@ -1434,6 +1480,26 @@ void VulkanStateWriter::WriteBufferState(const VulkanStateTable& state_table)
         }
 
         WriteFunctionCall(wrapper->create_call_id, wrapper->create_parameters.get());
+    });
+}
+
+void VulkanStateWriter::WriteImageState(const VulkanStateTable& state_table)
+{
+    std::set<util::MemoryOutputStream*> processed;
+    state_table.VisitWrappers([&](const vulkan_wrappers::ImageWrapper* image_wrapper) {
+        // Skip create call for swapchain images, i.e. vkGetSwapchainImagesKHR
+        // This call is already emitted by the state setup for the parent swapchain
+        if (image_wrapper->is_swapchain_image)
+        {
+            return;
+        }
+        // Filter duplicate entries for calls that create multiple objects, where objects created by the same call
+        // all reference the same parameter buffer.
+        if (processed.find(image_wrapper->create_parameters.get()) == processed.end())
+        {
+            WriteFunctionCall(image_wrapper->create_call_id, image_wrapper->create_parameters.get());
+            processed.insert(image_wrapper->create_parameters.get());
+        }
     });
 }
 
@@ -1528,7 +1594,7 @@ void VulkanStateWriter::WriteASInputMemoryState(ASInputBuffer& buffer)
     buffer.actual_address = mock_address_counter_;
 
     auto physical_device_wrapper = buffer.bind_device->physical_device;
-    auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)
+    auto call_id                 = physical_device_wrapper->instance_info.api_version >= VK_MAKE_VERSION(1, 2, 0)
                                        ? format::ApiCall_vkGetBufferDeviceAddress
                                        : format::ApiCall_vkGetBufferDeviceAddressKHR;
 
@@ -1661,8 +1727,6 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
         std::vector<AccelerationStructureBuildCommandData*>          tlas_build;
         std::vector<AccelerationStructureWritePropertiesCommandData> write_properties;
         AccelerationStructureCopyCommandData                         copies;
-        std::vector<AccelerationStructureBuildCommandData*>          blas_update;
-        std::vector<AccelerationStructureBuildCommandData*>          tlas_update;
     };
 
     std::unordered_map<format::HandleId, AccelerationStructureCommands> commands;
@@ -1671,34 +1735,22 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
     state_table.VisitWrappers([&](vulkan_wrappers::AccelerationStructureKHRWrapper* wrapper) {
         assert(wrapper != nullptr);
 
-        auto& per_device_container                                            = commands[wrapper->device->handle_id];
-        std::vector<AccelerationStructureBuildCommandData*>* build_container  = nullptr;
-        std::vector<AccelerationStructureBuildCommandData*>* update_container = nullptr;
+        auto& per_device_container                                           = commands[wrapper->device->handle_id];
+        std::vector<AccelerationStructureBuildCommandData*>* build_container = nullptr;
 
         if (wrapper->type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
         {
-            build_container  = &per_device_container.blas_build;
-            update_container = &per_device_container.blas_update;
+            build_container = &per_device_container.blas_build;
         }
         else if (wrapper->type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
         {
-            build_container  = &per_device_container.tlas_build;
-            update_container = &per_device_container.tlas_update;
+            build_container = &per_device_container.tlas_build;
         }
 
         if (wrapper->latest_build_command_)
         {
             build_container->push_back(&wrapper->latest_build_command_.value());
             for (const vulkan_wrappers::ASInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
-            {
-                max_resource_size = std::max(max_resource_size, buffer.bytes.size());
-            }
-        }
-
-        if (wrapper->latest_update_command_)
-        {
-            update_container->push_back(&wrapper->latest_update_command_.value());
-            for (const vulkan_wrappers::ASInputBuffer& buffer : wrapper->latest_update_command_->input_buffers)
             {
                 max_resource_size = std::max(max_resource_size, buffer.bytes.size());
             }
@@ -1737,15 +1789,6 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
             WriteAccelerationStructureBuildState(device, *tlas_build);
         }
 
-        for (auto& blas_update : command.blas_update)
-        {
-            WriteAccelerationStructureBuildState(device, *blas_update);
-        }
-
-        for (auto& tlas_update : command.tlas_update)
-        {
-            WriteAccelerationStructureBuildState(device, *tlas_update);
-        }
         EndAccelerationStructureSection(device);
     }
 }
@@ -1821,6 +1864,7 @@ void VulkanStateWriter::UpdateAddresses(AccelerationStructureBuildCommandData& c
             }
             case VK_GEOMETRY_TYPE_SPHERES_NV:
             case VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV:
+            case VK_GEOMETRY_TYPE_DENSE_GEOMETRY_FORMAT_TRIANGLES_AMDX:
                 GFXRECON_LOG_WARNING("Geometry type not supported at " __FILE__ ", line: %d.", __LINE__);
                 break;
             case VK_GEOMETRY_TYPE_MAX_ENUM_KHR:
@@ -2413,7 +2457,7 @@ void VulkanStateWriter::WriteBufferDeviceAddressCalls(const VulkanStateTable& st
             util::VulkanDeviceTableDispatcher(GetDeviceTable(device)).GetBufferDeviceAddress(device, &info);
 
         auto physical_device_wrapper = wrapper->bind_device->physical_device;
-        auto call_id                 = physical_device_wrapper->instance_api_version >= VK_MAKE_VERSION(1, 2, 0)
+        auto call_id                 = physical_device_wrapper->instance_info.api_version >= VK_MAKE_VERSION(1, 2, 0)
                                            ? format::ApiCall_vkGetBufferDeviceAddress
                                            : format::ApiCall_vkGetBufferDeviceAddressKHR;
 
@@ -2443,14 +2487,13 @@ bool VulkanStateWriter::OutputStreamWrite(const void* data, size_t len)
 {
     return output_stream_->Write(data, len);
 }
-
 void VulkanStateWriter::ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
                                             const std::vector<TensorSnapshotInfo>& tensor_snapshot_info,
                                             graphics::VulkanResourcesUtil&         resource_util)
 {
     assert(device_wrapper != nullptr);
 
-    const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
 
     for (const auto& snapshot_entry : tensor_snapshot_info)
     {
@@ -2521,12 +2564,12 @@ void VulkanStateWriter::ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper
             format::InitTensorCommandHeader upload_cmd;
 
             upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
-            upload_cmd.meta_header.meta_data_id =
-                format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitTensorCommand);
-            upload_cmd.thread_id = thread_data_->thread_id_;
-            upload_cmd.device_id = device_wrapper->handle_id;
-            upload_cmd.tensor_id = tensor_wrapper->handle_id;
-            upload_cmd.data_size = data_size;
+            upload_cmd.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
+                                                                         format::arm::MetaDataType::kInitTensorCommand);
+            upload_cmd.thread_id                     = thread_data_->thread_id_;
+            upload_cmd.device_id                     = device_wrapper->handle_id;
+            upload_cmd.tensor_id                     = tensor_wrapper->handle_id;
+            upload_cmd.data_size                     = data_size;
 
             if (compressor_ != nullptr)
             {
@@ -2562,37 +2605,88 @@ void VulkanStateWriter::ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper
 }
 
 void VulkanStateWriter::ProcessBufferMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
-                                            const std::vector<BufferSnapshotInfo>& buffer_snapshot_info,
+                                            const std::vector<BufferSnapshotInfo>& buffer_snapshot_infos,
                                             graphics::VulkanResourcesUtil&         resource_util)
 {
-    assert(device_wrapper != nullptr);
+    GFXRECON_ASSERT(device_wrapper != nullptr);
+    using BufferResource = graphics::VulkanResourcesUtil::BufferResource;
 
-    const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
 
-    for (const auto& snapshot_entry : buffer_snapshot_info)
-    {
-        const vulkan_wrappers::BufferWrapper*       buffer_wrapper = snapshot_entry.buffer_wrapper;
-        const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = snapshot_entry.memory_wrapper;
-        const uint8_t*                              bytes          = nullptr;
-        std::vector<uint8_t>                        data;
+    std::vector<BufferResource> buffer_resources;
+    buffer_resources.reserve(buffer_snapshot_infos.size());
 
-        assert((buffer_wrapper != nullptr) && (memory_wrapper != nullptr));
-
-        if (snapshot_entry.need_staging_copy)
+    auto write_init_buffer_cmd = [this, device_wrapper](const BufferResource& buf, const void* data) {
+        if (data != nullptr)
         {
-            VkResult result = resource_util.ReadFromBufferResource(
-                buffer_wrapper->handle, buffer_wrapper->size, 0, buffer_wrapper->queue_family_index, data);
 
-            if (result == VK_SUCCESS)
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, buf.size);
+            auto*                           bytes     = reinterpret_cast<const uint8_t*>(data);
+            auto                            data_size = static_cast<size_t>(buf.size);
+            format::InitBufferCommandHeader upload_cmd{};
+
+            upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+            upload_cmd.meta_header.meta_data_id =
+                format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitBufferCommand);
+            upload_cmd.thread_id = thread_data_->thread_id_;
+            upload_cmd.device_id = device_wrapper->handle_id;
+            upload_cmd.buffer_id = buf.handle_id;
+            upload_cmd.data_size = data_size;
+
+            if (compressor_ != nullptr)
             {
-                bytes = data.data();
+
+                size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
+
+                if ((compressed_size > 0) && (compressed_size < data_size))
+                {
+                    upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
+
+                    bytes     = compressed_parameter_buffer_.data();
+                    data_size = compressed_size;
+                }
             }
+
+            // Calculate size of packet with compressed or uncompressed data size.
+            upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd) + data_size;
+
+            output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
+            output_stream_->Write(bytes, data_size);
+            ++blocks_written_;
         }
         else
         {
-            assert((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0));
+            GFXRECON_LOG_ERROR("Trimming state snapshot failed to retrieve memory content for buffer %" PRIu64,
+                               buf.handle_id);
+        }
+    };
 
-            VkResult result = VK_SUCCESS;
+    size_t num_staging_bytes = 0;
+
+    for (const auto& snapshot_entry : buffer_snapshot_infos)
+    {
+        const vulkan_wrappers::BufferWrapper*       buffer_wrapper = snapshot_entry.buffer_wrapper;
+        const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = snapshot_entry.memory_wrapper;
+        GFXRECON_ASSERT(buffer_wrapper != nullptr);
+
+        BufferResource buffer_resource;
+        buffer_resource.handle_id          = buffer_wrapper->handle_id;
+        buffer_resource.buffer             = buffer_wrapper->handle;
+        buffer_resource.size               = buffer_wrapper->size;
+        buffer_resource.offset             = 0;
+        buffer_resource.queue_family_index = buffer_wrapper->queue_family_index;
+
+        if (snapshot_entry.need_staging_copy)
+        {
+            buffer_resources.push_back(buffer_resource);
+            num_staging_bytes += buffer_resource.size;
+        }
+        else
+        {
+            GFXRECON_ASSERT(memory_wrapper != nullptr);
+            GFXRECON_ASSERT((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0));
+            const uint8_t* bytes  = nullptr;
+            VkResult       result = VK_SUCCESS;
 
             if (memory_wrapper->mapped_data == nullptr)
             {
@@ -2619,94 +2713,106 @@ void VulkanStateWriter::ProcessBufferMemory(const vulkan_wrappers::DeviceWrapper
                 InvalidateMappedMemoryRange(
                     device_wrapper, memory_wrapper->handle, buffer_wrapper->bind_offset, buffer_wrapper->size);
             }
-        }
 
-        if (bytes != nullptr)
-        {
-            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, buffer_wrapper->size);
+            write_init_buffer_cmd(buffer_resource, bytes);
 
-            size_t                          data_size = static_cast<size_t>(buffer_wrapper->size);
-            format::InitBufferCommandHeader upload_cmd;
-
-            upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
-            upload_cmd.meta_header.meta_data_id =
-                format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitBufferCommand);
-            upload_cmd.thread_id = thread_data_->thread_id_;
-            upload_cmd.device_id = device_wrapper->handle_id;
-            upload_cmd.buffer_id = buffer_wrapper->handle_id;
-            upload_cmd.data_size = data_size;
-
-            if (compressor_ != nullptr)
-            {
-                size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
-
-                if ((compressed_size > 0) && (compressed_size < data_size))
-                {
-                    upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
-
-                    bytes     = compressed_parameter_buffer_.data();
-                    data_size = compressed_size;
-                }
-            }
-
-            // Calculate size of packet with compressed or uncompressed data size.
-            upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd) + data_size;
-
-            output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
-            output_stream_->Write(bytes, data_size);
-            ++blocks_written_;
-
-            if (!snapshot_entry.need_staging_copy && memory_wrapper->mapped_data == nullptr)
+            if (memory_wrapper->mapped_data == nullptr)
             {
                 device_table->UnmapMemory(device_wrapper->handle, memory_wrapper->handle);
             }
         }
-        else
-        {
-            GFXRECON_LOG_ERROR("Trimming state snapshot failed to retrieve memory content for buffer %" PRIu64,
-                               buffer_wrapper->handle_id);
-        }
     }
+
+    // batch process buffer-downloads requiring staging, use <128MB staging-mem
+    size_t staging_buffer_size = std::min<size_t>(128U << 20U, num_staging_bytes);
+    resource_util.ReadBufferResources(buffer_resources, write_init_buffer_cmd, staging_buffer_size);
 }
 
 void VulkanStateWriter::ProcessBufferMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
-                                                         const std::vector<BufferSnapshotInfo>& buffer_snapshot_info,
+                                                         const std::vector<BufferSnapshotInfo>& buffer_snapshot_infos,
                                                          graphics::VulkanResourcesUtil&         resource_util)
 {
-    assert(device_wrapper != nullptr);
-    assert(asset_file_stream_ != nullptr);
+    GFXRECON_ASSERT(device_wrapper != nullptr);
+    GFXRECON_ASSERT(asset_file_stream_ != nullptr);
 
-    const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
 
-    for (const auto& snapshot_entry : buffer_snapshot_info)
+    using BufferResource = graphics::VulkanResourcesUtil::BufferResource;
+    std::vector<BufferResource> buffer_resources;
+    buffer_resources.reserve(buffer_snapshot_infos.size());
+
+    auto write_init_buffer_cmd = [this, device_wrapper](const BufferResource& buffer_resource, const void* data) {
+        GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, buffer_resource.size);
+
+        size_t                          data_size = static_cast<size_t>(buffer_resource.size);
+        format::InitBufferCommandHeader upload_cmd;
+        auto*                           bytes = reinterpret_cast<const uint8_t*>(data);
+
+        upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+        upload_cmd.meta_header.meta_data_id =
+            format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitBufferCommand);
+        upload_cmd.thread_id = thread_data_->thread_id_;
+        upload_cmd.device_id = device_wrapper->handle_id;
+        upload_cmd.buffer_id = buffer_resource.handle_id;
+        upload_cmd.data_size = data_size;
+
+        if (compressor_ != nullptr)
+        {
+            size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
+
+            if ((compressed_size > 0) && (compressed_size < data_size))
+            {
+                upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
+
+                bytes     = compressed_parameter_buffer_.data();
+                data_size = compressed_size;
+            }
+        }
+
+        // Calculate size of packet with compressed or uncompressed data size.
+        upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd) + data_size;
+
+        const int64_t offset = asset_file_stream_->GetOffset();
+        asset_file_stream_->Write(&upload_cmd, sizeof(upload_cmd));
+        asset_file_stream_->Write(bytes, data_size);
+        (*asset_file_offsets_)[buffer_resource.handle_id] = offset;
+
+        if (output_stream_ != nullptr)
+        {
+            WriteExecuteFromFile(asset_file_name_, 1, offset);
+        }
+    };
+
+    size_t num_staging_bytes = 0;
+
+    for (const auto& snapshot_entry : buffer_snapshot_infos)
     {
         vulkan_wrappers::BufferWrapper*             buffer_wrapper = snapshot_entry.buffer_wrapper;
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = snapshot_entry.memory_wrapper;
-        const uint8_t*                              bytes          = nullptr;
-        std::vector<uint8_t>                        data;
-
-        assert((buffer_wrapper != nullptr));
+        GFXRECON_ASSERT(buffer_wrapper != nullptr);
 
         if (buffer_wrapper->dirty)
         {
-            assert(memory_wrapper != nullptr);
+            GFXRECON_ASSERT(memory_wrapper != nullptr);
             buffer_wrapper->dirty = false;
+
+            BufferResource buffer_resource;
+            buffer_resource.handle_id          = buffer_wrapper->handle_id;
+            buffer_resource.buffer             = buffer_wrapper->handle;
+            buffer_resource.size               = buffer_wrapper->size;
+            buffer_resource.offset             = 0;
+            buffer_resource.queue_family_index = buffer_wrapper->queue_family_index;
 
             if (snapshot_entry.need_staging_copy)
             {
-                VkResult result = resource_util.ReadFromBufferResource(
-                    buffer_wrapper->handle, buffer_wrapper->size, 0, buffer_wrapper->queue_family_index, data);
-
-                if (result == VK_SUCCESS)
-                {
-                    bytes = data.data();
-                }
+                buffer_resources.push_back(buffer_resource);
+                num_staging_bytes += buffer_resource.size;
             }
             else
             {
-                assert((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0));
-
-                VkResult result = VK_SUCCESS;
+                GFXRECON_ASSERT((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0));
+                VkResult       result = VK_SUCCESS;
+                const uint8_t* bytes  = nullptr;
 
                 if (memory_wrapper->mapped_data == nullptr)
                 {
@@ -2733,49 +2839,16 @@ void VulkanStateWriter::ProcessBufferMemoryWithAssetFile(const vulkan_wrappers::
                     InvalidateMappedMemoryRange(
                         device_wrapper, memory_wrapper->handle, buffer_wrapper->bind_offset, buffer_wrapper->size);
                 }
-            }
 
-            assert(bytes);
-
-            if (bytes != nullptr)
-            {
-                GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, buffer_wrapper->size);
-
-                size_t                          data_size = static_cast<size_t>(buffer_wrapper->size);
-                format::InitBufferCommandHeader upload_cmd;
-
-                upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
-                upload_cmd.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
-                                                                             format::MetaDataType::kInitBufferCommand);
-                upload_cmd.thread_id                     = thread_data_->thread_id_;
-                upload_cmd.device_id                     = device_wrapper->handle_id;
-                upload_cmd.buffer_id                     = buffer_wrapper->handle_id;
-                upload_cmd.data_size                     = data_size;
-
-                if (compressor_ != nullptr)
+                GFXRECON_ASSERT(bytes);
+                if (bytes != nullptr)
                 {
-                    size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
-
-                    if ((compressed_size > 0) && (compressed_size < data_size))
-                    {
-                        upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
-
-                        bytes     = compressed_parameter_buffer_.data();
-                        data_size = compressed_size;
-                    }
+                    write_init_buffer_cmd(buffer_resource, bytes);
                 }
-
-                // Calculate size of packet with compressed or uncompressed data size.
-                upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd) + data_size;
-
-                const int64_t offset = asset_file_stream_->GetOffset();
-                asset_file_stream_->Write(&upload_cmd, sizeof(upload_cmd));
-                asset_file_stream_->Write(bytes, data_size);
-                (*asset_file_offsets_)[buffer_wrapper->handle_id] = offset;
-
-                if (output_stream_ != nullptr)
+                else
                 {
-                    WriteExecuteFromFile(asset_file_name_, 1, offset);
+                    GFXRECON_LOG_ERROR("Trimming state snapshot failed to retrieve memory content for buffer %" PRIu64,
+                                       buffer_wrapper->handle_id);
                 }
 
                 if (!snapshot_entry.need_staging_copy && memory_wrapper->mapped_data == nullptr)
@@ -2783,73 +2856,98 @@ void VulkanStateWriter::ProcessBufferMemoryWithAssetFile(const vulkan_wrappers::
                     device_table->UnmapMemory(device_wrapper->handle, memory_wrapper->handle);
                 }
             }
-            else
-            {
-                GFXRECON_LOG_ERROR("Trimming state snapshot failed to retrieve memory content for buffer %" PRIu64,
-                                   buffer_wrapper->handle_id);
-            }
         }
         else
         {
             if (output_stream_ != nullptr)
             {
-                assert((*asset_file_offsets_).find(buffer_wrapper->handle_id) != (*asset_file_offsets_).end());
+                assert(asset_file_offsets_->find(buffer_wrapper->handle_id) != asset_file_offsets_->end());
                 const int64_t offset = (*asset_file_offsets_)[buffer_wrapper->handle_id];
                 WriteExecuteFromFile(asset_file_name_, 1, offset);
             }
         }
     }
+
+    // batch process buffer-downloads requiring staging, use <128MB staging-mem
+    size_t staging_buffer_size = std::min<size_t>(128U << 20U, num_staging_bytes);
+    resource_util.ReadBufferResources(buffer_resources, write_init_buffer_cmd, staging_buffer_size);
 }
 
 void VulkanStateWriter::ProcessImageMemory(const vulkan_wrappers::DeviceWrapper* device_wrapper,
-                                           const std::vector<ImageSnapshotInfo>& image_snapshot_info,
+                                           const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
                                            graphics::VulkanResourcesUtil&        resource_util)
 {
-    assert(device_wrapper != nullptr);
+    using ImageResource = graphics::VulkanResourcesUtil::ImageResource;
+    GFXRECON_ASSERT(device_wrapper != nullptr);
 
-    const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
 
-    for (const auto& snapshot_entry : image_snapshot_info)
+    std::vector<ImageResource> image_resources;
+    image_resources.reserve(image_snapshot_infos.size());
+
+    auto write_init_image_cmd = [this, device_wrapper](const ImageResource& img, const void* data, size_t num_bytes) {
+        if (data != nullptr)
+        {
+            command_writer_.WriteInitImageCmd(format::ApiFamilyId::ApiFamily_Vulkan,
+                                              device_wrapper->handle_id,
+                                              img.handle_id,
+                                              img.aspect,
+                                              img.layout,
+                                              img.level_count,
+                                              *img.level_sizes,
+                                              num_bytes,
+                                              data);
+            ++blocks_written_;
+        }
+    };
+
+    size_t num_staging_bytes = 0;
+
+    for (const auto& snapshot_entry : image_snapshot_infos)
     {
         const vulkan_wrappers::ImageWrapper*        image_wrapper  = snapshot_entry.image_wrapper;
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = snapshot_entry.memory_wrapper;
         const uint8_t*                              bytes          = nullptr;
         std::vector<uint8_t>                        data;
 
-        assert((image_wrapper != nullptr) && ((image_wrapper->is_swapchain_image && memory_wrapper == nullptr) ||
-                                              (!image_wrapper->is_swapchain_image && memory_wrapper != nullptr)));
+        GFXRECON_ASSERT(
+            (image_wrapper != nullptr) &&
+            (((image_wrapper->is_swapchain_image || image_wrapper->is_sparse_image) && memory_wrapper == nullptr) ||
+             ((!image_wrapper->is_swapchain_image && !image_wrapper->is_sparse_image) && memory_wrapper != nullptr)));
+
+        GFXRECON_ASSERT(snapshot_entry.resource_size > 0);
+
+        ImageResource image_resource        = {};
+        image_resource.handle_id            = image_wrapper->handle_id;
+        image_resource.image                = image_wrapper->handle;
+        image_resource.format               = image_wrapper->format;
+        image_resource.type                 = image_wrapper->image_type;
+        image_resource.extent               = image_wrapper->extent;
+        image_resource.level_count          = image_wrapper->mip_levels;
+        image_resource.layer_count          = image_wrapper->array_layers;
+        image_resource.tiling               = image_wrapper->tiling;
+        image_resource.sample_count         = image_wrapper->samples;
+        image_resource.layout               = image_wrapper->current_layout;
+        image_resource.queue_family_index   = image_wrapper->queue_family_index;
+        image_resource.external_format      = image_wrapper->external_format;
+        image_resource.size                 = image_wrapper->size;
+        image_resource.resource_size        = snapshot_entry.resource_size;
+        image_resource.level_sizes          = &snapshot_entry.level_sizes;
+        image_resource.aspect               = snapshot_entry.aspect;
+        image_resource.all_layers_per_level = true;
+
+        if (image_wrapper->external_memory_android)
+        {
+            // No need to process this image memory as its corresponding AHB is processed instead
+            continue;
+        }
 
         if (snapshot_entry.need_staging_copy)
         {
-            std::vector<uint64_t> subresource_offsets;
-            std::vector<uint64_t> subresource_sizes;
-            bool                  scaling_supported;
-
-            VkResult result = resource_util.ReadFromImageResourceStaging(image_wrapper->handle,
-                                                                         image_wrapper->format,
-                                                                         image_wrapper->image_type,
-                                                                         image_wrapper->extent,
-                                                                         image_wrapper->mip_levels,
-                                                                         image_wrapper->array_layers,
-                                                                         image_wrapper->tiling,
-                                                                         image_wrapper->samples,
-                                                                         image_wrapper->current_layout,
-                                                                         image_wrapper->queue_family_index,
-                                                                         image_wrapper->external_format,
-                                                                         image_wrapper->size,
-                                                                         snapshot_entry.aspect,
-                                                                         data,
-                                                                         subresource_offsets,
-                                                                         subresource_sizes,
-                                                                         scaling_supported,
-                                                                         true);
-
-            if (result == VK_SUCCESS)
-            {
-                bytes = data.data();
-            }
+            image_resources.emplace_back(image_resource);
+            num_staging_bytes += image_resource.resource_size;
         }
-        else if (!image_wrapper->is_swapchain_image)
+        else if (!image_wrapper->is_swapchain_image && !image_wrapper->is_sparse_image)
         {
             assert((memory_wrapper != nullptr) &&
                    ((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0)));
@@ -2881,89 +2979,153 @@ void VulkanStateWriter::ProcessImageMemory(const vulkan_wrappers::DeviceWrapper*
                 InvalidateMappedMemoryRange(
                     device_wrapper, memory_wrapper->handle, image_wrapper->bind_offset, snapshot_entry.resource_size);
             }
-        }
 
-        if (!image_wrapper->is_swapchain_image)
-        {
-            command_writer_.WriteInitImageCmd(format::ApiFamilyId::ApiFamily_Vulkan,
-                                              device_wrapper->handle_id,
-                                              image_wrapper->handle_id,
-                                              snapshot_entry.aspect,
-                                              image_wrapper->current_layout,
-                                              image_wrapper->mip_levels,
-                                              snapshot_entry.level_sizes,
-                                              snapshot_entry.resource_size,
-                                              bytes);
+            write_init_image_cmd(image_resource, bytes, snapshot_entry.resource_size);
 
-            if (!snapshot_entry.need_staging_copy && memory_wrapper->mapped_data == nullptr)
+            if (memory_wrapper->mapped_data == nullptr)
             {
                 device_table->UnmapMemory(device_wrapper->handle, memory_wrapper->handle);
             }
-
-            ++blocks_written_;
         }
     }
+
+    // batch process buffer-downloads requiring staging, use <128MB staging-mem
+    size_t staging_buffer_size = std::min<size_t>(128U << 20U, num_staging_bytes);
+    resource_util.ReadImageResources(image_resources, write_init_image_cmd, staging_buffer_size);
 }
 
 void VulkanStateWriter::ProcessImageMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper* device_wrapper,
-                                                        const std::vector<ImageSnapshotInfo>& image_snapshot_info,
+                                                        const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
                                                         graphics::VulkanResourcesUtil&        resource_util)
 {
-    assert(device_wrapper != nullptr);
-    assert(asset_file_stream_ != nullptr);
+    GFXRECON_ASSERT(device_wrapper != nullptr);
+    GFXRECON_ASSERT(asset_file_stream_ != nullptr);
+    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
 
-    const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+    using ImageResource = graphics::VulkanResourcesUtil::ImageResource;
+    std::vector<ImageResource> image_resources;
+    image_resources.reserve(image_snapshot_infos.size());
 
-    for (const auto& snapshot_entry : image_snapshot_info)
+    auto write_init_image_cmd = [this, device_wrapper](const ImageResource& img, const void* data, size_t num_bytes) {
+        format::InitImageCommandHeader upload_cmd;
+
+        // Packet size without the resource data.
+        upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd);
+        upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+        upload_cmd.meta_header.meta_data_id =
+            format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kInitImageCommand);
+        upload_cmd.thread_id = thread_data_->thread_id_;
+        upload_cmd.device_id = device_wrapper->handle_id;
+        upload_cmd.image_id  = img.handle_id;
+        upload_cmd.aspect    = img.aspect;
+        upload_cmd.layout    = img.layout;
+
+        if (data != nullptr)
+        {
+            auto* bytes = reinterpret_cast<const uint8_t*>(data);
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, img.resource_size);
+
+            auto data_size = static_cast<size_t>(num_bytes);
+
+            // Store uncompressed data size in packet.
+            upload_cmd.data_size   = data_size;
+            upload_cmd.level_count = img.level_count;
+
+            if (compressor_ != nullptr)
+            {
+                size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
+
+                if ((compressed_size > 0) && (compressed_size < data_size))
+                {
+                    upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
+
+                    bytes     = compressed_parameter_buffer_.data();
+                    data_size = compressed_size;
+                }
+            }
+
+            // Calculate size of packet with compressed or uncompressed data size.
+            GFXRECON_ASSERT(img.level_sizes != nullptr && !img.level_sizes->empty() &&
+                            (img.level_sizes->size() == upload_cmd.level_count));
+            size_t levels_size = img.level_sizes->size() * sizeof(img.level_sizes->front());
+
+            upload_cmd.meta_header.block_header.size += levels_size + data_size;
+
+            const int64_t offset                  = asset_file_stream_->GetOffset();
+            (*asset_file_offsets_)[img.handle_id] = offset;
+            asset_file_stream_->Write(&upload_cmd, sizeof(upload_cmd));
+            asset_file_stream_->Write(img.level_sizes->data(), levels_size);
+            asset_file_stream_->Write(bytes, data_size);
+
+            if (output_stream_ != nullptr)
+            {
+                WriteExecuteFromFile(asset_file_name_, 1, offset);
+            }
+        }
+        else
+        {
+            if (output_stream_ != nullptr)
+            {
+                // Write a packet without resource data; replay must still perform a layout transition at image
+                // initialization.
+                upload_cmd.data_size   = 0;
+                upload_cmd.level_count = 0;
+
+                output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
+                ++blocks_written_;
+            }
+        }
+    };
+
+    for (const auto& snapshot_entry : image_snapshot_infos)
     {
         vulkan_wrappers::ImageWrapper*              image_wrapper  = snapshot_entry.image_wrapper;
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = snapshot_entry.memory_wrapper;
         const uint8_t*                              bytes          = nullptr;
-        std::vector<uint8_t>                        data;
 
-        assert(image_wrapper != nullptr);
+        GFXRECON_ASSERT(image_wrapper != nullptr);
+
+        if (image_wrapper->external_memory_android)
+        {
+            // No need to process this image memory as its corresponding AHB is processed instead
+            continue;
+        }
 
         if (image_wrapper->dirty)
         {
-            assert((image_wrapper->is_swapchain_image && memory_wrapper == nullptr) ||
-                   (!image_wrapper->is_swapchain_image && memory_wrapper != nullptr));
+            GFXRECON_ASSERT((image_wrapper->is_swapchain_image && memory_wrapper == nullptr) ||
+                            (!image_wrapper->is_swapchain_image && memory_wrapper != nullptr));
 
             image_wrapper->dirty = false;
 
+            graphics::VulkanResourcesUtil::ImageResource image_resource = {};
+            image_resource.handle_id                                    = image_wrapper->handle_id;
+            image_resource.image                                        = image_wrapper->handle;
+            image_resource.format                                       = image_wrapper->format;
+            image_resource.type                                         = image_wrapper->image_type;
+            image_resource.extent                                       = image_wrapper->extent;
+            image_resource.level_count                                  = image_wrapper->mip_levels;
+            image_resource.layer_count                                  = image_wrapper->array_layers;
+            image_resource.tiling                                       = image_wrapper->tiling;
+            image_resource.sample_count                                 = image_wrapper->samples;
+            image_resource.layout                                       = image_wrapper->current_layout;
+            image_resource.queue_family_index                           = image_wrapper->queue_family_index;
+            image_resource.external_format                              = image_wrapper->external_format;
+            image_resource.size                                         = image_wrapper->size;
+            image_resource.resource_size                                = snapshot_entry.resource_size;
+            image_resource.level_sizes                                  = &snapshot_entry.level_sizes;
+            image_resource.aspect                                       = snapshot_entry.aspect;
+            image_resource.external_format                              = image_wrapper->external_format;
+            image_resource.all_layers_per_level                         = true;
+
             if (snapshot_entry.need_staging_copy)
             {
-                std::vector<uint64_t> subresource_offsets;
-                std::vector<uint64_t> subresource_sizes;
-                bool                  scaling_supported;
-
-                VkResult result = resource_util.ReadFromImageResourceStaging(image_wrapper->handle,
-                                                                             image_wrapper->format,
-                                                                             image_wrapper->image_type,
-                                                                             image_wrapper->extent,
-                                                                             image_wrapper->mip_levels,
-                                                                             image_wrapper->array_layers,
-                                                                             image_wrapper->tiling,
-                                                                             image_wrapper->samples,
-                                                                             image_wrapper->current_layout,
-                                                                             image_wrapper->queue_family_index,
-                                                                             image_wrapper->external_format,
-                                                                             image_wrapper->size,
-                                                                             snapshot_entry.aspect,
-                                                                             data,
-                                                                             subresource_offsets,
-                                                                             subresource_sizes,
-                                                                             scaling_supported,
-                                                                             true);
-
-                if (result == VK_SUCCESS)
-                {
-                    bytes = data.data();
-                }
+                image_resources.push_back(image_resource);
             }
             else if (!image_wrapper->is_swapchain_image)
             {
-                assert((memory_wrapper != nullptr) &&
-                       ((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0)));
+                GFXRECON_ASSERT((memory_wrapper != nullptr) &&
+                                ((memory_wrapper->mapped_data == nullptr) || (memory_wrapper->mapped_offset == 0)));
 
                 VkResult result = VK_SUCCESS;
 
@@ -2994,82 +3156,12 @@ void VulkanStateWriter::ProcessImageMemoryWithAssetFile(const vulkan_wrappers::D
                                                 image_wrapper->bind_offset,
                                                 snapshot_entry.resource_size);
                 }
-            }
 
-            if (!image_wrapper->is_swapchain_image)
-            {
-                format::InitImageCommandHeader upload_cmd;
+                write_init_image_cmd(image_resource, bytes, snapshot_entry.resource_size);
 
-                // Packet size without the resource data.
-                upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd);
-                upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
-                upload_cmd.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
-                                                                             format::MetaDataType::kInitImageCommand);
-                upload_cmd.thread_id                     = thread_data_->thread_id_;
-                upload_cmd.device_id                     = device_wrapper->handle_id;
-                upload_cmd.image_id                      = image_wrapper->handle_id;
-                upload_cmd.aspect                        = snapshot_entry.aspect;
-                upload_cmd.layout                        = image_wrapper->current_layout;
-
-                if (bytes != nullptr)
+                if (memory_wrapper->mapped_data == nullptr)
                 {
-                    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, snapshot_entry.resource_size);
-
-                    size_t data_size = static_cast<size_t>(snapshot_entry.resource_size);
-
-                    // Store uncompressed data size in packet.
-                    upload_cmd.data_size   = data_size;
-                    upload_cmd.level_count = image_wrapper->mip_levels;
-
-                    if (compressor_ != nullptr)
-                    {
-                        size_t compressed_size =
-                            compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
-
-                        if ((compressed_size > 0) && (compressed_size < data_size))
-                        {
-                            upload_cmd.meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
-
-                            bytes     = compressed_parameter_buffer_.data();
-                            data_size = compressed_size;
-                        }
-                    }
-
-                    // Calculate size of packet with compressed or uncompressed data size.
-                    assert(!snapshot_entry.level_sizes.empty() &&
-                           (snapshot_entry.level_sizes.size() == upload_cmd.level_count));
-                    size_t levels_size = snapshot_entry.level_sizes.size() * sizeof(snapshot_entry.level_sizes[0]);
-
-                    upload_cmd.meta_header.block_header.size += levels_size + data_size;
-
-                    const int64_t offset                             = asset_file_stream_->GetOffset();
-                    (*asset_file_offsets_)[image_wrapper->handle_id] = offset;
-                    asset_file_stream_->Write(&upload_cmd, sizeof(upload_cmd));
-                    asset_file_stream_->Write(snapshot_entry.level_sizes.data(), levels_size);
-                    asset_file_stream_->Write(bytes, data_size);
-
-                    if (output_stream_ != nullptr)
-                    {
-                        WriteExecuteFromFile(asset_file_name_, 1, offset);
-                    }
-
-                    if (!snapshot_entry.need_staging_copy && memory_wrapper->mapped_data == nullptr)
-                    {
-                        device_table->UnmapMemory(device_wrapper->handle, memory_wrapper->handle);
-                    }
-                }
-                else
-                {
-                    if (output_stream_ != nullptr)
-                    {
-                        // Write a packet without resource data; replay must still perform a layout transition at image
-                        // initialization.
-                        upload_cmd.data_size   = 0;
-                        upload_cmd.level_count = 0;
-
-                        output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
-                        ++blocks_written_;
-                    }
+                    device_table->UnmapMemory(device_wrapper->handle, memory_wrapper->handle);
                 }
             }
         }
@@ -3077,12 +3169,21 @@ void VulkanStateWriter::ProcessImageMemoryWithAssetFile(const vulkan_wrappers::D
         {
             if (output_stream_ != nullptr)
             {
-                assert((*asset_file_offsets_).find(image_wrapper->handle_id) != (*asset_file_offsets_).end());
-                const int64_t offset = (*asset_file_offsets_)[image_wrapper->handle_id];
-                WriteExecuteFromFile(asset_file_name_, 1, offset);
+                // It is possible that an image could not be dumped in the asset file (i.e. multisampled).
+                // We will still clear its flag to false but there won't be an entry in the offsets map
+                const auto& asset_file_offset_entry = asset_file_offsets_->find(image_wrapper->handle_id);
+                if (asset_file_offset_entry != asset_file_offsets_->end())
+                {
+                    const int64_t offset = asset_file_offset_entry->second;
+                    WriteExecuteFromFile(asset_file_name_, 1, offset);
+                }
             }
         }
     }
+
+    // batch process image-downloads requiring staging, use <128MB staging-mem
+    constexpr uint32_t staging_buffer_size = 128U << 20U;
+    resource_util.ReadImageResources(image_resources, write_init_image_cmd, staging_buffer_size);
 }
 
 void VulkanStateWriter::WriteBufferMemoryState(const VulkanStateTable& state_table,
@@ -3091,62 +3192,171 @@ void VulkanStateWriter::WriteBufferMemoryState(const VulkanStateTable& state_tab
                                                VkDeviceSize*           max_staging_copy_size,
                                                bool                    write_memory_state)
 {
-    assert((resources != nullptr) && (max_resource_size != nullptr) && (max_staging_copy_size != nullptr));
+    GFXRECON_ASSERT((resources != nullptr) && (max_resource_size != nullptr) && (max_staging_copy_size != nullptr));
 
     state_table.VisitWrappers([&](vulkan_wrappers::BufferWrapper* wrapper) {
-        assert(wrapper != nullptr);
-        // Perform memory binding.
-        const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-            state_table.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
-
-        if (memory_wrapper != nullptr)
+        GFXRECON_ASSERT(wrapper != nullptr);
+        if (!wrapper->is_sparse_buffer)
         {
             const vulkan_wrappers::DeviceWrapper* device_wrapper = wrapper->bind_device;
             assert(device_wrapper != nullptr);
+            // Perform memory binding for non-sparse buffer.
+            const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
+                state_table.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
+
+            if (memory_wrapper != nullptr)
+            {
+                if (write_memory_state)
+                {
+                    // Write memory requirements query before bind command.
+                    VkMemoryRequirements               memory_requirements;
+                    const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+                    assert(device_table != nullptr);
+
+                    device_table->GetBufferMemoryRequirements(
+                        device_wrapper->handle, wrapper->handle, &memory_requirements);
+
+                    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                    encoder_.EncodeHandleIdValue(wrapper->handle_id);
+                    EncodeStructPtr(&encoder_, &memory_requirements);
+
+                    WriteFunctionCall(format::ApiCall_vkGetBufferMemoryRequirements, &parameter_stream_);
+                    parameter_stream_.Clear();
+
+                    // Write memory bind command.
+                    if (wrapper->bind_pnext == nullptr)
+                    {
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeHandleIdValue(wrapper->handle_id);
+                        encoder_.EncodeHandleIdValue(memory_wrapper->handle_id);
+                        encoder_.EncodeUInt64Value(wrapper->bind_offset);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+
+                        WriteFunctionCall(format::ApiCall_vkBindBufferMemory, &parameter_stream_);
+                    }
+                    else
+                    {
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeUInt32Value(1);
+
+                        VkBindBufferMemoryInfo info = {};
+                        info.sType                  = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO;
+                        info.pNext                  = wrapper->bind_pnext;
+                        info.buffer                 = wrapper->handle;
+                        info.memory                 = memory_wrapper->handle;
+                        info.memoryOffset           = wrapper->bind_offset;
+                        EncodeStructArray(&encoder_, &info, 1);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+
+                        WriteFunctionCall(format::ApiCall_vkBindBufferMemory2, &parameter_stream_);
+                    }
+                    parameter_stream_.Clear();
+                }
+
+                // Group buffers with memory bindings by device for memory snapshot.
+                ResourceSnapshotQueueFamilyTable& snapshot_table = (*resources)[device_wrapper];
+                ResourceSnapshotInfo&             snapshot_entry = snapshot_table[wrapper->queue_family_index];
+
+                BufferSnapshotInfo snapshot_info;
+                snapshot_info.buffer_wrapper    = wrapper;
+                snapshot_info.memory_wrapper    = memory_wrapper;
+                snapshot_info.memory_properties = GetMemoryProperties(device_wrapper, memory_wrapper);
+                snapshot_info.need_staging_copy = !IsBufferReadable(snapshot_info.memory_properties, memory_wrapper);
+
+                if ((*max_resource_size) < wrapper->created_size)
+                {
+                    (*max_resource_size) = wrapper->created_size;
+                }
+
+                if (snapshot_info.need_staging_copy && ((*max_staging_copy_size) < wrapper->created_size))
+                {
+                    (*max_staging_copy_size) = wrapper->created_size;
+                }
+
+                snapshot_entry.buffers.emplace_back(snapshot_info);
+            }
+        }
+        else
+        {
+            // Perform memory binding for sparse buffer.
+            const vulkan_wrappers::DeviceWrapper* device_wrapper = wrapper->bind_device;
+            const graphics::VulkanDeviceTable*    device_table   = &device_wrapper->layer_table;
+            GFXRECON_ASSERT((device_wrapper != nullptr) && (device_table != nullptr));
 
             if (write_memory_state)
             {
-                // Write memory requirements query before bind command.
-                VkMemoryRequirements     memory_requirements;
-                const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
-                assert(device_table != nullptr);
-
-                device_table->GetBufferMemoryRequirements(
-                    device_wrapper->handle, wrapper->handle, &memory_requirements);
-
-                encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-                encoder_.EncodeHandleIdValue(wrapper->handle_id);
-                EncodeStructPtr(&encoder_, &memory_requirements);
-
-                WriteFunctionCall(format::ApiCall_vkGetBufferMemoryRequirements, &parameter_stream_);
-                parameter_stream_.Clear();
-
-                // Write memory bind command.
-                if (wrapper->bind_pnext == nullptr)
+                // We do not need to use sparse_resource_mutex for the access to the following sparse resource maps, as
+                // the writing states operation is included in the trim start handling, which is protected by an
+                // exclusive lock. No other API capturing handling occurs concurrently.
+                if (wrapper->sparse_memory_bind_map.size() != 0)
                 {
+                    std::vector<VkSparseMemoryBind> sparse_memory_binds;
+                    VkSparseBufferMemoryBindInfo    buffer_memory_bind_info = {};
+
+                    // Write memory requirements query before vkQueueBindSparse command. For sparse buffer, the
+                    // alignment of VkMemoryRequirements is the sparse block size in bytes which represents both the
+                    // memory alignment requirement and the binding granularity (in bytes) for sparse buffer.
+                    VkMemoryRequirements memory_requirements;
+
+                    device_table->GetBufferMemoryRequirements(
+                        device_wrapper->handle, wrapper->handle, &memory_requirements);
+
                     encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
                     encoder_.EncodeHandleIdValue(wrapper->handle_id);
-                    encoder_.EncodeHandleIdValue(memory_wrapper->handle_id);
-                    encoder_.EncodeUInt64Value(wrapper->bind_offset);
-                    encoder_.EncodeEnumValue(VK_SUCCESS);
+                    EncodeStructPtr(&encoder_, &memory_requirements);
 
-                    WriteFunctionCall(format::ApiCall_vkBindBufferMemory, &parameter_stream_);
-                }
-                else
-                {
-                    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-                    encoder_.EncodeUInt32Value(1);
+                    WriteFunctionCall(format::ApiCall_vkGetBufferMemoryRequirements, &parameter_stream_);
+                    parameter_stream_.Clear();
 
-                    VkBindBufferMemoryInfo info = {};
-                    info.sType                  = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO;
-                    info.pNext                  = wrapper->bind_pnext;
-                    info.buffer                 = wrapper->handle;
-                    info.memory                 = memory_wrapper->handle;
-                    info.memoryOffset           = wrapper->bind_offset;
-                    EncodeStructArray(&encoder_, &info, 1);
-                    encoder_.EncodeEnumValue(VK_SUCCESS);
+                    const vulkan_wrappers::QueueWrapper* sparse_bind_queue_wrapper =
+                        vulkan_wrappers::GetWrapper<vulkan_wrappers::QueueWrapper>(wrapper->sparse_bind_queue);
 
-                    WriteFunctionCall(format::ApiCall_vkBindBufferMemory2, &parameter_stream_);
+                    if ((wrapper->sparse_bind_queue != VK_NULL_HANDLE) && (sparse_bind_queue_wrapper != nullptr))
+                    {
+                        for (auto& item : wrapper->sparse_memory_bind_map)
+                        {
+                            sparse_memory_binds.push_back(item.second);
+                        }
+
+                        buffer_memory_bind_info.buffer    = wrapper->handle;
+                        buffer_memory_bind_info.bindCount = sparse_memory_binds.size();
+                        buffer_memory_bind_info.pBinds    = sparse_memory_binds.data();
+
+                        VkBindSparseInfo bind_sparse_info{};
+                        bind_sparse_info.sType                = VK_STRUCTURE_TYPE_BIND_SPARSE_INFO;
+                        bind_sparse_info.pNext                = nullptr;
+                        bind_sparse_info.waitSemaphoreCount   = 0;
+                        bind_sparse_info.pWaitSemaphores      = nullptr;
+                        bind_sparse_info.bufferBindCount      = 1;
+                        bind_sparse_info.pBufferBinds         = &buffer_memory_bind_info;
+                        bind_sparse_info.imageOpaqueBindCount = 0;
+                        bind_sparse_info.pImageOpaqueBinds    = nullptr;
+                        bind_sparse_info.imageBindCount       = 0;
+                        bind_sparse_info.pImageBinds          = nullptr;
+                        bind_sparse_info.signalSemaphoreCount = 0;
+                        bind_sparse_info.pSignalSemaphores    = nullptr;
+
+                        encoder_.EncodeVulkanHandleValue<vulkan_wrappers::QueueWrapper>(wrapper->sparse_bind_queue);
+                        encoder_.EncodeUInt32Value(1);
+                        EncodeStructArray(&encoder_, &bind_sparse_info, 1);
+                        encoder_.EncodeVulkanHandleValue<vulkan_wrappers::FenceWrapper>(VK_NULL_HANDLE);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+                        WriteFunctionCall(format::ApiCall_vkQueueBindSparse, &parameter_stream_);
+
+                        parameter_stream_.Clear();
+
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+
+                        WriteFunctionCall(format::ApiCall_vkDeviceWaitIdle, &parameter_stream_);
+                    }
+                    else
+                    {
+                        GFXRECON_LOG_WARNING(
+                            "Unable to generate vkQueueBindSparse for the sparse buffer (id = %d) due to "
+                            "the related sparse bind queue or its wrapper is invalid.",
+                            wrapper->handle_id);
+                    }
                 }
                 parameter_stream_.Clear();
             }
@@ -3156,10 +3366,16 @@ void VulkanStateWriter::WriteBufferMemoryState(const VulkanStateTable& state_tab
             ResourceSnapshotInfo&             snapshot_entry = snapshot_table[wrapper->queue_family_index];
 
             BufferSnapshotInfo snapshot_info;
-            snapshot_info.buffer_wrapper    = wrapper;
-            snapshot_info.memory_wrapper    = memory_wrapper;
-            snapshot_info.memory_properties = GetMemoryProperties(device_wrapper, memory_wrapper);
-            snapshot_info.need_staging_copy = !IsBufferReadable(snapshot_info.memory_properties, memory_wrapper);
+            snapshot_info.buffer_wrapper = wrapper;
+            snapshot_info.memory_wrapper = nullptr;
+
+            // We enforce the memory properties to be `VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT`, and we set
+            // `need_staging_copy` to true for sparse buffers. When dumping buffer data, there are two distinct code
+            // paths: one involves a staging copy, while the other requires mapping host-visible memory. This latter
+            // method requires the buffer to be bound to a single range of a single memory, which is not applicable for
+            // sparse buffers. Therefore, we set the two values to use staging copy for dumping sparse buffers.
+            snapshot_info.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+            snapshot_info.need_staging_copy = true; // Staging copy is needed for sparse buffer.
 
             if ((*max_resource_size) < wrapper->size)
             {
@@ -3189,10 +3405,11 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
 
         // Perform memory binding.
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-            state_table.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+            state_table.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
 
         if ((wrapper->is_swapchain_image && memory_wrapper == nullptr && wrapper->bind_device != nullptr) ||
-            (!wrapper->is_swapchain_image && memory_wrapper != nullptr))
+            (!wrapper->is_swapchain_image && memory_wrapper != nullptr) ||
+            (!wrapper->is_swapchain_image && wrapper->is_sparse_image && wrapper->bind_device != nullptr))
         {
             const vulkan_wrappers::DeviceWrapper* device_wrapper = wrapper->bind_device;
             assert(device_wrapper != nullptr);
@@ -3200,8 +3417,8 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
             // Write memory requirements query before bind command.
             if (write_memory_state)
             {
-                VkMemoryRequirements     memory_requirements;
-                const VulkanDeviceTable* device_table = &device_wrapper->layer_table;
+                VkMemoryRequirements               memory_requirements;
+                const graphics::VulkanDeviceTable* device_table = &device_wrapper->layer_table;
                 assert(device_table != nullptr);
 
                 device_table->GetImageMemoryRequirements(device_wrapper->handle, wrapper->handle, &memory_requirements);
@@ -3214,31 +3431,112 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
                 parameter_stream_.Clear();
 
                 // Write memory bind command.
-                if (wrapper->bind_pnext == nullptr)
+                if (!wrapper->is_sparse_image)
                 {
-                    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-                    encoder_.EncodeHandleIdValue(wrapper->handle_id);
-                    encoder_.EncodeHandleIdValue(memory_wrapper->handle_id);
-                    encoder_.EncodeUInt64Value(wrapper->bind_offset);
-                    encoder_.EncodeEnumValue(VK_SUCCESS);
+                    if (wrapper->bind_pnext == nullptr)
+                    {
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeHandleIdValue(wrapper->handle_id);
+                        encoder_.EncodeHandleIdValue(memory_wrapper->handle_id);
+                        encoder_.EncodeUInt64Value(wrapper->bind_offset);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
 
-                    WriteFunctionCall(format::ApiCall_vkBindImageMemory, &parameter_stream_);
+                        WriteFunctionCall(format::ApiCall_vkBindImageMemory, &parameter_stream_);
+                    }
+                    else
+                    {
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeUInt32Value(1);
+
+                        VkBindImageMemoryInfo info = {};
+                        info.sType                 = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO;
+                        info.pNext                 = wrapper->bind_pnext;
+                        info.image                 = wrapper->handle;
+                        info.memory                = memory_wrapper->handle;
+                        info.memoryOffset          = wrapper->bind_offset;
+                        EncodeStructArray(&encoder_, &info, 1);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+
+                        WriteFunctionCall(format::ApiCall_vkBindImageMemory2, &parameter_stream_);
+                    }
                 }
                 else
                 {
-                    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-                    encoder_.EncodeUInt32Value(1);
+                    const vulkan_wrappers::DeviceWrapper* device_wrapper = wrapper->bind_device;
+                    const graphics::VulkanDeviceTable*    device_table   = &device_wrapper->layer_table;
+                    assert((device_wrapper != nullptr) && (device_table != nullptr));
 
-                    VkBindImageMemoryInfo info = {};
-                    info.sType                 = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO;
-                    info.pNext                 = wrapper->bind_pnext;
-                    info.image                 = wrapper->handle;
-                    info.memory                = memory_wrapper->handle;
-                    info.memoryOffset          = wrapper->bind_offset;
-                    EncodeStructArray(&encoder_, &info, 1);
-                    encoder_.EncodeEnumValue(VK_SUCCESS);
+                    const vulkan_wrappers::QueueWrapper* sparse_bind_queue_wrapper =
+                        vulkan_wrappers::GetWrapper<vulkan_wrappers::QueueWrapper>(wrapper->sparse_bind_queue);
 
-                    WriteFunctionCall(format::ApiCall_vkBindImageMemory2, &parameter_stream_);
+                    GFXRECON_ASSERT((wrapper->sparse_bind_queue != VK_NULL_HANDLE) &&
+                                    (sparse_bind_queue_wrapper != nullptr));
+
+                    if ((wrapper->sparse_opaque_memory_bind_map.size() != 0) ||
+                        (wrapper->sparse_subresource_memory_bind_map.size() != 0))
+                    {
+                        std::vector<VkSparseMemoryBind>   sparse_memory_binds;
+                        VkSparseImageOpaqueMemoryBindInfo image_opaque_memory_bind_info = {};
+
+                        for (auto& item : wrapper->sparse_opaque_memory_bind_map)
+                        {
+                            sparse_memory_binds.push_back(item.second);
+                        }
+
+                        image_opaque_memory_bind_info.image     = wrapper->handle;
+                        image_opaque_memory_bind_info.bindCount = sparse_memory_binds.size();
+                        image_opaque_memory_bind_info.pBinds =
+                            (sparse_memory_binds.size() == 0) ? nullptr : sparse_memory_binds.data();
+
+                        std::vector<VkSparseImageMemoryBind> sparse_image_memory_binds;
+                        VkSparseImageMemoryBindInfo          image_memory_bind_info = {};
+
+                        for (auto& subresource_bind_map : wrapper->sparse_subresource_memory_bind_map)
+                        {
+                            auto& offset_3d_to_memory_range_map = subresource_bind_map.second;
+
+                            for (auto& item : offset_3d_to_memory_range_map)
+                            {
+                                sparse_image_memory_binds.push_back(item.second);
+                            }
+                        }
+
+                        image_memory_bind_info.image     = wrapper->handle;
+                        image_memory_bind_info.bindCount = sparse_image_memory_binds.size();
+                        image_memory_bind_info.pBinds =
+                            (sparse_image_memory_binds.size() == 0) ? nullptr : sparse_image_memory_binds.data();
+
+                        VkBindSparseInfo bind_sparse_info{};
+
+                        bind_sparse_info.sType                = VK_STRUCTURE_TYPE_BIND_SPARSE_INFO;
+                        bind_sparse_info.pNext                = nullptr;
+                        bind_sparse_info.waitSemaphoreCount   = 0;
+                        bind_sparse_info.pWaitSemaphores      = nullptr;
+                        bind_sparse_info.bufferBindCount      = 0;
+                        bind_sparse_info.pBufferBinds         = nullptr;
+                        bind_sparse_info.imageOpaqueBindCount = (image_opaque_memory_bind_info.bindCount == 0) ? 0 : 1;
+                        bind_sparse_info.pImageOpaqueBinds =
+                            (image_opaque_memory_bind_info.bindCount == 0) ? nullptr : &image_opaque_memory_bind_info;
+                        bind_sparse_info.imageBindCount = (image_memory_bind_info.bindCount == 0) ? 0 : 1;
+                        bind_sparse_info.pImageBinds =
+                            (image_memory_bind_info.bindCount == 0) ? nullptr : &image_memory_bind_info;
+                        bind_sparse_info.signalSemaphoreCount = 0;
+                        bind_sparse_info.pSignalSemaphores    = nullptr;
+
+                        encoder_.EncodeVulkanHandleValue<vulkan_wrappers::QueueWrapper>(wrapper->sparse_bind_queue);
+                        encoder_.EncodeUInt32Value(1);
+                        EncodeStructArray(&encoder_, &bind_sparse_info, 1);
+                        encoder_.EncodeVulkanHandleValue<vulkan_wrappers::FenceWrapper>(VK_NULL_HANDLE);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+                        WriteFunctionCall(format::ApiCall_vkQueueBindSparse, &parameter_stream_);
+
+                        parameter_stream_.Clear();
+
+                        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+                        encoder_.EncodeEnumValue(VK_SUCCESS);
+
+                        WriteFunctionCall(format::ApiCall_vkDeviceWaitIdle, &parameter_stream_);
+                    }
                 }
                 parameter_stream_.Clear();
             }
@@ -3255,6 +3553,13 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
                 (wrapper->tiling == VK_IMAGE_TILING_LINEAR) &&
                 ((memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
+            if (wrapper->is_sparse_image)
+            {
+                // The process for dumping host-visible image data requires binding the entire image to a single memory
+                // range. Since this is not applicable to sparse images, we set is_writable to false.
+                is_writable = false;
+            }
+
             // If an image is not host writable and has not been transitioned from the undefined or preinitialized
             // layouts, no data could have been loaded into it and its data will be omitted from the state snapshot.
             if (is_transitioned || is_writable)
@@ -3268,7 +3573,11 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
                                                             *device_wrapper->physical_device->layer_table_ref,
                                                             device_wrapper->physical_device->memory_properties);
 
-                bool need_staging_copy = !IsImageReadable(memory_properties, memory_wrapper, wrapper);
+                // Sparse images require staging copy for the following process because dumping image data with mapping
+                // memory needs binding the entire image to a single memory range. Sparse image opaque binding allows
+                // binding to multiple memory objects and various memory ranges.
+                bool need_staging_copy =
+                    !IsImageReadable(memory_properties, memory_wrapper, wrapper) || wrapper->is_sparse_image;
 
                 std::vector<VkImageAspectFlagBits> aspects;
                 bool                               combined_depth_stencil;
@@ -3284,16 +3593,21 @@ void VulkanStateWriter::WriteImageMemoryState(const VulkanStateTable& state_tabl
                     snapshot_info.need_staging_copy = need_staging_copy;
                     snapshot_info.aspect            = aspect;
 
-                    if (wrapper->external_format)
+                    if (wrapper->external_format || wrapper->external_memory_android)
                     {
+                        // The original external format is not restored at replay time, but RGBA8 is used, meaning the
+                        // image size at replay might be different than current size.
+                        const VkDeviceSize rgba8_size  = 4;
+                        const VkDeviceSize replay_size = wrapper->extent.width * wrapper->extent.height * rgba8_size;
+                        *max_staging_copy_size         = std::max(*max_staging_copy_size, replay_size);
+
                         snapshot_info.resource_size = wrapper->size;
                         snapshot_info.level_sizes.push_back(wrapper->size);
                     }
                     else
                     {
                         snapshot_info.resource_size =
-                            resource_util.GetImageResourceSizesOptimal(wrapper->handle,
-                                                                       wrapper->format,
+                            resource_util.GetImageResourceSizesOptimal(wrapper->format,
                                                                        wrapper->image_type,
                                                                        wrapper->extent,
                                                                        wrapper->mip_levels,
@@ -3350,7 +3664,7 @@ void VulkanStateWriter::WriteImageSubresourceLayouts(const vulkan_wrappers::Imag
     assert((image_wrapper != nullptr) && (aspect_flags != 0));
 
     const vulkan_wrappers::DeviceWrapper* device_wrapper = image_wrapper->bind_device;
-    const VulkanDeviceTable*              device_table   = &device_wrapper->layer_table;
+    const graphics::VulkanDeviceTable*    device_table   = &device_wrapper->layer_table;
 
     assert((device_wrapper != nullptr) && (device_table != nullptr));
 
@@ -3388,7 +3702,8 @@ void VulkanStateWriter::WriteResourceMemoryState(const VulkanStateTable& state_t
 
     WriteBufferMemoryState(state_table, &resources, &max_resource_size, &max_staging_copy_size, write_memory_state);
     WriteImageMemoryState(state_table, &resources, &max_resource_size, &max_staging_copy_size, write_memory_state);
-    WriteNGPMemoryState(state_table);
+    WriteTensorMemoryState(state_table);
+
     // Write resource memory content.
     for (const auto& resource_entry : resources)
     {
@@ -3463,10 +3778,7 @@ void VulkanStateWriter::WriteResourceMemoryState(const VulkanStateTable& state_t
     auto     done = std::chrono::high_resolution_clock::now();
     uint32_t time = std::chrono::duration_cast<std::chrono::milliseconds>(done - started).count();
 
-    GFXRECON_LOG_INFO("--------------------------------------")
-    GFXRECON_LOG_INFO("%s()", __func__)
-    GFXRECON_LOG_INFO("  saved in %u ms", time);
-    GFXRECON_LOG_INFO("--------------------------------------")
+    GFXRECON_LOG_INFO("%s()  saved in %u ms", __func__, time)
 }
 
 void VulkanStateWriter::WriteMappedMemoryState(const VulkanStateTable& state_table)
@@ -3551,7 +3863,7 @@ void VulkanStateWriter::WriteSwapchainImageState(const VulkanStateTable& state_t
                 // Only provide sync object IDs if the objects have not been destroyed between now and image
                 // acquire.
                 const vulkan_wrappers::SemaphoreWrapper* semaphore_wrapper =
-                    state_table.GetSemaphoreWrapper(wrapper->image_acquired_info[i].acquired_semaphore_id);
+                    state_table.GetVulkanSemaphoreWrapper(wrapper->image_acquired_info[i].acquired_semaphore_id);
                 if (semaphore_wrapper != nullptr)
                 {
                     info.acquire_semaphore_id = wrapper->image_acquired_info[i].acquired_semaphore_id;
@@ -3562,7 +3874,7 @@ void VulkanStateWriter::WriteSwapchainImageState(const VulkanStateTable& state_t
                 }
 
                 const vulkan_wrappers::FenceWrapper* fence_wrapper =
-                    state_table.GetFenceWrapper(wrapper->image_acquired_info[i].acquired_fence_id);
+                    state_table.GetVulkanFenceWrapper(wrapper->image_acquired_info[i].acquired_fence_id);
                 if (fence_wrapper != nullptr)
                 {
                     info.acquire_fence_id = wrapper->image_acquired_info[i].acquired_fence_id;
@@ -3589,7 +3901,7 @@ void VulkanStateWriter::WritePhysicalDevicePropertiesMetaData(
     const vulkan_wrappers::PhysicalDeviceWrapper* physical_device_wrapper)
 {
     // Write the meta-data commands to set physical device properties.
-    const VulkanInstanceTable* instance_table = physical_device_wrapper->layer_table_ref;
+    const graphics::VulkanInstanceTable* instance_table = physical_device_wrapper->layer_table_ref;
     assert(instance_table != nullptr);
 
     format::HandleId           physical_device_id     = physical_device_wrapper->handle_id;
@@ -3652,10 +3964,25 @@ void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceCapabilities(
     const VkResult result = VK_SUCCESS;
 
     encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    EncodeStructPtr(&encoder_, &capabilities.surface_capabilities);
+    encoder_.EncodeEnumValue(result);
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceCapabilities2(
+    format::HandleId                             physical_device_id,
+    format::HandleId                             surface_id,
+    const vulkan_wrappers::SurfaceCapabilities2& capabilities,
+    const VulkanStateTable&                      state_table)
+{
+    const VkResult result = VK_SUCCESS;
+
+    encoder_.EncodeHandleIdValue(physical_device_id);
     EncodeStructPtr(&encoder_, &capabilities.surface_info);
     EncodeStructPtr(&encoder_, &capabilities.surface_capabilities);
     encoder_.EncodeEnumValue(result);
-
     WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceCapabilities2KHR, &parameter_stream_);
     parameter_stream_.Clear();
 }
@@ -3665,15 +3992,43 @@ void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceFormats(format::HandleId   
                                                              const vulkan_wrappers::SurfaceFormats& formats,
                                                              const VulkanStateTable&                state_table)
 {
-    const VkResult result = VK_SUCCESS;
+    const VkResult result       = VK_SUCCESS;
+    const uint32_t format_count = formats.surface_formats.size();
 
-    uint32_t format_count = formats.surface_format_count;
+    // First write the call to retrieve the size.
+    encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    encoder_.EncodeUInt32Ptr(&format_count);
+    EncodeStructArray<VkSurfaceFormatKHR>(&encoder_, nullptr, 0);
+    encoder_.EncodeEnumValue(result);
+
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormatsKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+
+    // Then write the call with the data.
+    encoder_.EncodeHandleIdValue(physical_device_id);
+    encoder_.EncodeHandleIdValue(surface_id);
+    encoder_.EncodeUInt32Ptr(&format_count);
+    EncodeStructArray(&encoder_, formats.surface_formats.data(), format_count);
+    encoder_.EncodeEnumValue(result);
+
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormatsKHR, &parameter_stream_);
+    parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteGetPhysicalDeviceSurfaceFormats2(format::HandleId physical_device_id,
+                                                              format::HandleId surface_id,
+                                                              const vulkan_wrappers::SurfaceFormats2& formats,
+                                                              const VulkanStateTable&                 state_table)
+{
+    const VkResult result       = VK_SUCCESS;
+    uint32_t       format_count = formats.surface_format_count;
 
     // First write the call to retrieve the size.
     encoder_.EncodeHandleIdValue(physical_device_id);
     EncodeStructPtr(&encoder_, &formats.surface_info);
     encoder_.EncodeUInt32Ptr(&format_count);
-    EncodeStructArray<VkSurfaceFormatKHR>(&encoder_, nullptr, 0);
+    EncodeStructArray<VkSurfaceFormat2KHR>(&encoder_, nullptr, 0);
     encoder_.EncodeEnumValue(result);
 
     WriteFunctionCall(format::ApiCallId::ApiCall_vkGetPhysicalDeviceSurfaceFormats2KHR, &parameter_stream_);
@@ -3727,7 +4082,7 @@ void VulkanStateWriter::WriteGetPhysicalDeviceSurfacePresentModes(
         VkPhysicalDeviceSurfaceInfo2KHR surface_info2;
         surface_info2.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR;
         surface_info2.pNext   = present_modes.surface_info_pnext;
-        auto surface_wrapper  = state_table.GetSurfaceKHRWrapper(surface_id);
+        auto surface_wrapper  = state_table.GetVulkanSurfaceKHRWrapper(surface_id);
         surface_info2.surface = surface_wrapper->handle;
 
         // First write the call to retrieve the size.
@@ -3775,7 +4130,7 @@ void VulkanStateWriter::WriteGetDeviceGroupSurfacePresentModes(
         VkPhysicalDeviceSurfaceInfo2KHR surface_info2;
         surface_info2.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR;
         surface_info2.pNext   = present_modes.surface_info_pnext;
-        auto surface_wrapper  = state_table.GetSurfaceKHRWrapper(surface_id);
+        auto surface_wrapper  = state_table.GetVulkanSurfaceKHRWrapper(surface_id);
         surface_info2.surface = surface_wrapper->handle;
 
         encoder_.EncodeHandleIdValue(device_id);
@@ -3907,8 +4262,8 @@ void VulkanStateWriter::WriteCommandExecution(format::HandleId            queue_
     parameter_stream_.Clear();
 }
 
-void VulkanStateWriter::WriteCommandBufferCommands(const vulkan_wrappers::CommandBufferWrapper* wrapper,
-                                                   const VulkanStateTable&                      state_table)
+void VulkanStateWriter::WriteCommandBufferCommands(vulkan_wrappers::CommandBufferWrapper* wrapper,
+                                                   const VulkanStateTable&                state_table)
 {
     assert(wrapper != nullptr);
 
@@ -3934,6 +4289,10 @@ void VulkanStateWriter::WriteCommandBufferCommands(const vulkan_wrappers::Comman
         }
 
         assert(offset == data_size);
+    }
+    else
+    {
+        wrapper->state = vulkan_wrappers::CommandBufferWrapper::kInvalid;
     }
 }
 
@@ -4618,11 +4977,14 @@ bool VulkanStateWriter::CheckCommandHandle(vulkan_state_info::CommandHandleType 
         case vulkan_state_info::CommandHandleType::BufferViewHandle:
             return IsBufferViewValid(handle_id, state_table);
         case vulkan_state_info::CommandHandleType::CommandBufferHandle:
-            return (state_table.GetCommandBufferWrapper(handle_id) != nullptr);
+        {
+            const vulkan_wrappers::CommandBufferWrapper* wrapper = state_table.GetVulkanCommandBufferWrapper(handle_id);
+            return (wrapper != nullptr && wrapper->state == vulkan_wrappers::CommandBufferWrapper::kExecutable);
+        }
         case vulkan_state_info::CommandHandleType::DescriptorSetHandle:
-            return (state_table.GetDescriptorSetWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanDescriptorSetWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::EventHandle:
-            return (state_table.GetEventWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanEventWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::FramebufferHandle:
             return IsFramebufferValid(handle_id, state_table);
         case vulkan_state_info::CommandHandleType::ImageHandle:
@@ -4630,33 +4992,35 @@ bool VulkanStateWriter::CheckCommandHandle(vulkan_state_info::CommandHandleType 
         case vulkan_state_info::CommandHandleType::ImageViewHandle:
             return IsImageViewValid(handle_id, state_table);
         case vulkan_state_info::CommandHandleType::PipelineHandle:
-            return (state_table.GetPipelineWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanPipelineWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::PipelineLayoutHandle:
-            return (state_table.GetPipelineLayoutWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanPipelineLayoutWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::QueryPoolHandle:
-            return (state_table.GetQueryPoolWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanQueryPoolWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::RenderPassHandle:
-            return (state_table.GetRenderPassWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanRenderPassWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::SamplerHandle:
-            return (state_table.GetSamplerWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanSamplerWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::AccelerationStructureNVHandle:
-            return (state_table.GetAccelerationStructureNVWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanAccelerationStructureNVWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::AccelerationStructureKHRHandle:
-            return (state_table.GetAccelerationStructureKHRWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanAccelerationStructureKHRWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::IndirectCommandsLayoutNVHandle:
-            return (state_table.GetIndirectCommandsLayoutNVWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanIndirectCommandsLayoutNVWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::DeferredOperationKHRHandle:
-            return (state_table.GetDeferredOperationKHRWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanDeferredOperationKHRWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::MicromapEXTHandle:
-            return (state_table.GetMicromapEXTWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanMicromapEXTWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::OpticalFlowSessionNVHandle:
-            return (state_table.GetOpticalFlowSessionNVWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanOpticalFlowSessionNVWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::VideoSessionKHRHandle:
-            return (state_table.GetVideoSessionKHRWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanVideoSessionKHRWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::VideoSessionParametersKHRHandle:
-            return (state_table.GetVideoSessionParametersKHRWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanVideoSessionParametersKHRWrapper(handle_id) != nullptr);
         case vulkan_state_info::CommandHandleType::ShaderEXTHandle:
-            return (state_table.GetShaderEXTWrapper(handle_id) != nullptr);
+            return (state_table.GetVulkanShaderEXTWrapper(handle_id) != nullptr);
+        case vulkan_state_info::CommandHandleType::DeviceMemoryHandle:
+            return (state_table.GetVulkanDeviceMemoryWrapper(handle_id) != nullptr);
         default:
             GFXRECON_LOG_ERROR("State write is skipping unrecognized handle type when checking handles "
                                "referenced by command buffers");
@@ -4688,14 +5052,14 @@ bool VulkanStateWriter::CheckDescriptorStatus(const vulkan_state_info::Descripto
         switch (*descriptor_type)
         {
             case VK_DESCRIPTOR_TYPE_SAMPLER:
-                if (state_table.GetSamplerWrapper(descriptor->sampler_ids[index]) != nullptr)
+                if (state_table.GetVulkanSamplerWrapper(descriptor->sampler_ids[index]) != nullptr)
                 {
                     valid = true;
                 }
                 break;
             case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                 if ((descriptor->immutable_samplers ||
-                     (state_table.GetSamplerWrapper(descriptor->sampler_ids[index]) != nullptr)) &&
+                     (state_table.GetVulkanSamplerWrapper(descriptor->sampler_ids[index]) != nullptr)) &&
                     IsImageViewValid(descriptor->handle_ids[index], state_table))
                 {
                     valid = true;
@@ -4736,7 +5100,7 @@ bool VulkanStateWriter::CheckDescriptorStatus(const vulkan_state_info::Descripto
                 GFXRECON_LOG_WARNING("Descriptor type acceleration structure NV is not currently supported");
                 break;
             case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
-                if (state_table.GetAccelerationStructureKHRWrapper(descriptor->handle_ids[index]) != nullptr)
+                if (state_table.GetVulkanAccelerationStructureKHRWrapper(descriptor->handle_ids[index]) != nullptr)
                 {
                     valid = true;
                 }
@@ -4756,13 +5120,13 @@ bool VulkanStateWriter::CheckDescriptorStatus(const vulkan_state_info::Descripto
 bool VulkanStateWriter::IsBufferValid(format::HandleId buffer_id, const VulkanStateTable& state_table)
 {
     bool valid          = false;
-    auto buffer_wrapper = state_table.GetBufferWrapper(buffer_id);
+    auto buffer_wrapper = state_table.GetVulkanBufferWrapper(buffer_id);
 
     if (buffer_wrapper != nullptr)
     {
         format::HandleId memory_id = buffer_wrapper->bind_memory_id;
 
-        if ((memory_id == 0) || (state_table.GetDeviceMemoryWrapper(memory_id) != nullptr))
+        if ((memory_id == 0) || (state_table.GetVulkanDeviceMemoryWrapper(memory_id) != nullptr))
         {
             valid = true;
         }
@@ -4774,7 +5138,7 @@ bool VulkanStateWriter::IsBufferValid(format::HandleId buffer_id, const VulkanSt
 bool VulkanStateWriter::IsBufferViewValid(format::HandleId view_id, const VulkanStateTable& state_table)
 {
     bool valid               = false;
-    auto buffer_view_wrapper = state_table.GetBufferViewWrapper(view_id);
+    auto buffer_view_wrapper = state_table.GetVulkanBufferViewWrapper(view_id);
 
     if (buffer_view_wrapper != nullptr)
     {
@@ -4787,13 +5151,13 @@ bool VulkanStateWriter::IsBufferViewValid(format::HandleId view_id, const Vulkan
 bool VulkanStateWriter::IsImageValid(format::HandleId image_id, const VulkanStateTable& state_table)
 {
     bool valid         = false;
-    auto image_wrapper = state_table.GetImageWrapper(image_id);
+    auto image_wrapper = state_table.GetVulkanImageWrapper(image_id);
 
     if (image_wrapper != nullptr)
     {
         format::HandleId memory_id = image_wrapper->bind_memory_id;
 
-        if ((memory_id == 0) || (state_table.GetDeviceMemoryWrapper(memory_id) != nullptr))
+        if ((memory_id == 0) || (state_table.GetVulkanDeviceMemoryWrapper(memory_id) != nullptr))
         {
             valid = true;
         }
@@ -4805,7 +5169,7 @@ bool VulkanStateWriter::IsImageValid(format::HandleId image_id, const VulkanStat
 bool VulkanStateWriter::IsImageViewValid(format::HandleId view_id, const VulkanStateTable& state_table)
 {
     bool valid              = false;
-    auto image_view_wrapper = state_table.GetImageViewWrapper(view_id);
+    auto image_view_wrapper = state_table.GetVulkanImageViewWrapper(view_id);
 
     if (image_view_wrapper != nullptr)
     {
@@ -4818,7 +5182,7 @@ bool VulkanStateWriter::IsImageViewValid(format::HandleId view_id, const VulkanS
 bool VulkanStateWriter::IsFramebufferValid(format::HandleId framebuffer_id, const VulkanStateTable& state_table)
 {
     bool valid               = false;
-    auto framebuffer_wrapper = state_table.GetFramebufferWrapper(framebuffer_id);
+    auto framebuffer_wrapper = state_table.GetVulkanFramebufferWrapper(framebuffer_id);
 
     if (framebuffer_wrapper != nullptr)
     {
@@ -4941,7 +5305,7 @@ void VulkanStateWriter::WriteDebugUtilsState(const VulkanStateTable& state_table
     // clang-format on
 }
 
-void VulkanStateWriter::WriteNGPMemoryState(const VulkanStateTable& state_table)
+void VulkanStateWriter::WriteTensorMemoryState(const VulkanStateTable& state_table)
 {
     state_table.VisitWrappers([&](const vulkan_wrappers::DataGraphPipelineSessionARMWrapper* wrapper) {
         parameter_stream_.Clear();
@@ -4953,10 +5317,12 @@ void VulkanStateWriter::WriteNGPMemoryState(const VulkanStateTable& state_table)
         info.session   = wrapper->handle;
         info.bindPoint = wrapper->bindPoint;
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-            state_table.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+            state_table.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
         info.memory       = memory_wrapper->handle;
         info.memoryOffset = wrapper->bind_offset;
-
+        encoder_.EncodeHandleIdValue(memory_wrapper->parent_device->handle_id);
+        encoder_.EncodeUInt32Value(1);
+        EncodeStructPtr(&encoder_, &info);
         WriteFunctionCall(format::ApiCallId::ApiCall_vkBindDataGraphPipelineSessionMemoryARM, &parameter_stream_);
     });
     state_table.VisitWrappers([&](const vulkan_wrappers::TensorARMWrapper* wrapper) {
@@ -4967,10 +5333,10 @@ void VulkanStateWriter::WriteNGPMemoryState(const VulkanStateTable& state_table)
         info.sType  = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
         info.tensor = wrapper->handle;
         const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
-            state_table.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+            state_table.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
         info.memory       = memory_wrapper->handle;
         info.memoryOffset = wrapper->bind_offset;
-
+        encoder_.EncodeHandleIdValue(memory_wrapper->parent_device->handle_id);
         encoder_.EncodeUInt32Value(1);
         EncodeStructPtr(&encoder_, &info);
         encoder_.EncodeEnumValue(VK_SUCCESS);

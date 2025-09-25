@@ -340,6 +340,7 @@ void VulkanCppConsumerBase::PrintOutGlobalVar()
         }
 
         util::platform::FileClose(global_file_);
+        global_file_ = nullptr;
     }
     else
     {
@@ -461,6 +462,7 @@ void VulkanCppConsumerBase::Destroy()
         {
             WriteMainFooter();
             util::platform::FileClose(main_file_);
+            main_file_ = nullptr;
             if (platform_ != GfxToCppPlatform::PLATFORM_ANDROID)
             {
                 PrintOutCMakeFile();
@@ -3208,6 +3210,7 @@ void VulkanCppConsumerBase::ProcessResizeWindowCommand2(format::HandleId surface
 }
 
 void VulkanCppConsumerBase::ProcessCreateHardwareBufferCommand(
+    format::HandleId                                    device_id,
     format::HandleId                                    memory_id,
     uint64_t                                            buffer_id,
     uint32_t                                            format,

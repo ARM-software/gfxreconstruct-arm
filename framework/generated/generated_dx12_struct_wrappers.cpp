@@ -30,6 +30,10 @@
 #include "generated/generated_dx12_wrapper_creators.h"
 #include "util/defines.h"
 
+#include <dxgiformat.h>
+#include <d3d12.h>
+#include <d3dcommon.h>
+#include <d3d12sdklayers.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
 #include <dxgi1_3.h>
@@ -37,11 +41,7 @@
 #include <dxgi1_5.h>
 #include <dxgi1_6.h>
 #include <dxgicommon.h>
-#include <dxgiformat.h>
 #include <dxgitype.h>
-#include <d3d12.h>
-#include <d3dcommon.h>
-#include <d3d12sdklayers.h>
 #include <Unknwnbase.h>
 #include <guiddef.h>
 #include <windef.h>
@@ -162,7 +162,8 @@ void WrapStruct(const D3D12_DRED_ALLOCATION_NODE1* value)
 {
     if(value->pObject)
     {
-        WrapObject(IID_IUnknown, reinterpret_cast<void**>(&const_cast<IUnknown*>(value->pObject)), nullptr);
+        IUnknown* casted = const_cast<IUnknown*>(value->pObject);
+        WrapObject(IID_IUnknown, reinterpret_cast<void**>(&casted), nullptr);
     }
 }
 

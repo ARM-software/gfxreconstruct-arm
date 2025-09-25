@@ -3,6 +3,7 @@
 # Copyright (c) 2013-2024 The Khronos Group Inc.
 # Copyright (c) 2021-2024 LunarG, Inc.
 # Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Qualcomm Technologies, Inc. and/or its subsidiaries.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -142,6 +143,12 @@ class ValueInfo():
         self.is_dynamic = True if not array_capacity else False
         self.is_const = is_const
         self.is_com_outptr = is_com_outptr
+
+        sizeof_key = 'sizeof'
+        if (self.array_length != None) and isinstance(self.array_length, str) and (sizeof_key in self.array_length) and ('(' not in self.array_length):
+            sizeof_index = self.array_length.find(sizeof_key)
+            sizeof_len = len(sizeof_key)
+            self.array_length = self.array_length[:sizeof_index + sizeof_len] + '(' +  self.array_length[sizeof_index + sizeof_len + 1:] + ')'
 
 class Dx12GeneratorOptions():
     """Options for generating C++ function declarations for Dx12 API.
@@ -304,11 +311,6 @@ class Dx12BaseGenerator():
         'ID3D12DebugCommandList1'
     ]
 
-    # Those parent classes need to be wrapped
-    PARENT_CLASSES_EXECPTION = [
-        'ID3D12Object', 'ID3D12DeviceChild', 'ID3D12Pageable'
-    ]
-
     # ID3D23CommandList is top parent class for all ID3D12GraphicsCommandList[n]
     FAMILY_CLASSES_EXECPTION = {
         'ID3D12GraphicsCommandList':
@@ -336,6 +338,9 @@ class Dx12BaseGenerator():
         'D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS':'D3D12_RAYTRACING_GEOMETRY_DESC[]',
         'D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC':'',
     }
+
+    # Not all generations check blacklists.json. This is for all generations.
+    BLACKLIST_FOR_ALL = ["DXGIDisableVBlankVirtualization"]
 
     def __init__(
         self,
@@ -1272,7 +1277,7 @@ class Dx12BaseGenerator():
 
     def is_cmd_black_listed(self, name):
         """Determines if a function with the specified typename is blacklisted."""
-        if name in self.APICALL_BLACKLIST:
+        if name in self.APICALL_BLACKLIST or name in self.BLACKLIST_FOR_ALL:
             return True
         if 'Decoder' in self.__class__.__name__ and name in self.APICALL_DECODER_BLACKLIST:
             return True
@@ -1498,6 +1503,11 @@ class Dx12BaseGenerator():
                 if type == k:
                     return e[1]
         return type
+
+    def is_callback(self, type):
+        if self.convert_function(type) == 'Function':
+            return True
+        return False
 
     def make_unique_list(self, in_list):
         """Return a copy of in_list with duplicates removed, preserving order."""

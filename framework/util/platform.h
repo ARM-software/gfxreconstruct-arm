@@ -639,7 +639,7 @@ inline std::string GetCpuAffinity()
     {
         affinity.pop_back();
     }
-#endif
+#endif // __linux__
 
     return affinity;
 }
@@ -662,7 +662,7 @@ inline bool SetCpuAffinity(const std::string& affinity)
     }
 
     return (sched_setaffinity(0, sizeof(mask), &mask) == 0);
-#else
+#else // !__linux__
     return false;
 #endif
 }

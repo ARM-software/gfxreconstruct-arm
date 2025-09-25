@@ -1,5 +1,6 @@
 /*
-** Copyright (c) 2020 LunarG, Inc.
+** Copyright (c) 2025 LunarG, Inc.
+** Copyright (c) 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -187,6 +188,8 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
 
     D3D12_RESOURCE_ALLOCATION_INFO GetReplayResourceDescAllocationInfo1(const D3D12_RESOURCE_DESC1* resource_desc);
 
+    D3D12_HEAP_PROPERTIES GetReplayCustomHeapProperties(const D3D12_CPU_PAGE_PROPERTY cpu_page_property);
+
     void SetReplayResourceCompatibility(const format::HandleId    heap_capture_id,
                                         const ID3D12Heap*         heap,
                                         const UINT64              Heap_offset,
@@ -216,7 +219,6 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     std::unordered_map<format::HandleId, ComPtr<D3D12MA::Allocation>>     heap_id_aliasing_allocation_;
     std::unordered_map<format::HandleId, ComPtr<D3D12MA::Allocation>>     resource_id_allocation_;
     std::unordered_map<format::HandleId, ComPtr<D3D12MA::Pool>>           heap_id_custom_pool_;
-    std::unordered_map<format::HandleId, ComPtr<D3D12MA::Pool>>           resource_id_custom_pool_;
     std::unordered_map<format::HandleId, D3D12_HEAP_DESC>                 heap_id_desc_;
     std::unordered_map<format::HandleId, ComPtr<ID3D12Heap>>              heap_id_recreated_heap_;
     std::unordered_map<format::HandleId, std::vector<ComPtr<ID3D12Heap>>> resource_id_recreated_heap_;

@@ -43,12 +43,12 @@ class Dx12DescriptorMap
     static const size_t   kNullCpuAddress = 0;
     static const uint64_t kNullGpuAddress = 0;
 
-    Dx12DescriptorMap(const Dx12DescriptorMap&) = delete;
+    Dx12DescriptorMap(const Dx12DescriptorMap&)            = delete;
     Dx12DescriptorMap& operator=(const Dx12DescriptorMap&) = delete;
 
     Dx12DescriptorMap() = default;
 
-    Dx12DescriptorMap(Dx12DescriptorMap&&) noexcept = default;
+    Dx12DescriptorMap(Dx12DescriptorMap&&) noexcept            = default;
     Dx12DescriptorMap& operator=(Dx12DescriptorMap&&) noexcept = default;
 
     void AddCpuDescriptorHeap(const D3D12_CPU_DESCRIPTOR_HANDLE&     capture_cpu_start,
@@ -68,6 +68,8 @@ class Dx12DescriptorMap
     void GetCpuAddress(D3D12_CPU_DESCRIPTOR_HANDLE& descriptor) const;
 
     void GetGpuAddress(D3D12_GPU_DESCRIPTOR_HANDLE& descriptor, bool* found = nullptr) const;
+
+    uint64_t GetReplayGpuDescriptorBaseAddress(const uint64_t descriptor_ptr, const uint64_t capture_offset = 0);
 
     void RemoveCpuDescriptorHeap(const size_t capture_cpu_addr_begin);
 

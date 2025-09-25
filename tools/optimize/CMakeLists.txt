@@ -43,12 +43,16 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_raytracing_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.h
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.cpp
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_file_optimizer.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_file_optimizer.cpp>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_optimize_util.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_optimize_util.cpp>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_raytracing_modifier.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_raytracing_modifier.cpp>
+                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_redundancy_detector.h>
+                   $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_redundancy_detector.cpp>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_resource_value_tracking_consumer.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_resource_value_tracking_consumer.cpp>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.h>
@@ -77,7 +81,6 @@ target_link_libraries(gfxrecon-optimize
                           gfxrecon_encode
                           gfxrecon_graphics
                           gfxrecon_format
-                          gfxrecon_util
                           platform_specific
                           $<$<BOOL:${D3D12_SUPPORT}>:d3d12.lib>
                           $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>

@@ -16,15 +16,23 @@
     "vkBuildAccelerationStructuresKHR",
     "vkCopyAccelerationStructureKHR",
     "vkCreateRayTracingPipelinesKHR",
-    "vkCmdDispatchNeuralEngineARM",
+    "vkCreateExternalComputeQueueNV",
+    "vkDestroyExternalComputeQueueNV",
+    "vkGetExternalComputeQueueDataNV",
     "vkGetTensorOpaqueCaptureDescriptorDataARM",
-    "vkGetTensorViewOpaqueCaptureDescriptorDataARM"
+    "vkGetTensorViewOpaqueCaptureDescriptorDataARM",
+    "vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT",
+    "vkGetBufferOpaqueCaptureDescriptorDataEXT",
+    "vkGetImageOpaqueCaptureDescriptorDataEXT",
+    "vkGetImageViewOpaqueCaptureDescriptorDataEXT",
+    "vkGetSamplerOpaqueCaptureDescriptorDataEXT"
   ],
   "functions-encoder": [
     "vkCreateComputePipelines",
     "vkCreateGraphicsPipelines",
     "vkCreateRayTracingPipelinesNV",
-    "vkCreateRayTracingPipelinesKHR"
+    "vkCreateRayTracingPipelinesKHR",
+    "vkCreateDataGraphPipelinesARM"
   ],
   "functions-decoder": [
     "vkDeferredOperationJoinKHR"
@@ -37,11 +45,17 @@
     "VkPerformanceValueINTEL",
     "VkPushDescriptorSetWithTemplateInfo",
     "VkAccelerationStructureGeometryKHR",
+    "VkAccelerationStructureDenseGeometryFormatTrianglesDataAMDX",
     "VkAccelerationStructureMotionInstanceNV",
     "VkIndirectExecutionSetInfoEXT",
     "VkIndirectExecutionSetCreateInfoEXT",
     "VkIndirectCommandsTokenDataEXT",
     "VkIndirectCommandsLayoutTokenEXT",
-    "VkDataGraphPipelineConstantARM"
+    "VkCopyMemoryToImageInfo",
+    "VkMemoryToImageCopy",
+    "VkCopyImageToMemoryInfo",
+    "VkImageToMemoryCopy",
+    "VkDataGraphPipelineConstantARM",
+    "VkDescriptorGetInfoEXT"
   ]
 }

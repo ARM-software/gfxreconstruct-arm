@@ -46,9 +46,9 @@ HeadlessContext::HeadlessContext(Application* application, bool dpi_aware) : Wsi
                 get_instance_proc_addr(nullptr, "vkEnumerateInstanceExtensionProperties"));
             std::vector<VkExtensionProperties> properties;
 
-            if (feature_util::GetInstanceExtensions(instance_extension_proc, &properties) == VK_SUCCESS)
+            if (graphics::feature_util::GetInstanceExtensions(instance_extension_proc, &properties) == VK_SUCCESS)
             {
-                if (feature_util::IsSupportedExtension(properties, VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME))
+                if (graphics::feature_util::IsSupportedExtension(properties, VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME))
                 {
                     supported = true;
                 }

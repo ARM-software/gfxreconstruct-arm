@@ -555,6 +555,7 @@ void VulkanSkiaModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
 }
 
 void VulkanSkiaModifier::ProcessCreateHardwareBufferCommand(
+    format::HandleId                                    device_id,
     format::HandleId                                    memory_id,
     uint64_t                                            buffer_id,
     uint32_t                                            format,
@@ -567,13 +568,21 @@ void VulkanSkiaModifier::ProcessCreateHardwareBufferCommand(
 {
     if (IsModificationPass())
         return;
+    auto it2 = skia_device2queue.find(device_id);
+    if (it2 != skia_device2queue.end())
+    {
+        skia_device2buffer[device_id].push_back(buffer_id);
+        skiavkindex2remove[block_index_] = true;
+        return;
+    }
     for (auto& e : skia_device2memory)
     {
         auto it = std::find(e.second.begin(), e.second.end(), memory_id);
         if (it != e.second.end())
         {
+            skia_device2buffer[device_id].push_back(buffer_id);
             skiavkindex2remove[block_index_] = true;
-            break;
+            return;
         }
     }
 }
@@ -668,6 +677,7 @@ void VulkanSkiaModifier::ProcessDestroyHardwareBufferCommand(uint64_t buffer_id)
         auto it = std::find(e.second.begin(), e.second.end(), buffer_id);
         if (it != e.second.end())
         {
+            e.second.erase(it);
             skiavkindex2remove[block_index_] = true;
             break;
         }

@@ -255,6 +255,13 @@ class Dx12StatsConsumer : public Dx12Consumer
         opt_fillmem_ = true;
     }
 
+    virtual void
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                            const uint8_t*                                        data)
+    {
+        opt_fillmem_ = true;
+    }
+
     virtual void ProcessInitDx12AccelerationStructureCommand(
         const format::InitDx12AccelerationStructureCommandHeader&       command_header,
         std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,

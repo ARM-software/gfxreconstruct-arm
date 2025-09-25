@@ -67,40 +67,6 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                const VkAllocationCallbacks* allocation_callbacks,
                                ResourceData                 allocator_data) override;
 
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data) override;
-
-    virtual void DestroyTensor(VkTensorARM                  tensor,
-                               const VkAllocationCallbacks* allocation_callbacks,
-                               ResourceData                 allocator_data) override;
-
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData* allocator_data) override;
-
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data) override;
-
-    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_tensor_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties) override;
-
-    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                        VkDeviceMemory                memory,
-                                                        VkDeviceSize                  memory_offset,
-                                                        ResourceData                  allocator_session_data,
-                                                        MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties) override;
-
     virtual VkResult CreateImage(const VkImageCreateInfo*     create_info,
                                  const VkAllocationCallbacks* allocation_callbacks,
                                  format::HandleId             capture_id,
@@ -115,11 +81,11 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                         const VkAllocationCallbacks*       allocation_callbacks,
                                         format::HandleId                   capture_id,
                                         VkVideoSessionKHR*                 session,
-                                        std::vector<ResourceData>*         allocator_datas) override;
+                                        ResourceData*                      allocator_data) override;
 
     virtual void DestroyVideoSession(VkVideoSessionKHR            session,
                                      const VkAllocationCallbacks* allocation_callbacks,
-                                     std::vector<ResourceData>    allocator_datas) override;
+                                     ResourceData                 allocator_data) override;
 
     virtual void GetBufferMemoryRequirements(VkBuffer              buffer,
                                              VkMemoryRequirements* memory_requirements,
@@ -146,7 +112,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR video_session,
                                                           uint32_t*         memory_requirements_count,
                                                           VkVideoSessionMemoryRequirementsKHR* memory_requirements,
-                                                          std::vector<ResourceData> allocator_datas) override;
+                                                          ResourceData                         allocator_data) override;
 
     virtual VkResult AllocateMemory(const VkMemoryAllocateInfo*  allocate_info,
                                     const VkAllocationCallbacks* allocation_callbacks,
@@ -209,7 +175,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
                                             uint32_t                               bind_info_count,
                                             const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                            const ResourceData*                    allocator_session_datas,
+                                            const ResourceData                     allocator_session_data,
                                             const MemoryData*                      allocator_memory_datas,
                                             VkMemoryPropertyFlags*                 bind_memory_properties) override;
 
@@ -220,7 +186,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                void**           data,
                                MemoryData       allocator_data) override;
 
+    virtual VkResult
+    MapMemory2(const VkMemoryMapInfo* memory_map_info, void** data, MemoryData allocator_data) override;
+
     virtual void UnmapMemory(VkDeviceMemory memory, MemoryData allocator_data) override;
+
+    virtual VkResult UnmapMemory2(const VkMemoryUnmapInfo* memory_unmap_info, MemoryData allocator_data) override;
 
     virtual VkResult FlushMappedMemoryRanges(uint32_t                   memory_range_count,
                                              const VkMappedMemoryRange* memory_ranges,
@@ -264,8 +235,25 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
                                                        uint32_t                               bind_info_count,
                                                        const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                                       const ResourceData*                    allocator_resource_datas,
+                                                       const ResourceData                     allocator_resource_data,
                                                        const MemoryData* allocator_memory_datas) override;
+
+    virtual void
+    ReportBindAccelerationStructureMemoryNVIncompatibility(uint32_t bind_info_count,
+                                                           const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
+                                                           const ResourceData* allocator_acc_datas,
+                                                           const MemoryData*   allocator_memory_datas) override;
+
+    virtual void ReportQueueBindSparseIncompatibility(VkQueue                 queue,
+                                                      uint32_t                bind_info_count,
+                                                      const VkBindSparseInfo* bind_infos,
+                                                      VkFence                 fence,
+                                                      const ResourceData*     allocator_buf_datas,
+                                                      const MemoryData*       allocator_buf_mem_datas,
+                                                      const ResourceData*     allocator_img_op_datas,
+                                                      const MemoryData*       allocator_img_op_mem_datas,
+                                                      const ResourceData*     allocator_img_datas,
+                                                      const MemoryData*       allocator_img_mem_datas) override;
 
     // Direct allocation methods that perform memory allocation and resource creation without performing memory
     // translation.  These methods allow the replay tool to allocate staging resources through the resource allocator so
@@ -380,8 +368,99 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) override
     {
         GFXRECON_ASSERT(alloc_data != 0);
-        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->rebind_size;
+        return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->bound_memory_infos.back().rebind_size;
     }
+
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data) override;
+
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override;
+
+    virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
+                                      const VkBindTensorMemoryInfoARM* pBindInfos,
+                                      const ResourceData*              allocator_buffer_data,
+                                      const MemoryData*                allocator_memory_data,
+                                      VkMemoryPropertyFlags*           bind_memory_properties) override;
+
+    virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
+                                        const VkAllocationCallbacks* allocation_callbacks,
+                                        VkTensorARM*                 tensor,
+                                        ResourceData*                allocator_data) override
+    {
+        return CreateTensor(create_info, allocation_callbacks, format::kNullHandleId, tensor, allocator_data);
+    }
+
+    virtual void DestroyTensorDirect(VkTensorARM                  tensor,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     ResourceData                 allocator_data) override
+    {
+        DestroyTensor(tensor, allocation_callbacks, allocator_data);
+    }
+
+    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                                VkMemoryRequirements2*             memory_requirements,
+                                                ResourceData                       allocator_data) override;
+
+    virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
+                                            const VkBindTensorMemoryInfoARM* pBindInfos,
+                                            const ResourceData*              allocator_buffer_data,
+                                            const MemoryData*                allocator_memory_data,
+                                            VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return BindTensorMemory(
+            bindInfoCount, pBindInfos, allocator_buffer_data, allocator_memory_data, bind_memory_properties);
+    }
+
+    virtual void SetDeviceMemoryPriority(VkDeviceMemory memory, float priority, MemoryData allocator_data) override;
+
+    virtual VkResult GetMemoryRemoteAddressNV(const VkMemoryGetRemoteAddressInfoNV* memory_get_remote_address_info,
+                                              VkRemoteAddressNV*                    address,
+                                              MemoryData                            allocator_data) override;
+
+    virtual VkResult CreateAccelerationStructureNV(const VkAccelerationStructureCreateInfoNV* create_info,
+                                                   const VkAllocationCallbacks*               allocation_callbacks,
+                                                   format::HandleId                           capture_id,
+                                                   VkAccelerationStructureNV*                 acc_str,
+                                                   ResourceData*                              allocator_data) override;
+
+    virtual void DestroyAccelerationStructureNV(VkAccelerationStructureNV    acc_str,
+                                                const VkAllocationCallbacks* allocation_callbacks,
+                                                ResourceData                 allocator_data) override;
+
+    virtual void
+    GetAccelerationStructureMemoryRequirementsNV(const VkAccelerationStructureMemoryRequirementsInfoNV* info,
+                                                 VkMemoryRequirements2KHR* memory_requirements,
+                                                 ResourceData              allocator_data) override;
+
+    virtual VkResult BindAccelerationStructureMemoryNV(uint32_t                                       bind_info_count,
+                                                       const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
+                                                       const ResourceData*    allocator_acc_datas,
+                                                       const MemoryData*      allocator_memory_datas,
+                                                       VkMemoryPropertyFlags* bind_memory_properties) override;
+
+    virtual VkResult GetMemoryFd(const VkMemoryGetFdInfoKHR* get_fd_info, int* pFd, MemoryData allocator_data) override;
+
+    virtual VkResult QueueBindSparse(VkQueue                 queue,
+                                     uint32_t                bind_info_count,
+                                     const VkBindSparseInfo* bind_infos,
+                                     VkFence                 fence,
+                                     ResourceData*           allocator_buf_datas,
+                                     const MemoryData*       allocator_buf_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_buf_mem_properties,
+                                     ResourceData*           allocator_img_op_datas,
+                                     const MemoryData*       allocator_img_op_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_img_op_mem_properties,
+                                     ResourceData*           allocator_img_datas,
+                                     const MemoryData*       allocator_img_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_img_mem_properties) override;
+
+    virtual uint64_t GetDeviceMemoryOpaqueCaptureAddress(const VkDeviceMemoryOpaqueCaptureAddressInfo* info,
+                                                         MemoryData allocator_data) override;
 
   private:
     struct MemoryAllocInfo;
@@ -393,19 +472,18 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         VkSubresourceLayout rebind{};
     };
 
-    enum ObjectType
+    enum MemoryInfoType
     {
-        none          = 0,
-        buffer        = 1,
-        image         = 2,
-        video_session = 3,
-        ngp_tensor    = 4,
-        ngp_session   = 5,
+        kBasic,       // single: buffer, image, tensor_arm
+        kSparse,      // array: buffer, image
+        kVideoSession // array: video_session
     };
 
-    struct ResourceAllocInfo
+    // Create a new allocation for a binding memory case. The binding offset is allocation_info's offset, instead of
+    // original offset.
+    struct BoundMemoryInfo
     {
-        MemoryAllocInfo* memory_info{ nullptr };
+        MemoryAllocInfo* memory_info{ nullptr }; // If memory_info is nullptr, the memory could be free.
         VmaAllocation    allocation{ VK_NULL_HANDLE };
         bool             is_host_visible{ false };
         void*            mapped_pointer{ nullptr };
@@ -413,12 +491,19 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         VkDeviceSize     rebind_offset{ 0 };
         VkDeviceSize     original_size{ 0 };
         VkDeviceSize     rebind_size{ 0 };
-        ObjectType       object_type{ none };
-        VkFlags          usage{ 0 };
-        VkImageTiling    tiling{};
-        uint32_t         height{ 0 };
-        bool             uses_extensions{ false };
-        VkFormat         format{ VK_FORMAT_UNDEFINED };
+    };
+
+    struct ResourceAllocInfo
+    {
+        MemoryInfoType               memory_info_type;
+        std::vector<BoundMemoryInfo> bound_memory_infos;
+        std::vector<VkDeviceSize>    original_sizes; // video_session is array, the others are single.
+        VkObjectType                 object_type{ VK_OBJECT_TYPE_UNKNOWN };
+        VkFlags                      usage{ 0 };
+        VkImageTiling                tiling{};
+        uint32_t                     height{ 0 };
+        bool                         uses_extensions{ false };
+        VkFormat                     format{ VK_FORMAT_UNDEFINED };
 
         std::string          debug_utils_name;
         std::vector<uint8_t> debug_utils_tag;
@@ -432,17 +517,15 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     struct MemoryAllocInfo
     {
-        VkDeviceSize                                        allocation_size{ 0 };
-        uint32_t                                            original_index{ std::numeric_limits<uint32_t>::max() };
-        bool                                                is_mapped{ false };
-        VkDeviceSize                                        mapped_offset{ 0 };
-        AHardwareBuffer*                                    ahb{ nullptr };
-        VkDeviceMemory                                      ahb_memory{ VK_NULL_HANDLE };
-        std::unique_ptr<uint8_t[]>                          original_content;
-        std::unordered_map<VkBuffer, ResourceAllocInfo*>    original_buffers;
-        std::unordered_map<VkImage, ResourceAllocInfo*>     original_images;
-        std::unordered_map<VkTensorARM, ResourceAllocInfo*> original_ngp_tensors;
-        std::unordered_map<VkDataGraphPipelineSessionARM, ResourceAllocInfo*> original_ngp_sessions;
+        format::HandleId                                 capture_id{ format::kNullHandleId };
+        VkDeviceSize                                     allocation_size{ 0 };
+        uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
+        bool                                             is_mapped{ false };
+        VkDeviceSize                                     mapped_offset{ 0 };
+        AHardwareBuffer*                                 ahb{ nullptr };
+        VkDeviceMemory                                   ahb_memory{ VK_NULL_HANDLE };
+        std::unique_ptr<uint8_t[]>                       original_content;
+        std::unordered_map<uint64_t, ResourceAllocInfo*> original_objects; // Key is object handle.
 
         std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*>     original_sessions;
         std::unordered_map<VkImage, VulkanAndroidHardwareBufferInfo*> original_ahardwarebuffers;
@@ -452,20 +535,34 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint64_t             debug_utils_tag_name;
     };
 
+    struct StagingResources
+    {
+        VkCommandBuffer    cmd_buffer;
+        VkBuffer           staging_buf;
+        VkSemaphore        staging_semaphore;
+        VmaAllocation      staging_alloc;
+        ResourceAllocInfo* resource_alloc_info;
+        size_t             dst_offset;
+        VkFence            staging_fence;
+    };
+
   private:
     void WriteBoundResource(ResourceAllocInfo* resource_alloc_info,
+                            BoundMemoryInfo*   bound_memory_info,
                             VkDeviceSize       src_offset,
                             VkDeviceSize       dst_offset,
                             VkDeviceSize       data_size,
                             const uint8_t*     data);
 
     void WriteBoundResourceStaging(ResourceAllocInfo* resource_alloc_info,
+                                   BoundMemoryInfo*   bound_memory_info,
                                    size_t             src_offset,
                                    size_t             dst_offset,
                                    size_t             data_size,
                                    const uint8_t*     data);
 
     void WriteBoundResourceDirect(ResourceAllocInfo* resource_alloc_info,
+                                  BoundMemoryInfo*   bound_memory_info,
                                   size_t             src_offset,
                                   size_t             dst_offset,
                                   size_t             data_size,
@@ -476,6 +573,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     // resource, the dst_offset is the offset from the start of the new resource allocation, and the data_size is the
     // region of the resource that overlaps with the original memory region.
     bool TranslateMemoryRange(const ResourceAllocInfo* resource_alloc_info,
+                              const BoundMemoryInfo*   bound_memory_info,
                               VkDeviceSize             oiriginal_start,
                               VkDeviceSize             original_end,
                               VkDeviceSize*            src_offset,
@@ -483,11 +581,13 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                               VkDeviceSize*            data_size);
 
     void UpdateBoundResource(ResourceAllocInfo* resource_alloc_info,
+                             BoundMemoryInfo*   bound_memory_info,
                              VkDeviceSize       write_start,
                              VkDeviceSize       write_end,
                              const uint8_t*     data);
 
     VkResult UpdateMappedMemoryRange(ResourceAllocInfo* resource_alloc_info,
+                                     BoundMemoryInfo*   bound_memory_info,
                                      VkDeviceSize       oiriginal_start,
                                      VkDeviceSize       original_end,
                                      VkResult (*update_func)(VmaAllocator, VmaAllocation, VkDeviceSize, VkDeviceSize));
@@ -498,6 +598,10 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                       VkResult (*update_func)(VmaAllocator, VmaAllocation, VkDeviceSize, VkDeviceSize));
 
     VmaMemoryUsage GetBufferMemoryUsage(VkBufferUsageFlags          buffer_usage,
+                                        VkMemoryPropertyFlags       capture_properties,
+                                        const VkMemoryRequirements& replay_requirements);
+
+    VmaMemoryUsage GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
                                         VkMemoryPropertyFlags       capture_properties,
                                         const VkMemoryRequirements& replay_requirements);
 
@@ -534,8 +638,62 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     void SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo*   memory_alloc_info,
                                         const ResourceAllocInfo* resource_alloc_info,
                                         VkDeviceMemory           device_memory,
-                                        VkObjectType             resource_type,
                                         uint64_t                 resource_handle);
+
+    virtual void ClearStagingResources() override;
+
+    VkResult AllocateMemoryForBuffer(VkBuffer                                buffer,
+                                     const VkPhysicalDeviceMemoryProperties& device_memory_properties,
+                                     const ResourceAllocInfo&                resource_alloc_info,
+                                     const MemoryAllocInfo&                  memory_alloc_info,
+                                     VmaAllocation&                          allocation,
+                                     VmaAllocationInfo&                      allocation_info);
+
+    VkResult AllocateMemoryForImage(VkImage                                 image,
+                                    const VkPhysicalDeviceMemoryProperties& device_memory_properties,
+                                    const ResourceAllocInfo&                resource_alloc_info,
+                                    const MemoryAllocInfo&                  memory_alloc_info,
+                                    VmaAllocation&                          allocation,
+                                    VmaAllocationInfo&                      allocation_info);
+
+    VkResult
+    VmaAllocateMemory(const VkMemoryRequirements& mem_req, const VmaMemoryUsage usage, VmaAllocation& allocation);
+
+    // The allocation for the same memory and offset could be re-used.
+    bool FindBoundMemory(const ResourceAllocInfo* resource_alloc_info,
+                         format::HandleId         memory_capture_id,
+                         VkDeviceSize             original_offset,
+                         VmaAllocation&           allocation,
+                         VmaAllocationInfo&       allocation_info);
+
+    void UpdateAllocInfo(ResourceAllocInfo&     resource_alloc_info,
+                         uint64_t               object_handle,
+                         MemoryInfoType         memory_info_type,
+                         VkDeviceSize           memory_offset,
+                         const VmaAllocation&   allocation,
+                         VmaAllocationInfo&     allocation_info,
+                         MemoryAllocInfo&       memory_alloc_info,
+                         VkMemoryPropertyFlags& bind_memory_property);
+
+    void GetVmaAllocations(MemoryData allocator_data, std::vector<VmaAllocation>& allocations);
+
+    enum QueueBindSparseType
+    {
+        kBindBuffer,
+        kBindImageOpaqueMemory,
+        kBindImageMemory
+    };
+
+    VkResult ProcessSingleQueueBindSparse(VkQueue                   queue,
+                                          VkFence                   fence,
+                                          QueueBindSparseType       type,
+                                          const VkBindSparseInfo&   original_bind_info,
+                                          bool                      is_last_bind_info,
+                                          uint32_t                  object_bind_index,
+                                          uint32_t                  memory_bind_index,
+                                          std::vector<VkSemaphore>& semaphores,
+                                          const VmaAllocation&      allocation,
+                                          const VmaAllocationInfo&  allocation_info);
 
   private:
     VkDevice                         device_ = VK_NULL_HANDLE;
@@ -545,10 +703,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     VkPhysicalDeviceType             capture_device_type_;
     VkPhysicalDeviceMemoryProperties capture_memory_properties_;
     VkPhysicalDeviceMemoryProperties replay_memory_properties_;
-    VkCommandBuffer                  cmd_buffer_    = VK_NULL_HANDLE;
     VkCommandPool                    cmd_pool_      = VK_NULL_HANDLE;
     VkQueue                          staging_queue_ = VK_NULL_HANDLE;
     uint32_t                         staging_queue_family_{};
+    std::vector<VkSemaphore>         queue_bind_sparse_semaphores;
+
+    std::vector<StagingResources> staging_resources_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)

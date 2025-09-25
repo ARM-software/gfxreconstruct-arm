@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -i
 #
 # Copyright (c) 2019 Valve Corporation
-# Copyright (c) 2019-2024 LunarG, Inc.
+# Copyright (c) 2019-2025 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -37,7 +37,8 @@ class KhronosStructHandleWrappersBodyGenerator():
 
     def generate_parent_child_handling(self, api_data, type):
         body = ''
-        if type in self.children_structs.keys():
+        has_case = False
+        if type in self.children_structs:
             type_var_name = api_data.struct_type_variable
             body += '        switch (value->{})\n'.format(type_var_name)
             body += '        {\n'
@@ -46,7 +47,11 @@ class KhronosStructHandleWrappersBodyGenerator():
             body += '                break;\n'
 
             # Loop over each possible child
+            has_case = False
             for child in self.children_structs[type]:
+                if child not in self.structs_with_handles:
+                    continue
+                has_case = True
                 switch_type = self.struct_type_names[child]
 
                 body += f'            case {switch_type}:\n'
@@ -57,7 +62,8 @@ class KhronosStructHandleWrappersBodyGenerator():
                 body += '                return;\n'
             body += '        }\n'
             body += '\n'
-        return body
+
+        return body if has_case else ''
 
     def write_struct_handle_wrapper_content(self):
         api_data = self.get_api_data()
@@ -71,6 +77,7 @@ class KhronosStructHandleWrappersBodyGenerator():
         for struct in self.get_all_filtered_struct_names():
             if (
                 (struct in self.structs_with_handles) or
+                self.child_struct_has_handles(struct) or
                 (struct in self.GENERIC_HANDLE_STRUCTS)
             ) and (struct not in self.STRUCT_MAPPERS_BLACKLIST):
                 handle_members = dict()
@@ -86,15 +93,18 @@ class KhronosStructHandleWrappersBodyGenerator():
                 body += 'void UnwrapStructHandles({}* value, HandleUnwrapMemory* unwrap_memory)\n'.format(
                     struct
                 )
+                
                 body += '{\n'
-                body += '    if (value != nullptr)\n'
-                body += '    {\n'
 
-                body += self.generate_parent_child_handling(api_data, struct)
-                body += self.make_struct_handle_unwrappings(
-                    api_data, struct, handle_members, generic_handle_members
-                )
-                body += '    }\n'
+                unwrapping = self.generate_parent_child_handling(api_data, struct)
+                unwrapping += self.make_struct_handle_unwrappings(api_data, struct, handle_members, generic_handle_members)
+                
+                if unwrapping:
+                    body += '    if (value != nullptr)\n'
+                    body += '    {\n'
+                    body += unwrapping
+                    body += '    }\n'
+
                 body += '}'
 
                 write(body, file=self.outFile)
@@ -150,8 +160,8 @@ class KhronosStructHandleWrappersBodyGenerator():
         # Generate the extended struct handle wrapping code.
         self.newline()
         write(
-            '{}void* Unwrap{}StructHandles(const void* value, HandleUnwrapMemory* unwrap_memory)'
-            .format(const_prefix, ext_struct_name),
+            '{const}void* Unwrap{struct}StructHandles(const void* value, HandleUnwrapMemory* unwrap_memory)'
+            .format(const=const_prefix, struct=ext_struct_name),
             file=self.outFile
         )
         write('{', file=self.outFile)

@@ -93,8 +93,17 @@ class VulkanDecoderBase : public ApiDecoder
     virtual void DispatchFixDeviceAddresCommand(const format::FixDeviceAddressCommandHeader& header,
                                                 const format::AddressLocationInfo*           infos) override;
 
-    virtual void DispatchShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
-                                                  const format::ShaderHandleLocationInfo*          infos) override;
+    virtual void DispatchFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
+                                                     const format::ShaderHandleLocationInfo*          infos) override;
+
+    virtual void DispatchFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                  const format::DescriptorDataLocationInfo*     infos) override;
+
+    virtual void DispatchFixShadowMemoryCommand(format::ThreadId thread_id,
+                                                format::HandleId memory_id,
+                                                uint64_t         map_memory,
+                                                uint64_t         shadow_memory) override;
+
     virtual void
     DispatchFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                            const uint8_t*                                      data) override;
@@ -112,6 +121,7 @@ class VulkanDecoderBase : public ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -175,12 +185,6 @@ class VulkanDecoderBase : public ApiDecoder
                                            uint64_t         data_size,
                                            const uint8_t*   data) override;
 
-    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
-                                           format::HandleId device_id,
-                                           format::HandleId tensor_id,
-                                           uint64_t         data_size,
-                                           const uint8_t*   data) override;
-
     virtual void DispatchInitImageCommand(format::ThreadId             thread_id,
                                           format::HandleId             device_id,
                                           format::HandleId             image_id,
@@ -189,6 +193,12 @@ class VulkanDecoderBase : public ApiDecoder
                                           uint32_t                     layout,
                                           const std::vector<uint64_t>& level_sizes,
                                           const uint8_t*               data) override;
+
+    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
+                                           format::HandleId device_id,
+                                           format::HandleId tensor_id,
+                                           uint64_t         data_size,
+                                           const uint8_t*   data) override;
 
     virtual void DispatchInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                 const uint8_t*                              data) override;
@@ -216,6 +226,8 @@ class VulkanDecoderBase : public ApiDecoder
     virtual void DispatchSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
                                                         const char*                             env_string) override;
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;
+
+    virtual void SetCurrentFrameNumber(uint64_t frame_number) override;
 
     void DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
                                                               size_t         buffer_size) override;

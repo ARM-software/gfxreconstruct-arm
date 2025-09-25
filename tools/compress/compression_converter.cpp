@@ -24,6 +24,7 @@
 
 #include "compression_converter.h"
 
+#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 
@@ -188,7 +189,8 @@ bool CompressionConverter::ProcessMetaData(const format::MetaDataHeader& meta_he
 {
     // Only the meta data blocks that contain resource data support compression.  The rest of the meta data block types
     // can be copied directly to the new file.
-    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
+    auto meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_header.meta_data_id);
+    format::MetaDataType meta_data_type = format::GetMetaDataType(meta_data_id);
     switch (meta_data_type)
     {
         case format::MetaDataType::kFillMemoryCommand:
@@ -197,7 +199,8 @@ bool CompressionConverter::ProcessMetaData(const format::MetaDataHeader& meta_he
         case format::MetaDataType::kInitSubresourceCommand:
         case format::MetaDataType::kInitDx12AccelerationStructureCommand:
         case format::MetaDataType::kFillMemoryResourceValueCommand:
-        case format::MetaDataType::kInitTensorCommand:
+        case format::arm::MetaDataType::kFillMemoryResourceAddressCommand:
+        case format::arm::MetaDataType::kInitTensorCommand:
         {
             break;
         }
@@ -633,23 +636,18 @@ bool CompressionConverter::ProcessFillMemoryResourceValueCommand(
 bool CompressionConverter::ProcessInitTensorCommand(const format::InitTensorCommandHeader& header)
 {
     format::InitTensorCommandHeader init_cmd = header;
-
     GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, init_cmd.data_size);
-
     size_t data_size = static_cast<size_t>(init_cmd.data_size);
-
     if (format::IsBlockCompressed(init_cmd.meta_header.block_header.type))
     {
         size_t uncompressed_size = 0;
         size_t compressed_size =
             static_cast<size_t>(init_cmd.meta_header.block_header.size - format::GetMetaDataBlockBaseSize(init_cmd));
-
         if (!ReadCompressedParameterBuffer(compressed_size, data_size, &uncompressed_size))
         {
             HandleBlockReadError(kErrorReadingCompressedBlockData, "Failed to read init buffer meta-data block");
             return false;
         }
-
         assert(uncompressed_size == data_size);
     }
     else
@@ -660,24 +658,75 @@ bool CompressionConverter::ProcessInitTensorCommand(const format::InitTensorComm
             return false;
         }
     }
-
     const auto&    buffer       = GetParameterBuffer();
     const uint8_t* data_address = buffer.data();
-
     PrepMetadataBlock(init_cmd.meta_header, init_cmd.meta_header.meta_data_id, data_address, data_size);
-
     // Calculate size of packet with compressed or uncompressed data size.
     init_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(init_cmd) + data_size;
-
     if (!WriteBytes(&init_cmd, sizeof(init_cmd)))
     {
         HandleBlockWriteError(kErrorWritingBlockHeader, "Failed to write init buffer meta-data block header");
         return false;
     }
-
     if (!WriteBytes(data_address, data_size))
     {
         HandleBlockWriteError(kErrorWritingBlockData, "Failed to write init buffer meta-data block");
+        return false;
+    }
+    return true;
+}
+
+bool CompressionConverter::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& header)
+{
+    format::FillMemoryResourceAddressCommandHeader ra_cmd = header;
+
+    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, ra_cmd.resource_address_count);
+    size_t data_size =
+        static_cast<size_t>(ra_cmd.resource_address_count * sizeof(format::Dx12FillMemoryResourceAddressInfo));
+
+    if (format::IsBlockCompressed(ra_cmd.meta_header.block_header.type))
+    {
+        size_t uncompressed_size = 0;
+        size_t compressed_size =
+            static_cast<size_t>(ra_cmd.meta_header.block_header.size - format::GetMetaDataBlockBaseSize(ra_cmd));
+
+        if (!ReadCompressedParameterBuffer(compressed_size, data_size, &uncompressed_size))
+        {
+            HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                 "Failed to read fill memory resource address meta-data block");
+            return false;
+        }
+
+        assert(uncompressed_size == data_size);
+    }
+    else
+    {
+        if (!ReadParameterBuffer(data_size))
+        {
+            HandleBlockReadError(kErrorReadingBlockData, "Failed to read fill memory resource address meta-data block");
+            return false;
+        }
+    }
+
+    const auto&    buffer       = GetParameterBuffer();
+    const uint8_t* data_address = buffer.data();
+
+    PrepMetadataBlock(ra_cmd.meta_header, ra_cmd.meta_header.meta_data_id, data_address, data_size);
+
+    // Calculate size of packet with compressed or uncompressed data size.
+    ra_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(ra_cmd) + data_size;
+
+    if (!WriteBytes(&ra_cmd, sizeof(ra_cmd)))
+    {
+        HandleBlockWriteError(kErrorWritingBlockHeader,
+                              "Failed to write fill memory resource address meta-data block header");
+        return false;
+    }
+
+    if (!WriteBytes(data_address, data_size))
+    {
+        HandleBlockWriteError(kErrorWritingBlockData, "Failed to read fill memory resource address meta-data block");
         return false;
     }
 

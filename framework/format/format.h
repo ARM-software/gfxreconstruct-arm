@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2022 Valve Corporation
 ** Copyright (c) 2018-2022 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,7 @@ typedef uint64_t AddressEncodeType;
 typedef uint8_t  CharEncodeType;  // Encoding type for UTF-8 strings.
 typedef uint16_t WCharEncodeType; // Encoding type for LPCWSTR (UTF-16) strings.
 typedef uint32_t FormatEncodeType;
+typedef uint32_t D3D_FEATURE_LEVELEncodeType;
 
 typedef HandleEncodeType HandleId;
 typedef uint64_t         ThreadId;
@@ -123,43 +124,46 @@ enum AdapterType
 
 enum class MetaDataType : uint16_t
 {
-    kUnknownMetaDataType                    = 0,
-    kDisplayMessageCommand                  = 1,
-    kFillMemoryCommand                      = 2,
-    kResizeWindowCommand                    = 3,
-    kSetSwapchainImageStateCommand          = 4,
-    kBeginResourceInitCommand               = 5,
-    kEndResourceInitCommand                 = 6,
-    kInitBufferCommand                      = 7,
-    kInitImageCommand                       = 8,
-    kCreateHardwareBufferCommand_deprecated = 9,
-    kDestroyHardwareBufferCommand           = 10,
-    kSetDevicePropertiesCommand             = 11,
-    kSetDeviceMemoryPropertiesCommand       = 12,
-    kResizeWindowCommand2                   = 13,
-    kSetOpaqueAddressCommand                = 14,
-    kSetRayTracingShaderGroupHandlesCommand = 15,
-    kCreateHeapAllocationCommand            = 16,
-    kInitSubresourceCommand                 = 17,
-    kExeFileInfoCommand                     = 18,
-    kInitDx12AccelerationStructureCommand   = 19,
-    kFillMemoryResourceValueCommand         = 20,
-    kDxgiAdapterInfoCommand                 = 21,
-    kDriverInfoCommand                      = 22,
-    kReserved23                             = 23,
-    kCreateHardwareBufferCommand            = 24,
-    kReserved25                             = 25,
-    kDx12RuntimeInfoCommand                 = 26,
-    kParentToChildDependency                = 27,
+    kUnknownMetaDataType                                = 0,
+    kDisplayMessageCommand                              = 1,
+    kFillMemoryCommand                                  = 2,
+    kResizeWindowCommand                                = 3,
+    kSetSwapchainImageStateCommand                      = 4,
+    kBeginResourceInitCommand                           = 5,
+    kEndResourceInitCommand                             = 6,
+    kInitBufferCommand                                  = 7,
+    kInitImageCommand                                   = 8,
+    kCreateHardwareBufferCommand_deprecated             = 9,
+    kDestroyHardwareBufferCommand                       = 10,
+    kSetDevicePropertiesCommand                         = 11,
+    kSetDeviceMemoryPropertiesCommand                   = 12,
+    kResizeWindowCommand2                               = 13,
+    kSetOpaqueAddressCommand                            = 14,
+    kSetRayTracingShaderGroupHandlesCommand             = 15,
+    kCreateHeapAllocationCommand                        = 16,
+    kInitSubresourceCommand                             = 17,
+    kExeFileInfoCommand                                 = 18,
+    kInitDx12AccelerationStructureCommand               = 19,
+    kFillMemoryResourceValueCommand                     = 20,
+    kDxgiAdapterInfoCommand                             = 21,
+    kDriverInfoCommand                                  = 22,
+    kReserved23                                         = 23,
+    kCreateHardwareBufferCommand_deprecated2            = 24,
+    kReserved25                                         = 25,
+    kDx12RuntimeInfoCommand                             = 26,
+    kParentToChildDependency                            = 27,
     kVulkanBuildAccelerationStructuresCommand           = 28,
     kVulkanCopyAccelerationStructuresCommand            = 29,
     kVulkanWriteAccelerationStructuresPropertiesCommand = 30,
     kFixDeviceAddressCommand                            = 31,
-    kSetEnvironmentVariablesCommand         = 32,
-    kViewRelativeLocation                   = 33,
-    kExecuteBlocksFromFile                  = 34,
-    kFixShaderGroupHandleCommand            = 35,
-    kInitTensorCommand                      = 36,
+    kSetEnvironmentVariablesCommand                     = 32,
+    kViewRelativeLocation                               = 33,
+    kExecuteBlocksFromFile                              = 34,
+    kCreateHardwareBufferCommand                        = 35,
+    kInitializeMetaCommand                              = 36,
+
+    //! reserve values with highest-bit for special purposes
+    kBeginExperimentalReservedRange = 1U << 15U
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -333,6 +337,33 @@ struct FillMemoryCommandHeader
     uint64_t memory_size;   // Uncompressed size of the data encoded after the header.
 };
 
+struct FixDescriptorDataCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::HandleId memory_id;
+    uint64_t         num_of_locations;
+};
+
+struct DescriptorDataLocationInfo
+{
+    uint64_t descriptor_offset_in_mapped_memory; // offset from the start the mapped pointer
+    uint64_t descriptor_offset_in_buffer;        // offset from the start of bound buffer for this descriptor data
+    uint64_t descriptor_offset_in_memory;        // offset from the start of one block of filled-memory
+    uint64_t descriptor_addr;                    // captured memory pointer to store descriptor
+    uint64_t orig_size;
+    uint64_t new_size;
+    bool     is_descriptor_buffer;
+};
+
+struct FixShadowMemoryCommand
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+    format::HandleId memory_id;
+    uint64_t         map_memory;
+    uint64_t         shadow_memory;
+};
+
 struct FixDeviceAddressCommandHeader
 {
     MetaDataHeader meta_header;
@@ -446,10 +477,27 @@ struct CreateHardwareBufferCommandHeader_deprecated
                            // HardwareBufferLayerInfo records.  When unavailable, 'planes' is zero.
 };
 
+struct CreateHardwareBufferCommandHeader_deprecated2
+{
+    MetaDataHeader meta_header;
+    ThreadId       thread_id;
+    HandleId       memory_id; // Globally unique ID assigned to the buffer for tracking memory modifications.
+    uint64_t       buffer_id; // Address of the buffer object.
+    uint32_t       format;
+    uint32_t       width;
+    uint32_t       height;
+    uint32_t       stride; // Size of a row in pixels.
+    uint64_t       usage;
+    uint32_t       layers;
+    uint32_t       planes; // When additional multi-plane data is available, header is followed by 'planes' count
+                           // HardwareBufferLayerInfo records.  When unavailable, 'planes' is zero.
+};
+
 struct CreateHardwareBufferCommandHeader
 {
     MetaDataHeader meta_header;
     ThreadId       thread_id;
+    HandleId       device_id;
     HandleId       memory_id; // Globally unique ID assigned to the buffer for tracking memory modifications.
     uint64_t       buffer_id; // Address of the buffer object.
     uint32_t       format;
@@ -525,15 +573,6 @@ struct InitBufferCommandHeader
     uint64_t         data_size;
 };
 
-struct InitTensorCommandHeader
-{
-    MetaDataHeader   meta_header;
-    format::ThreadId thread_id;
-    format::HandleId device_id;
-    format::HandleId tensor_id;
-    uint64_t         data_size;
-};
-
 struct InitImageCommandHeader
 {
     MetaDataHeader   meta_header;
@@ -556,6 +595,15 @@ struct InitSubresourceCommandHeader
     uint32_t         initial_state;
     uint32_t         resource_state;
     uint32_t         barrier_flags;
+    uint64_t         data_size;
+};
+
+struct InitTensorCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+    format::HandleId device_id;
+    format::HandleId tensor_id;
     uint64_t         data_size;
 };
 
@@ -745,6 +793,70 @@ struct ExecuteBlocksFromFile
 
     // Number of characters in file name
     uint32_t filename_length;
+};
+
+struct ViewRelativeLocation
+{
+    format::HandleId session_id;
+    format::HandleId space_id;
+
+    // Locate status
+    uint64_t flags;
+
+    // Orientation
+    float qx;
+    float qy;
+    float qz;
+    float qw;
+
+    // Position
+    float x;
+    float y;
+    float z;
+};
+
+struct ViewRelativeLocationCmd
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+
+    ViewRelativeLocation location;
+};
+
+struct InitializeMetaCommand
+{
+    MetaDataHeader   meta_header{};
+    ThreadId         thread_id;
+    format::HandleId capture_id;
+    uint32_t         block_index{ 0 };
+    uint32_t         total_number_of_initializemetacommand{ 0 };
+    uint64_t         initialization_parameters_data_size{ 0 };
+
+    // In the capture file, initialize metacommand data is written in the following order:
+    // InitializeMetaCommandHeder
+    // parameters data
+};
+
+struct FillMemoryResourceAddressCommandHeader
+{
+    MetaDataHeader   meta_header;
+    format::ThreadId thread_id;
+    uint64_t         resource_address_count;
+};
+
+struct Dx12FillMemoryResourceAddressInfo
+{
+    uint64_t          offset;
+    ResourceValueType type;
+
+    // The relevant resource, descriptor, or state object properties.
+    format::HandleId object_id;
+    // Base GPU VA or GPU Descriptor start address.
+    uint64_t start_value;
+    // GPU VA or GPU Descriptor found in memory.
+    uint64_t adjusted_value;
+    // Shader identifier found in memory.
+    uint8_t shader_id[kMaxShaderGroupHandleSize];
 };
 
 // Restore size_t to normal behavior.

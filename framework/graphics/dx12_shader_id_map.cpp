@@ -77,5 +77,43 @@ bool Dx12ShaderIdMap::Map(uint8_t* dst_translated_shader_id, const uint8_t* src_
     return false;
 }
 
+void Dx12ShaderIdMap::Add(const format::HandleId object_id, const uint8_t* old_shader_id, const uint8_t* new_shader_id)
+{
+    Dx12ShaderIdentifier old_shader_identifier = PackDx12ShaderIdentifier(old_shader_id);
+    Dx12ShaderIdentifier new_shader_identifier = PackDx12ShaderIdentifier(new_shader_id);
+
+    auto& shader_id_map = state_property_shader_id_map_[object_id];
+    shader_id_map.insert(std::pair<Dx12ShaderIdentifier, Dx12ShaderIdentifier>(std::move(old_shader_identifier),
+                                                                               std::move(new_shader_identifier)));
+}
+
+void Dx12ShaderIdMap::Remove(const format::HandleId object_id)
+{
+    auto iter = state_property_shader_id_map_.find(object_id);
+    if (iter != state_property_shader_id_map_.end())
+    {
+        state_property_shader_id_map_.erase(iter);
+    }
+}
+
+bool Dx12ShaderIdMap::Map(const format::HandleId object_id,
+                          uint8_t*               dst_translated_shader_id,
+                          const uint8_t*         src_translated_shader_id) const
+{
+    Dx12ShaderIdentifier old_shader_id = PackDx12ShaderIdentifier(src_translated_shader_id);
+
+    auto property_entry = state_property_shader_id_map_.find(object_id);
+    if (property_entry != state_property_shader_id_map_.end())
+    {
+        auto shader_entry = property_entry->second.find(old_shader_id);
+        if (shader_entry != property_entry->second.end())
+        {
+            UnpackDx12ShaderIdentifier(dst_translated_shader_id, shader_entry->second);
+            return true;
+        }
+    }
+    return false;
+}
+
 GFXRECON_END_NAMESPACE(graphics)
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -29,8 +29,18 @@
 
 #include "vulkan/vulkan.h"
 
+#if VK_USE_64_BIT_PTR_DEFINES == 1
+#define VK_HANDLE_TO_UINT64(value) reinterpret_cast<uint64_t>(value)
+#define UINT64_TO_VK_HANDLE(handle_type, value) reinterpret_cast<handle_type>(value)
+#else
+#define VK_HANDLE_TO_UINT64(value) (value)
+#define UINT64_TO_VK_HANDLE(handle_type, value) static_cast<handle_type>(value)
+#endif
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(graphics)
+
+typedef uint64_t PresentId;
 
 const std::vector<std::string> kLoaderLibNames = {
 #if defined(WIN32)
@@ -42,27 +52,38 @@ const std::vector<std::string> kLoaderLibNames = {
 #endif
 };
 
-util::platform::LibraryHandle InitializeLoader();
+/// @brief Initialize the Vulkan loader by loading the Vulkan library.
+/// @param loader_path Optional path to the Vulkan loader library. If not provided, the function will search for
+/// `kLoaderLibNames` in the system library paths.
+/// @return A handle to the loaded Vulkan library, or nullptr if the library could not be loaded.
+util::platform::LibraryHandle InitializeLoader(const char* loader_path = nullptr);
 
 void ReleaseLoader(util::platform::LibraryHandle loader_handle);
 
-// Search through the parent's pNext chain for the first struct with the requested struct_type. parent's struct type is
-// not checked and parent won't be returned as a result. T and Parent_T must be Vulkan struct pointer types. Return
-// nullptr if no matching struct found.
-template <typename T, typename Parent_T>
-static T* GetPNextStruct(const Parent_T* parent, VkStructureType struct_type)
+bool ImageHasUsage(VkImageUsageFlags usage_flags, VkImageUsageFlagBits bit);
+
+/**
+ * @brief   copy_dispatch_table_from_device can be used if a command-buffer was not allocated through the loader,
+ *          in order to assign the dispatch table from an existing VkDevice.
+ *
+ * @param   device  a VkDevice handle
+ * @param   handle  a VkCommandBuffer handle
+ */
+static inline void copy_dispatch_table_from_device(VkDevice device, VkCommandBuffer handle)
 {
-    VkBaseOutStructure* current_struct = reinterpret_cast<const VkBaseOutStructure*>(parent)->pNext;
-    while (current_struct != nullptr)
-    {
-        if (current_struct->sType == struct_type)
-        {
-            return reinterpret_cast<T*>(current_struct);
-        }
-        current_struct = current_struct->pNext;
-    }
-    return nullptr;
+    // Because this command buffer was not allocated through the loader, it must be assigned a dispatch table.
+    *reinterpret_cast<void**>(handle) = *reinterpret_cast<void**>(device);
 }
+
+/**
+ * @brief   StripWaitSemaphores can be used to remove all wait-semaphores for a provided VkSubmitInfo.
+ *          Respective pointer in submit_info will be set to nullptr and count to zero.
+ *
+ * @param   submit_info     a provided VkSubmitInfo(2) struct
+ * @return  an array of Semaphores that have been stripped/removed from submit_info
+ */
+std::vector<std::pair<VkSemaphore, uint64_t>> StripWaitSemaphores(VkSubmitInfo* submit_info);
+std::vector<std::pair<VkSemaphore, uint64_t>> StripWaitSemaphores(VkSubmitInfo2* submit_info);
 
 [[maybe_unused]] static const char* kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
 

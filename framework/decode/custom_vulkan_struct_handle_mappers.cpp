@@ -106,8 +106,6 @@ void MapStructHandles(Decoded_VkWriteDescriptorSet* wrapper, const CommonObjectI
             case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
                 // Handles are mapped in the VkWriteDescriptorSetAccelerationStructureKHR structure in the pNext chain
                 break;
-            case VK_DESCRIPTOR_TYPE_STORAGE_TENSOR_ARM:
-                break;
             default:
                 GFXRECON_LOG_WARNING("Attempting to track descriptor state for unrecognized descriptor type");
                 break;
@@ -167,6 +165,59 @@ void MapStructHandles(Decoded_VkAccelerationStructureBuildGeometryInfoKHR* wrapp
                 MapStructHandles(wrapper->ppGeometries->GetMetaStructPointer()[i], object_info_table);
             }
         }
+    }
+}
+
+void MapStructHandles(Decoded_VkDescriptorGetInfoEXT* wrapper, const CommonObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkDescriptorGetInfoEXT* value = wrapper->decoded_value;
+        switch (value->type)
+        {
+            case VK_DESCRIPTOR_TYPE_SAMPLER:
+                value->data.pSampler = handle_mapping::MapHandleArray<VulkanSamplerInfo>(
+                    &wrapper->data->pSampler, object_info_table, &CommonObjectInfoTable::GetVkSamplerInfo);
+                break;
+            case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                MapStructHandles(
+                    value->type, wrapper->data->pCombinedImageSampler->GetMetaStructPointer(), object_info_table);
+                break;
+            case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                MapStructHandles(
+                    value->type, wrapper->data->pInputAttachmentImage->GetMetaStructPointer(), object_info_table);
+                break;
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                MapStructHandles(value->type, wrapper->data->pSampledImage->GetMetaStructPointer(), object_info_table);
+                break;
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                MapStructHandles(value->type, wrapper->data->pStorageImage->GetMetaStructPointer(), object_info_table);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkCopyMemoryToImageInfo* wrapper, const CommonObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkCopyMemoryToImageInfo* value = wrapper->decoded_value;
+
+        value->dstImage = handle_mapping::MapHandle<VulkanImageInfo>(
+            wrapper->dstImage, object_info_table, &CommonObjectInfoTable::GetVkImageInfo);
+    }
+}
+
+void MapStructHandles(Decoded_VkCopyImageToMemoryInfo* wrapper, const CommonObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkCopyImageToMemoryInfo* value = wrapper->decoded_value;
+
+        value->srcImage = handle_mapping::MapHandle<VulkanImageInfo>(
+            wrapper->srcImage, object_info_table, &CommonObjectInfoTable::GetVkImageInfo);
     }
 }
 

@@ -43,6 +43,22 @@ void TrackBeginCommandBufferHandles(vulkan_wrappers::CommandBufferWrapper* wrapp
     {
         if (pBeginInfo->pInheritanceInfo != nullptr)
         {
+            auto pnext_header = reinterpret_cast<const VkBaseInStructure*>(pBeginInfo->pInheritanceInfo->pNext);
+            while (pnext_header)
+            {
+                switch (pnext_header->sType)
+                {
+                    default:
+                        break;
+                    case VK_STRUCTURE_TYPE_TILE_MEMORY_BIND_INFO_QCOM:
+                    {
+                        auto pnext_value = reinterpret_cast<const VkTileMemoryBindInfoQCOM*>(pnext_header);
+                        if(pnext_value->memory != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::DeviceMemoryHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(pnext_value->memory));
+                        break;
+                    }
+                }
+                pnext_header = pnext_header->pNext;
+            }
             if(pBeginInfo->pInheritanceInfo->renderPass != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::RenderPassHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::RenderPassWrapper>(pBeginInfo->pInheritanceInfo->renderPass));
             if(pBeginInfo->pInheritanceInfo->framebuffer != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::FramebufferHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::FramebufferWrapper>(pBeginInfo->pInheritanceInfo->framebuffer));
         }
@@ -746,26 +762,14 @@ void TrackCmdPushDescriptorSetHandles(vulkan_wrappers::CommandBufferWrapper* wra
                         }
                         break;
                     }
-                    case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_INFO_ARM:
+                    case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_ARM:
                     {
-                        auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorInfoARM*>(pnext_header);
+                        auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorARM*>(pnext_header);
                         if (pnext_value->pTensorViews != nullptr)
                         {
                             for (uint32_t pTensorViews_index = 0; pTensorViews_index < pnext_value->tensorViewCount; ++pTensorViews_index)
                             {
                                 if(pnext_value->pTensorViews[pTensorViews_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::TensorViewARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::TensorViewARMWrapper>(pnext_value->pTensorViews[pTensorViews_index]));
-                            }
-                        }
-                        break;
-                    }
-                    case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_WEIGHTS_ARM:
-                    {
-                        auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetWeightsARM*>(pnext_header);
-                        if (pnext_value->pWeights != nullptr)
-                        {
-                            for (uint32_t pWeights_index = 0; pWeights_index < pnext_value->weightsCount; ++pWeights_index)
-                            {
-                                if(pnext_value->pWeights[pWeights_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::WeightsARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::WeightsARMWrapper>(pnext_value->pWeights[pWeights_index]));
                             }
                         }
                         break;
@@ -940,26 +944,14 @@ void TrackCmdPushDescriptorSet2Handles(vulkan_wrappers::CommandBufferWrapper* wr
                             }
                             break;
                         }
-                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_INFO_ARM:
+                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_ARM:
                         {
-                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorInfoARM*>(pnext_header);
+                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorARM*>(pnext_header);
                             if (pnext_value->pTensorViews != nullptr)
                             {
                                 for (uint32_t pTensorViews_index = 0; pTensorViews_index < pnext_value->tensorViewCount; ++pTensorViews_index)
                                 {
                                     if(pnext_value->pTensorViews[pTensorViews_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::TensorViewARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::TensorViewARMWrapper>(pnext_value->pTensorViews[pTensorViews_index]));
-                                }
-                            }
-                            break;
-                        }
-                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_WEIGHTS_ARM:
-                        {
-                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetWeightsARM*>(pnext_header);
-                            if (pnext_value->pWeights != nullptr)
-                            {
-                                for (uint32_t pWeights_index = 0; pWeights_index < pnext_value->weightsCount; ++pWeights_index)
-                                {
-                                    if(pnext_value->pWeights[pWeights_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::WeightsARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::WeightsARMWrapper>(pnext_value->pWeights[pWeights_index]));
                                 }
                             }
                             break;
@@ -1606,26 +1598,14 @@ void TrackCmdPushDescriptorSet2KHRHandles(vulkan_wrappers::CommandBufferWrapper*
                             }
                             break;
                         }
-                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_INFO_ARM:
+                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_TENSOR_ARM:
                         {
-                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorInfoARM*>(pnext_header);
+                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetTensorARM*>(pnext_header);
                             if (pnext_value->pTensorViews != nullptr)
                             {
                                 for (uint32_t pTensorViews_index = 0; pTensorViews_index < pnext_value->tensorViewCount; ++pTensorViews_index)
                                 {
                                     if(pnext_value->pTensorViews[pTensorViews_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::TensorViewARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::TensorViewARMWrapper>(pnext_value->pTensorViews[pTensorViews_index]));
-                                }
-                            }
-                            break;
-                        }
-                        case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_WEIGHTS_ARM:
-                        {
-                            auto pnext_value = reinterpret_cast<const VkWriteDescriptorSetWeightsARM*>(pnext_header);
-                            if (pnext_value->pWeights != nullptr)
-                            {
-                                for (uint32_t pWeights_index = 0; pWeights_index < pnext_value->weightsCount; ++pWeights_index)
-                                {
-                                    if(pnext_value->pWeights[pWeights_index] != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::WeightsARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::WeightsARMWrapper>(pnext_value->pWeights[pWeights_index]));
                                 }
                             }
                             break;
@@ -1969,6 +1949,48 @@ void TrackCmdBindPipelineShaderGroupNVHandles(vulkan_wrappers::CommandBufferWrap
     if(pipeline != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::PipelineHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::PipelineWrapper>(pipeline));
 }
 
+void TrackCmdBindDescriptorBuffersEXTHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, uint32_t bufferCount, const VkDescriptorBufferBindingInfoEXT* pBindingInfos)
+{
+    assert(wrapper != nullptr);
+
+    if (pBindingInfos != nullptr)
+    {
+        for (uint32_t pBindingInfos_index = 0; pBindingInfos_index < bufferCount; ++pBindingInfos_index)
+        {
+            auto pnext_header = reinterpret_cast<const VkBaseInStructure*>(pBindingInfos->pNext);
+            while (pnext_header)
+            {
+                switch (pnext_header->sType)
+                {
+                    default:
+                        break;
+                    case VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_PUSH_DESCRIPTOR_BUFFER_HANDLE_EXT:
+                    {
+                        auto pnext_value = reinterpret_cast<const VkDescriptorBufferBindingPushDescriptorBufferHandleEXT*>(pnext_header);
+                        if(pnext_value->buffer != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::BufferHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::BufferWrapper>(pnext_value->buffer));
+                        break;
+                    }
+                }
+                pnext_header = pnext_header->pNext;
+            }
+        }
+    }
+}
+
+void TrackCmdSetDescriptorBufferOffsetsEXTHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkPipelineLayout layout)
+{
+    assert(wrapper != nullptr);
+
+    if(layout != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::PipelineLayoutHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::PipelineLayoutWrapper>(layout));
+}
+
+void TrackCmdBindDescriptorBufferEmbeddedSamplersEXTHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkPipelineLayout layout)
+{
+    assert(wrapper != nullptr);
+
+    if(layout != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::PipelineLayoutHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::PipelineLayoutWrapper>(layout));
+}
+
 void TrackCmdBindInvocationMaskHUAWEIHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, VkImageView imageView)
 {
     assert(wrapper != nullptr);
@@ -2084,6 +2106,16 @@ void TrackCmdDispatchDataGraphARMHandles(vulkan_wrappers::CommandBufferWrapper* 
     assert(wrapper != nullptr);
 
     if(session != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::DataGraphPipelineSessionARMHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::DataGraphPipelineSessionARMWrapper>(session));
+}
+
+void TrackCmdBindTileMemoryQCOMHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkTileMemoryBindInfoQCOM* pTileMemoryBindInfo)
+{
+    assert(wrapper != nullptr);
+
+    if (pTileMemoryBindInfo != nullptr)
+    {
+        if(pTileMemoryBindInfo->memory != VK_NULL_HANDLE) wrapper->command_handles[vulkan_state_info::CommandHandleType::DeviceMemoryHandle].insert(vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceMemoryWrapper>(pTileMemoryBindInfo->memory));
+    }
 }
 
 void TrackCmdPreprocessGeneratedCommandsEXTHandles(vulkan_wrappers::CommandBufferWrapper* wrapper, const VkGeneratedCommandsInfoEXT* pGeneratedCommandsInfo, VkCommandBuffer stateCommandBuffer)

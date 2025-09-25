@@ -23,10 +23,10 @@
 #
 
 import sys
-from base_generator import BaseGenerator, BaseGeneratorOptions, write
+from vulkan_base_generator import *
 
 
-class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
+class VulkanSkiavkModifierHeaderGeneratorOptions(VulkanBaseGeneratorOptions):
     """Adds the following new option:
     is_override - Specify whether the member function declarations are
                   virtual function overrides or pure virtual functions.
@@ -48,7 +48,7 @@ class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
         protect_feature=True,
         extra_headers=[]
     ):
-        BaseGeneratorOptions.__init__(
+        VulkanBaseGeneratorOptions.__init__(
             self,
             blacklists,
             platform_types,
@@ -64,8 +64,18 @@ class VulkanSkiavkModifierHeaderGeneratorOptions(BaseGeneratorOptions):
         self.is_override = is_override
         self.constructor_args = constructor_args
 
+        self.begin_end_file_data.specific_headers.extend((
+            'util/vulkan_modifier_base.h',
+        ))
+        self.begin_end_file_data.namespaces.extend(('gfxrecon', 'decode'))
+        self.begin_end_file_data.common_api_headers = []
+        self.begin_end_file_data.system_headers = [
+            'unordered_map',
+            'unordered_set'
+        ]
 
-class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
+
+class VulkanSkiavkModifierHeaderGenerator(VulkanBaseGenerator):
     """VulkanConsumerHeaderGenerator - subclass of BaseGenerator.
     Generates C++ member declarations for the VulkanConsumer class responsible for processing
     Vulkan API call parameter data.
@@ -75,7 +85,7 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
-        BaseGenerator.__init__(
+        VulkanBaseGenerator.__init__(
             self,
             err_file=err_file,
             warn_file=warn_file,
@@ -108,15 +118,8 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         ]
 
         gen_opts.prefix_text = arm_copyright_text + gen_opts.prefix_text
-        BaseGenerator.beginFile(self, gen_opts)
+        VulkanBaseGenerator.beginFile(self, gen_opts)
 
-        write('#include "util/vulkan_modifier_base.h"', file=self.outFile)
-        write('#include <unordered_map>', file=self.outFile)
-        write('#include <unordered_set>', file=self.outFile)
-        self.newline()
-
-        write('GFXRECON_BEGIN_NAMESPACE(gfxrecon)', file=self.outFile)
-        write('GFXRECON_BEGIN_NAMESPACE(decode)', file=self.outFile)
         self.newline()
         write(
             'class {class_name} : public util::VulkanModifierBase'.format(
@@ -175,15 +178,16 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         """Method override."""
         self.newline()
         write('  public: // meta data function', file=self.outFile)
-        write('    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);', file=self.outFile)
+        write('    virtual void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;', file=self.outFile)
         write('    virtual void ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader& header,', file=self.outFile)
-        write('                                                const format::AddressLocationInfo*           infos);', file=self.outFile)
+        write('                                                const format::AddressLocationInfo*           infos) override;', file=self.outFile)
         write('    virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,', file=self.outFile)
-        write('                                                    const format::ShaderHandleLocationInfo*          infos);', file=self.outFile)
-        write('    virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height);', file=self.outFile)
+        write('                                                    const format::ShaderHandleLocationInfo*          infos) override;', file=self.outFile)
+        write('    virtual void ProcessResizeWindowCommand(format::HandleId surface_id, uint32_t width, uint32_t height) override;', file=self.outFile)
         write('    virtual void', file=self.outFile)
-        write('    ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform);', file=self.outFile)
-        write('    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                memory_id,', file=self.outFile)
+        write('    ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform) override;', file=self.outFile)
+        write('    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                device_id,', file=self.outFile)
+        write('                                                format::HandleId                                    memory_id,', file=self.outFile)
         write('                                                uint64_t                                            buffer_id,', file=self.outFile)
         write('                                                uint32_t                                            format,', file=self.outFile)
         write('                                                uint32_t                                            width,', file=self.outFile)
@@ -191,8 +195,8 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         write('                                                uint32_t                                            stride,', file=self.outFile)
         write('                                                uint64_t                                            usage,', file=self.outFile)
         write('                                                uint32_t                                            layers,', file=self.outFile)
-        write('                                                const std::vector<format::HardwareBufferPlaneInfo>& plane_info);', file=self.outFile)
-        write('    virtual void ProcessDestroyHardwareBufferCommand(uint64_t buffer_id);', file=self.outFile)
+        write('                                                const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;', file=self.outFile)
+        write('    virtual void ProcessDestroyHardwareBufferCommand(uint64_t buffer_id) override;', file=self.outFile)
         write('    virtual void ProcessSetDevicePropertiesCommand(format::HandleId   physical_device_id,', file=self.outFile)
         write('                                               uint32_t           api_version,', file=self.outFile)
         write('                                               uint32_t           driver_version,', file=self.outFile)
@@ -200,46 +204,46 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         write('                                               uint32_t           device_id,', file=self.outFile)
         write('                                               uint32_t           device_type,', file=self.outFile)
         write('                                               const uint8_t      pipeline_cache_uuid[format::kUuidSize],', file=self.outFile)
-        write('                                               const std::string& device_name);', file=self.outFile)
+        write('                                               const std::string& device_name) override;', file=self.outFile)
         write('    virtual void ProcessSetDeviceMemoryPropertiesCommand(format::HandleId physical_device_id,', file=self.outFile)
         write('                                                     const std::vector<format::DeviceMemoryType>& memory_types,', file=self.outFile)
-        write('                                                     const std::vector<format::DeviceMemoryHeap>& memory_heaps);', file=self.outFile)
+        write('                                                     const std::vector<format::DeviceMemoryHeap>& memory_heaps) override;', file=self.outFile)
         write('    virtual void', file=self.outFile)
-        write('    ProcessSetOpaqueAddressCommand(format::HandleId device_id, format::HandleId object_id, uint64_t address);', file=self.outFile)
+        write('    ProcessSetOpaqueAddressCommand(format::HandleId device_id, format::HandleId object_id, uint64_t address) override;', file=self.outFile)
         write('    virtual void ProcessSetRayTracingShaderGroupHandlesCommand(format::HandleId device_id,', file=self.outFile)
         write('                                                           format::HandleId pipeline_id,', file=self.outFile)
         write('                                                           size_t           data_size,', file=self.outFile)
-        write('                                                           const uint8_t*   data);', file=self.outFile)
+        write('                                                           const uint8_t*   data) override;', file=self.outFile)
         write('    virtual void ProcessSetSwapchainImageStateCommand(format::HandleId device_id,', file=self.outFile)
         write('                                                  format::HandleId swapchain_id,', file=self.outFile)
         write('                                                  uint32_t         last_presented_image,', file=self.outFile)
-        write('                                                  const std::vector<format::SwapchainImageStateInfo>& image_state);', file=self.outFile)
+        write('                                                  const std::vector<format::SwapchainImageStateInfo>& image_state) override;', file=self.outFile)
         write('    virtual void', file=self.outFile)
-        write('    ProcessBeginResourceInitCommand(format::HandleId device_id, uint64_t max_resource_size, uint64_t max_copy_size);', file=self.outFile)
-        write('    virtual void ProcessEndResourceInitCommand(format::HandleId device_id);', file=self.outFile)
+        write('    ProcessBeginResourceInitCommand(format::HandleId device_id, uint64_t max_resource_size, uint64_t max_copy_size) override;', file=self.outFile)
+        write('    virtual void ProcessEndResourceInitCommand(format::HandleId device_id) override;', file=self.outFile)
         write('    virtual void ProcessInitBufferCommand(format::HandleId device_id,', file=self.outFile)
         write('                                      format::HandleId buffer_id,', file=self.outFile)
         write('                                      uint64_t         data_size,', file=self.outFile)
-        write('                                      const uint8_t*   data);', file=self.outFile)
+        write('                                      const uint8_t*   data) override;', file=self.outFile)
         write('    virtual void ProcessInitImageCommand(format::HandleId             device_id,', file=self.outFile)
         write('                                     format::HandleId             image_id,', file=self.outFile)
         write('                                     uint64_t                     data_size,', file=self.outFile)
         write('                                     uint32_t                     aspect,', file=self.outFile)
         write('                                     uint32_t                     layout,', file=self.outFile)
         write('                                     const std::vector<uint64_t>& level_sizes,', file=self.outFile)
-        write('                                     const uint8_t*               data);', file=self.outFile)
+        write('                                     const uint8_t*               data) override;', file=self.outFile)
         write('    virtual void ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,', file=self.outFile)
-        write('                                           const uint8_t*                              data);', file=self.outFile)
+        write('                                           const uint8_t*                              data) override;', file=self.outFile)
         write('    virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(', file=self.outFile)
         write('    format::HandleId                                                           device_id,', file=self.outFile)
         write('    uint32_t                                                                   info_count,', file=self.outFile)
         write('    StructPointerDecoder<Decoded_VkAccelerationStructureBuildGeometryInfoKHR>* geometry_infos,', file=self.outFile)
         write('    StructPointerDecoder<Decoded_VkAccelerationStructureBuildRangeInfoKHR*>*   range_infos,', file=self.outFile)
-        write('    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data);', file=self.outFile)
+        write('    std::vector<std::vector<VkAccelerationStructureInstanceKHR>>&              instance_buffers_data) override;', file=self.outFile)
         write('    virtual void ProcessCopyVulkanAccelerationStructuresMetaCommand(', file=self.outFile)
-        write('    format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos);', file=self.outFile)
+        write('    format::HandleId device_id, StructPointerDecoder<Decoded_VkCopyAccelerationStructureInfoKHR>* copy_infos) override;', file=self.outFile)
         write('    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(', file=self.outFile)
-        write('    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id);', file=self.outFile)
+        write('    format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;', file=self.outFile)
         write('    virtual void ProcessFrameEndMarker(uint64_t frame_number) override;', file=self.outFile)
         self.newline()
         write('  private:', file=self.outFile)
@@ -261,11 +265,9 @@ class VulkanSkiavkModifierHeaderGenerator(BaseGenerator):
         write('    std::unordered_map<format::HandleId, std::vector<format::HandleId>> skia_device2buffer;', file=self.outFile)
         write('};', file=self.outFile)
         self.newline()
-        write('GFXRECON_END_NAMESPACE(decode)', file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
 
         # Finish processing in superclass
-        BaseGenerator.endFile(self)
+        VulkanBaseGenerator.endFile(self)
 
     #
     # Indicates that the current feature has C++ code to generate.

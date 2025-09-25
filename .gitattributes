@@ -1,0 +1,2 @@
+android/scripts/gfxrecon.py                   merge=union
+framework/decode/vulkan_replay_options.h      merge=union

@@ -1,5 +1,6 @@
 /*
-** Copyright (c) 2022 LunarG, Inc.
+** Copyright (c) 2022-2025 LunarG, Inc.
+** Copyright (c) 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -35,18 +36,26 @@ class Dx12FileOptimizer : public FileOptimizer
   public:
     Dx12FileOptimizer() :
         fill_command_resource_values_(nullptr), inject_noop_resource_value_optimization_(false),
-        num_optimized_fill_commands_(0), prebuild_Info_resource_values_(nullptr)
+        num_optimized_fill_commands_(0), fill_command_resource_addresses_(nullptr),
+        prebuild_info_resource_values_(nullptr)
     {}
 
     void SetFillCommandResourceValues(const decode::Dx12FillCommandResourceValueMap* fill_command_resource_values,
                                       bool inject_noop_resource_value_optimization);
 
-    void SetPrebuildInfoResourceValues(const decode::Dx12PrebuildInfoResourceValueMap* prebuild_Info_resource_values);
+    void
+    SetFillCommandResourceAddresses(const decode::Dx12FillCommandResourceAddressMap* fill_command_resource_addresses);
+
+    void SetPrebuildInfoResourceValues(const decode::Dx12PrebuildInfoResourceValueMap* prebuild_info_resource_values);
 
     uint64_t GetNumOptimizedFillCommands() { return num_optimized_fill_commands_; }
 
   private:
     bool AddFillMemoryResourceValueCommand();
+
+    bool AddFillMemoryResourceAddressCommand();
+
+    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
 
     bool AddPrebuildInfoResourceValueCommand(const format::BlockHeader& block_header, format::ApiCallId call_id);
 
@@ -57,12 +66,13 @@ class Dx12FileOptimizer : public FileOptimizer
 
     virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
 
-    virtual bool ProcessMetaData(const format::MetaDataHeader& meta_header) override;
-
     const decode::Dx12FillCommandResourceValueMap*          fill_command_resource_values_;
     decode::Dx12FillCommandResourceValueMap::const_iterator resource_values_iter_;
     bool                                                    inject_noop_resource_value_optimization_;
-    const decode::Dx12PrebuildInfoResourceValueMap*         prebuild_Info_resource_values_;
+
+    const decode::Dx12FillCommandResourceAddressMap*          fill_command_resource_addresses_;
+    decode::Dx12FillCommandResourceAddressMap::const_iterator resource_addresses_iter_;
+    const decode::Dx12PrebuildInfoResourceValueMap*           prebuild_info_resource_values_;
 
     size_t num_optimized_fill_commands_;
 

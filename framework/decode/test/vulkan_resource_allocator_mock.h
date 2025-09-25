@@ -78,14 +78,14 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
                                         const VkAllocationCallbacks*       allocation_callbacks,
                                         format::HandleId                   capture_id,
                                         VkVideoSessionKHR*                 session,
-                                        std::vector<ResourceData>*         allocator_datas)
+                                        ResourceData*                      allocator_datas)
     {
         return VK_SUCCESS;
     }
 
     virtual void DestroyVideoSession(VkVideoSessionKHR            session,
                                      const VkAllocationCallbacks* allocation_callbacks,
-                                     std::vector<ResourceData>    allocator_datas)
+                                     ResourceData                 allocator_datas)
     {}
 
     virtual void
@@ -96,52 +96,6 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
                                               VkMemoryRequirements2*                 memory_requirements,
                                               ResourceData                           allocator_data)
     {}
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM*                 session,
-                                                    ResourceData*                                  allocator_data)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual void
-    DestroyTensor(VkTensorARM tensor, const VkAllocationCallbacks* allocation_callbacks, ResourceData allocator_data)
-    {}
-
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data)
-    {}
-
-    virtual VkResult BindTensorMemory(VkTensorARM            tensor,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_tensor_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties)
-    {
-        return VK_SUCCESS;
-    }
-
-    virtual VkResult BindDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                        VkDeviceMemory                memory,
-                                                        VkDeviceSize                  memory_offset,
-                                                        ResourceData                  allocator_session_data,
-                                                        MemoryData                    allocator_memory_data,
-                                                        VkMemoryPropertyFlags*        bind_memory_properties)
-    {
-        return VK_SUCCESS;
-    }
 
     virtual void GetImageSubresourceLayout(VkImage                    image,
                                            const VkImageSubresource*  subresource,
@@ -162,7 +116,7 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
     virtual VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR video_session,
                                                           uint32_t*         memory_requirements_count,
                                                           VkVideoSessionMemoryRequirementsKHR* memory_requirements,
-                                                          std::vector<ResourceData>            allocator_datas)
+                                                          ResourceData                         allocator_datas)
     {
         return VK_SUCCESS;
     }
@@ -225,7 +179,7 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
     virtual VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
                                             uint32_t                               bind_info_count,
                                             const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                            const ResourceData*                    allocator_session_datas,
+                                            const ResourceData                     allocator_session_datas,
                                             const MemoryData*                      allocator_memory_datas,
                                             VkMemoryPropertyFlags*                 bind_memory_properties)
     {
@@ -242,7 +196,17 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
         return VK_SUCCESS;
     }
 
+    virtual VkResult MapMemory2(const VkMemoryMapInfo* memory_map_info, void** data, MemoryData allocator_data)
+    {
+        return VK_SUCCESS;
+    }
+
     virtual void UnmapMemory(VkDeviceMemory memory, MemoryData allocator_data) {}
+
+    virtual VkResult UnmapMemory2(const VkMemoryUnmapInfo* memory_unmap_info, MemoryData allocator_data)
+    {
+        return VK_SUCCESS;
+    }
 
     virtual VkResult FlushMappedMemoryRanges(uint32_t                   memory_range_count,
                                              const VkMappedMemoryRange* memory_ranges,
@@ -303,9 +267,94 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
     virtual void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
                                                        uint32_t                               bind_info_count,
                                                        const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                                       const ResourceData*                    allocator_resource_datas,
+                                                       const ResourceData                     allocator_resource_datas,
                                                        const MemoryData*                      allocator_memory_datas)
     {}
+
+    virtual void
+    ReportBindAccelerationStructureMemoryNVIncompatibility(uint32_t bind_info_count,
+                                                           const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
+                                                           const ResourceData* allocator_acc_datas,
+                                                           const MemoryData*   allocator_memory_datas)
+    {}
+
+    virtual void ReportQueueBindSparseIncompatibility(VkQueue                 queue,
+                                                      uint32_t                bind_info_count,
+                                                      const VkBindSparseInfo* bind_infos,
+                                                      VkFence                 fence,
+                                                      const ResourceData*     allocator_buf_datas,
+                                                      const MemoryData*       allocator_buf_mem_datas,
+                                                      const ResourceData*     allocator_img_op_datas,
+                                                      const MemoryData*       allocator_img_op_mem_datas,
+                                                      const ResourceData*     allocator_img_datas,
+                                                      const MemoryData*       allocator_img_mem_datas)
+    {}
+
+    virtual void SetDeviceMemoryPriority(VkDeviceMemory memory, float priority, MemoryData allocator_data) {}
+
+    virtual VkResult GetMemoryRemoteAddressNV(const VkMemoryGetRemoteAddressInfoNV* memory_get_remote_address_info,
+                                              VkRemoteAddressNV*                    address,
+                                              MemoryData                            allocator_data)
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult CreateAccelerationStructureNV(const VkAccelerationStructureCreateInfoNV* create_info,
+                                                   const VkAllocationCallbacks*               allocation_callbacks,
+                                                   format::HandleId                           capture_id,
+                                                   VkAccelerationStructureNV*                 acc_str,
+                                                   ResourceData*                              allocator_data)
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual void DestroyAccelerationStructureNV(VkAccelerationStructureNV    acc_str,
+                                                const VkAllocationCallbacks* allocation_callbacks,
+                                                ResourceData                 allocator_data)
+    {}
+
+    virtual void
+    GetAccelerationStructureMemoryRequirementsNV(const VkAccelerationStructureMemoryRequirementsInfoNV* info,
+                                                 VkMemoryRequirements2KHR* memory_requirements,
+                                                 ResourceData              allocator_data)
+    {}
+
+    virtual VkResult BindAccelerationStructureMemoryNV(uint32_t                                       bind_info_count,
+                                                       const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
+                                                       const ResourceData*    allocator_acc_datas,
+                                                       const MemoryData*      allocator_memory_datas,
+                                                       VkMemoryPropertyFlags* bind_memory_properties)
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult GetMemoryFd(const VkMemoryGetFdInfoKHR* get_fd_info, int* pFd, MemoryData allocator_data)
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult QueueBindSparse(VkQueue                 queue,
+                                     uint32_t                bind_info_count,
+                                     const VkBindSparseInfo* bind_infos,
+                                     VkFence                 fence,
+                                     ResourceData*           allocator_buf_datas,
+                                     const MemoryData*       allocator_buf_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_buf_mem_properties,
+                                     ResourceData*           allocator_img_op_datas,
+                                     const MemoryData*       allocator_img_op_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_img_op_mem_properties,
+                                     ResourceData*           allocator_img_datas,
+                                     const MemoryData*       allocator_img_mem_datas,
+                                     VkMemoryPropertyFlags*  bind_img_mem_properties)
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual uint64_t GetDeviceMemoryOpaqueCaptureAddress(const VkDeviceMemoryOpaqueCaptureAddressInfo* info,
+                                                         MemoryData                                    allocator_data)
+    {
+        return 0;
+    }
 
     std::function<void(const VkBufferCreateInfo*)> OnCreateBufferDirect;
 
@@ -404,6 +453,52 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
     }
 
     virtual bool SupportBindVideoSessionMemory() { return true; }
+
+    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  format::HandleId             capture_id,
+                                  VkTensorARM*                 tensor,
+                                  ResourceData*                allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+    virtual void DestroyTensor(VkTensorARM                  tensor,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               ResourceData                 allocator_data) override
+    {}
+    virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
+                                      const VkBindTensorMemoryInfoARM* pBindInfos,
+                                      const ResourceData*              allocator_buffer_data,
+                                      const MemoryData*                allocator_memory_data,
+                                      VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
+                                        const VkAllocationCallbacks* allocation_callbacks,
+                                        VkTensorARM*                 tensor,
+                                        ResourceData*                allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual void DestroyTensorDirect(VkTensorARM                  tensor,
+                                     const VkAllocationCallbacks* allocation_callbacks,
+                                     ResourceData                 allocator_data) override
+    {}
+    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                                VkMemoryRequirements2*             memory_requirements,
+                                                ResourceData                       allocator_data) override
+    {}
+    virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
+                                            const VkBindTensorMemoryInfoARM* pBindInfos,
+                                            const ResourceData*              allocator_buffer_data,
+                                            const MemoryData*                allocator_memory_data,
+                                            VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
 };
 
 GFXRECON_END_NAMESPACE(decode)

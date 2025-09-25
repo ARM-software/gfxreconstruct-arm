@@ -44,6 +44,8 @@ class FileOptimizer : public decode::FileTransformer
 
     uint64_t GetUnreferencedBlocksSize();
 
+    void SetRedundantBlocks(const std::unordered_set<uint64_t>& redundant_blocks);
+
   protected:
     virtual bool ProcessFunctionCall(const format::FunctionCallHeader& header) override;
     virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
@@ -80,6 +82,8 @@ class FileOptimizer : public decode::FileTransformer
     virtual bool ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header) override;
     virtual bool ProcessExecuteBlocksFromFile(const format::ExecuteBlocksFromFile& header) override;
     virtual bool ProcessInitTensorCommand(const format::InitTensorCommandHeader& header) override;
+    virtual bool
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& header) override;
 
     bool RemoveThreadBlock(const format::BlockHeader& header, size_t size_read);
 
@@ -88,6 +92,8 @@ class FileOptimizer : public decode::FileTransformer
     std::unordered_set<uint64_t>         unreferenced_blocks_;
 
     std::unordered_set<format::ThreadId> removed_threads_ids_;
+
+    std::unordered_set<uint64_t> redundant_blocks_;
 };
 
 GFXRECON_END_NAMESPACE(gfxrecon)

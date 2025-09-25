@@ -22,6 +22,7 @@
 */
 
 #include "decode/preload_file_processor.h"
+#include "format/format_arm.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -58,7 +59,7 @@ size_t PreloadFileProcessor::PreloadBuffer::Read(void* destination, size_t desti
 void PreloadFileProcessor::PreloadBuffer::Reset()
 {
     allocated_size_ = 0;
-    replay_offset_ = 0;
+    replay_offset_  = 0;
     free(container_);
     container_ = nullptr;
 }
@@ -179,9 +180,12 @@ bool PreloadFileProcessor::ProcessBlocks()
 
                         success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
 
+                        auto versioned_meta_data_id =
+                            format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
+
                         if (success)
                         {
-                            success = ProcessMetaData(block_header, meta_data_id);
+                            success = ProcessMetaData(block_header, versioned_meta_data_id);
                         }
                         else
                         {
@@ -301,7 +305,7 @@ bool PreloadFileProcessor::ProcessBlocks()
             }
             else
             {
-                if (feof(GetFileDescriptor()) == 0)
+                if (!AtEof())
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as
                     // it assumes that the block header has been successfully read and will print an incomplete
@@ -322,28 +326,27 @@ bool PreloadFileProcessor::ProcessBlocks()
     return success;
 }
 
+// NOTE: WIP WIP WIP -- need to refactor this to take advantage of mapped spans to minimize copies
+//       Also, until that's done the preload file process will be broken... (unless we disable spans... for the preload)
+//
+//       But the real question is, if mapped file input is running correctly, do we still need it?
 bool PreloadFileProcessor::ReadBytes(void* buffer, size_t buffer_size)
 {
-    size_t bytes_read = 0;
     if (status_ == PreloadStatus::kReplay)
     {
+        size_t bytes_read = 0;
         bytes_read = preload_buffer_.Read(buffer, buffer_size);
+        bytes_read_ += bytes_read;
         if (preload_buffer_.ReplayFinished())
         {
             status_ = PreloadStatus::kInactive;
         }
+        return bytes_read == buffer_size;
     }
     else
     {
-        bool success = util::platform::FileRead(buffer, buffer_size, GetFileDescriptor());
-        if (success)
-        {
-            bytes_read = buffer_size;
-        }
+        return Base::ReadBytes(buffer, buffer_size);
     }
-
-    bytes_read_ += bytes_read;
-    return bytes_read == buffer_size;
 }
 
 bool PreloadFileProcessor::IsFileValid() const

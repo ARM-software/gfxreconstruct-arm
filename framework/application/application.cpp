@@ -66,8 +66,8 @@ Application::Application(const std::string&     name,
                          const std::string&     cli_wsi_extension,
                          void*                  platform_specific_wsi_data) :
     name_(name),
-    file_processor_(file_processor), cli_wsi_extension_(cli_wsi_extension), running_(false), paused_(false),
-    pause_frame_(0), fps_info_(nullptr), trigger_script_name_(""), trigger_script_(false)
+    file_processor_(file_processor), running_(false), paused_(false), pause_frame_(0),
+    cli_wsi_extension_(cli_wsi_extension), fps_info_(nullptr), trigger_script_name_(""), trigger_script_(false)
 {
     if (!cli_wsi_extension_.empty())
     {

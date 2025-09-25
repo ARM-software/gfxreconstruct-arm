@@ -183,10 +183,6 @@ void UnwrapStructHandles(VkPushConstantsInfo* value, HandleUnwrapMemory* unwrap_
 
 void UnwrapStructHandles(VkPushDescriptorSetInfo* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkCopyMemoryToImageInfo* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkCopyImageToMemoryInfo* value, HandleUnwrapMemory* unwrap_memory);
-
 void UnwrapStructHandles(VkCopyImageToImageInfo* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkHostImageLayoutTransitionInfo* value, HandleUnwrapMemory* unwrap_memory);
@@ -275,6 +271,10 @@ void UnwrapStructHandles(VkPipelineBinaryDataInfoKHR* value, HandleUnwrapMemory*
 
 void UnwrapStructHandles(VkPipelineBinaryHandlesInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkSwapchainPresentFenceInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkReleaseSwapchainImagesInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkVideoInlineQueryInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkSetDescriptorBufferOffsetsInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
@@ -325,10 +325,6 @@ void UnwrapStructHandles(VkAccelerationStructureMemoryRequirementsInfoNV* value,
 
 void UnwrapStructHandles(VkRenderingFragmentDensityMapAttachmentInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkSwapchainPresentFenceInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkReleaseSwapchainImagesInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
-
 void UnwrapStructHandles(VkGraphicsShaderGroupCreateInfoNV* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkGraphicsPipelineShaderGroupsCreateInfoNV* value, HandleUnwrapMemory* unwrap_memory);
@@ -342,6 +338,20 @@ void UnwrapStructHandles(VkIndirectCommandsLayoutCreateInfoNV* value, HandleUnwr
 void UnwrapStructHandles(VkGeneratedCommandsInfoNV* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkGeneratedCommandsMemoryRequirementsInfoNV* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkDescriptorBufferBindingInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkDescriptorBufferBindingPushDescriptorBufferHandleEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkBufferCaptureDescriptorDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkImageCaptureDescriptorDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkImageViewCaptureDescriptorDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkSamplerCaptureDescriptorDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkAccelerationStructureCaptureDescriptorDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkMemoryGetZirconHandleInfoFUCHSIA* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -373,27 +383,13 @@ void UnwrapStructHandles(VkRenderPassStripeSubmitInfoARM* value, HandleUnwrapMem
 
 void UnwrapStructHandles(VkPipelineIndirectDeviceAddressInfoNV* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkNeuralEnginePipelineCreateInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkNeuralEnginePipelineStatisticsDispatchInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkWriteDescriptorSetWeightsARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkWeightsDeviceAddressInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkTensorDeviceAddressInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkBindWeightsMemoryInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkWeightsMemoryRequirementsInfoARM* value, HandleUnwrapMemory* unwrap_memory);
-
 void UnwrapStructHandles(VkTensorViewCreateInfoARM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkTensorMemoryRequirementsInfoARM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkBindTensorMemoryInfoARM* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkWriteDescriptorSetTensorInfoARM* value, HandleUnwrapMemory* unwrap_memory);
+void UnwrapStructHandles(VkWriteDescriptorSetTensorARM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkTensorMemoryBarrierARM* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -428,6 +424,8 @@ void UnwrapStructHandles(VkDataGraphPipelineSessionMemoryRequirementsInfoARM* va
 void UnwrapStructHandles(VkBindDataGraphPipelineSessionMemoryInfoARM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkDataGraphPipelineInfoARM* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkTileMemoryBindInfoQCOM* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkGeneratedCommandsMemoryRequirementsInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -584,7 +582,7 @@ void CreateWrappedStructArrayHandles(typename ParentWrapper::HandleType parent, 
 }
 
 template <typename T>
-const  T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
+const T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
 {
     if ((values != nullptr) && (len > 0))
     {
@@ -625,4 +623,4 @@ GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif
+#endif // GFXRECON_GENERATED_VULKAN_STRUCT_HANDLE_WRAPPERS_H

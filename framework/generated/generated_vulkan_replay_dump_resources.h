@@ -736,7 +736,7 @@ void Process_vkCmdBindDescriptorSets2(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBindDescriptorSets2                func,
     VkCommandBuffer                             commandBuffer,
-    const VkBindDescriptorSetsInfo*             pBindDescriptorSetsInfo);
+    StructPointerDecoder<Decoded_VkBindDescriptorSetsInfo>* pBindDescriptorSetsInfo);
 
 void Process_vkCmdPushConstants2(
     const ApiCallInfo&                          call_info,
@@ -992,7 +992,7 @@ void Process_vkCmdBindDescriptorSets2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBindDescriptorSets2KHR             func,
     VkCommandBuffer                             commandBuffer,
-    const VkBindDescriptorSetsInfo*             pBindDescriptorSetsInfo);
+    StructPointerDecoder<Decoded_VkBindDescriptorSetsInfo>* pBindDescriptorSetsInfo);
 
 void Process_vkCmdPushConstants2KHR(
     const ApiCallInfo&                          call_info,
@@ -1101,9 +1101,9 @@ void Process_vkCmdDrawIndirectCountAMD(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDrawIndirectCountAMD               func,
     VkCommandBuffer                             commandBuffer,
-    VkBuffer                                    buffer,
+    const VulkanBufferInfo*                     buffer,
     VkDeviceSize                                offset,
-    VkBuffer                                    countBuffer,
+    const VulkanBufferInfo*                     countBuffer,
     VkDeviceSize                                countBufferOffset,
     uint32_t                                    maxDrawCount,
     uint32_t                                    stride);
@@ -1112,9 +1112,9 @@ void Process_vkCmdDrawIndexedIndirectCountAMD(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDrawIndexedIndirectCountAMD        func,
     VkCommandBuffer                             commandBuffer,
-    VkBuffer                                    buffer,
+    const VulkanBufferInfo*                     buffer,
     VkDeviceSize                                offset,
-    VkBuffer                                    countBuffer,
+    const VulkanBufferInfo*                     countBuffer,
     VkDeviceSize                                countBufferOffset,
     uint32_t                                    maxDrawCount,
     uint32_t                                    stride);
@@ -1387,7 +1387,7 @@ void Process_vkCmdBindVertexBuffers2EXT(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstBinding,
     uint32_t                                    bindingCount,
-    const VkBuffer*                             pBuffers,
+    HandlePointerDecoder<VkBuffer>*             pBuffers,
     const VkDeviceSize*                         pOffsets,
     const VkDeviceSize*                         pSizes,
     const VkDeviceSize*                         pStrides);
@@ -1458,6 +1458,50 @@ void Process_vkCmdSetDepthBias2EXT(
     PFN_vkCmdSetDepthBias2EXT                   func,
     VkCommandBuffer                             commandBuffer,
     const VkDepthBiasInfoEXT*                   pDepthBiasInfo);
+
+void Process_vkCmdDispatchTileQCOM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdDispatchTileQCOM                   func,
+    VkCommandBuffer                             commandBuffer,
+    const VkDispatchTileInfoQCOM*               pDispatchTileInfo);
+
+void Process_vkCmdBeginPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBeginPerTileExecutionQCOM          func,
+    VkCommandBuffer                             commandBuffer,
+    const VkPerTileBeginInfoQCOM*               pPerTileBeginInfo);
+
+void Process_vkCmdEndPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdEndPerTileExecutionQCOM            func,
+    VkCommandBuffer                             commandBuffer,
+    const VkPerTileEndInfoQCOM*                 pPerTileEndInfo);
+
+void Process_vkCmdBindDescriptorBuffersEXT(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBindDescriptorBuffersEXT           func,
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    bufferCount,
+    const VkDescriptorBufferBindingInfoEXT*     pBindingInfos);
+
+void Process_vkCmdSetDescriptorBufferOffsetsEXT(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdSetDescriptorBufferOffsetsEXT      func,
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    VkPipelineLayout                            layout,
+    uint32_t                                    firstSet,
+    uint32_t                                    setCount,
+    const uint32_t*                             pBufferIndices,
+    const VkDeviceSize*                         pOffsets);
+
+void Process_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT func,
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    VkPipelineLayout                            layout,
+    uint32_t                                    set);
 
 void Process_vkCmdSetFragmentShadingRateEnumNV(
     const ApiCallInfo&                          call_info,
@@ -1596,22 +1640,6 @@ void Process_vkCmdUpdatePipelineIndirectBufferNV(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipeline                                  pipeline);
-
-void Process_vkCmdDispatchNeuralEngineARM(
-    const ApiCallInfo&                          call_info,
-    PFN_vkCmdDispatchNeuralEngineARM            func,
-    VkCommandBuffer                             commandBuffer,
-    VkOffset4DARM                               offset,
-    VkExtent4DARM                               size,
-    uint32_t                                    iteratorOuterDimension,
-    uint32_t                                    iteratorInnerDimension,
-    uint32_t                                    taskIncrementOuter,
-    uint32_t                                    taskIncrementInner,
-    uint32_t                                    iteratorWeightArrayOffset,
-    uint32_t                                    iteratorWeightArrayBehavior,
-    uint32_t                                    iteratorTraceID0,
-    uint32_t                                    iteratorTraceID1,
-    const VkNeuralEnginePipelineStatisticsDispatchInfoARM* pStatisticsDispatchInfo);
 
 void Process_vkCmdSetDepthClampEnableEXT(
     const ApiCallInfo&                          call_info,
@@ -1850,13 +1878,20 @@ void Process_vkCmdDispatchDataGraphARM(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDispatchDataGraphARM               func,
     VkCommandBuffer                             commandBuffer,
-    VkDataGraphPipelineSessionARM               session);
+    VkDataGraphPipelineSessionARM               session,
+    const VkDataGraphPipelineDispatchInfoARM*   pInfo);
 
 void Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetAttachmentFeedbackLoopEnableEXT func,
     VkCommandBuffer                             commandBuffer,
     VkImageAspectFlags                          aspectMask);
+
+void Process_vkCmdBindTileMemoryQCOM(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBindTileMemoryQCOM                 func,
+    VkCommandBuffer                             commandBuffer,
+    const VkTileMemoryBindInfoQCOM*             pTileMemoryBindInfo);
 
 void Process_vkCmdBuildPartitionedAccelerationStructuresNV(
     const ApiCallInfo&                          call_info,
@@ -1877,6 +1912,12 @@ void Process_vkCmdExecuteGeneratedCommandsEXT(
     VkCommandBuffer                             commandBuffer,
     VkBool32                                    isPreprocessed,
     const VkGeneratedCommandsInfoEXT*           pGeneratedCommandsInfo);
+
+void Process_vkCmdEndRendering2EXT(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdEndRendering2EXT                   func,
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderingEndInfoEXT*                pRenderingEndInfo);
 
 void Process_vkCmdBuildAccelerationStructuresKHR(
     const ApiCallInfo&                          call_info,
@@ -1985,4 +2026,4 @@ void Process_vkCmdDrawMeshTasksIndirectCountEXT(
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif
+#endif // GFXRECON_GENERATED_VULKAN_REPLAY_DUMP_RESOURCES_H

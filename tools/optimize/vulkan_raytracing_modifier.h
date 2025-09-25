@@ -178,9 +178,6 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         format::HandleId                                  queryPool,
         uint32_t                                          firstQuery) override;
 
-    virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
-        format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id) override;
-
     virtual void ProcessBuildVulkanAccelerationStructuresMetaCommand(
         format::HandleId                                                           device_id,
         uint32_t                                                                   info_count,
@@ -434,8 +431,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // -----buffer device address-----handle id
     std::unordered_map<uint64_t, format::HandleId> buffer_device_addresses_;
 
-    // -----acceleration structure device address-----handle id
-    std::unordered_map<uint64_t, format::HandleId> acceleration_structure_device_addresses_;
+    // -----acceleration structure device address-----set of unique handle ids
+    std::unordered_map<uint64_t, std::unordered_set<format::HandleId>> acceleration_structure_device_addresses_;
 
     // -----pipeline handle-----group index-----SGH location info
     std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
@@ -458,7 +455,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     VulkanOptimizationOptions options_;
 
-    bool HeuristicCheckCompute(format::HandleId command_buffer);
+    bool heuristic_check_compute(format::HandleId command_buffer);
 };
 
 GFXRECON_END_NAMESPACE(decode)

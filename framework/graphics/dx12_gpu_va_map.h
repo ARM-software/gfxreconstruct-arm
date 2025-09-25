@@ -40,13 +40,21 @@ class Dx12GpuVaMap
   public:
     void Add(format::HandleId resource_id, uint64_t old_start_address, uint64_t old_size, uint64_t new_start_address);
 
+    void AddForAccelStruct(uint64_t old_start_address, uint64_t new_start_address);
+
     void Remove(format::HandleId resource_id, uint64_t old_start_address);
+
+    void RemoveForAccelStruct(uint64_t old_start_address);
 
     uint64_t Map(uint64_t                 old_address,
                  format::HandleId*        resource_id             = nullptr,
                  bool*                    found                   = nullptr,
                  uint64_t                 minimum_old_end_address = 0,
                  ResourceMatchFunctionPtr resource_match_func     = nullptr) const;
+
+    uint64_t GetReplayGpuVirtualBaseAddress(const format::HandleId resource_id, const uint64_t address) const;
+
+    uint64_t GetReplayAccelerationStructureAddress(const uint64_t address) const;
 
   private:
     struct GpuVaInfo
@@ -68,6 +76,8 @@ class Dx12GpuVaMap
 
   private:
     GpuVaMap gpu_va_map_;
+
+    std::map<uint64_t, uint64_t> accel_struct_gpu_va_map_;
 };
 
 GFXRECON_END_NAMESPACE(graphics)

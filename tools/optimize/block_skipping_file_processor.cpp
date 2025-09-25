@@ -25,6 +25,7 @@
 
 #include "decode/decode_allocator.h"
 #include "format/format_util.h"
+#include "format/format_arm.h"
 #include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -121,6 +122,8 @@ bool BlockSkippingFileProcessor::ProcessBlocks()
 
                     success = ReadBytes(&meta_data_id, sizeof(meta_data_id));
 
+                    meta_data_id = format::arm::MetaDataType::GetVersionedMetaDataId(file_header_, meta_data_id);
+
                     if (success)
                     {
                         success = ProcessMetaData(block_header, meta_data_id);
@@ -203,7 +206,7 @@ bool BlockSkippingFileProcessor::ProcessBlocks()
             }
             else
             {
-                if (!feof(GetFileDescriptor()))
+                if (!AtEof())
                 {
                     // No data has been read for the current block, so we don't use 'HandleBlockReadError' here, as it
                     // assumes that the block header has been successfully read and will print an incomplete block at

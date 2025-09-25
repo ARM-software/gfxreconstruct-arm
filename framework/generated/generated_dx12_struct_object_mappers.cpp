@@ -36,6 +36,10 @@
 #include <algorithm>
 #include <cassert>
 
+#include <dxgiformat.h>
+#include <d3d12.h>
+#include <d3dcommon.h>
+#include <d3d12sdklayers.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
 #include <dxgi1_3.h>
@@ -43,11 +47,7 @@
 #include <dxgi1_5.h>
 #include <dxgi1_6.h>
 #include <dxgicommon.h>
-#include <dxgiformat.h>
 #include <dxgitype.h>
-#include <d3d12.h>
-#include <d3dcommon.h>
-#include <d3d12sdklayers.h>
 #include <Unknwnbase.h>
 #include <guiddef.h>
 #include <windef.h>
@@ -252,6 +252,28 @@ void MapStructObjects(Decoded_D3D12_RAYTRACING_GEOMETRY_AABBS_DESC* wrapper, con
     }
 }
 
+void MapStructObjects(Decoded_D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC* value = wrapper->decoded_value;
+
+        MapStructObjects(wrapper->OpacityMicromapIndexBuffer, object_info_table, gpu_va_map);
+
+        object_mapping::MapGpuVirtualAddress(value->OpacityMicromapArray, gpu_va_map);
+    }
+}
+
+void MapStructObjects(Decoded_D3D12_RAYTRACING_GEOMETRY_OMM_TRIANGLES_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if (wrapper != nullptr)
+    {
+        MapStructArrayObjects<Decoded_D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC>(wrapper->pTriangles->GetMetaStructPointer(), 1, object_info_table, gpu_va_map);
+
+        MapStructArrayObjects<Decoded_D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC>(wrapper->pOmmLinkage->GetMetaStructPointer(), 1, object_info_table, gpu_va_map);
+    }
+}
+
 void MapStructObjects(Decoded_D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
 {
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
@@ -272,6 +294,18 @@ void MapStructObjects(Decoded_D3D12_RAYTRACING_INSTANCE_DESC* wrapper, const Dx1
     }
 }
 
+void MapStructObjects(Decoded_D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC* value = wrapper->decoded_value;
+
+        object_mapping::MapGpuVirtualAddress(value->InputBuffer, gpu_va_map);
+
+        MapStructObjects(wrapper->PerOmmDescs, object_info_table, gpu_va_map);
+    }
+}
+
 void MapStructObjects(Decoded_D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
 {
     if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
@@ -285,6 +319,16 @@ void MapStructObjects(Decoded_D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC
         object_mapping::MapGpuVirtualAddress(value->SourceAccelerationStructureData, gpu_va_map);
 
         object_mapping::MapGpuVirtualAddress(value->ScratchAccelerationStructureData, gpu_va_map);
+    }
+}
+
+void MapStructObjects(Decoded_D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_POSTBUILD_INFO_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_POSTBUILD_INFO_DESC* value = wrapper->decoded_value;
+
+        object_mapping::MapGpuVirtualAddress(value->DestBuffer, gpu_va_map);
     }
 }
 
@@ -427,6 +471,32 @@ void MapStructObjects(Decoded_D3D12_DISPATCH_RAYS_DESC* wrapper, const Dx12Objec
         MapStructObjects(wrapper->HitGroupTable, object_info_table, gpu_va_map);
 
         MapStructObjects(wrapper->CallableShaderTable, object_info_table, gpu_va_map);
+    }
+}
+
+void MapStructObjects(Decoded_D3D12_SET_WORK_GRAPH_DESC* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if (wrapper != nullptr)
+    {
+        MapStructObjects(wrapper->BackingMemory, object_info_table, gpu_va_map);
+
+        MapStructObjects(wrapper->NodeLocalRootArgumentsTable, object_info_table, gpu_va_map);
+    }
+}
+
+void MapStructObjects(Decoded_D3D12_NODE_GPU_INPUT* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if (wrapper != nullptr)
+    {
+        MapStructObjects(wrapper->Records, object_info_table, gpu_va_map);
+    }
+}
+
+void MapStructObjects(Decoded_D3D12_MULTI_NODE_GPU_INPUT* wrapper, const Dx12ObjectInfoTable& object_info_table, const graphics::Dx12GpuVaMap& gpu_va_map)
+{
+    if (wrapper != nullptr)
+    {
+        MapStructObjects(wrapper->NodeInputs, object_info_table, gpu_va_map);
     }
 }
 

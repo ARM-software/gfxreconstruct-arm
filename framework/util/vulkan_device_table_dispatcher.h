@@ -31,30 +31,29 @@ GFXRECON_BEGIN_NAMESPACE(util)
 
 struct VulkanDeviceTableDispatcher
 {
-    const encode::VulkanDeviceTable* table_;
+    const graphics::VulkanDeviceTable* table_;
 
     VulkanDeviceTableDispatcher() : table_(nullptr) {}
 
-    VulkanDeviceTableDispatcher(const encode::VulkanDeviceTable* table) : table_(table) {}
+    VulkanDeviceTableDispatcher(const graphics::VulkanDeviceTable* table) : table_(table) {}
 
     VkDeviceAddress GetBufferDeviceAddress(VkDevice device, const VkBufferDeviceAddressInfo* pInfo)
     {
-        using namespace encode;
-        if (table_->GetBufferDeviceAddress != noop::GetBufferDeviceAddress)
+        if (table_->GetBufferDeviceAddress != graphics::noop::vkGetBufferDeviceAddress)
         {
             return table_->GetBufferDeviceAddress(device, pInfo);
         }
-        else if (table_->GetBufferDeviceAddressKHR != noop::GetBufferDeviceAddressKHR)
+        else if (table_->GetBufferDeviceAddressKHR != graphics::noop::vkGetBufferDeviceAddressKHR)
         {
             return table_->GetBufferDeviceAddressKHR(device, pInfo);
         }
-        else if (table_->GetBufferDeviceAddressEXT != noop::GetBufferDeviceAddressEXT)
+        else if (table_->GetBufferDeviceAddressEXT != graphics::noop::vkGetBufferDeviceAddressEXT)
         {
             return table_->GetBufferDeviceAddressEXT(device, pInfo);
         }
         else
         {
-            return noop::GetBufferDeviceAddress(device, pInfo);
+            return graphics::noop::vkGetBufferDeviceAddress(device, pInfo);
         }
     }
 };

@@ -30,6 +30,7 @@
 #include "util/defines.h"
 #include "generated/generated_vulkan_json_consumer.h"
 #include "decode/custom_vulkan_struct_to_json.h"
+
 #include "vulkan/vulkan.h"
 #include "vk_video/vulkan_video_codec_h264std.h"
 #include "vk_video/vulkan_video_codec_h264std_decode.h"
@@ -6206,6 +6207,23 @@ void VulkanExportJsonConsumer::Process_vkGetImageSubresourceLayout2KHR(
     WriteBlockEnd();
 }
 
+void VulkanExportJsonConsumer::Process_vkWaitForPresent2KHR(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkPresentWait2InfoKHR>* pPresentWait2Info)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkWaitForPresent2KHR");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["swapchain"], swapchain, json_options);
+        FieldToJson(args["pPresentWait2Info"], pPresentWait2Info, json_options);
+    WriteBlockEnd();
+}
+
 void VulkanExportJsonConsumer::Process_vkCreatePipelineBinariesKHR(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
@@ -6292,6 +6310,21 @@ void VulkanExportJsonConsumer::Process_vkReleaseCapturedPipelineDataKHR(
         HandleToJson(args["device"], device, json_options);
         FieldToJson(args["pInfo"], pInfo, json_options);
         FieldToJson(args["pAllocator"], pAllocator, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkReleaseSwapchainImagesKHR(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkReleaseSwapchainImagesKHR");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        FieldToJson(args["pReleaseInfo"], pReleaseInfo, json_options);
     WriteBlockEnd();
 }
 
@@ -7631,7 +7664,7 @@ void VulkanExportJsonConsumer::Process_vkGetAccelerationStructureMemoryRequireme
     const ApiCallInfo&                          call_info,
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkAccelerationStructureMemoryRequirementsInfoNV>* pInfo,
-    StructPointerDecoder<Decoded_VkMemoryRequirements2KHR>* pMemoryRequirements)
+    StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
 {
     nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetAccelerationStructureMemoryRequirementsNV");
     const JsonOptions& json_options = GetJsonOptions();
@@ -8757,7 +8790,7 @@ void VulkanExportJsonConsumer::Process_vkReleaseSwapchainImagesEXT(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
     format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoEXT>* pReleaseInfo)
+    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo)
 {
     nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkReleaseSwapchainImagesEXT");
     const JsonOptions& json_options = GetJsonOptions();
@@ -8986,6 +9019,155 @@ void VulkanExportJsonConsumer::Process_vkGetPrivateDataEXT(
         HandleToJson(args["objectHandle"], objectHandle, json_options);
         HandleToJson(args["privateDataSlot"], privateDataSlot, json_options);
         FieldToJson(args["pData"], pData, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdDispatchTileQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkDispatchTileInfoQCOM>* pDispatchTileInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdDispatchTileQCOM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pDispatchTileInfo"], pDispatchTileInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdBeginPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkPerTileBeginInfoQCOM>* pPerTileBeginInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdBeginPerTileExecutionQCOM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pPerTileBeginInfo"], pPerTileBeginInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdEndPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkPerTileEndInfoQCOM>* pPerTileEndInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdEndPerTileExecutionQCOM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pPerTileEndInfo"], pPerTileEndInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetDescriptorSetLayoutSizeEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    format::HandleId                            layout,
+    PointerDecoder<VkDeviceSize>*               pLayoutSizeInBytes)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDescriptorSetLayoutSizeEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["layout"], layout, json_options);
+        FieldToJson(args["pLayoutSizeInBytes"], pLayoutSizeInBytes, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetDescriptorSetLayoutBindingOffsetEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    format::HandleId                            layout,
+    uint32_t                                    binding,
+    PointerDecoder<VkDeviceSize>*               pOffset)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        HandleToJson(args["layout"], layout, json_options);
+        FieldToJson(args["binding"], binding, json_options);
+        FieldToJson(args["pOffset"], pOffset, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetDescriptorEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            device,
+    StructPointerDecoder<Decoded_VkDescriptorGetInfoEXT>* pDescriptorInfo,
+    size_t                                      dataSize,
+    PointerDecoder<uint8_t>*                    pDescriptor)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDescriptorEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        FieldToJson(args["pDescriptorInfo"], pDescriptorInfo, json_options);
+        FieldToJson(args["dataSize"], dataSize, json_options);
+        FieldToJson(args["pDescriptor"], pDescriptor, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdBindDescriptorBuffersEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    uint32_t                                    bufferCount,
+    StructPointerDecoder<Decoded_VkDescriptorBufferBindingInfoEXT>* pBindingInfos)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdBindDescriptorBuffersEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["bufferCount"], bufferCount, json_options);
+        FieldToJson(args["pBindingInfos"], pBindingInfos, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdSetDescriptorBufferOffsetsEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    format::HandleId                            layout,
+    uint32_t                                    firstSet,
+    uint32_t                                    setCount,
+    PointerDecoder<uint32_t>*                   pBufferIndices,
+    PointerDecoder<VkDeviceSize>*               pOffsets)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdSetDescriptorBufferOffsetsEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pipelineBindPoint"], pipelineBindPoint, json_options);
+        HandleToJson(args["layout"], layout, json_options);
+        FieldToJson(args["firstSet"], firstSet, json_options);
+        FieldToJson(args["setCount"], setCount, json_options);
+        FieldToJson(args["pBufferIndices"], pBufferIndices, json_options);
+        FieldToJson(args["pOffsets"], pOffsets, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdBindDescriptorBufferEmbeddedSamplersEXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    format::HandleId                            layout,
+    uint32_t                                    set)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdBindDescriptorBufferEmbeddedSamplersEXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pipelineBindPoint"], pipelineBindPoint, json_options);
+        HandleToJson(args["layout"], layout, json_options);
+        FieldToJson(args["set"], set, json_options);
     WriteBlockEnd();
 }
 
@@ -9745,138 +9927,6 @@ void VulkanExportJsonConsumer::Process_vkGetPipelineIndirectDeviceAddressNV(
     WriteBlockEnd();
 }
 
-void VulkanExportJsonConsumer::Process_vkCreateNeuralEnginePipelinesARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            device,
-    uint32_t                                    createInfoCount,
-    StructPointerDecoder<Decoded_VkNeuralEnginePipelineCreateInfoARM>* pCreateInfos,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-    HandlePointerDecoder<VkPipeline>*           pPipelines)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCreateNeuralEnginePipelinesARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["createInfoCount"], createInfoCount, json_options);
-        FieldToJson(args["pCreateInfos"], pCreateInfos, json_options);
-        FieldToJson(args["pAllocator"], pAllocator, json_options);
-        HandleToJson(args["pPipelines"], pPipelines, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkCreateWeightsARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkWeightsCreateInfoARM>* pCreateInfo,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-    HandlePointerDecoder<VkWeightsARM>*         pWeights)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCreateWeightsARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pCreateInfo"], pCreateInfo, json_options);
-        FieldToJson(args["pAllocator"], pAllocator, json_options);
-        HandleToJson(args["pWeights"], pWeights, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkDestroyWeightsARM(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            device,
-    format::HandleId                            weights,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkDestroyWeightsARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        HandleToJson(args["weights"], weights, json_options);
-        FieldToJson(args["pAllocator"], pAllocator, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetWeightsMemoryRequirementsARM(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkWeightsMemoryRequirementsInfoARM>* pInfo,
-    StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetWeightsMemoryRequirementsARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-        FieldToJson(args["pMemoryRequirements"], pMemoryRequirements, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetDeviceWeightsMemoryRequirementsARM(
-    const ApiCallInfo&                          call_info,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkDeviceWeightsMemoryRequirementsARM>* pInfo,
-    StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDeviceWeightsMemoryRequirementsARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-        FieldToJson(args["pMemoryRequirements"], pMemoryRequirements, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkBindWeightsMemoryARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            device,
-    uint32_t                                    bindInfoCount,
-    StructPointerDecoder<Decoded_VkBindWeightsMemoryInfoARM>* pBindInfos)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkBindWeightsMemoryARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["bindInfoCount"], bindInfoCount, json_options);
-        FieldToJson(args["pBindInfos"], pBindInfos, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetWeightsDeviceAddressARM(
-    const ApiCallInfo&                          call_info,
-    VkDeviceAddress                             returnValue,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkWeightsDeviceAddressInfoARM>* pInfo)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetWeightsDeviceAddressARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJsonAsHex(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-    WriteBlockEnd();
-}
-
-void VulkanExportJsonConsumer::Process_vkGetTensorDeviceAddressARM(
-    const ApiCallInfo&                          call_info,
-    VkDeviceAddress                             returnValue,
-    format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkTensorDeviceAddressInfoARM>* pInfo)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetTensorDeviceAddressARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJsonAsHex(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["device"], device, json_options);
-        FieldToJson(args["pInfo"], pInfo, json_options);
-    WriteBlockEnd();
-}
-
 void VulkanExportJsonConsumer::Process_vkCmdSetDepthClampEnableEXT(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,
@@ -10464,6 +10514,21 @@ void VulkanExportJsonConsumer::Process_vkCmdCopyTensorARM(
     WriteBlockEnd();
 }
 
+void VulkanExportJsonConsumer::Process_vkGetPhysicalDeviceExternalTensorPropertiesARM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            physicalDevice,
+    StructPointerDecoder<Decoded_VkPhysicalDeviceExternalTensorInfoARM>* pExternalTensorInfo,
+    StructPointerDecoder<Decoded_VkExternalTensorPropertiesARM>* pExternalTensorProperties)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetPhysicalDeviceExternalTensorPropertiesARM");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["physicalDevice"], physicalDevice, json_options);
+        FieldToJson(args["pExternalTensorInfo"], pExternalTensorInfo, json_options);
+        FieldToJson(args["pExternalTensorProperties"], pExternalTensorProperties, json_options);
+    WriteBlockEnd();
+}
+
 void VulkanExportJsonConsumer::Process_vkGetShaderModuleIdentifierEXT(
     const ApiCallInfo&                          call_info,
     format::HandleId                            device,
@@ -10847,23 +10912,6 @@ void VulkanExportJsonConsumer::Process_vkQueueNotifyOutOfBandNV(
     WriteBlockEnd();
 }
 
-void VulkanExportJsonConsumer::Process_vkGetPhysicalDeviceDataGraphInstructionSetsARM(
-    const ApiCallInfo&                          call_info,
-    VkResult                                    returnValue,
-    format::HandleId                            physicalDevice,
-    PointerDecoder<uint32_t>*                   pSetCount,
-    StructPointerDecoder<Decoded_VkPhysicalDeviceDataGraphInstructionSetARM>* pSets)
-{
-    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetPhysicalDeviceDataGraphInstructionSetsARM");
-    const JsonOptions& json_options = GetJsonOptions();
-    FieldToJson(jdata[NameReturn()], returnValue, json_options);
-    auto& args = jdata[NameArgs()];
-        HandleToJson(args["physicalDevice"], physicalDevice, json_options);
-        FieldToJson(args["pSetCount"], pSetCount, json_options);
-        FieldToJson(args["pSets"], pSets, json_options);
-    WriteBlockEnd();
-}
-
 void VulkanExportJsonConsumer::Process_vkCreateDataGraphPipelinesARM(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
@@ -10977,7 +11025,8 @@ void VulkanExportJsonConsumer::Process_vkDestroyDataGraphPipelineSessionARM(
 void VulkanExportJsonConsumer::Process_vkCmdDispatchDataGraphARM(
     const ApiCallInfo&                          call_info,
     format::HandleId                            commandBuffer,
-    format::HandleId                            session)
+    format::HandleId                            session,
+    StructPointerDecoder<Decoded_VkDataGraphPipelineDispatchInfoARM>* pInfo)
 {
     nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdDispatchDataGraphARM");
     const JsonOptions& json_options = GetJsonOptions();
@@ -10985,6 +11034,26 @@ void VulkanExportJsonConsumer::Process_vkCmdDispatchDataGraphARM(
     auto& args = jdata[NameArgs()];
         HandleToJson(args["commandBuffer"], commandBuffer, json_options);
         HandleToJson(args["session"], session, json_options);
+        FieldToJson(args["pInfo"], pInfo, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetDataGraphPipelineAvailablePropertiesARM(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
+    PointerDecoder<uint32_t>*                   pPropertiesCount,
+    PointerDecoder<VkDataGraphPipelinePropertyARM>* pProperties)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDataGraphPipelineAvailablePropertiesARM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["device"], device, json_options);
+        FieldToJson(args["pPipelineInfo"], pPipelineInfo, json_options);
+        FieldToJson(args["pPropertiesCount"], pPropertiesCount, json_options);
+        FieldToJson(args["pProperties"], pProperties, json_options);
     WriteBlockEnd();
 }
 
@@ -10993,7 +11062,7 @@ void VulkanExportJsonConsumer::Process_vkGetDataGraphPipelinePropertiesARM(
     VkResult                                    returnValue,
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkDataGraphPipelineInfoARM>* pPipelineInfo,
-    PointerDecoder<uint32_t>*                   pPropertiesCount,
+    uint32_t                                    propertiesCount,
     StructPointerDecoder<Decoded_VkDataGraphPipelinePropertyQueryResultARM>* pProperties)
 {
     nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetDataGraphPipelinePropertiesARM");
@@ -11002,8 +11071,42 @@ void VulkanExportJsonConsumer::Process_vkGetDataGraphPipelinePropertiesARM(
     auto& args = jdata[NameArgs()];
         HandleToJson(args["device"], device, json_options);
         FieldToJson(args["pPipelineInfo"], pPipelineInfo, json_options);
-        FieldToJson(args["pPropertiesCount"], pPropertiesCount, json_options);
+        FieldToJson(args["propertiesCount"], propertiesCount, json_options);
         FieldToJson(args["pProperties"], pProperties, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            physicalDevice,
+    uint32_t                                    queueFamilyIndex,
+    PointerDecoder<uint32_t>*                   pQueueFamilyDataGraphPropertyCount,
+    StructPointerDecoder<Decoded_VkQueueFamilyDataGraphPropertiesARM>* pQueueFamilyDataGraphProperties)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameReturn()], returnValue, json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["physicalDevice"], physicalDevice, json_options);
+        FieldToJson(args["queueFamilyIndex"], queueFamilyIndex, json_options);
+        FieldToJson(args["pQueueFamilyDataGraphPropertyCount"], pQueueFamilyDataGraphPropertyCount, json_options);
+        FieldToJson(args["pQueueFamilyDataGraphProperties"], pQueueFamilyDataGraphProperties, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkGetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            physicalDevice,
+    StructPointerDecoder<Decoded_VkPhysicalDeviceQueueFamilyDataGraphProcessingEngineInfoARM>* pQueueFamilyDataGraphProcessingEngineInfo,
+    StructPointerDecoder<Decoded_VkQueueFamilyDataGraphProcessingEnginePropertiesARM>* pQueueFamilyDataGraphProcessingEngineProperties)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkGetPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM");
+    const JsonOptions& json_options = GetJsonOptions();
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["physicalDevice"], physicalDevice, json_options);
+        FieldToJson(args["pQueueFamilyDataGraphProcessingEngineInfo"], pQueueFamilyDataGraphProcessingEngineInfo, json_options);
+        FieldToJson(args["pQueueFamilyDataGraphProcessingEngineProperties"], pQueueFamilyDataGraphProcessingEngineProperties, json_options);
     WriteBlockEnd();
 }
 
@@ -11018,6 +11121,20 @@ void VulkanExportJsonConsumer::Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     auto& args = jdata[NameArgs()];
         HandleToJson(args["commandBuffer"], commandBuffer, json_options);
         FieldToJson(VkImageAspectFlags_t(), args["aspectMask"], aspectMask, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdBindTileMemoryQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkTileMemoryBindInfoQCOM>* pTileMemoryBindInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdBindTileMemoryQCOM");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pTileMemoryBindInfo"], pTileMemoryBindInfo, json_options);
     WriteBlockEnd();
 }
 
@@ -11249,6 +11366,20 @@ void VulkanExportJsonConsumer::Process_vkGetMemoryMetalHandlePropertiesEXT(
         FieldToJson(args["handleType"], handleType, json_options);
         FieldToJson(args["pHandle"], pHandle, json_options);
         FieldToJson(args["pMemoryMetalHandleProperties"], pMemoryMetalHandleProperties, json_options);
+    WriteBlockEnd();
+}
+
+void VulkanExportJsonConsumer::Process_vkCmdEndRendering2EXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderingEndInfoEXT>* pRenderingEndInfo)
+{
+    nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "vkCmdEndRendering2EXT");
+    const JsonOptions& json_options = GetJsonOptions();
+    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);
+    auto& args = jdata[NameArgs()];
+        HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+        FieldToJson(args["pRenderingEndInfo"], pRenderingEndInfo, json_options);
     WriteBlockEnd();
 }
 

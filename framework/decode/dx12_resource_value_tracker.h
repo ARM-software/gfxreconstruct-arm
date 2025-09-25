@@ -48,6 +48,10 @@ struct Dx12FillCommandResourceValue
 #pragma pack(pop)
 typedef std::map<Dx12FillCommandBlockIndex, std::vector<Dx12FillCommandResourceValue>> Dx12FillCommandResourceValueMap;
 
+typedef format::Dx12FillMemoryResourceAddressInfo Dx12FillCommandResourceAddress;
+typedef std::map<Dx12FillCommandBlockIndex, std::vector<Dx12FillCommandResourceAddress>>
+    Dx12FillCommandResourceAddressMap;
+
 #pragma pack(push)
 #pragma pack(1)
 struct Dx12UnassociatedResourceValue

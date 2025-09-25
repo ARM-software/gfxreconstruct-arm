@@ -58,8 +58,12 @@ class AndroidContext : public WsiContext
     void InitWindow();
 
     void SetOrientation(ScreenOrientation orientation);
+
     void requestNativeWindow(int width, int height);
+
     void destroyNativeWindow(int window_index);
+
+    virtual const char* GetWsiName() override { return "ANDROID"; }
 
   private:
     std::unique_ptr<AndroidWindow> window_{};

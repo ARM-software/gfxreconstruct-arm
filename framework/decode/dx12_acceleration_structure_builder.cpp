@@ -1,5 +1,6 @@
 /*
-** Copyright (c) 2022 LunarG, Inc.
+** Copyright (c) 2022-2025 LunarG, Inc.
+** Copyright (c) 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -42,7 +43,8 @@ void UpdateBufferSize(ID3D12Device*                         device,
     // Create an upload resource of the required size.
     if (!buffer || (buffer_size < required_size))
     {
-        buffer = graphics::dx12::CreateBufferResource(device, required_size, heap_type, initial_state, flags);
+        buffer = graphics::dx12::CreateBufferResource(
+            device, required_size, heap_type, initial_state, flags, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED);
         if (!buffer)
         {
             buffer_size = 0;
@@ -189,7 +191,7 @@ void Dx12AccelerationStructureBuilder::SetupBuild(
     // non-zero GPU VA must be set for values that will be used.
     const D3D12_GPU_VIRTUAL_ADDRESS kDefaultGpuVa = 1;
 
-    // Reconstruct accleration structure build descs.
+    // Reconstruct acceleration structure build descs.
     temp_geometry_descs_.clear();
     if (inputs_desc.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL)
     {
@@ -353,6 +355,61 @@ void Dx12AccelerationStructureBuilder::ExecuteCopy(D3D12_GPU_VIRTUAL_ADDRESS    
     GFXRECON_ASSERT(SUCCEEDED(hr));
 }
 
+void Dx12AccelerationStructureBuilder::SetPrebuildInfo(
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* capture_prebuild_info,
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* replay_prebuild_info,
+    graphics::Dx12GpuVaMap&                                gpu_va_map)
+{
+    if ((capture_prebuild_info->ResultDataMaxSizeInBytes == 0) &&
+        (capture_prebuild_info->ScratchDataSizeInBytes == 0) &&
+        (capture_prebuild_info->UpdateScratchDataSizeInBytes == 0))
+    {
+        prebuild_info_ = *replay_prebuild_info;
+    }
+    else if ((capture_prebuild_info->ResultDataMaxSizeInBytes != 0) &&
+             (capture_prebuild_info->ScratchDataSizeInBytes == 0) &&
+             (capture_prebuild_info->UpdateScratchDataSizeInBytes != 0))
+    {
+        uint64_t capture_accel_struct_address = capture_prebuild_info->ResultDataMaxSizeInBytes;
+        uint64_t capture_accel_struct_id      = capture_prebuild_info->UpdateScratchDataSizeInBytes;
+        uint64_t replay_accel_struct_size     = replay_prebuild_info->ResultDataMaxSizeInBytes;
+        replay_accel_struct_size = util::platform::AlignValue<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT>(
+            replay_accel_struct_size);
+
+        graphics::dx12::ID3D12ResourceComPtr accel_struct_buffer      = nullptr;
+        uint64_t                             accel_struct_buffer_size = 0;
+
+        UpdateBufferSize(device5_,
+                         accel_struct_buffer,
+                         accel_struct_buffer_size,
+                         replay_accel_struct_size,
+                         D3D12_HEAP_TYPE_DEFAULT,
+                         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+        if (accel_struct_buffer && accel_struct_buffer_size > 0)
+        {
+            uint64_t replay_accel_struct_address = accel_struct_buffer->GetGPUVirtualAddress();
+
+            AccelerationStructureBufferData buffer_data;
+            buffer_data.accel_struct_buffer          = std::move(accel_struct_buffer);
+            buffer_data.accel_struct_buffer_size     = accel_struct_buffer_size;
+            buffer_data.capture_accel_struct_address = capture_accel_struct_address;
+            buffer_data.replay_accel_struct_address  = replay_accel_struct_address;
+
+            recreated_new_accel_struct_buffers_[capture_accel_struct_id].emplace_back(std::move(buffer_data));
+            gpu_va_map.AddForAccelStruct(capture_accel_struct_address, replay_accel_struct_address);
+            recreated_accel_struct_va_size_[replay_accel_struct_address] =
+                std::make_pair(capture_accel_struct_address, accel_struct_buffer_size);
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to recreate acceleration structure buffer for VA %" PRIu64,
+                               capture_accel_struct_address);
+        }
+    }
+}
+
 const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO Dx12AccelerationStructureBuilder::GetLastPrebuildInfo()
 {
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = prebuild_info_;
@@ -362,19 +419,40 @@ const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO Dx12AccelerationStru
 }
 
 void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
-    const format::HandleId command_list, const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* pDesc)
+    const format::HandleId                                    command_list_id,
+    ID3D12GraphicsCommandList4*                               command_list_ptr,
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* build_desc)
 {
     bool        recreated_scratch = false;
-    const auto& inputs_desc       = pDesc->Inputs;
+    const auto& inputs_desc       = build_desc->Inputs;
 
     // Get required sizes for scratch buffer.
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info;
     device5_->GetRaytracingAccelerationStructurePrebuildInfo(&inputs_desc, &prebuild_info);
     UINT64                    scratch_size            = prebuild_info.ScratchDataSizeInBytes;
-    D3D12_GPU_VIRTUAL_ADDRESS capture_scratch_address = pDesc->ScratchAccelerationStructureData;
+    D3D12_GPU_VIRTUAL_ADDRESS capture_scratch_address = build_desc->ScratchAccelerationStructureData;
 
-    auto scratch_entries = command_lis_recorded_scratches_.find(command_list);
-    if (scratch_entries != command_lis_recorded_scratches_.end())
+    if (inputs_desc.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE)
+    {
+        scratch_size = prebuild_info.UpdateScratchDataSizeInBytes;
+    }
+
+    auto recreated_va_size_map_iter = recreated_accel_struct_va_size_.find(build_desc->DestAccelerationStructureData);
+    if (recreated_va_size_map_iter != recreated_accel_struct_va_size_.end())
+    {
+        if (recreated_va_size_map_iter->second.second < prebuild_info.ResultDataMaxSizeInBytes)
+        {
+            GFXRECON_LOG_DEBUG("Building acceleration structure dest VA %" PRIu64 " size %" PRIu64
+                               " is smaller than required size %" PRIu64 ", Build may fail.",
+                               recreated_va_size_map_iter->second.first,
+                               recreated_va_size_map_iter->second.second,
+                               prebuild_info.ResultDataMaxSizeInBytes);
+        }
+    }
+
+    scratch_size = util::platform::AlignValue<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT>(scratch_size);
+    auto scratch_entries = command_list_recorded_scratches_.find(command_list_id);
+    if (scratch_entries != command_list_recorded_scratches_.end())
     {
         auto scratch_entry = std::find_if(scratch_entries->second.begin(),
                                           scratch_entries->second.end(),
@@ -384,8 +462,14 @@ void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
                                           });
         if (scratch_entry != scratch_entries->second.end())
         {
-            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
-                (*scratch_entry).replay_scratch_address;
+            D3D12_RESOURCE_BARRIER uav_barrier = {};
+            uav_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            uav_barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            uav_barrier.UAV.pResource          = (*scratch_entry).scratch_buffer.GetInterfacePtr();
+            command_list_ptr->ResourceBarrier(1, &uav_barrier);
+
+            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(build_desc)
+                ->ScratchAccelerationStructureData = (*scratch_entry).replay_scratch_address;
         }
         else
         {
@@ -405,7 +489,7 @@ void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
         UpdateBufferSize(device5_,
                          scratch_buffer,
                          scratch_buffer_size,
-                         prebuild_info.ScratchDataSizeInBytes,
+                         scratch_size,
                          D3D12_HEAP_TYPE_DEFAULT,
                          D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                          D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -413,16 +497,16 @@ void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
         if (scratch_buffer && scratch_buffer_size > 0)
         {
             D3D12_GPU_VIRTUAL_ADDRESS replay_scratch_address = scratch_buffer->GetGPUVirtualAddress();
-            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(pDesc)->ScratchAccelerationStructureData =
-                replay_scratch_address;
+            const_cast<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*>(build_desc)
+                ->ScratchAccelerationStructureData = replay_scratch_address;
 
             ScratchBufferData scratch_data{};
             scratch_data.scratch_buffer          = std::move(scratch_buffer);
-            scratch_data.build_size              = prebuild_info.ScratchDataSizeInBytes;
+            scratch_data.build_size              = scratch_buffer_size;
             scratch_data.capture_scratch_address = capture_scratch_address;
             scratch_data.replay_scratch_address  = replay_scratch_address;
 
-            command_lis_recorded_scratches_[command_list].push_back(std::move(scratch_data));
+            command_list_recorded_scratches_[command_list_id].push_back(std::move(scratch_data));
         }
         else
         {
@@ -431,87 +515,86 @@ void Dx12AccelerationStructureBuilder::PreBuildRaytracingAccelerationStructure(
     }
 }
 
-void Dx12AccelerationStructureBuilder::ReleaseScratchBuffer(const format::HandleId command_list)
+void Dx12AccelerationStructureBuilder::PreCmdResourceBarrier(ID3D12GraphicsCommandList* command_list_ptr,
+                                                             const format::HandleId     resource_id)
 {
-    if (command_lis_recorded_scratches_.find(command_list) != command_lis_recorded_scratches_.end())
+    auto buffer_iter = recreated_new_accel_struct_buffers_.find(resource_id);
+    if (buffer_iter != recreated_new_accel_struct_buffers_.end())
     {
-        // The scratch_buffer in command_lis_recorded_scratches_[command_list] will be automatically released.
-        command_lis_recorded_scratches_.erase(command_list);
-    }
-}
-
-void Dx12AccelerationStructureBuilder::PostExecuteCommandLists(const format::HandleId  queue,
-                                                               const UINT              num_command_lists,
-                                                               const format::HandleId* command_lists)
-{
-    CommandQueueData cmd_queue_data;
-    for (UINT i = 0; i < num_command_lists; i++)
-    {
-        if (command_lis_recorded_scratches_.find(command_lists[i]) != command_lis_recorded_scratches_.end())
+        for (const auto& buffer_entry : buffer_iter->second)
         {
-            cmd_queue_data.command_lists.push_back(command_lists[i]);
+            D3D12_RESOURCE_BARRIER barrier = {};
+            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            barrier.UAV.pResource          = buffer_entry.accel_struct_buffer.GetInterfacePtr();
+            command_list_ptr->ResourceBarrier(1, &barrier);
         }
     }
-
-    if (cmd_queue_data.command_lists.size())
-    {
-        command_queue_data_[queue] = std::move(cmd_queue_data);
-    }
 }
 
-void Dx12AccelerationStructureBuilder::PostCommandQueueSignal(const format::HandleId queue,
-                                                              const format::HandleId fence,
-                                                              const UINT64           value)
+void Dx12AccelerationStructureBuilder::ReleaseAccelerationStructureBuffer(const format::HandleId  resource_id,
+                                                                          graphics::Dx12GpuVaMap& gpu_va_map)
 {
-    if (command_queue_data_.find(queue) != command_queue_data_.end())
+    auto buffer_iter = recreated_new_accel_struct_buffers_.find(resource_id);
+    if (buffer_iter != recreated_new_accel_struct_buffers_.end())
     {
-        command_queue_data_[queue].wait_fences_value.emplace(fence, value);
-    }
-}
-
-void Dx12AccelerationStructureBuilder::PostGetCompletedValue(const format::HandleId fence, const UINT64 value)
-{
-    for (auto it = command_queue_data_.begin(); it != command_queue_data_.end();)
-    {
-        auto& wait_fence_value = it->second.wait_fences_value;
-        if (wait_fence_value.find(fence) != wait_fence_value.end())
+        for (const auto& buffer_entry : buffer_iter->second)
         {
-            if (value >= wait_fence_value[fence])
-            {
-                for (auto& command_list : it->second.command_lists)
-                {
-                    ReleaseScratchBuffer(command_list);
-                }
-                it = command_queue_data_.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
+            gpu_va_map.RemoveForAccelStruct(buffer_entry.capture_accel_struct_address);
+            recreated_accel_struct_va_size_.erase(buffer_entry.replay_accel_struct_address);
+        }
+
+        recreated_new_accel_struct_buffers_.erase(buffer_iter);
+    }
+}
+
+void Dx12AccelerationStructureBuilder::ReleaseScratchBuffer()
+{
+    auto sync_fence_value = fence_->GetCompletedValue();
+
+    auto executed_scratches_iter = sync_fence_value_executed_scratches_.begin();
+    for (; executed_scratches_iter != sync_fence_value_executed_scratches_.end();)
+    {
+        if (sync_fence_value >= executed_scratches_iter->first)
+        {
+            executed_scratches_iter->second.clear();
+            executed_scratches_iter = sync_fence_value_executed_scratches_.erase(executed_scratches_iter);
         }
         else
         {
-            ++it;
+            ++executed_scratches_iter;
         }
     }
 }
 
-void Dx12AccelerationStructureBuilder::PostCommandQueueWait(const format::HandleId queue,
-                                                            const format::HandleId fence,
-                                                            const UINT64           value)
+void Dx12AccelerationStructureBuilder::PostExecuteCommandLists(ID3D12CommandQueue*     command_queue,
+                                                               const format::HandleId  queue,
+                                                               const UINT              num_command_lists,
+                                                               const format::HandleId* command_lists)
 {
-    if (command_queue_data_.find(queue) != command_queue_data_.end())
+    ReleaseScratchBuffer();
+
+    for (UINT i = 0; i < num_command_lists; i++)
     {
-        auto& wait_fence_value = command_queue_data_[queue].wait_fences_value;
-        if (wait_fence_value.find(fence) != wait_fence_value.end())
+        auto scratched_iter = command_list_recorded_scratches_.find(command_lists[i]);
+        if (scratched_iter != command_list_recorded_scratches_.end())
         {
-            if (value >= wait_fence_value[fence])
+            if (SUCCEEDED(command_queue->Signal(fence_, ++fence_value_)))
             {
-                for (auto& command_list : command_queue_data_[queue].command_lists)
+                auto sync_fence_iter = sync_fence_value_executed_scratches_.find(fence_value_);
+                if (sync_fence_iter == sync_fence_value_executed_scratches_.end())
                 {
-                    ReleaseScratchBuffer(command_list);
+                    sync_fence_value_executed_scratches_[fence_value_].swap(scratched_iter->second);
+                    command_list_recorded_scratches_.erase(scratched_iter);
                 }
-                command_queue_data_.erase(queue);
+                else
+                {
+                    GFXRECON_LOG_ERROR("Failed to signal command queue after executing ray tracing command lists.");
+                }
+            }
+            else
+            {
+                GFXRECON_LOG_ERROR("Failed to signal command queue after executing ray tracing command lists.");
             }
         }
     }

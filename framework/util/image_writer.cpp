@@ -72,6 +72,7 @@ uint8_t* GFXRECON_zlib_compress2(uint8_t* data, int32_t data_len, int32_t* out_l
 
 #include <stb_image_write.h>
 #endif // GFXRECON_ENABLE_ZLIB_COMPRESSION && GFXRECON_ENABLE_PNG_SCREENSHOT
+#include <algorithm>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
@@ -226,6 +227,20 @@ static float Ufloat10ToFloat(uint16_t val)
             return false;                                                                             \
         }                                                                                             \
     }
+
+// This function is a copy from Renderdoc sources
+static float ConvertLinearToSRGB(float linear)
+{
+    if (linear <= 0.0031308f)
+        return 12.92f * linear;
+
+    if (linear < 0.0f)
+        linear = 0.0f;
+    else if (linear > 1.0f)
+        linear = 1.0f;
+
+    return 1.055f * powf(linear, 1.0f / 2.4f) - 0.055f;
+}
 
 static const uint8_t* ConvertIntoTemporaryBuffer(uint32_t    width,
                                                  uint32_t    height,
@@ -529,15 +544,19 @@ static const uint8_t* ConvertIntoTemporaryBuffer(uint32_t    width,
                     uint16_t g_u16 = static_cast<uint16_t>((u64_vals[x] & 0x00000000FFFF0000ULL) >> 16);
                     uint16_t r_u16 = static_cast<uint16_t>((u64_vals[x] & 0x000000000000FFFFULL) >> 0);
 
-                    float r_f = ConvertFromHalf(r_u16);
-                    float g_f = ConvertFromHalf(g_u16);
-                    float b_f = ConvertFromHalf(b_u16);
-                    float a_f = ConvertFromHalf(a_u16);
+                    float r_f = std::clamp(ConvertFromHalf(r_u16), 0.0f, 1.0f);
+                    float g_f = std::clamp(ConvertFromHalf(g_u16), 0.0f, 1.0f);
+                    float b_f = std::clamp(ConvertFromHalf(b_u16), 0.0f, 1.0f);
+                    float a_f = std::clamp(ConvertFromHalf(a_u16), 0.0f, 1.0f);
 
-                    uint8_t r = static_cast<uint8_t>(r_f * 255.0f);
-                    uint8_t g = static_cast<uint8_t>(g_f * 255.0f);
-                    uint8_t b = static_cast<uint8_t>(b_f * 255.0f);
-                    uint8_t a = static_cast<uint8_t>(a_f * 255.0f);
+                    r_f = ConvertLinearToSRGB(r_f);
+                    g_f = ConvertLinearToSRGB(g_f);
+                    b_f = ConvertLinearToSRGB(b_f);
+
+                    uint8_t r = static_cast<uint8_t>(r_f * 255.0f + 0.5f);
+                    uint8_t g = static_cast<uint8_t>(g_f * 255.0f + 0.5f);
+                    uint8_t b = static_cast<uint8_t>(b_f * 255.0f + 0.5f);
+                    uint8_t a = static_cast<uint8_t>(a_f * 255.0f + 0.5f);
 
                     if (is_png)
                     {

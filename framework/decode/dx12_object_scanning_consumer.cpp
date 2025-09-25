@@ -155,6 +155,12 @@ void Dx12ObjectScanningConsumer::ProcessFillMemoryResourceValueCommand(
     opt_fillmem_ = true;
 }
 
+void Dx12ObjectScanningConsumer::ProcessFillMemoryResourceAddressCommand(
+    const format::FillMemoryResourceAddressCommandHeader& command_header, const uint8_t* data)
+{
+    opt_fillmem_ = true;
+}
+
 void Dx12ObjectScanningConsumer::ProcessInitDx12AccelerationStructureCommand(
     const format::InitDx12AccelerationStructureCommandHeader&       command_header,
     std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,

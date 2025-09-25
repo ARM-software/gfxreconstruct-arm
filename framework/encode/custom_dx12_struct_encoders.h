@@ -26,8 +26,10 @@
 #include "encode/parameter_encoder.h"
 #include "util/defines.h"
 
+#ifdef WIN32
 #include <d3d12.h>
 #include <dxgi1_5.h>
+#endif
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -52,19 +54,28 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_BUILD_RAYTRACING_ACCELE
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_VERSIONED_DEVICE_REMOVED_EXTENDED_DATA& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_RENDER_PASS_BEGINNING_ACCESS& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_RENDER_PASS_ENDING_ACCESS& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_SERIALIZED_RAYTRACING_ACCELERATION_STRUCTURE_HEADER1& value);
+void EncodeStruct(ParameterEncoder*                                                                encoder,
+                  const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION_DESC& value);
 
 // Platform types.
 void EncodeStruct(ParameterEncoder* encoder, const LARGE_INTEGER& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_RAYTRACING_OPACITY_MICROMAP_DESC& value);
 
 // Types requiring special processing.
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_DESC& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_OBJECT_DESC& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_GENERIC_PROGRAM_DESC& value);
 void EncodeD3D12FeatureStruct(ParameterEncoder* encoder, void* feature_data, D3D12_FEATURE feature);
 void EncodeDXGIFeatureStruct(ParameterEncoder* encoder, void* feature_data, DXGI_FEATURE feature);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_BARRIER_GROUP& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_SAMPLER_DESC2& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_SHADER_NODE& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_NODE& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_SET_PROGRAM_DESC& value);
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_DISPATCH_GRAPH_DESC& value);
 
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

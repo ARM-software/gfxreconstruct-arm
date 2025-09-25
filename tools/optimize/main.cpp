@@ -28,6 +28,7 @@
 #include "vulkan_micromap_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
 #include "vulkan_raytracing_modifier.h"
+#include "vulkan_descriptor_buffer_modifier.h"
 
 #include "../tool_settings.h"
 
@@ -63,19 +64,20 @@
 #if defined(WIN32)
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 616;
 }
 extern "C"
 {
-    __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\";
+    __declspec(dllexport) extern const char* D3D12SDKPath = reinterpret_cast<const char*>(u8".\\D3D12\\");
 }
 #endif
 
-const char kOptions[] =
-    "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--dxr,--dxr-offline,--dxr-experimental,--vk-remove-rt";
+const char kOptions[] = "-h|--help,--version,--no-debug-popup,--d3d12-pso-removal,--d3d12-fence-calls-removal,--dxr,--"
+                        "dxr-offline,--dxr-experimental,--vk-remove-rt";
 const char kArguments[] = "--gpu,--set-replay-options,--set-replay-options,--remove-device-instance,--remove-thread";
 
 const char kD3d12PsoRemoval[]             = "--d3d12-pso-removal";
+const char kDx12OptimizeFenceCalls[]      = "--d3d12-fence-calls-removal";
 const char kDx12OptimizeDxr[]             = "--dxr";
 const char kDx12OptimizeDxrExperimental[] = "--dxr-experimental";
 const char kDx12OptimizeDxrOffline[]      = "--dxr-offline";
@@ -130,6 +132,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("        \t\tdisplayed when abort() is called (Windows debug only).");
 #endif
     GFXRECON_WRITE_CONSOLE("  --d3d12-pso-removal\tD3D12-only: Remove creation of unreferenced PSOs.");
+    GFXRECON_WRITE_CONSOLE("  --d3d12-fence-calls-removal\tD3D12-only: Remove redundant fence related calls.");
     GFXRECON_WRITE_CONSOLE("  --dxr\t\t\tD3D12-only: Optimize for DXR and ExecuteIndirect replay.");
     GFXRECON_WRITE_CONSOLE("  --dxr-offline\t\t\tD3D12-only: Optimize for ray tracing with offline.");
     GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\tUse the specified device for the optimizer replay, where index");
@@ -172,11 +175,14 @@ GetVulkanOptimizationData(const std::string& input_filename, const gfxrecon::Vul
         auto micromap_modifier_consumer    = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
         auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
         auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>(options);
+        auto descriptor_buffer_modifier_consumer =
+            std::make_unique<gfxrecon::decode::VulkanDescriptorBufferModifier>(options);
 
         decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
         decoder.AddConsumer(vulkan_skia_modifier_consumer.get());
+        decoder.AddConsumer(descriptor_buffer_modifier_consumer.get());
         decoder.AddConsumer(raytracing_modifier_consumer.get());
 
         vulkan_skia_modifier_consumer.get()->SetAppName(remove_app_name);
@@ -201,6 +207,10 @@ GetVulkanOptimizationData(const std::string& input_filename, const gfxrecon::Vul
         if (vulkan_skia_modifier_consumer->CanOptimize())
         {
             result->modifiers.push_back(std::move(vulkan_skia_modifier_consumer));
+        }
+        if (descriptor_buffer_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(descriptor_buffer_modifier_consumer));
         }
         if (raytracing_modifier_consumer->CanOptimize())
         {
@@ -315,6 +325,7 @@ int main(int argc, const char** argv)
         dx12_options.optimize_resource_values              = arg_parser.IsOptionSet(kDx12OptimizeDxr);
         dx12_options.optimize_resource_values_experimental = arg_parser.IsOptionSet(kDx12OptimizeDxrExperimental);
         dx12_options.optimize_resource_values_offline      = arg_parser.IsOptionSet(kDx12OptimizeDxrOffline);
+        dx12_options.remove_redundant_fence_calls          = arg_parser.IsOptionSet(kDx12OptimizeFenceCalls);
         dx12_options.remove_redundant_psos                 = arg_parser.IsOptionSet(kD3d12PsoRemoval);
         const auto& override_gpu                           = arg_parser.GetArgumentValue(kOverrideGpuArgument);
 
@@ -325,8 +336,8 @@ int main(int argc, const char** argv)
         if (set_replay_options)
         {
             if (dx12_options.optimize_resource_values || dx12_options.optimize_resource_values_experimental ||
-                dx12_options.remove_redundant_psos || dx12_options.optimize_resource_values_offline ||
-                !override_gpu.empty())
+                dx12_options.remove_redundant_psos || dx12_options.remove_redundant_fence_calls ||
+                dx12_options.optimize_resource_values_offline || !override_gpu.empty())
             {
                 throw std::runtime_error("Option --set-replay-options cannot be used with any other option. Exiting.");
             }
@@ -371,7 +382,8 @@ int main(int argc, const char** argv)
         }
         // Perform user selected DX12 optimizations
         else if (dx12_options.optimize_resource_values || dx12_options.optimize_resource_values_offline ||
-                 dx12_options.remove_redundant_psos || !override_gpu.empty())
+                 dx12_options.remove_redundant_psos || dx12_options.remove_redundant_fence_calls ||
+                 !override_gpu.empty())
         {
             RunDx12Optimizations(input_filename, output_filename, dx12_options);
         }
@@ -384,12 +396,13 @@ int main(int argc, const char** argv)
         {
             bool detected_d3d12  = false;
             bool detected_vulkan = false;
-            gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
+            bool detected_openxr = false;
+            gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, detected_openxr);
 
             if ((!detected_d3d12) && (!detected_vulkan))
             {
                 // Detect with no block limit
-                gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, true);
+                gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, detected_openxr, true);
             }
 
             if (detected_d3d12)
@@ -404,6 +417,12 @@ int main(int argc, const char** argv)
                 // Run all vulkan optimizations
                 RunVulkanOptimizations(input_filename, output_filename, vulkan_options);
             }
+#if ENABLE_OPENXR_SUPPORT
+            else if (detected_openxr)
+            {
+                GFXRECON_LOG_INFO("No optimizations defined for OpenXR capture files");
+            }
+#endif
             else
             {
                 GFXRECON_LOG_ERROR("Could not detect graphics API. Aborting optimization.")

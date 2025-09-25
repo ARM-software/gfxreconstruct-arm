@@ -137,10 +137,35 @@ std::string GenerateStruct_VkIndirectCommandsLayoutTokenEXT(std::ostream&       
                                                             Decoded_VkIndirectCommandsLayoutTokenEXT* metaInfo,
                                                             VulkanCppConsumerBase&                    consumer);
 
+std::string GenerateStruct_VkCopyMemoryToImageInfo(std::ostream&                    out,
+                                                   const VkCopyMemoryToImageInfo*   structInfo,
+                                                   Decoded_VkCopyMemoryToImageInfo* metaInfo,
+                                                   VulkanCppConsumerBase&           consumer);
+
+std::string GenerateStruct_VkMemoryToImageCopy(std::ostream&                out,
+                                               const VkMemoryToImageCopy*   structInfo,
+                                               Decoded_VkMemoryToImageCopy* metaInfo,
+                                               VulkanCppConsumerBase&       consumer);
+
+std::string GenerateStruct_VkCopyImageToMemoryInfo(std::ostream&                    out,
+                                                   const VkCopyImageToMemoryInfo*   structInfo,
+                                                   Decoded_VkCopyImageToMemoryInfo* metaInfo,
+                                                   VulkanCppConsumerBase&           consumer);
+
+std::string GenerateStruct_VkImageToMemoryCopy(std::ostream&                out,
+                                               const VkImageToMemoryCopy*   structInfo,
+                                               Decoded_VkImageToMemoryCopy* metaInfo,
+                                               VulkanCppConsumerBase&       consumer);
+
 std::string GenerateStruct_VkDataGraphPipelineConstantARM(std::ostream&                           out,
                                                           const VkDataGraphPipelineConstantARM*   structInfo,
                                                           Decoded_VkDataGraphPipelineConstantARM* metaInfo,
                                                           VulkanCppConsumerBase&                  consumer);
+
+std::string GenerateStruct_VkDescriptorGetInfoEXT(std::ostream&                   out,
+                                                  const VkDescriptorGetInfoEXT*   structInfo,
+                                                  Decoded_VkDescriptorGetInfoEXT* metaInfo,
+                                                  VulkanCppConsumerBase&          consumer);
 
 GFXRECON_END_NAMESPACE(gfxrecon)
 GFXRECON_END_NAMESPACE(decode)

@@ -40,7 +40,7 @@ struct UintRange
 };
 
 std::vector<UintRange>
-GetUintRanges(const char* args, const char* option_name, bool check_overlap_range = true, bool allow_zero = false);
+GetUintRanges(const char* args, const char* option_name, bool check_overlap_range, bool allow_zero);
 
 enum class ScreenshotFormat : uint32_t
 {
@@ -53,6 +53,15 @@ enum class SwapchainOption : uint32_t
     kVirtual   = 0,
     kCaptured  = 1,
     kOffscreen = 2,
+};
+
+enum class PresentModeOption : uint32_t
+{
+    kCapture     = 0,
+    kImmediate   = 1,
+    kMailbox     = 2,
+    kFifo        = 3,
+    kFifoRelaxed = 4,
 };
 
 //----------------------------------------------------------------------------

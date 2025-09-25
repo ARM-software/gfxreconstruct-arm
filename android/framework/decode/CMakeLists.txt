@@ -10,6 +10,13 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/common_struct_handle_mappers.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/common_object_info_table.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/copy_shaders.h
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_decoders.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_decoders.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_decoders_forward.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_handle_mappers.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_handle_mappers.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_to_json.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/custom_openxr_struct_to_json.cpp>
                    ${GFXRECON_SOURCE_DIR}/framework/decode/custom_vulkan_struct_decoders.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/custom_vulkan_struct_decoders.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/custom_vulkan_struct_decoders_forward.h
@@ -28,6 +35,36 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/handle_pointer_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/json_writer.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/json_writer.cpp
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_consumer_base.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_decoder_base.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_decoder_base.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_detection_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_enum_util.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_feature_util.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_feature_util.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_handle_mapping_util.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_handle_mapping_util.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_json_consumer_base.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_json_consumer_base.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_next_node.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_next_typed_node.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_object_info.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_object_info_table_base.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_common_state.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_session_state.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_session_state.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_swapchain_state.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_swapchain_state.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_consumer_base.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_consumer_base.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_replay_options.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_resource_tracking_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_resource_tracking_consumer.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_stats_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_tracked_object_info.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_tracked_object_info_table.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_tracked_object_info.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/decode/openxr_tracked_object_info_table.cpp>
                    # ${GFXRECON_SOURCE_DIR}/framework/decode/mark_injected_commands.h
                    # ${GFXRECON_SOURCE_DIR}/framework/decode/mark_injected_commands.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/pointer_decoder_base.h
@@ -57,6 +94,9 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_decoder_base.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_default_allocator.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_default_allocator.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer_base.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer_arm.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer_arm.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_address_replacer_shaders.h
@@ -84,6 +124,8 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_remap_allocator.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_consumer_base.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_consumer_base.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_consumer_arm_features.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_consumer_arm_features.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_options.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_pre_process_consumer.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_replay_dump_resources.h
@@ -121,10 +163,27 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_internal_buffer_manager.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_internal_buffer_manager.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/vulkan_captured_swapchain.cpp
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_decoder.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_decoder.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_enum_to_json.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_enum_to_json.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_json_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_json_consumer.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_object_info_table.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_replay_consumer.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_replay_consumer.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_decoders.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_decoders.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_decoders_forward.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_handle_mappers.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_handle_mappers.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_next_decoder.cpp>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_to_json.h>
+                   $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_openxr_struct_to_json.cpp>
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_consumer.h
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_decoder.cpp
-                   ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_feature_util.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_decoder.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_replay_consumer.h
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_replay_consumer.cpp
@@ -137,6 +196,11 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_mappers.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_object_info_table_base2.h
               )
+
+if (OPENXR_SUPPORT_ENABLED)
+    target_include_directories(gfxrecon_decode PUBLIC ${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK/include)
+    target_compile_definitions(gfxrecon_decode PUBLIC ENABLE_OPENXR_SUPPORT=1)
+endif()
 
 target_include_directories(gfxrecon_decode
                            PUBLIC
@@ -151,5 +215,4 @@ target_link_libraries(gfxrecon_decode
                       vulkan_registry
                       vulkan_memory_allocator
                       platform_specific
-                      nlohmann_json
                       spirv-reflect-static)

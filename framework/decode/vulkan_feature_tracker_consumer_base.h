@@ -100,6 +100,27 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
                                       StructPointerDecoder<Decoded_VkAllocationCallbacks>*        pAllocator,
                                       HandlePointerDecoder<VkPipeline>*                           pPipelines) override;
 
+    virtual void
+    Process_vkCreateComputePipelines(const ApiCallInfo&                                         call_info,
+                                     VkResult                                                   returnValue,
+                                     format::HandleId                                           device,
+                                     format::HandleId                                           pipelineCache,
+                                     uint32_t                                                   createInfoCount,
+                                     StructPointerDecoder<Decoded_VkComputePipelineCreateInfo>* pCreateInfos,
+                                     StructPointerDecoder<Decoded_VkAllocationCallbacks>*       pAllocator,
+                                     HandlePointerDecoder<VkPipeline>*                          pPipelines) override;
+
+    virtual void Process_vkCreateRayTracingPipelinesKHR(
+        const ApiCallInfo&                                               call_info,
+        VkResult                                                         returnValue,
+        format::HandleId                                                 device,
+        format::HandleId                                                 deferredOperation,
+        format::HandleId                                                 pipelineCache,
+        uint32_t                                                         createInfoCount,
+        StructPointerDecoder<Decoded_VkRayTracingPipelineCreateInfoKHR>* pCreateInfos,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>*             pAllocator,
+        HandlePointerDecoder<VkPipeline>*                                pPipelines) override;
+
     virtual void Process_vkCmdDrawIndirect(const ApiCallInfo& call_info,
                                            format::HandleId   commandBuffer,
                                            format::HandleId   buffer,
@@ -237,8 +258,73 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
                                         StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
                                         HandlePointerDecoder<VkSwapchainKHR>*                   pSwapchains) override;
 
+    virtual void Process_vkCmdBindIndexBuffer(const ApiCallInfo& call_info,
+                                              format::HandleId   commandBuffer,
+                                              format::HandleId   buffer,
+                                              VkDeviceSize       offset,
+                                              VkIndexType        indexType) override;
+
+    virtual void Process_vkCmdBindIndexBuffer2(const ApiCallInfo& call_info,
+                                               format::HandleId   commandBuffer,
+                                               format::HandleId   buffer,
+                                               VkDeviceSize       offset,
+                                               VkDeviceSize       size,
+                                               VkIndexType        indexType) override;
+
+    virtual void Process_vkCmdBindIndexBuffer2KHR(const ApiCallInfo& call_info,
+                                                  format::HandleId   commandBuffer,
+                                                  format::HandleId   buffer,
+                                                  VkDeviceSize       offset,
+                                                  VkDeviceSize       size,
+                                                  VkIndexType        indexType) override;
+
+    virtual void Process_vkCmdSetDepthBias(const ApiCallInfo& call_info,
+                                           format::HandleId   commandBuffer,
+                                           float              depthBiasConstantFactor,
+                                           float              depthBiasClamp,
+                                           float              depthBiasSlopeFactor) override;
+
+    virtual void
+    Process_vkCmdSetLineWidth(const ApiCallInfo& call_info, format::HandleId commandBuffer, float lineWidth) override;
+
+    virtual void Process_vkCmdBeginQuery(const ApiCallInfo&  call_info,
+                                         format::HandleId    commandBuffer,
+                                         format::HandleId    queryPool,
+                                         uint32_t            query,
+                                         VkQueryControlFlags flags) override;
+
+    virtual void Process_vkCreateShaderModule(const ApiCallInfo&                                      call_info,
+                                              VkResult                                                returnValue,
+                                              format::HandleId                                        device,
+                                              StructPointerDecoder<Decoded_VkShaderModuleCreateInfo>* pCreateInfo,
+                                              StructPointerDecoder<Decoded_VkAllocationCallbacks>*    pAllocator,
+                                              HandlePointerDecoder<VkShaderModule>* pShaderModule) override;
+
+    virtual void Process_vkCreateSemaphore(const ApiCallInfo&                                   call_info,
+                                           VkResult                                             returnValue,
+                                           format::HandleId                                     device,
+                                           StructPointerDecoder<Decoded_VkSemaphoreCreateInfo>* pCreateInfo,
+                                           StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                           HandlePointerDecoder<VkSemaphore>*                   pSemaphore) override;
+
+    virtual void
+    Process_vkGetBufferDeviceAddress(const ApiCallInfo&                                       call_info,
+                                     VkDeviceAddress                                          returnValue,
+                                     format::HandleId                                         device,
+                                     StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo) override;
+
+    virtual void
+    Process_vkGetBufferOpaqueCaptureAddress(const ApiCallInfo&                                       call_info,
+                                            uint64_t                                                 returnValue,
+                                            format::HandleId                                         device,
+                                            StructPointerDecoder<Decoded_VkBufferDeviceAddressInfo>* pInfo) override;
+
   private:
+    void parse_SPIRV(const uint32_t* code, uint32_t code_size);
+
     void checkSwapchainColorspaceEXT(VkColorSpaceKHR s);
+
+    void Process_VkPipelineShaderStageCreateInfo(const VkPipelineShaderStageCreateInfo* info);
 
     bool ProcessInstanceExtensions();
     bool ProcessDeviceExtensions();
@@ -247,6 +333,7 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
     bool ProcessCore11Features();
     bool ProcessCore12Features();
     bool ProcessCore13Features();
+    bool ProcessCore14Features();
 
   private:
     // capture_corexx_ holds the data in the order of passing (first encounter is the first element)
@@ -272,6 +359,11 @@ class VulkanFeatureTrackerConsumerBase : public util::VulkanModifierBase
     VkPhysicalDeviceVulkan13Features              core13_{};
     std::vector<VkPhysicalDeviceVulkan13Features> capture_core13_{};
     std::vector<VkPhysicalDeviceVulkan13Features> output_core13_{};
+
+    std::vector<std::string>                      core14_members_as_strings_{};
+    VkPhysicalDeviceVulkan14Features              core14_{};
+    std::vector<VkPhysicalDeviceVulkan14Features> capture_core14_{};
+    std::vector<VkPhysicalDeviceVulkan14Features> output_core14_{};
 
     std::vector<std::vector<std::string>> capture_instance_extensions_vector_{};
     std::vector<std::vector<std::string>> capture_device_extensions_vector_{};

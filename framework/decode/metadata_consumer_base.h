@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2023 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -47,6 +48,11 @@ class MetadataConsumerBase
     virtual void ProcessFixShaderGroupHandleCommand(const format::FixShaderGroupHandleCommandHeader& header,
                                                     const format::ShaderHandleLocationInfo*          infos)
     {}
+    virtual void ProcessFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader& header,
+                                                 const format::DescriptorDataLocationInfo*     infos)
+    {}
+    virtual void ProcessFixShadowMemoryCommand(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory)
+    {}
     virtual void
     ProcessFillMemoryResourceValueCommand(const format::FillMemoryResourceValueCommandHeader& command_header,
                                           const uint8_t*                                      data)
@@ -55,7 +61,8 @@ class MetadataConsumerBase
     virtual void
     ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform)
     {}
-    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                    memory_id,
+    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                    device_id,
+                                                    format::HandleId                                    memory_id,
                                                     uint64_t                                            buffer_id,
                                                     uint32_t                                            format,
                                                     uint32_t                                            width,
@@ -103,12 +110,6 @@ class MetadataConsumerBase
                                           const uint8_t*   data)
     {}
 
-    virtual void ProcessInitTensorCommand(format::HandleId device_id,
-                                          format::HandleId tensor_id,
-                                          uint64_t         data_size,
-                                          const uint8_t*   data)
-    {}
-
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                          format::HandleId             image_id,
                                          uint64_t                     data_size,
@@ -138,6 +139,23 @@ class MetadataConsumerBase
 
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+    {}
+
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data)
+    {}
+
+    virtual void
+    ProcessFillMemoryResourceAddressCommand(const format::FillMemoryResourceAddressCommandHeader& command_header,
+                                            const uint8_t*                                        data)
+    {}
+
+    virtual void ProcessViewRelativeLocation(format::ThreadId thread_id, format::ViewRelativeLocation& location){};
+
+    virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,
+                                              const uint8_t*                       parameters_data)
     {}
 
   protected:

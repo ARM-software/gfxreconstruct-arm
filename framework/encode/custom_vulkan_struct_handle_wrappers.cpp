@@ -99,8 +99,6 @@ void UnwrapStructHandles(VkWriteDescriptorSet* value, HandleUnwrapMemory* unwrap
                 // Handles are unwrapped in the VkWriteDescriptorSetAccelerationStructureKHR structure in the pNext
                 // chain
                 break;
-            case VK_DESCRIPTOR_TYPE_STORAGE_TENSOR_ARM:
-                break;
             default:
                 GFXRECON_LOG_WARNING("Attempting to track descriptor state for unrecognized descriptor type");
                 break;
@@ -149,6 +147,50 @@ void UnwrapStructHandles(VkAccelerationStructureBuildGeometryInfoKHR* value, Han
         }
     }
 }
+
+void UnwrapStructHandles(VkDescriptorGetInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        switch (value->type)
+        {
+            case VK_DESCRIPTOR_TYPE_SAMPLER:
+                break;
+            case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                value->data.pCombinedImageSampler = UnwrapDescriptorImageInfoStructArrayHandles(
+                    value->type, value->data.pCombinedImageSampler, 1, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                value->data.pInputAttachmentImage = UnwrapDescriptorImageInfoStructArrayHandles(
+                    value->type, value->data.pInputAttachmentImage, 1, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                value->data.pSampledImage = UnwrapDescriptorImageInfoStructArrayHandles(
+                    value->type, value->data.pSampledImage, 1, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                value->data.pStorageImage = UnwrapDescriptorImageInfoStructArrayHandles(
+                    value->type, value->data.pStorageImage, 1, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                break;
+            case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                break;
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                break;
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                break;
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void UnwrapStructHandles(VkCopyMemoryToImageInfo* value, HandleUnwrapMemory* unwrap_memory) {}
+
+void UnwrapStructHandles(VkCopyImageToMemoryInfo* value, HandleUnwrapMemory* unwrap_memory) {}
 
 GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)

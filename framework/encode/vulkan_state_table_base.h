@@ -24,7 +24,7 @@
 #define GFXRECON_ENCODE_VULKAN_STATE_TABLE_BASE_H
 
 #include "encode/vulkan_handle_wrappers.h"
-#include "encode/vulkan_state_table_map.h"
+#include "encode/unordered_state_map.h"
 #include "format/format.h"
 #include "util/defines.h"
 

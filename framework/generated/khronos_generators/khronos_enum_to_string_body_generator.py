@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -i
 #
-# Copyright (c) 2021-2024 LunarG, Inc.
+# Copyright (c) 2021-2025 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -33,7 +33,7 @@ class KhronosEnumToStringBodyGenerator():
         """ Method may be overridden"""
         return False
 
-    def write_enum_to_string_body(self):
+    def write_enum_to_string_body(self, use_flags_for_64bit_enum=False):
         api_data = self.get_api_data()
         flags_type = api_data.flags_type
         flags64_type = api_data.flags_64_type
@@ -44,7 +44,10 @@ class KhronosEnumToStringBodyGenerator():
             if self.is_flags_enum_64bit(enum):
                 # Since every caller needs to know exactly what it is calling, we may as well
                 # dispense with the parameters that are always ignored:
-                body = 'std::string {0}ToString(const {0} value)\n'
+                if use_flags_for_64bit_enum:
+                    body = 'std::string {0}ToString(const {1} value)\n'
+                else:
+                    body = 'std::string {0}ToString(const {0} value)\n'
             else:
                 body = 'template <> std::string ToString<{0}>(const {0}& value, ToStringFlags, uint32_t, uint32_t)\n'
             body += '{{\n'
@@ -63,26 +66,10 @@ class KhronosEnumToStringBodyGenerator():
                 if self.is_flags_enum_64bit(enum):
                     body += '\nstd::string {1}ToString({2} {3})\n'
                     body += '{{\n'
-                    body += '    std::string   str;\n'
-                    body += '    {2}     index = 0U;\n'
-                    body += '    while ({3})\n'
-                    body += '    {{\n'
-                    body += '        if ({3} & 1U)\n'
-                    body += '        {{\n'
-                    body += '            if (!str.empty())\n'
-                    body += '            {{\n'
-                    body += '                str += \'|\';\n'
-                    body += '            }}\n'
-                    body += '            str.append({0}ToString(static_cast<{0}>(1U) << index));\n'
-                    body += '        }}\n'
-                    body += '        ++index;\n'
-                    body += '        {3} >>= 1U;\n'
-                    body += '    }}\n'
-                    body += '    if (str.empty())\n'
-                    body += '    {{\n'
-                    body += '        str.append({0}ToString(0U));\n'
-                    body += '    }}\n'
-                    body += '    return str;\n'
+                    if use_flags_for_64bit_enum:
+                        body += '    return BitmaskToString<{1}>({3}, {0}ToString);\n'
+                    else:
+                        body += '    return BitmaskToString<{0}>({3}, {0}ToString);\n'
                     body += '}}\n'
                 else:
                     # Original version(these are never actually being called which is part of issue #620):

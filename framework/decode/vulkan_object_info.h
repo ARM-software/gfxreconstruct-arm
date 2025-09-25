@@ -30,8 +30,10 @@
 #include "format/format.h"
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "graphics/vulkan_device_util.h"
+#include "graphics/vulkan_instance_util.h"
 #include "graphics/vulkan_shader_group_handle.h"
 #include "util/defines.h"
+#include "util/spirv_parsing_util.h"
 
 #include "vulkan/vulkan.h"
 
@@ -85,8 +87,9 @@ enum PhysicalDeviceArrayIndices : uint32_t
     kVideoSessionKHRArrayGetVideoSessionMemoryRequirementsKHR                            = 20,
     kShaderEXTArrayGetShaderBinaryDataEXT                                                = 21,
     kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV = 22,
-    kPhysicalDeviceArrayGetPhysicalDeviceDataGraphInstructionSetsARM                     = 23,
-    kPhysicalDeviceArrayGetPhysicalDeviceCooperativeVectorPropertiesNV                   = 24,
+    kPhysicalDeviceArrayGetPhysicalDeviceCooperativeVectorPropertiesNV                   = 23,
+    kPhysicalDeviceArrayGetPhysicalDeviceDataGraphInstructionSetsARM                     = 24,
+    kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM               = 25,
 
     // Aliases for extensions functions that were promoted to core.
     kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties2KHR =
@@ -108,7 +111,7 @@ enum DeviceArrayIndices : uint32_t
     kPhysicalDeviceArrayGetPhysicalDeviceCalibrateableTimeDomainsKHR    = 7,
     kDeviceArrayGetPipelineBinaryDataKHR                                = 8,
     kDeviceArrayGetDataGraphPipelineSessionBindPointRequirementsARM     = 9,
-    kDeviceArrayGetDataGraphPipelinePropertiesARM                       = 10,
+    kDeviceArrayGetDataGraphPipelineAvailablePropertiesARM              = 10,
 
     // Aliases for extensions functions that were promoted to core.
     kDeviceArrayGetImageSparseMemoryRequirements2KHR      = kDeviceArrayGetImageSparseMemoryRequirements2,
@@ -166,11 +169,22 @@ enum ValidationCacheEXTArrayIndices : uint32_t
 
 struct VulkanReplayDeviceInfo
 {
-    std::optional<VkPhysicalDeviceProperties>       properties;
-    std::optional<VkPhysicalDeviceMemoryProperties> memory_properties;
+    std::optional<VkPhysicalDeviceProperties>       properties        = {};
+    std::optional<VkPhysicalDeviceMemoryProperties> memory_properties = {};
 
     // extensions
-    std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> raytracing_properties;
+    std::optional<VkPhysicalDeviceDriverProperties>                   driver_properties;
+    std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR>    raytracing_properties;
+    std::optional<VkPhysicalDeviceAccelerationStructurePropertiesKHR> acceleration_structure_properties;
+    std::optional<VkPhysicalDeviceDescriptorBufferPropertiesEXT>      descriptor_buffer_properties;
+
+    bool IsPropertiesNull()
+    {
+        // Not include memory properties.
+        return properties == std::nullopt || driver_properties == std::nullopt ||
+               raytracing_properties == std::nullopt || acceleration_structure_properties == std::nullopt ||
+               descriptor_buffer_properties == std::nullopt;
+    }
 };
 
 template <typename T>
@@ -219,7 +233,6 @@ struct VulkanPoolObjectInfo : public VulkanObjectInfo<T>
 
 typedef VulkanObjectInfo<VkEvent>                              VulkanEventInfo;
 typedef VulkanObjectInfo<VkQueryPool>                          VulkanQueryPoolInfo;
-typedef VulkanObjectInfo<VkPipelineLayout>                     VulkanPipelineLayoutInfo;
 typedef VulkanObjectInfo<VkPrivateDataSlot>                    VulkanPrivateDataSlotInfo;
 typedef VulkanObjectInfo<VkSampler>                            VulkanSamplerInfo;
 typedef VulkanPoolInfo<VkCommandPool>                          VulkanCommandPoolInfo;
@@ -228,7 +241,6 @@ typedef VulkanObjectInfo<VkDisplayModeKHR>                     VulkanDisplayMode
 typedef VulkanObjectInfo<VkDebugReportCallbackEXT>             VulkanDebugReportCallbackEXTInfo;
 typedef VulkanObjectInfo<VkIndirectCommandsLayoutNV>           VulkanIndirectCommandsLayoutNVInfo;
 typedef VulkanObjectInfo<VkDebugUtilsMessengerEXT>             VulkanDebugUtilsMessengerEXTInfo;
-typedef VulkanObjectInfo<VkAccelerationStructureNV>            VulkanAccelerationStructureNVInfo;
 typedef VulkanObjectInfo<VkPerformanceConfigurationINTEL>      VulkanPerformanceConfigurationINTELInfo;
 typedef VulkanObjectInfo<VkMicromapEXT>                        VulkanMicromapEXTInfo;
 typedef VulkanObjectInfo<VkOpticalFlowSessionNV>               VulkanOpticalFlowSessionNVInfo;
@@ -249,6 +261,7 @@ typedef VulkanObjectInfo<VkPhysicalDevicePipelineBinaryPropertiesKHR>
                                                       VulkanPhysicalDevicePipelineBinaryPropertiesKHRInfo;
 typedef VulkanObjectInfo<VkIndirectCommandsLayoutEXT> VulkanIndirectCommandsLayoutEXTInfo;
 typedef VulkanObjectInfo<VkIndirectExecutionSetEXT>   VulkanIndirectExecutionSetEXTInfo;
+typedef VulkanObjectInfo<VkExternalComputeQueueNV>    VulkanExternalComputeQueueNVInfo;
 
 //
 // Declarations for Vulkan objects with additional replay state info.
@@ -256,8 +269,7 @@ typedef VulkanObjectInfo<VkIndirectExecutionSetEXT>   VulkanIndirectExecutionSet
 
 struct VulkanInstanceInfo : public VulkanObjectInfo<VkInstance>
 {
-    uint32_t                             api_version{ VK_MAKE_VERSION(1, 0, 0) };
-    std::vector<std::string>             enabled_extensions;
+    graphics::VulkanInstanceUtilInfo     util_info{};
     std::unordered_map<uint32_t, size_t> array_counts;
 
     // Capture and replay devices sorted in the order that they were originally retrieved from
@@ -266,13 +278,16 @@ struct VulkanInstanceInfo : public VulkanObjectInfo<VkInstance>
     std::vector<VkPhysicalDevice> replay_devices;
 
     std::unordered_map<VkPhysicalDevice, VulkanReplayDeviceInfo> replay_device_info;
+
+    VkDebugUtilsMessengerEXT debug_messenger{ VK_NULL_HANDLE };
 };
 
 struct VulkanPhysicalDeviceInfo : public VulkanObjectInfo<VkPhysicalDevice>
 {
-    VkInstance                           parent{ VK_NULL_HANDLE };
-    uint32_t                             parent_api_version{ 0 };
-    std::vector<std::string>             parent_enabled_extensions;
+    VkInstance parent{ VK_NULL_HANDLE };
+
+    graphics::VulkanInstanceUtilInfo parent_info{};
+
     std::unordered_map<uint32_t, size_t> array_counts;
 
     // Capture device properties.
@@ -287,6 +302,9 @@ struct VulkanPhysicalDeviceInfo : public VulkanObjectInfo<VkPhysicalDevice>
 
     // capture raytracing (shader-binding-table) properties
     std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> capture_raytracing_properties = {};
+
+    // capture descriptor buffer properties
+    std::optional<VkPhysicalDeviceDescriptorBufferPropertiesEXT> capture_descriptor_buffer_properties = {};
 
     // Closest matching replay device.
     VulkanReplayDeviceInfo* replay_device_info{ nullptr };
@@ -305,25 +323,48 @@ struct VulkanPhysicalDeviceInfo : public VulkanObjectInfo<VkPhysicalDevice>
 struct VulkanDeviceInfo : public VulkanObjectInfo<VkDevice>
 {
     VkPhysicalDevice                         parent{ VK_NULL_HANDLE };
-    std::unique_ptr<VulkanResourceAllocator> allocator;
+    std::shared_ptr<VulkanResourceAllocator> allocator;
     std::unordered_map<uint32_t, size_t>     array_counts;
 
     std::unordered_map<format::HandleId, uint64_t> opaque_addresses;
 
     // Map pipeline ID to ray tracing shader group handle capture replay data.
-    std::unordered_map<format::HandleId, const std::vector<uint8_t>> shader_group_handles;
+    std::unordered_map<format::HandleId, std::vector<uint8_t>> shader_group_handles;
 
     // The following values are only used when loading the initial state for trimmed files.
     std::vector<std::string>                   extensions;
-    std::unique_ptr<VulkanResourceInitializer> resource_initializer;
+    std::shared_ptr<VulkanResourceInitializer> resource_initializer;
 
     // Physical device property & feature state at device creation
     graphics::VulkanDevicePropertyFeatureInfo property_feature_info;
 
-    std::unordered_map<uint32_t, VkDeviceQueueCreateFlags> queue_family_creation_flags;
-    std::vector<bool>                                      queue_family_index_enabled;
+    struct EnabledQueueFamilyFlags
+    {
+        std::unordered_map<uint32_t, VkDeviceQueueCreateFlags> queue_family_creation_flags;
+        std::unordered_map<uint32_t, VkDeviceQueueCreateFlags> queue_family_properties_flags;
+
+        std::vector<bool> queue_family_index_enabled;
+    } enabled_queue_family_flags;
 
     std::vector<VkPhysicalDevice> replay_device_group;
+
+    // For use with device deduplication
+    format::HandleId duplicate_source_id{ format::kNullHandleId };
+
+    void copy_characteristics(const VulkanDeviceInfo* source_info)
+    {
+        parent                     = source_info->parent;
+        allocator                  = source_info->allocator;
+        array_counts               = source_info->array_counts;
+        opaque_addresses           = source_info->opaque_addresses;
+        shader_group_handles       = source_info->shader_group_handles;
+        extensions                 = source_info->extensions;
+        resource_initializer       = source_info->resource_initializer;
+        property_feature_info      = source_info->property_feature_info;
+        enabled_queue_family_flags = source_info->enabled_queue_family_flags;
+        replay_device_group        = source_info->replay_device_group;
+        duplicate_source_id        = source_info->capture_id;
+    }
 };
 
 struct VulkanQueueInfo : public VulkanObjectInfo<VkQueue>
@@ -382,6 +423,7 @@ struct VulkanAndroidHardwareBufferPlaneInfo
 
 struct VulkanAndroidHardwareBufferInfo : public VulkanExternalMemoryInfo
 {
+    format::HandleId device_id{ format::kNullHandleId };
     format::HandleId memory_id{ format::kNullHandleId };
     AHardwareBuffer* hardware_buffer{ nullptr };
     uint8_t*         data{ nullptr };
@@ -414,16 +456,20 @@ struct VulkanBufferInfo : public VulkanObjectInfo<VkBuffer>
     // This is only used when loading the initial state for trimmed files.
     VkMemoryPropertyFlags memory_property_flags{ 0 };
 
+    std::vector<VkMemoryPropertyFlags> sparse_memory_property_flags;
+
     VkBufferUsageFlags usage{ 0 };
     VkDeviceSize       replay_size{ 0 };
     VkDeviceSize       capture_size{ 0 };
 
-    uint32_t           queue_family_index{ 0 };
+    uint32_t queue_family_index{ 0 };
 };
 
 struct VulkanBufferViewInfo : public VulkanObjectInfo<VkBufferView>
 {
     format::HandleId buffer_id{ format::kNullHandleId };
+    VkDeviceSize     offset{ 0 };
+    VkDeviceSize     range{ 0 };
 };
 
 struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
@@ -441,10 +487,13 @@ struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
     // This is only used when loading the initial state for trimmed files.
     VkMemoryPropertyFlags memory_property_flags{ 0 };
 
+    std::vector<VkMemoryPropertyFlags> sparse_memory_property_flags;
+
     VkImageUsageFlags     usage{ 0 };
     VkImageType           type{};
     VkFormat              format{};
     bool                  external_format{ false };
+    bool                  external_memory_android{ false };
     VkExtent3D            extent{ 0, 0, 0 };
     VkImageTiling         tiling{};
     VkSampleCountFlagBits sample_count{};
@@ -478,52 +527,42 @@ struct VulkanPipelineCacheInfo : public VulkanObjectInfo<VkPipelineCache>
 
 struct VulkanShaderModuleInfo : public VulkanObjectInfo<VkShaderModule>
 {
-    // All information stored in ShaderModuleInfo is populated and used
-    // by the dump resources feature
-    struct ShaderDescriptorInfo
-    {
-        ShaderDescriptorInfo(
-            VkDescriptorType _type, bool _readonly, uint32_t _accessed, uint32_t _count, bool _is_array) :
-            type(_type),
-            readonly(_readonly), accessed(_accessed), count(_count), is_array(_is_array)
-        {}
+    // keep track of existing usage of buffer-references
+    std::vector<gfxrecon::util::SpirVParsingUtil::BufferReferenceInfo> buffer_reference_infos;
+};
 
-        ShaderDescriptorInfo(const ShaderDescriptorInfo& other)            = default;
-        ShaderDescriptorInfo& operator=(const ShaderDescriptorInfo& other) = default;
+struct DescriptorBindingLayout
+{
+    uint32_t           count;
+    VkDescriptorType   type;
+    VkShaderStageFlags stage_flags;
+};
 
-        VkDescriptorType type;
-        bool             readonly;
-        uint32_t         accessed;
-        uint32_t         count;
-        bool             is_array;
-    };
+using DescriptorBindingLayoutMap = std::unordered_map<uint32_t, DescriptorBindingLayout>;
 
-    VulkanShaderModuleInfo() = default;
-    VulkanShaderModuleInfo(const VulkanShaderModuleInfo& other)
-    {
-        handle                = other.handle;
-        parent_id             = other.parent_id;
-        capture_id            = other.capture_id;
-        used_descriptors_info = other.used_descriptors_info;
-    }
-    VulkanShaderModuleInfo& operator=(const VulkanShaderModuleInfo& other) = default;
+struct VulkanDescriptorSetLayoutInfo : public VulkanObjectInfo<VkDescriptorSetLayout>
+{
+    // One per descriptor binding
+    DescriptorBindingLayoutMap bindings_layout;
+};
 
-    // One entry per descriptor binding
-    using ShaderDescriptorSetInfo = std::map<uint32_t, ShaderDescriptorInfo>;
-
-    // One entry per descriptor set
-    using ShaderDescriptorSetsInfos = std::map<uint32_t, ShaderDescriptorSetInfo>;
-
-    ShaderDescriptorSetsInfos used_descriptors_info;
+struct VulkanPipelineLayoutInfo : public VulkanObjectInfo<VkPipelineLayout>
+{
+    // One per descriptor set
+    std::vector<DescriptorBindingLayoutMap> desc_set_layouts;
 };
 
 struct VulkanPipelineInfo : public VulkanObjectInfoAsync<VkPipeline>
 {
     std::unordered_map<uint32_t, size_t> array_counts;
 
-    // The following information is populated and used only when the
-    // dump resources feature is in use
-    std::unordered_map<VkShaderStageFlagBits, VulkanShaderModuleInfo> shaders;
+    // keep track of existing usage of buffer-references
+    std::vector<gfxrecon::util::SpirVParsingUtil::BufferReferenceInfo> buffer_reference_infos;
+
+    // map capture- to replay-time shader-group-handles
+    std::unordered_map<graphics::shader_group_handle_t, graphics::shader_group_handle_t> shader_group_handle_map;
+
+    // The following information is populated and used only when the dump resources feature is in use
 
     struct InputBindingDescription
     {
@@ -537,6 +576,9 @@ struct VulkanPipelineInfo : public VulkanObjectInfoAsync<VkPipeline>
         VkFormat format;
         uint32_t offset;
     };
+
+    // Aggregated shader stages flags
+    VkShaderStageFlags shader_stages{ 0 };
 
     // One entry per binding
     using VertexInputBindingMap = std::unordered_map<uint32_t, InputBindingDescription>;
@@ -552,8 +594,11 @@ struct VulkanPipelineInfo : public VulkanObjectInfoAsync<VkPipeline>
     // Is VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE_EXT enabled
     bool dynamic_vertex_binding_stride{ false };
 
-    // map capture- to replay-time shader-group-handles
-    std::unordered_map<graphics::shader_group_handle_t, graphics::shader_group_handle_t> shader_group_handle_map;
+    // Grahpics pipeline library info
+    VkGraphicsPipelineLibraryFlagsEXT gpl_flags{ 0 };
+
+    // Pipeline layout info
+    std::vector<DescriptorBindingLayoutMap> desc_set_layouts;
 };
 
 struct VulkanDescriptorPoolInfo : public VulkanPoolInfo<VkDescriptorPool>
@@ -656,7 +701,7 @@ struct VulkanVideoSessionKHRInfo : VulkanObjectInfo<VkVideoSessionKHR>
     std::unordered_map<uint32_t, size_t> array_counts;
 
     // The following values are only used for memory portability.
-    std::vector<VulkanResourceAllocator::ResourceData> allocator_datas;
+    VulkanResourceAllocator::ResourceData allocator_data;
 
     // This is only used when loading the initial state for trimmed files.
     std::vector<VkMemoryPropertyFlags> memory_property_flags;
@@ -667,6 +712,9 @@ struct VulkanVideoSessionKHRInfo : VulkanObjectInfo<VkVideoSessionKHR>
 struct VulkanShaderEXTInfo : VulkanObjectInfoAsync<VkShaderEXT>
 {
     std::unordered_map<uint32_t, size_t> array_counts;
+
+    // keep track of existing usage of buffer-references
+    std::vector<gfxrecon::util::SpirVParsingUtil::BufferReferenceInfo> buffer_reference_infos;
 };
 
 struct VulkanCommandBufferInfo : public VulkanPoolObjectInfo<VkCommandBuffer>
@@ -679,6 +727,10 @@ struct VulkanCommandBufferInfo : public VulkanPoolObjectInfo<VkCommandBuffer>
     std::vector<uint8_t>                                      push_constant_data;
     VkShaderStageFlags                                        push_constant_stage_flags     = 0;
     VkPipelineLayout                                          push_constant_pipeline_layout = VK_NULL_HANDLE;
+
+    // collect buffer-device-addresses of locations to replace before submit
+    std::unordered_set<VkDeviceAddress> addresses_to_replace;
+    bool                                inside_renderpass = false;
 };
 
 struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
@@ -686,45 +738,16 @@ struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
     std::vector<VkImageLayout>           attachment_description_final_layouts;
     std::vector<VkAttachmentDescription> attachment_descs;
 
-    struct SubpassReferences
+    std::vector<uint8_t> create_info;
+    enum FuncVersion
     {
-        VkSubpassDescriptionFlags          flags;
-        VkPipelineBindPoint                pipeline_bind_point;
-        std::vector<VkAttachmentReference> input_att_refs;
-        std::vector<VkAttachmentReference> color_att_refs;
-        std::vector<VkAttachmentReference> resolve_att_refs;
-        std::vector<uint32_t>              preserve_att_refs;
-
-        bool                  has_depth;
-        VkAttachmentReference depth_att_ref;
+        kCreateRenderPass,
+        kCreateRenderPass2,
+        kCreateRenderPass2KHR
     };
+    FuncVersion func_version;
 
-    // The attachment references per subpass
-    std::vector<SubpassReferences> subpass_refs;
-
-    std::vector<VkSubpassDependency> dependencies;
-
-    // Multiview info
-    bool has_multiview{ false };
-
-    struct
-    {
-        std::vector<uint32_t> view_masks;
-        std::vector<int32_t>  view_offsets;
-        std::vector<uint32_t> correlation_masks;
-    } multiview;
-};
-
-struct VulkanDescriptorSetLayoutInfo : public VulkanObjectInfo<VkDescriptorSetLayout>
-{
-    struct DescriptorBindingLayout
-    {
-        VkDescriptorType type;
-        uint32_t         binding;
-        uint32_t         count;
-    };
-
-    std::vector<DescriptorBindingLayout> bindings_layout;
+    std::vector<format::HandleId> begin_renderpass_override_attachments;
 };
 
 struct VulkanDescriptorTypeImageInfo
@@ -742,11 +765,15 @@ struct VulkanDescriptorTypeBufferInfo
 
 struct VulkanDescriptorSetBindingInfo
 {
-    VkDescriptorType                            desc_type{ VK_DESCRIPTOR_TYPE_MAX_ENUM };
-    std::vector<VulkanDescriptorTypeImageInfo>  image_info;
-    std::vector<VulkanDescriptorTypeBufferInfo> buffer_info;
-    std::vector<const VulkanBufferViewInfo*>    texel_buffer_view_info;
-    std::vector<uint8_t>                        inline_uniform_block;
+    VkDescriptorType   desc_type{ VK_DESCRIPTOR_TYPE_MAX_ENUM };
+    VkShaderStageFlags stage_flags{ 0 };
+
+    // Use a map to represent array as many entries can be left unpopulated.
+    // Use a sorted map so that array indices are printed in order in the json output
+    std::map<uint32_t, VulkanDescriptorTypeImageInfo>  image_info;
+    std::map<uint32_t, VulkanDescriptorTypeBufferInfo> buffer_info;
+    std::map<uint32_t, const VulkanBufferViewInfo*>    texel_buffer_view_info;
+    std::vector<uint8_t>                               inline_uniform_block;
 };
 
 struct VulkanDescriptorSetInfo : public VulkanPoolObjectInfo<VkDescriptorSet>
@@ -760,6 +787,11 @@ struct VulkanAccelerationStructureKHRInfo : public VulkanObjectInfo<VkAccelerati
 {
     VkDeviceAddress capture_address = 0;
     VkDeviceAddress replay_address  = 0;
+
+    VkAccelerationStructureTypeKHR type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+
+    //! associated buffer
+    VkBuffer buffer = VK_NULL_HANDLE;
 };
 
 struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>
@@ -782,10 +814,18 @@ struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>
 
 struct VulkanTensorViewARMInfo : public VulkanObjectInfo<VkTensorViewARM>
 {};
-struct VulkanWeightsARMInfo : public VulkanObjectInfo<VkWeightsARM>
-{};
+
 struct VulkanDataGraphPipelineSessionARMInfo : public VulkanObjectInfo<VkDataGraphPipelineSessionARM>
 {};
+
+struct VulkanAccelerationStructureNVInfo : public VulkanObjectInfo<VkAccelerationStructureNV>
+{
+    // The following values are only used for memory portability.
+    VulkanResourceAllocator::ResourceData allocator_data{ 0 };
+
+    // This is only used when loading the initial state for trimmed files.
+    VkMemoryPropertyFlags memory_property_flags{ 0 };
+};
 
 //
 // Handle alias types for extension handle types that have been promoted to core types.

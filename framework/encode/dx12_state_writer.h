@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021 LunarG, Inc.
-** Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -101,6 +101,7 @@ class Dx12StateWriter
         StandardCreateWrite(wrapper->GetCaptureId(), *wrapper_info.get());
         WriteAddRefAndReleaseCommands(wrapper);
         WritePrivateData(wrapper->GetCaptureId(), *wrapper_info.get());
+        WritePrivateDataInterface(wrapper->GetCaptureId(), *wrapper_info.get());
     }
 
     void StandardCreateWrite(format::HandleId object_id, const DxWrapperInfo& wrapper_info);
@@ -112,16 +113,31 @@ class Dx12StateWriter
     void
     WriteMethodCall(format::ApiCallId call_id, format::HandleId object_id, util::MemoryOutputStream* parameter_buffer);
 
+    bool IsCachedPSOBlob(const ID3D10Blob_Wrapper* wrapper) const;
+
+    bool IsRootSignatureBlob(const ID3D10Blob_Wrapper* wrapper) const
+    {
+        return !IsCachedPSOBlob(wrapper);
+    }
+
+    void WriteRootSignatureBlobState(const Dx12StateTable& state_table);
+
+    void WriteCachedPSOBlobState(const Dx12StateTable& state_table);
+
     void WriteHeapState(const Dx12StateTable& state_table);
 
     // Returns true if memory information was successfully retrieved and written and false otherwise.
     bool WriteCreateHeapAllocationCmd(const void* address);
+
+    void WriteHeapMakeResidentCmd(const ID3D12Heap_Wrapper* wrapper);
 
     void WriteDescriptorState(const Dx12StateTable& state_table);
 
     void WriteAddRefAndReleaseCommands(const IUnknown_Wrapper* wrapper);
 
     void WritePrivateData(format::HandleId handle_id, const DxWrapperInfo& wrapper_info);
+
+    void WritePrivateDataInterface(format::HandleId handle_id, const DxWrapperInfo& wrapper_info);
 
     void WriteResidencyPriority(const Dx12StateTable& state_table);
 
@@ -133,6 +149,8 @@ class Dx12StateWriter
         const Dx12StateTable&                                                    state_table,
         std::unordered_map<format::HandleId, std::vector<ResourceSnapshotInfo>>& resource_snapshots,
         std::unordered_map<format::HandleId, uint64_t>&                          max_resource_sizes);
+
+    void WriteMetaCommandCreationState(const Dx12StateTable& state_table);
 
     void WriteTileMappings(const Dx12StateTable& state_table, ID3D12ResourceInfo* resource_info);
 
@@ -165,6 +183,8 @@ class Dx12StateWriter
     bool CheckGpuVa(D3D12_GPU_VIRTUAL_ADDRESS address);
 
     bool CheckDescriptorObjects(const DxDescriptorInfo& descriptor_info, const Dx12StateTable& state_table);
+
+    bool CheckResourceObject(const ID3D12ResourceInfo* resource_info, const Dx12StateTable& state_table);
 
     void WriteSwapChainState(const Dx12StateTable& state_table);
 
