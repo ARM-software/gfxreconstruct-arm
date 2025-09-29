@@ -27,6 +27,8 @@
 #include "encode/parameter_encoder.h"
 #include "encode/custom_dx12_struct_encoders.h"
 #include "generated/generated_dx12_api_call_encoders.h"
+#include "format/format.h"
+#include "format/format_arm.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -35,6 +37,11 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_GetGPUVirtualAddress(const A
                                                                          format::HandleId          object_id,
                                                                          D3D12_GPU_VIRTUAL_ADDRESS return_value)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((return_value == 0) || (return_value == UINT64_MAX))
     {
         // If the GPU virtual address is 0 or UINT64_MAX, it indicates that the resource is not valid or not
@@ -83,6 +90,11 @@ void Dx12RayTracingModifier::Process_ID3D12StateObjectProperties_GetShaderIdenti
     PointerDecoder<uint8_t>* return_value,
     WStringDecoder*          pExportName)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((return_value != nullptr) && !return_value->IsNull())
     {
         std::vector<uint8_t> shader_id(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, 0);
@@ -98,6 +110,11 @@ void Dx12RayTracingModifier::Process_ID3D12StateObjectProperties_GetShaderIdenti
 void Dx12RayTracingModifier::Process_ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(
     const ApiCallInfo& call_info, format::HandleId object_id, Decoded_D3D12_GPU_DESCRIPTOR_HANDLE return_value)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((return_value.decoded_value->ptr == 0) || (return_value.decoded_value->ptr == UINT64_MAX))
     {
         // If the GPU descriptor handle is 0 or UINT64_MAX, it indicates that the descriptor heap is not valid or not
@@ -169,6 +186,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommittedResource(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -198,6 +221,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateCommittedResource1(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -227,6 +256,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device8_CreateCommittedResource2(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -260,6 +295,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreateCommittedResource3(
     Decoded_GUID                                         riidResource,
     HandlePointerDecoder<void*>*                         ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -290,6 +331,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreatePlacedResource(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -317,6 +364,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device8_CreatePlacedResource1(
     Decoded_GUID                                        riid,
     HandlePointerDecoder<void*>*                        ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -348,6 +401,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreatePlacedResource2(
     Decoded_GUID                                        riid,
     HandlePointerDecoder<void*>*                        ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -375,6 +434,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateReservedResource(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -400,6 +465,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateReservedResource1(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -427,6 +498,12 @@ void Dx12RayTracingModifier::Process_ID3D12Device10_CreateReservedResource2(
     Decoded_GUID                                       riid,
     HandlePointerDecoder<void*>*                       ppvResource)
 {
+    if (IsModificationPass())
+    {
+        AddPrebuildInfoResourceValueCommand();
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -448,6 +525,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_BuildRaytracingA
     UINT                                                                                       NumPostbuildInfoDescs,
     StructPointerDecoder<Decoded_D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC>* pPostbuildInfoDescs)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     Process_BuildRaytracingAccelerationStructure(
         call_info, object_id, pDesc->GetPointer(), NumPostbuildInfoDescs, pPostbuildInfoDescs->GetPointer());
 }
@@ -694,6 +776,11 @@ void Dx12RayTracingModifier::ProcessInitDx12AccelerationStructureCommand(
     std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
     const uint8_t*                                                  build_inputs_data)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     const ApiCallInfo      call_info   = { GetCurrentBlockIndex(), command_header.thread_id };
     const format::HandleId object_id   = format::kNullHandleId;
     const auto             src_address = command_header.copy_source_gpu_va;
@@ -795,6 +882,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_CopyRaytracingAc
     D3D12_GPU_VIRTUAL_ADDRESS                         SourceAccelerationStructureData,
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE Mode)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     Process_CopyRaytracingAccelerationStructure(
         call_info, object_id, DestAccelerationStructureData, SourceAccelerationStructureData, Mode);
 }
@@ -945,6 +1037,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device5_CreateStateObject(
     Decoded_GUID                                           riid,
     HandlePointerDecoder<void*>*                           ppStateObject)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -960,6 +1057,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device7_AddToStateObject(
     Decoded_GUID                                           riid,
     HandlePointerDecoder<void*>*                           ppNewStateObject)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -974,6 +1076,11 @@ void Dx12RayTracingModifier::Process_D3D12SerializeRootSignature(
     HandlePointerDecoder<ID3D10Blob*>*                       ppBlob,
     HandlePointerDecoder<ID3D10Blob*>*                       ppErrorBlob)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1004,6 +1111,11 @@ void Dx12RayTracingModifier::Process_D3D12SerializeVersionedRootSignature(
     HandlePointerDecoder<ID3D10Blob*>*                                 ppBlob,
     HandlePointerDecoder<ID3D10Blob*>*                                 ppErrorBlob)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((return_value != S_OK) || (pRootSignature == nullptr) || (pRootSignature->GetPointer() == nullptr))
     {
         return;
@@ -1074,6 +1186,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateRootSignature(const ApiC
                                                                       Decoded_GUID             riid,
                                                                       HandlePointerDecoder<void*>* ppvRootSignature)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1101,6 +1218,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device14_CreateRootSignatureFromSubob
     Decoded_GUID                 riid,
     HandlePointerDecoder<void*>* ppvRootSignature)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1116,6 +1238,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandSignature(
     Decoded_GUID                                                riid,
     HandlePointerDecoder<void*>*                                ppvCommandSignature)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1151,6 +1278,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_ExecuteIndirect(c
                                                                                format::HandleId   pCountBuffer,
                                                                                UINT64             CountBufferOffset)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (command_signature_related_types_.find(pCommandSignature) != command_signature_related_types_.end())
     {
         ResourceValueInfo resource_value;
@@ -1172,6 +1304,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_SetPipelineState
                                                                                   format::HandleId   object_id,
                                                                                   format::HandleId   pStateObject)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (command_list_related_infos_.find(object_id) != command_list_related_infos_.end())
     {
         command_list_related_infos_[object_id].state_object_id = pStateObject;
@@ -1183,6 +1320,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList4_DispatchRays(
     format::HandleId                                        object_id,
     StructPointerDecoder<Decoded_D3D12_DISPATCH_RAYS_DESC>* pDesc)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     const auto pDesc_struct    = pDesc->GetPointer();
     auto       ray_gen_id      = FindBaseResourceFromGPUAddress(pDesc_struct->RayGenerationShaderRecord.StartAddress);
     auto       miss_table_id   = FindBaseResourceFromGPUAddress(pDesc_struct->MissShaderTable.StartAddress);
@@ -1247,6 +1389,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandList(const ApiCal
                                                                     Decoded_GUID                 riid,
                                                                     HandlePointerDecoder<void*>* ppCommandList)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1271,6 +1418,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device4_CreateCommandList1(const ApiC
                                                                       Decoded_GUID                 riid,
                                                                       HandlePointerDecoder<void*>* ppCommandList)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1292,6 +1444,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_Dispatch(const Ap
                                                                         UINT               ThreadGroupCountY,
                                                                         UINT               ThreadGroupCountZ)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     return;
 }
 
@@ -1303,6 +1460,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyBufferRegion(
                                                                                 UINT64             SrcOffset,
                                                                                 UINT64             NumBytes)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     ResourceCopyInfo copy_info;
     copy_info.dst_resource_id = pDstBuffer;
     copy_info.dst_offset      = DstOffset;
@@ -1318,6 +1480,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_CopyResource(cons
                                                                             format::HandleId   pDstResource,
                                                                             format::HandleId   pSrcResource)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     const auto iter = resource_entries_.find(pDstResource);
     if (iter != resource_entries_.end())
     {
@@ -1341,6 +1508,11 @@ void Dx12RayTracingModifier::Process_ID3D12CommandQueue_ExecuteCommandLists(
     UINT                                      NumCommandLists,
     HandlePointerDecoder<ID3D12CommandList*>* ppCommandLists)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     auto command_lists = ppCommandLists->GetPointer();
     for (UINT i = 0; i < NumCommandLists; ++i)
     {
@@ -1360,6 +1532,11 @@ void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_Reset(const ApiCa
                                                                      format::HandleId   pAllocator,
                                                                      format::HandleId   pInitialState)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (command_list_related_infos_.find(object_id) != command_list_related_infos_.end())
     {
         command_list_related_infos_[object_id].related_resource_values.clear();
@@ -1376,6 +1553,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_CreateDescriptorHeap(
     Decoded_GUID                                              riid,
     HandlePointerDecoder<void*>*                              ppvHeap)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
@@ -1401,6 +1583,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_GetDescriptorHandleIncrementSi
     UINT                       return_value,
     D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value == 0)
     {
         GFXRECON_LOG_WARNING("GetDescriptorHandleIncrementSize returned 0 for object ID: 0x%" PRIx64
@@ -1440,6 +1627,11 @@ void Dx12RayTracingModifier::Process_ID3D12Device_GetDescriptorHandleIncrementSi
 
 void Dx12RayTracingModifier::FindAccelerationStructureResourceFromGPUAddress(const D3D12_GPU_VIRTUAL_ADDRESS address)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((address == 0) || (address < min_gpu_va_) || (address >= max_gpu_va_))
     {
         return;
@@ -1705,6 +1897,11 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_Map(const ApiCallInfo&      
                                                         StructPointerDecoder<Decoded_D3D12_RANGE>* pReadRange,
                                                         PointerDecoder<uint64_t, void*>*           ppData)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if ((return_value != S_OK) || (ppData == nullptr) || (ppData->GetPointer() == nullptr))
     {
         return;
@@ -1721,6 +1918,11 @@ void Dx12RayTracingModifier::Process_ID3D12Resource_Unmap(const ApiCallInfo&    
                                                           UINT                                       Subresource,
                                                           StructPointerDecoder<Decoded_D3D12_RANGE>* pWrittenRange)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (mapped_memory_info_.find(object_id) != mapped_memory_info_.end())
     {
         auto entry = mapped_memory_info_[object_id].find(Subresource);
@@ -1744,12 +1946,22 @@ void Dx12RayTracingModifier::Process_IUnknown_QueryInterface(const ApiCallInfo& 
                                                              Decoded_GUID                 riid,
                                                              HandlePointerDecoder<void*>* ppvObject)
 {
+    format::HandleId handle_id = *ppvObject->GetPointer();
+    if (IsModificationPass())
+    {
+        if (*riid.decoded_value == __uuidof(ID3D12Resource) || *riid.decoded_value == __uuidof(ID3D12Resource1) ||
+            *riid.decoded_value == __uuidof(ID3D12Resource2))
+        {
+            AddPrebuildInfoResourceValueCommand();
+        }
+        return;
+    }
+
     if (return_value != S_OK)
     {
         return;
     }
 
-    format::HandleId handle_id = *ppvObject->GetPointer();
     if (*riid.decoded_value == __uuidof(ID3D12Resource) || *riid.decoded_value == __uuidof(ID3D12Resource1) ||
         *riid.decoded_value == __uuidof(ID3D12Resource2))
     {
@@ -1784,6 +1996,11 @@ void Dx12RayTracingModifier::Process_IUnknown_Release(const ApiCallInfo& call_in
                                                       format::HandleId   object_id,
                                                       ULONG              return_value)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     if (return_value == 0)
     {
         auto resource_iter = resource_entries_.find(object_id);
@@ -1854,13 +2071,23 @@ void Dx12RayTracingModifier::Process_IUnknown_Release(const ApiCallInfo& call_in
 void Dx12RayTracingModifier::ProcessFillMemoryResourceValueCommand(
     const format::FillMemoryResourceValueCommandHeader& command_header, const uint8_t* data)
 {
-    // All old FillMemoryResourceValueCommand Will be deleted
-    return;
+    if (IsModificationPass())
+    {
+        // All old FillMemoryResourceValueCommand Will be deleted
+        SetDeleteCurrentCall();
+        return;
+    }
 }
 
 void Dx12RayTracingModifier::ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                            const uint8_t*                              data)
 {
+    if (IsModificationPass())
+    {
+        AddFillMemoryResourceAddressCommand(command_header.resource_id);
+        return;
+    }
+
     std::vector<Dx12FillCommandResourceAddress> found_resource_addresses;
 
     if (resource_entries_.find(command_header.resource_id) != resource_entries_.end())
@@ -1886,8 +2113,12 @@ void Dx12RayTracingModifier::ProcessInitSubresourceCommand(const format::InitSub
 void Dx12RayTracingModifier::ProcessFillMemoryResourceAddressCommand(
     const format::FillMemoryResourceAddressCommandHeader& command_header, const uint8_t* data)
 {
-    // All old FillMemoryResourceAddressCommand Will be deleted
-    return;
+    if (IsModificationPass())
+    {
+        // All old FillMemoryResourceAddressCommand Will be deleted
+        SetDeleteCurrentCall();
+        return;
+    }
 }
 
 void Dx12RayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
@@ -1895,6 +2126,12 @@ void Dx12RayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
                                                       uint64_t       size,
                                                       const uint8_t* data)
 {
+    if (IsModificationPass())
+    {
+        AddFillMemoryResourceAddressCommand(memory_id);
+        return;
+    }
+
     std::vector<Dx12FillCommandResourceAddress> found_resource_addresses;
 
     if (mapped_memory_resource_id_.find(memory_id) != mapped_memory_resource_id_.end())
@@ -1920,11 +2157,64 @@ void Dx12RayTracingModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
     }
 }
 
-void Dx12RayTracingModifier::GetTrackedResourceValues(Dx12PrebuildInfoResourceValueMap&  prebuild_values,
-                                                      Dx12FillCommandResourceAddressMap& resource_addresses)
+void Dx12RayTracingModifier::AddPrebuildInfoResourceValueCommand()
 {
-    prebuild_values.swap(prebuild_info_insert_values_);
-    resource_addresses.swap(fill_cmd_resource_addresses_);
+    auto prebuild_iter = prebuild_info_insert_values_.find(GetCurrentBlockIndex());
+    if (prebuild_iter != prebuild_info_insert_values_.end() && !prebuild_iter->second.empty())
+    {
+        auto& build_descs = prebuild_iter->second;
+        for (auto iter = build_descs.begin(); iter != build_descs.end(); ++iter)
+        {
+            auto new_call  = CreatePreCall();
+            new_call->type = NewCallDataType::ApiCall;
+            new_call->call_id =
+                gfxrecon::format::ApiCallId::ApiCall_ID3D12Device5_GetRaytracingAccelerationStructurePrebuildInfo;
+            new_call->thread_id = 1;
+            new_call->object_id = iter->second.object_id;
+
+            const auto& prebuild_info = iter->second.get_prebuild_info;
+            new_call->parameter_buffer.Write(prebuild_info.GetData(), prebuild_info.GetDataSize());
+        }
+
+        prebuild_iter->second.clear();
+    }
+}
+
+void Dx12RayTracingModifier::AddFillMemoryResourceAddressCommand(uint64_t object_id)
+{
+    auto resource_addresses_iter = fill_cmd_resource_addresses_.find(GetCurrentBlockIndex());
+    if (resource_addresses_iter != fill_cmd_resource_addresses_.end() && !resource_addresses_iter->second.empty())
+    {
+        auto&    resource_addresses     = resource_addresses_iter->second;
+        uint64_t resource_address_count = resource_addresses.size();
+        if (resource_address_count == 0)
+        {
+            return;
+        }
+
+        auto new_call       = CreatePreCall();
+        new_call->type      = NewCallDataType::MetaDataCall;
+        new_call->object_id = object_id;
+        new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_Unknown;
+        new_call->thread_id = 1;
+
+        format::FillMemoryResourceAddressCommandHeader ra_header;
+        ra_header.meta_header.block_header.type = format::BlockType::kMetaDataBlock;
+        ra_header.meta_header.block_header.size =
+            format::GetMetaDataBlockBaseSize(ra_header) +
+            (resource_address_count * sizeof(decode::Dx12FillCommandResourceAddress));
+        ra_header.meta_header.meta_data_id = format::MakeMetaDataId(
+            format::ApiFamilyId::ApiFamily_D3D12, format::arm::MetaDataType::kFillMemoryResourceAddressCommand);
+        ra_header.thread_id              = 1;
+        ra_header.resource_address_count = resource_address_count;
+        size_t       header_size         = sizeof(format::FillMemoryResourceAddressCommandHeader);
+        const size_t uncompressed_size   = resource_address_count * sizeof(decode::Dx12FillCommandResourceAddress);
+
+        new_call->parameter_buffer.Write(&ra_header, header_size);
+        new_call->parameter_buffer.Write(resource_addresses.data(), uncompressed_size);
+
+        resource_addresses_iter->second.clear();
+    }
 }
 
 void Dx12RayTracingModifier::CreateDeviceAndCheckRayTracingSupport()
@@ -1972,6 +2262,13 @@ void Dx12RayTracingModifier::CreateDeviceAndCheckRayTracingSupport()
             }
         }
     }
+}
+
+bool Dx12RayTracingModifier::CanOptimize()
+{
+    GFXRECON_WRITE_CONSOLE("Optimizing %zu FillMemoryCommand blocks for DXR/EI replay.",
+                           fill_cmd_resource_addresses_.size());
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(decode)

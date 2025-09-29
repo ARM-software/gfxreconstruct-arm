@@ -21,10 +21,10 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_DX12_REDUNDANCY_DETECTOR_H
-#define GFXRECON_DX12_REDUNDANCY_DETECTOR_H
+#ifndef GFXRECON_DX12_REDUNDANCY_MODIFIER_H
+#define GFXRECON_DX12_REDUNDANCY_MODIFIER_H
 
-#include "generated/generated_dx12_consumer.h"
+#include "util/dx12_modifier_base.h"
 #include <unordered_set>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -37,11 +37,13 @@ struct FenceCallInfo
     UINT64           completed_value;
 };
 
-class Dx12RedundancyDetector : public Dx12Consumer
+class Dx12RedundancyModifier : public util::Dx12ModifierBase
 {
   public:
-    Dx12RedundancyDetector() = default;
-    virtual ~Dx12RedundancyDetector(){};
+    Dx12RedundancyModifier() = default;
+    virtual ~Dx12RedundancyModifier(){};
+
+    virtual bool CanOptimize() override;
 
     virtual void Process_ID3D12Fence_GetCompletedValue(const ApiCallInfo& call_info,
                                                        format::HandleId   object_id,
@@ -53,8 +55,6 @@ class Dx12RedundancyDetector : public Dx12Consumer
 
     virtual void
     Process_IUnknown_Release(const ApiCallInfo& call_info, format::HandleId object_id, ULONG return_value) override;
-
-    void GetRedundantCalls(std::unordered_set<uint64_t>& redundant_calls);
 
   private:
     bool IsRedundantFenceCall(const ApiCallInfo& current_call_info, format::HandleId object_id, UINT64 return_value);
@@ -73,4 +73,4 @@ class Dx12RedundancyDetector : public Dx12Consumer
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_DX12_REDUNDANCY_DETECTOR_H
+#endif // GFXRECON_DX12_REDUNDANCY_MODIFIER_H

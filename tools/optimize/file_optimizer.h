@@ -44,8 +44,6 @@ class FileOptimizer : public decode::FileTransformer
 
     uint64_t GetUnreferencedBlocksSize();
 
-    void SetRedundantBlocks(const std::unordered_set<uint64_t>& redundant_blocks);
-
   protected:
     virtual bool ProcessFunctionCall(const format::FunctionCallHeader& header) override;
     virtual bool ProcessMethodCall(const format::MethodCallHeader& header, uint64_t block_index = 0) override;
@@ -92,8 +90,6 @@ class FileOptimizer : public decode::FileTransformer
     std::unordered_set<uint64_t>         unreferenced_blocks_;
 
     std::unordered_set<format::ThreadId> removed_threads_ids_;
-
-    std::unordered_set<uint64_t> redundant_blocks_;
 };
 
 GFXRECON_END_NAMESPACE(gfxrecon)

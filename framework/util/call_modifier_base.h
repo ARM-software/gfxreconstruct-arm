@@ -47,6 +47,7 @@ class CallModifierBase
     {
         NewCallDataType          type;
         format::ApiCallId        call_id;
+        format::HandleId         object_id;
         format::ThreadId         thread_id;
         util::MemoryOutputStream parameter_buffer;
     };

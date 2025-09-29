@@ -21,12 +21,12 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#include "dx12_redundancy_detector.h"
+#include "dx12_redundancy_modifier.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-bool Dx12RedundancyDetector::IsRedundantFenceCall(const ApiCallInfo& current_call_info,
+bool Dx12RedundancyModifier::IsRedundantFenceCall(const ApiCallInfo& current_call_info,
                                                   format::HandleId   object_id,
                                                   UINT64             return_value)
 {
@@ -55,7 +55,7 @@ bool Dx12RedundancyDetector::IsRedundantFenceCall(const ApiCallInfo& current_cal
     return false;
 }
 
-void Dx12RedundancyDetector::ReleaseFenceCall(const ApiCallInfo& current_call_info,
+void Dx12RedundancyModifier::ReleaseFenceCall(const ApiCallInfo& current_call_info,
                                               format::HandleId   object_id,
                                               UINT64             return_value)
 {
@@ -65,40 +65,65 @@ void Dx12RedundancyDetector::ReleaseFenceCall(const ApiCallInfo& current_call_in
     }
 }
 
-void Dx12RedundancyDetector::Process_ID3D12Fence_GetCompletedValue(const ApiCallInfo& call_info,
+void Dx12RedundancyModifier::Process_ID3D12Fence_GetCompletedValue(const ApiCallInfo& call_info,
                                                                    format::HandleId   object_id,
                                                                    UINT64             return_value)
 {
+    if (IsModificationPass())
+    {
+        if (redundant_fence_calls_.find(call_info.index) != redundant_fence_calls_.end())
+        {
+            SetDeleteCurrentCall();
+            redundant_fence_calls_.erase(call_info.index);
+        }
+        return;
+    }
+
     if (IsRedundantFenceCall(call_info, object_id, return_value))
     {
         redundant_fence_calls_.insert(call_info.index);
     }
 }
 
-void Dx12RedundancyDetector::Process_ID3D12Device_GetDeviceRemovedReason(const ApiCallInfo& call_info,
+void Dx12RedundancyModifier::Process_ID3D12Device_GetDeviceRemovedReason(const ApiCallInfo& call_info,
                                                                          format::HandleId   object_id,
                                                                          HRESULT            return_value)
 {
+    if (IsModificationPass())
+    {
+        if (redundant_device_calls_.find(call_info.index) != redundant_device_calls_.end())
+        {
+            SetDeleteCurrentCall();
+            redundant_device_calls_.erase(call_info.index);
+        }
+        return;
+    }
+
     if (return_value == S_OK)
     {
         redundant_device_calls_.insert(call_info.index);
     }
 }
 
-void Dx12RedundancyDetector::Process_IUnknown_Release(const ApiCallInfo& call_info,
+void Dx12RedundancyModifier::Process_IUnknown_Release(const ApiCallInfo& call_info,
                                                       format::HandleId   object_id,
                                                       ULONG              return_value)
 {
+    if (IsModificationPass())
+    {
+        return;
+    }
+
     ReleaseFenceCall(call_info, object_id, return_value);
 }
 
-void Dx12RedundancyDetector::GetRedundantCalls(std::unordered_set<uint64_t>& redundant_calls)
+bool Dx12RedundancyModifier::CanOptimize()
 {
-    redundant_calls.insert(redundant_fence_calls_.begin(), redundant_fence_calls_.end());
-    redundant_calls.insert(redundant_device_calls_.begin(), redundant_device_calls_.end());
-    printf("Found %zu redundant fence calls and %zu redundant device calls.\n",
-           redundant_fence_calls_.size(),
-           redundant_device_calls_.size());
+    GFXRECON_WRITE_CONSOLE("Removing %zu redundant fence calls and %zu redundant device calls.",
+                           redundant_fence_calls_.size(),
+                           redundant_device_calls_.size());
+
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(decode)

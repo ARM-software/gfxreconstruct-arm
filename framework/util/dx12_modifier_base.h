@@ -1,6 +1,6 @@
 /*
-** Copyright (c) 2019-2021 LunarG, Inc.
-** Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2025 LunarG, Inc
+** Copyright (c) 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -21,23 +21,22 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_DECODE_DX12_OPTIMIZE_OPTIONS_H
-#define GFXRECON_DECODE_DX12_OPTIMIZE_OPTIONS_H
+#ifndef GFXRECON_UTIL_DX12_MODIFIER_BASE_H
+#define GFXRECON_UTIL_DX12_MODIFIER_BASE_H
+
+#include "generated/generated_dx12_consumer.h"
+#include "util/call_modifier_base.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-GFXRECON_BEGIN_NAMESPACE(decode)
+GFXRECON_BEGIN_NAMESPACE(util)
 
-struct Dx12OptimizationOptions
+class Dx12ModifierBase : public decode::Dx12Consumer, public util::CallModifierBase
 {
-    bool remove_redundant_psos{ false };
-    bool optimize_resource_values{ false };
-    bool optimize_resource_values_experimental{ false };
-    bool optimize_resource_values_offline{ false };
-
-    int32_t override_gpu_index{ -1 };
+  public:
+    virtual ~Dx12ModifierBase() override {}
 };
 
-GFXRECON_END_NAMESPACE(decode)
+GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_DECODE_DX12_OPTIMIZE_OPTIONS_H
+#endif // GFXRECON_UTIL_DX12_MODIFIER_BASE_H

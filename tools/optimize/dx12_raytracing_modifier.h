@@ -32,10 +32,9 @@
 
 #include "decode/dx12_consumer_base.h"
 #include "decode/dx12_resource_value_tracker.h"
-#include "generated/generated_dx12_consumer.h"
+#include "util/dx12_modifier_base.h"
 #include "util/memory_output_stream.h"
 #include "util/defines.h"
-#include "format/format.h"
 #include "util/hash.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -56,10 +55,12 @@ struct AccelerationStructurePreBuildDesc
 typedef std::map<UINT64, AccelerationStructurePreBuildDesc> AccelerationStructureVAToPreBuildDescs;
 typedef std::map<Dx12MethodCallBlockIndex, AccelerationStructureVAToPreBuildDescs> Dx12PrebuildInfoResourceValueMap;
 
-class Dx12RayTracingModifier : public decode::Dx12Consumer
+class Dx12RayTracingModifier : public util::Dx12ModifierBase
 {
   public:
     Dx12RayTracingModifier() = default;
+
+    virtual bool CanOptimize() override;
 
     virtual void Process_ID3D12Resource_GetGPUVirtualAddress(const ApiCallInfo&        call_info,
                                                              format::HandleId          object_id,
@@ -397,9 +398,6 @@ class Dx12RayTracingModifier : public decode::Dx12Consumer
                                                           UINT                       return_value,
                                                           D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType) override;
 
-    void GetTrackedResourceValues(Dx12PrebuildInfoResourceValueMap&  prebuild_values,
-                                  Dx12FillCommandResourceAddressMap& resource_addresses);
-
   private:
     void FindAccelerationStructureResourceFromGPUAddress(const D3D12_GPU_VIRTUAL_ADDRESS address);
 
@@ -423,6 +421,10 @@ class Dx12RayTracingModifier : public decode::Dx12Consumer
                                                      D3D12_GPU_VIRTUAL_ADDRESS dest_acceleration_structure_data,
                                                      D3D12_GPU_VIRTUAL_ADDRESS source_acceleration_structure_data,
                                                      D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode);
+
+    void AddPrebuildInfoResourceValueCommand();
+
+    void AddFillMemoryResourceAddressCommand(uint64_t object_id);
 
   private:
     struct ResourceObject
