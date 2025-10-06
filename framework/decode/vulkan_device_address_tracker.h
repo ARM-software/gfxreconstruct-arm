@@ -27,6 +27,7 @@
 #include "decode/vulkan_object_info.h"
 #include "vulkan_object_info_table.h"
 #include <map>
+#include <unordered_map>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -34,7 +35,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanDeviceAddressTracker
 {
   public:
-    explicit VulkanDeviceAddressTracker(const VulkanObjectInfoTable& object_info_table);
+    explicit VulkanDeviceAddressTracker(VulkanObjectInfoTable& object_info_table);
 
     //! prevent copying
     VulkanDeviceAddressTracker(const VulkanDeviceAddressTracker&) = delete;
@@ -93,18 +94,10 @@ class VulkanDeviceAddressTracker
      * @brief   Retrieve a buffer info-struct by providing its vulkan-handle.
      *
      * @param   handle  a capture-time VkBuffer handle.
-     * @return  a const-pointer to a found BufferInfo or nullptr.
+     * @return  a (const-) pointer to a found BufferInfo or nullptr.
      */
+    [[nodiscard]] VulkanBufferInfo*       GetBufferByHandle(VkBuffer handle);
     [[nodiscard]] const VulkanBufferInfo* GetBufferByHandle(VkBuffer handle) const;
-
-    /**
-     * @brief   Retrieve an acceleration-structure by providing a capture-time VkDeviceAddress.
-     *
-     * @param   capture_address  a capture-time VkDeviceAddress for an acceleration-structure.
-     * @return  a const-pointer to a found AccelerationStructureKHRInfo or nullptr.
-     */
-    [[nodiscard]] const VulkanAccelerationStructureKHRInfo*
-    GetAccelerationStructureByCaptureDeviceAddress(VkDeviceAddress capture_address) const;
 
     /**
      * @brief   Retrieve an acceleration-structure info-struct by providing its vulkan-handle.
@@ -120,7 +113,8 @@ class VulkanDeviceAddressTracker
      *
      * @return  a lookup-table for acceleration-structure addresses.
      */
-    [[nodiscard]] std::unordered_map<VkDeviceAddress, VkDeviceAddress> GetAccelerationStructureDeviceAddressMap() const;
+    [[nodiscard]] const std::unordered_map<VkDeviceAddress, VkDeviceAddress>&
+    GetAccelerationStructureDeviceAddressMap() const;
 
     //! aggregate to group an address and size
     struct device_address_range_t
@@ -143,15 +137,19 @@ class VulkanDeviceAddressTracker
 
     [[nodiscard]] const VulkanBufferInfo* GetBufferInfo(VkDeviceAddress             device_address,
                                                         const buffer_address_map_t& address_map) const;
+    [[nodiscard]] const VulkanBufferInfo* GetShadowBufferInfo(VkDeviceAddress device_address) const;
 
-    const VulkanObjectInfoTable&                          object_info_table_;
-    buffer_address_map_t                                  buffer_capture_addresses_, buffer_replay_addresses_;
-    std::unordered_map<VkDeviceAddress, format::HandleId> acceleration_structure_capture_addresses_;
+    VulkanObjectInfoTable&                               object_info_table_;
+    buffer_address_map_t                                 buffer_capture_addresses_, buffer_replay_addresses_;
+    std::unordered_map<VkDeviceAddress, VkDeviceAddress> acceleration_structure_addresses_;
 
     std::unordered_map<VkBuffer, format::HandleId>                   buffer_handles_;
     std::unordered_map<VkAccelerationStructureKHR, format::HandleId> acceleration_structure_handles_;
 
     std::unordered_map<VkDeviceAddress, device_address_range_t> address_lookup_helper_map_;
+
+    std::unordered_map<VkBuffer, VulkanBufferInfo*> shadow_info_table_;
+    std::map<VkDeviceAddress, VkBuffer>             shadow_address_map_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

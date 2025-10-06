@@ -22,11 +22,13 @@
 */
 
 #include "decode/vulkan_device_address_tracker.h"
+#include "decode/vulkan_object_info.h"
+#include "format/format.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanDeviceAddressTracker::VulkanDeviceAddressTracker(const VulkanObjectInfoTable& object_info_table) :
+VulkanDeviceAddressTracker::VulkanDeviceAddressTracker(VulkanObjectInfoTable& object_info_table) :
     object_info_table_(object_info_table)
 {}
 
@@ -53,6 +55,11 @@ void decode::VulkanDeviceAddressTracker::TrackBuffer(const decode::VulkanBufferI
         {
             buffer_handles_[buffer_info->handle] = buffer_info->capture_id;
         }
+
+        if (buffer_info->capture_id == format::kNullHandleId)
+        {
+            shadow_info_table_[buffer_info->handle] = const_cast<VulkanBufferInfo*>(buffer_info);
+        }
     }
 }
 
@@ -64,6 +71,13 @@ void VulkanDeviceAddressTracker::RemoveBuffer(const VulkanBufferInfo* buffer_inf
         buffer_replay_addresses_.erase(buffer_info->replay_address);
         buffer_handles_.erase(buffer_info->handle);
         address_lookup_helper_map_.erase(buffer_info->capture_address);
+        shadow_address_map_.erase(buffer_info->replay_address);
+        shadow_info_table_.erase(buffer_info->handle);
+
+        for (auto [capture_address, replay_address] : buffer_info->acceleration_structures)
+        {
+            acceleration_structure_addresses_.erase(capture_address);
+        }
     }
 }
 
@@ -75,8 +89,18 @@ void VulkanDeviceAddressTracker::TrackAccelerationStructure(
         // track capture device address
         if (acceleration_structure_info->capture_address != 0)
         {
-            acceleration_structure_capture_addresses_[acceleration_structure_info->capture_address] =
-                acceleration_structure_info->capture_id;
+            acceleration_structure_addresses_[acceleration_structure_info->capture_address] =
+                acceleration_structure_info->replay_address;
+
+            auto* buffer_info = GetBufferByHandle(acceleration_structure_info->buffer);
+
+            // associated buffer has already queried a device-address, meaning we also got the AS device-address
+            if (buffer_info != nullptr && buffer_info->replay_address != 0)
+            {
+                // if not already present, keep track of AS<->VkBuffer association
+                buffer_info->acceleration_structures[acceleration_structure_info->capture_address] =
+                    acceleration_structure_info->replay_address;
+            }
         }
 
         // track vulkan-handle
@@ -93,7 +117,6 @@ void VulkanDeviceAddressTracker::RemoveAccelerationStructure(
 {
     if (acceleration_structure_info != nullptr)
     {
-        acceleration_structure_capture_addresses_.erase(acceleration_structure_info->capture_address);
         acceleration_structure_handles_.erase(acceleration_structure_info->handle);
     }
 }
@@ -110,13 +133,38 @@ decode::VulkanDeviceAddressTracker::GetBufferByReplayDeviceAddress(VkDeviceAddre
     return GetBufferInfo(replay_address, buffer_replay_addresses_);
 }
 
+VulkanBufferInfo* VulkanDeviceAddressTracker::GetBufferByHandle(VkBuffer handle)
+{
+    auto handle_it = buffer_handles_.find(handle);
+    if (handle_it != buffer_handles_.end())
+    {
+        const auto& [h, handle_id] = *handle_it;
+        if (handle_id != format::kNullHandleId)
+        {
+            return object_info_table_.GetVkBufferInfo(handle_id);
+        }
+        else
+        {
+            return shadow_info_table_[handle];
+        }
+    }
+    return nullptr;
+}
+
 const VulkanBufferInfo* VulkanDeviceAddressTracker::GetBufferByHandle(VkBuffer handle) const
 {
     auto handle_it = buffer_handles_.find(handle);
     if (handle_it != buffer_handles_.end())
     {
         const auto& [h, handle_id] = *handle_it;
-        return object_info_table_.GetVkBufferInfo(handle_id);
+        if (handle_id != format::kNullHandleId)
+        {
+            return object_info_table_.GetVkBufferInfo(handle_id);
+        }
+        else
+        {
+            return shadow_info_table_.at(handle);
+        }
     }
     return nullptr;
 }
@@ -143,7 +191,16 @@ VulkanDeviceAddressTracker::GetBufferInfo(VkDeviceAddress                       
         }
         // found_address is lower or equal to device_address
         const auto& [found_address, buffer_handle] = *address_it;
-        const VulkanBufferInfo* found_buffer       = object_info_table_.GetVkBufferInfo(buffer_handle);
+
+        const VulkanBufferInfo* found_buffer = nullptr;
+        if (buffer_handle != format::kNullHandleId)
+        {
+            found_buffer = object_info_table_.GetVkBufferInfo(buffer_handle);
+        }
+        else
+        {
+            found_buffer = GetShadowBufferInfo(device_address);
+        }
 
         if (found_buffer != nullptr)
         {
@@ -156,19 +213,35 @@ VulkanDeviceAddressTracker::GetBufferInfo(VkDeviceAddress                       
     return nullptr;
 }
 
-const VulkanAccelerationStructureKHRInfo*
-VulkanDeviceAddressTracker::GetAccelerationStructureByCaptureDeviceAddress(VkDeviceAddress capture_address) const
+[[nodiscard]] const VulkanBufferInfo*
+VulkanDeviceAddressTracker::GetShadowBufferInfo(VkDeviceAddress device_address) const
 {
-    auto address_it = acceleration_structure_capture_addresses_.find(capture_address);
-    if (address_it != acceleration_structure_capture_addresses_.end())
+    if (!shadow_address_map_.empty())
     {
-        const auto& [found_address, acceleration_structure_handle] = *address_it;
-        const VulkanAccelerationStructureKHRInfo* found_acceleration_structure_info =
-            object_info_table_.GetVkAccelerationStructureKHRInfo(acceleration_structure_handle);
+        // find first address equal or greater
+        auto address_it = shadow_address_map_.lower_bound(device_address);
 
-        if (found_acceleration_structure_info != nullptr)
+        if (address_it == shadow_address_map_.end() || address_it->first > device_address)
         {
-            return found_acceleration_structure_info;
+            // not found
+            if (address_it == shadow_address_map_.begin())
+            {
+                return nullptr;
+            }
+
+            // decrement iterator, now pointing to the first VkDeviceAddress that is lower than device_address
+            address_it--;
+        }
+        // found_address is lower or equal to device_address
+        const auto& [found_address, buffer_handle] = *address_it;
+        const VulkanBufferInfo* found_buffer       = shadow_info_table_.at(buffer_handle);
+
+        if (found_buffer != nullptr)
+        {
+            if (device_address < found_address + found_buffer->capture_size)
+            {
+                return found_buffer;
+            }
         }
     }
     return nullptr;
@@ -186,21 +259,10 @@ VulkanDeviceAddressTracker::GetAccelerationStructureByHandle(VkAccelerationStruc
     return nullptr;
 }
 
-std::unordered_map<VkDeviceAddress, VkDeviceAddress>
+const std::unordered_map<VkDeviceAddress, VkDeviceAddress>&
 VulkanDeviceAddressTracker::GetAccelerationStructureDeviceAddressMap() const
 {
-    std::unordered_map<VkDeviceAddress, VkDeviceAddress> ret;
-    for (const auto& [address, handleId] : acceleration_structure_capture_addresses_)
-    {
-        const VulkanAccelerationStructureKHRInfo* acceleration_structure_info =
-            object_info_table_.GetVkAccelerationStructureKHRInfo(handleId);
-
-        if (acceleration_structure_info != nullptr && acceleration_structure_info->replay_address != 0)
-        {
-            ret[address] = acceleration_structure_info->replay_address;
-        }
-    }
-    return ret;
+    return acceleration_structure_addresses_;
 }
 
 const std::unordered_map<VkDeviceAddress, VulkanDeviceAddressTracker::device_address_range_t>&

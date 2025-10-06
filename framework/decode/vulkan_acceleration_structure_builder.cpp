@@ -54,7 +54,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     const VkAccelerationStructureCreateInfoKHR* create_info,
     const VkAllocationCallbacks*                pAllocator,
     const VulkanBufferInfo*                     buffer_info,
-    format::HandleId                            capture_id,
+    VulkanAccelerationStructureKHRInfo*         acceleration_structure_info,
     VkAccelerationStructureKHR*                 handle)
 {
     // Create new storage buffer for AccelerationStructure based on previously recorded
@@ -113,9 +113,10 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
 
     if (build_sizes.accelerationStructureSize == 0)
     {
-        if (compaction_child_to_parent_dependency_.count(capture_id) != 0)
+        if (compaction_child_to_parent_dependency_.count(acceleration_structure_info->capture_id) != 0)
         {
-            VkAccelerationStructureKHR parent = compaction_child_to_parent_dependency_[capture_id];
+            VkAccelerationStructureKHR parent =
+                compaction_child_to_parent_dependency_[acceleration_structure_info->capture_id];
             build_sizes = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0 };
             // compaction flow
             if (compacted_sizes_processed_.count(parent) == 0)
@@ -197,6 +198,9 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                   memory_property_flags);
 
+        new_storage_buffer->info_.capture_address = buffer_info->capture_address;
+        device_address_tracker_.TrackBuffer(&new_storage_buffer->info_);
+
         info->size                              = build_sizes.accelerationStructureSize;
         target_storage_buffer                   = &new_storage_buffer->info_;
         info->offset                            = 0;
@@ -215,6 +219,11 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     GFXRECON_ASSERT(target_storage_buffer->replay_size > info->size + info->offset);
     GFXRECON_ASSERT(target_storage_buffer_allocated_size > build_sizes.accelerationStructureSize + info->offset);
     GFXRECON_ASSERT(target_storage_buffer->replay_size > build_sizes.accelerationStructureSize + info->offset);
+
+    acceleration_structure_info->replay_address = target_storage_buffer->replay_address;
+    acceleration_structure_info->size           = info->size;
+    acceleration_structure_info->offset         = info->offset;
+    acceleration_structure_info->buffer         = target_storage_buffer->handle;
 
     info->buffer    = target_storage_buffer->handle;
     VkResult result = functions_.create_acceleration_structure(device_info->handle, info, pAllocator, handle);

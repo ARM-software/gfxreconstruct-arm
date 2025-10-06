@@ -463,6 +463,9 @@ struct VulkanBufferInfo : public VulkanObjectInfo<VkBuffer>
     VkDeviceSize       capture_size{ 0 };
 
     uint32_t queue_family_index{ 0 };
+
+    // acceleration-structure capture/replay addresses defined for buffer-range
+    std::unordered_map<VkDeviceAddress, VkDeviceAddress> acceleration_structures;
 };
 
 struct VulkanBufferViewInfo : public VulkanObjectInfo<VkBufferView>
@@ -791,7 +794,9 @@ struct VulkanAccelerationStructureKHRInfo : public VulkanObjectInfo<VkAccelerati
     VkAccelerationStructureTypeKHR type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
 
     //! associated buffer
-    VkBuffer buffer = VK_NULL_HANDLE;
+    VkBuffer     buffer = VK_NULL_HANDLE;
+    VkDeviceSize offset = 0;
+    VkDeviceSize size   = 0;
 };
 
 struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>

@@ -103,6 +103,22 @@ class VulkanAddressReplacerBase
     virtual void DestroyShadowResources(VkAccelerationStructureKHR handle){};
 
     virtual void DestroyShadowResources(VkCommandBuffer handle){};
+
+    void ProcessUpdateDescriptorSets(uint32_t                                  descriptor_write_count,
+                                     VkWriteDescriptorSet*                     descriptor_writes,
+                                     uint32_t                                  descriptor_copy_count,
+                                     VkCopyDescriptorSet*                      descriptor_copies,
+                                     const decode::VulkanDeviceAddressTracker& address_tracker)
+    {}
+
+    void ProcessCmdWriteAccelerationStructuresPropertiesKHR(uint32_t                    count,
+                                                            VkAccelerationStructureKHR* acceleration_structures,
+                                                            VkQueryType                 query_type,
+                                                            VkQueryPool                 pool,
+                                                            uint32_t                    first_query,
+                                                            const decode::VulkanDeviceAddressTracker& address_tracker)
+    {}
+    void DestroyShadowResources(const VulkanBufferInfo* buffer_info) {}
 };
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

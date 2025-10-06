@@ -24,6 +24,7 @@
 #ifndef GFXRECON_DECODE_VULKAN_ACCELERATION_STRUCTURE_BUILDER_H
 #define GFXRECON_DECODE_VULKAN_ACCELERATION_STRUCTURE_BUILDER_H
 
+#include "decode/vulkan_object_info.h"
 #include "decode/vulkan_resource_allocator.h"
 #include "decode/descriptor_update_template_decoder.h"
 #include "decode/vulkan_object_info_table.h"
@@ -81,7 +82,7 @@ class VulkanAccelerationStructureBuilder
                                            const VkAccelerationStructureCreateInfoKHR* create_info,
                                            const VkAllocationCallbacks*                pAllocator,
                                            const VulkanBufferInfo*                     buffer_info,
-                                           format::HandleId                            capture_id,
+                                           VulkanAccelerationStructureKHRInfo*         acceleration_structure_info,
                                            VkAccelerationStructureKHR*                 handle);
 
     void OnDestroyAccelerationStructure(const VulkanAccelerationStructureKHRInfo* acceleration_structure_info);
