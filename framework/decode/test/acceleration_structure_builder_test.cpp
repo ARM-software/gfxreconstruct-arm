@@ -146,11 +146,14 @@ SCENARIO_METHOD(TestFixture, "Create single AS object with valid sizes")
             storage_buffer_info.replay_size         = scenario.storage_size;
             storage_buffer_info.allocator_data      = kInputStorageAllocatorData;
 
+            decode::VulkanAccelerationStructureKHRInfo acceleration_structure_info;
+            acceleration_structure_info.capture_id = acceleration_structure_capture_id;
+
             asb.OnCreateAccelerationStructure(&device_info,
                                               &acceleration_structure_create_info,
                                               nullptr,
                                               &storage_buffer_info,
-                                              acceleration_structure_capture_id,
+                                              &acceleration_structure_info,
                                               &acceleration_structure_handle);
             THEN("Acceleration structure of size " + std::to_string(scenario.expected_as_size) + " is created")
             {
