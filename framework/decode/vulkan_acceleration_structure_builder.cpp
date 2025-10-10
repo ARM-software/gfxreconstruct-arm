@@ -220,7 +220,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     GFXRECON_ASSERT(target_storage_buffer_allocated_size > build_sizes.accelerationStructureSize + info->offset);
     GFXRECON_ASSERT(target_storage_buffer->replay_size > build_sizes.accelerationStructureSize + info->offset);
 
-    acceleration_structure_info->replay_address = target_storage_buffer->replay_address;
+    acceleration_structure_info->replay_address = target_storage_buffer->replay_address + info->offset;
     acceleration_structure_info->size           = info->size;
     acceleration_structure_info->offset         = info->offset;
     acceleration_structure_info->buffer         = target_storage_buffer->handle;
