@@ -644,11 +644,17 @@ inline void InitializeState<VkDevice, vulkan_wrappers::TensorARMWrapper, VkTenso
     wrapper->dimensionCount            = desc->dimensionCount;
     wrapper->usage                     = desc->usage;
     wrapper->pDimensions.reserve(desc->dimensionCount);
-    wrapper->pStrides.reserve(desc->dimensionCount);
+    if (desc->pStrides)
+    {
+        wrapper->pStrides.reserve(desc->dimensionCount);
+    }
     for (int i = 0; i < desc->dimensionCount; i++)
     {
         wrapper->pDimensions.push_back(desc->pDimensions[i]);
-        wrapper->pStrides.push_back(desc->pStrides[i]);
+        if (desc->pStrides)
+        {
+            wrapper->pStrides.push_back(desc->pStrides[i]);
+        }
     }
 
     // TODO: Do we need to track the queue family that the tensor is actually used with?
