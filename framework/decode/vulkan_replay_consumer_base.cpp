@@ -3242,6 +3242,14 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
                              "VK_EXT_debug_utils extension is not available for the replay instance.");
     }
 
+    if (graphics::feature_util::IsSupportedExtension(available_extensions,
+                                                     VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))
+    {
+
+        GFXRECON_LOG_INFO("Enabling the %s extension", VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+        modified_extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+    }
+
     // Enable validation layer and create a debug messenger if the enable_validation_layer replay option is set.
     std::vector<VkLayerProperties> available_layers;
     if (graphics::feature_util::GetInstanceLayers(instance_layer_proc, &available_layers) == VK_SUCCESS)
