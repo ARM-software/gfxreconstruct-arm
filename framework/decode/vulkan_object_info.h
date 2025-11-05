@@ -816,7 +816,12 @@ struct VulkanTensorViewARMInfo : public VulkanObjectInfo<VkTensorViewARM>
 {};
 
 struct VulkanDataGraphPipelineSessionARMInfo : public VulkanObjectInfo<VkDataGraphPipelineSessionARM>
-{};
+{
+    // The following values are only used for memory portability.
+    VulkanResourceAllocator::ResourceData allocator_data{ 0 };
+
+    VkDataGraphPipelineSessionCreateFlagsARM flags{};
+};
 
 struct VulkanAccelerationStructureNVInfo : public VulkanObjectInfo<VkAccelerationStructureNV>
 {

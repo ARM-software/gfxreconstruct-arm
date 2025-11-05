@@ -26,6 +26,7 @@
 #include "decode/decode_allocator.h"
 #include "decode/value_decoder.h"
 #include "generated/generated_vulkan_struct_decoders.h"
+#include "graphics/vulkan_struct_get_pnext.h"
 #include "util/defines.h"
 #include "util/logging.h"
 
@@ -305,55 +306,23 @@ size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDataGra
     value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
     bytes_read += ValueDecoder::DecodeUInt32Value((buffer + bytes_read), (buffer_size - bytes_read), &(value->id));
     value->pConstantData = nullptr;
+
     if (value->pNext)
     {
-        const VkBaseInStructure* base = reinterpret_cast<const VkBaseInStructure*>(value->pNext);
-        if (base->sType == VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM)
+        const VkTensorDescriptionARM* description =
+            gfxrecon::graphics::vulkan_struct_get_pnext<VkTensorDescriptionARM>(value);
+        if (description != nullptr)
         {
-            const VkTensorDescriptionARM* description  = (const VkTensorDescriptionARM*)base;
-            uint64_t                      size         = 0;
-            uint64_t                      element_size = 0;
-            switch (description->format)
-            {
-                case VK_FORMAT_R8_BOOL_ARM:
-                case VK_FORMAT_R8_UNORM:
-                case VK_FORMAT_R8_SNORM:
-                case VK_FORMAT_R8_USCALED:
-                case VK_FORMAT_R8_SSCALED:
-                case VK_FORMAT_R8_UINT:
-                case VK_FORMAT_R8_SINT:
-                    element_size = 1;
-                    break;
-                case VK_FORMAT_R16_UNORM:
-                case VK_FORMAT_R16_SNORM:
-                case VK_FORMAT_R16_USCALED:
-                case VK_FORMAT_R16_SSCALED:
-                case VK_FORMAT_R16_UINT:
-                case VK_FORMAT_R16_SINT:
-                case VK_FORMAT_R16_SFLOAT:
-                    element_size = 2;
-                    break;
-                case VK_FORMAT_R32_UINT:
-                case VK_FORMAT_R32_SINT:
-                case VK_FORMAT_R32_SFLOAT:
-                    element_size = 4;
-                    break;
-                case VK_FORMAT_R64_UINT:
-                case VK_FORMAT_R64_SINT:
-                case VK_FORMAT_R64_SFLOAT:
-                    element_size = 8;
-                    break;
-                default:
-                    GFXRECON_LOG_ERROR("Unhandled tensor format: %d", description->format);
-                    break;
-            }
-            for (int i = 0; i < description->dimensionCount; i++)
-            {
-                size += description->pDimensions[i] * element_size;
-            }
+            uint32_t pointer_attrib = 0;
+            bytes_read +=
+                ValueDecoder::DecodeUInt32Value(buffer + bytes_read, buffer_size - bytes_read, &pointer_attrib);
+            size_t size = 0;
+            bytes_read += ValueDecoder::DecodeSizeTValue((buffer + bytes_read), (buffer_size - bytes_read), &size);
             wrapper->pConstantData = DecodeAllocator::Allocate<uint8_t>(size);
             bytes_read += ValueDecoder::DecodeUInt8Array(
                 (buffer + bytes_read), (buffer_size - bytes_read), (void*)wrapper->pConstantData, size);
+
+            value->pConstantData = wrapper->pConstantData;
         }
     }
 

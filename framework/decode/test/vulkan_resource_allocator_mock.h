@@ -454,6 +454,18 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
 
     virtual bool SupportBindVideoSessionMemory() { return true; }
 
+    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                    const VkAllocationCallbacks*                   allocation_callbacks,
+                                                    format::HandleId                               capture_id,
+                                                    VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
+                                                    ResourceData*                  allocator_data) override
+    {
+        return VK_SUCCESS;
+    }
+    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
+                                                 const VkAllocationCallbacks*  allocation_callbacks,
+                                                 ResourceData                  allocator_data)
+    {}
     virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
                                   const VkAllocationCallbacks* allocation_callbacks,
                                   format::HandleId             capture_id,
@@ -471,6 +483,15 @@ class VulkanResourceAllocatorMock : public gfxrecon::decode::VulkanResourceAlloc
                                       const ResourceData*              allocator_buffer_data,
                                       const MemoryData*                allocator_memory_data,
                                       VkMemoryPropertyFlags*           bind_memory_properties) override
+    {
+        return VK_SUCCESS;
+    }
+
+    virtual VkResult BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
+                                                        const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
+                                                        const ResourceData*    allocator_session_datas,
+                                                        const MemoryData*      allocator_memory_datas,
+                                                        VkMemoryPropertyFlags* bind_memory_properties)
     {
         return VK_SUCCESS;
     }

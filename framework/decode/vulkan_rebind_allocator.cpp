@@ -2549,6 +2549,80 @@ VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create
 
     return result;
 }
+VkResult
+VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                      const VkAllocationCallbacks*   allocation_callbacks,
+                                                      format::HandleId               capture_id,
+                                                      VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
+                                                      ResourceData*                  allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
+    if (!create_info || !data_graph_pipeline_session || !allocator_data)
+    {
+        GFXRECON_LOG_DEBUG(
+            "CreateDataGraphPipelineSession: invalid input (create_info=%p, session=%p, allocator_data=%p)",
+            (void*)create_info,
+            (void*)data_graph_pipeline_session,
+            (void*)allocator_data);
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    *allocator_data = 0;
+
+    VkResult result = functions_.create_data_graph_pipeline_session(
+        device_, create_info, allocator_->GetAllocationCallbacks(), data_graph_pipeline_session);
+
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("CreateDataGraphPipelineSession: vkCreateDataGraphPipelineSessionARM failed: %d", result);
+        return result;
+    }
+
+    ResourceAllocInfo* resource_alloc_info = new ResourceAllocInfo();
+
+    resource_alloc_info->object_type     = VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM;
+    resource_alloc_info->uses_extensions = (create_info->pNext != nullptr);
+    resource_alloc_info->usage           = 0;
+
+    *allocator_data = static_cast<ResourceData>(reinterpret_cast<uintptr_t>(resource_alloc_info));
+    return VK_SUCCESS;
+}
+
+void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
+                                                            const VkAllocationCallbacks*  allocation_callbacks,
+                                                            ResourceData                  allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+
+        for (auto& mem_info : resource_alloc_info->bound_memory_infos)
+        {
+            auto mem_alc_info = mem_info->memory_info;
+            if (mem_alc_info != nullptr)
+            {
+                mem_alc_info->original_objects.erase(VK_HANDLE_TO_UINT64(data_graph_pipeline_session));
+            }
+
+            if (mem_info->allocation != VK_NULL_HANDLE)
+            {
+                if (mem_info->mapped_pointer != nullptr)
+                {
+                    vmaUnmapMemory(allocator_, mem_info->allocation);
+                }
+                vmaFreeMemory(allocator_, mem_info->allocation);
+            }
+        }
+        delete resource_alloc_info;
+    }
+
+    functions_.destroy_data_graph_pipeline_session(
+        device_, data_graph_pipeline_session, allocator_->GetAllocationCallbacks());
+}
 
 void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
                                           const VkAllocationCallbacks* allocation_callbacks,
@@ -2579,6 +2653,159 @@ void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
     }
 
     functions_.destroy_tensor(device_, tensor, allocation_callbacks);
+}
+
+VkResult
+VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
+                                                          const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
+                                                          const ResourceData*    allocator_session_datas,
+                                                          const MemoryData*      allocator_memory_datas,
+                                                          VkMemoryPropertyFlags* bind_memory_properties)
+{
+
+    if (!bind_infos || !allocator_session_datas || !allocator_memory_datas || !bind_memory_properties)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    if (bind_info_count == 0)
+    {
+        GFXRECON_LOG_DEBUG("BindDataGraphPipelineSessionMemory: bind_info_count==0 (no-op).");
+        return VK_SUCCESS;
+    }
+
+    for (uint32_t i = 0; i < bind_info_count; ++i)
+    {
+        const auto&                         in            = bind_infos[i];
+        const VkDataGraphPipelineSessionARM session       = in.session;
+        const auto                          bind_point    = in.bindPoint;
+        const uint32_t                      object_idx    = in.objectIndex;
+        const VkDeviceSize                  memory_offset = in.memoryOffset;
+
+        if (session == VK_NULL_HANDLE)
+        {
+            GFXRECON_LOG_ERROR("Bind[%u]: session handle is VK_NULL_HANDLE.", i);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        const uintptr_t session_ud = allocator_session_datas[i];
+        const uintptr_t memory_ud  = allocator_memory_datas[i];
+
+        auto* resource_alloc_info = (session_ud != 0) ? reinterpret_cast<ResourceAllocInfo*>(session_ud) : nullptr;
+        auto* memory_alloc_info   = (memory_ud != 0) ? reinterpret_cast<MemoryAllocInfo*>(memory_ud) : nullptr;
+
+        const VkMemoryPropertyFlags want_props = bind_memory_properties[i];
+
+        VkDataGraphPipelineSessionMemoryRequirementsInfoARM mem_req_info{
+            VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_MEMORY_REQUIREMENTS_INFO_ARM
+        };
+        mem_req_info.session     = session;
+        mem_req_info.bindPoint   = bind_point;
+        mem_req_info.objectIndex = object_idx;
+
+        VkMemoryRequirements2 replay_mem_req_2{ VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+        replay_mem_req_2.pNext = nullptr;
+
+        functions_.get_data_graph_pipeline_session_memory_requirements(device_, &mem_req_info, &replay_mem_req_2);
+
+        const VkMemoryRequirements& replay_mem_req = replay_mem_req_2.memoryRequirements;
+
+        GFXRECON_LOG_DEBUG("Bind[%u]: session=0x%llx bindPoint=%u obj=%u size=%" PRIu64 " align=%" PRIu64
+                           " typeBits=0x%08X wantProps=0x%08X",
+                           i,
+                           static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                           static_cast<unsigned>(bind_point),
+                           object_idx,
+                           static_cast<unsigned long long>(replay_mem_req.size),
+                           static_cast<unsigned long long>(replay_mem_req.alignment),
+                           replay_mem_req.memoryTypeBits,
+                           want_props);
+
+        VmaAllocation     allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo alloc_info{};
+        VkResult          result = VK_ERROR_UNKNOWN;
+
+        VmaAllocationCreateInfo aci{};
+        aci.flags          = 0;
+        aci.memoryTypeBits = replay_mem_req.memoryTypeBits;
+        aci.requiredFlags  = want_props;
+        aci.preferredFlags = 0;
+
+        if (resource_alloc_info && memory_alloc_info)
+        {
+            aci.usage = GetTensorMemoryUsage(
+                resource_alloc_info->usage,
+                capture_memory_properties_.memoryTypes[memory_alloc_info->original_index].propertyFlags,
+                replay_mem_req);
+        }
+        else
+        {
+            aci.usage = VMA_MEMORY_USAGE_UNKNOWN;
+        }
+
+        VkMemoryRequirements capture_mem_req = {};
+        if (resource_alloc_info && resource_alloc_info->capture_mem_reqs.size() > 0)
+        {
+            capture_mem_req = resource_alloc_info->capture_mem_reqs[0];
+        }
+
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_mem_req;
+        mem_info.replay_mem_req                     = replay_mem_req;
+        mem_info.requires_dedicated_allocation      = false;
+        mem_info.prefers_dedicated_allocation       = false;
+        mem_info.alc_create_info                    = aci;
+        mem_info.offset_from_original_device_memory = memory_offset;
+
+        result = vmaAllocateMemory(allocator_, &replay_mem_req, &aci, &allocation, &alloc_info);
+
+        if (result == VK_SUCCESS)
+        {
+            memory_alloc_info->vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+        }
+
+        VkBindDataGraphPipelineSessionMemoryInfoARM bind_session_memory_info{
+            VK_STRUCTURE_TYPE_BIND_DATA_GRAPH_PIPELINE_SESSION_MEMORY_INFO_ARM
+        };
+        bind_session_memory_info.session      = session;
+        bind_session_memory_info.bindPoint    = bind_point;
+        bind_session_memory_info.objectIndex  = object_idx;
+        bind_session_memory_info.memory       = alloc_info.deviceMemory;
+        bind_session_memory_info.memoryOffset = alloc_info.offset;
+
+        result = functions_.bind_data_graph_pipeline_session_memory(device_, 1, &bind_session_memory_info);
+        if (result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_ERROR(
+                "Bind[%u]: vkBindDataGraphPipelineSessionMemoryARM failed: %d (mem=0x%llx, offset=%" PRIu64 ")",
+                i,
+                result,
+                static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(alloc_info.deviceMemory)),
+                static_cast<unsigned long long>(alloc_info.offset));
+
+            if (allocation != VK_NULL_HANDLE)
+            {
+                vmaFreeMemory(allocator_, allocation);
+            }
+            return result;
+        }
+
+        VkMemoryPropertyFlags nonconst_want_props = want_props;
+        UpdateAllocInfo(*resource_alloc_info,
+                        VK_HANDLE_TO_UINT64(session),
+                        MemoryInfoType::kBasic,
+                        *memory_alloc_info,
+                        mem_info,
+                        bind_memory_properties[i]);
+
+        GFXRECON_LOG_INFO("Bind[%u]: SUCCESS session=0x%llx mem=0x%llx offset=%" PRIu64 " size=%" PRIu64,
+                          i,
+                          static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                          static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(alloc_info.deviceMemory)),
+                          static_cast<unsigned long long>(alloc_info.offset),
+                          static_cast<unsigned long long>(replay_mem_req.size));
+    }
+
+    return VK_SUCCESS;
 }
 
 VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                         bind_info_count,

@@ -371,6 +371,16 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         return reinterpret_cast<ResourceAllocInfo*>(alloc_data)->bound_memory_infos.back().rebind_size;
     }
 
+    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                    const VkAllocationCallbacks*                   allocation_callbacks,
+                                                    format::HandleId                               capture_id,
+                                                    VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
+                                                    ResourceData*                  allocator_data) override;
+
+    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
+                                                 const VkAllocationCallbacks*  allocation_callbacks,
+                                                 ResourceData                  allocator_data) override;
+
     virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
                                   const VkAllocationCallbacks* allocation_callbacks,
                                   format::HandleId             capture_id,
@@ -380,6 +390,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual void DestroyTensor(VkTensorARM                  tensor,
                                const VkAllocationCallbacks* allocation_callbacks,
                                ResourceData                 allocator_data) override;
+
+    virtual VkResult BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
+                                                        const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
+                                                        const ResourceData*    allocator_session_datas,
+                                                        const MemoryData*      allocator_memory_datas,
+                                                        VkMemoryPropertyFlags* bind_memory_properties) override;
 
     virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
                                       const VkBindTensorMemoryInfoARM* pBindInfos,

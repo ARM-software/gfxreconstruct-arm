@@ -11487,19 +11487,20 @@ void VulkanReplayConsumer::Process_vkCreateDataGraphPipelineSessionARM(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkDataGraphPipelineSessionARM>* pSession)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkDataGraphPipelineSessionCreateInfoARM* in_pCreateInfo = pCreateInfo->GetPointer();
-    MapStructHandles(pCreateInfo->GetMetaStructPointer(), GetObjectInfoTable());
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
-    if (!pSession->IsNull()) { pSession->SetHandleLength(1); }
-    VkDataGraphPipelineSessionARM* out_pSession = pSession->GetHandlePointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
 
-    VkResult replay_result = GetDeviceTable(in_device)->CreateDataGraphPipelineSessionARM(in_device, in_pCreateInfo, in_pAllocator, out_pSession);
+    MapStructHandles(pCreateInfo->GetMetaStructPointer(), GetObjectInfoTable());
+    if (!pSession->IsNull()) { pSession->SetHandleLength(1); }
+    VulkanDataGraphPipelineSessionARMInfo handle_info;
+    pSession->SetConsumerData(0, &handle_info);
+
+    PushRecaptureHandleId(pSession->GetPointer());
+    VkResult replay_result = OverrideCreateDataGraphPipelineSessionARM(GetDeviceTable(in_device->handle)->CreateDataGraphPipelineSessionARM, returnValue, in_device, pCreateInfo, pAllocator, pSession);
     CheckResult("vkCreateDataGraphPipelineSessionARM", returnValue, replay_result, call_info);
 
-    AddHandle<VulkanDataGraphPipelineSessionARMInfo>(device, pSession->GetPointer(), out_pSession, &CommonObjectInfoTable::AddVkDataGraphPipelineSessionARMInfo);
+    AddHandle<VulkanDataGraphPipelineSessionARMInfo>(device, pSession->GetPointer(), pSession->GetHandlePointer(), std::move(handle_info), &CommonObjectInfoTable::AddVkDataGraphPipelineSessionARMInfo);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkGetDataGraphPipelineSessionBindPointRequirementsARM(
@@ -11546,14 +11547,14 @@ void VulkanReplayConsumer::Process_vkBindDataGraphPipelineSessionMemoryARM(
     uint32_t                                    bindInfoCount,
     StructPointerDecoder<Decoded_VkBindDataGraphPipelineSessionMemoryInfoARM>* pBindInfos)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkBindDataGraphPipelineSessionMemoryInfoARM* in_pBindInfos = pBindInfos->GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+
     MapStructArrayHandles(pBindInfos->GetMetaStructPointer(), pBindInfos->GetLength(), GetObjectInfoTable());
 
-    VkResult replay_result = GetDeviceTable(in_device)->BindDataGraphPipelineSessionMemoryARM(in_device, bindInfoCount, in_pBindInfos);
+    VkResult replay_result = OverrideBindDataGraphPipelineSessionMemoryARM(GetDeviceTable(in_device->handle)->BindDataGraphPipelineSessionMemoryARM, returnValue, in_device, bindInfoCount, pBindInfos);
     CheckResult("vkBindDataGraphPipelineSessionMemoryARM", returnValue, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkDestroyDataGraphPipelineSessionARM(
@@ -11562,11 +11563,10 @@ void VulkanReplayConsumer::Process_vkDestroyDataGraphPipelineSessionARM(
     format::HandleId                            session,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    VkDataGraphPipelineSessionARM in_session = MapHandle<VulkanDataGraphPipelineSessionARMInfo>(session, &CommonObjectInfoTable::GetVkDataGraphPipelineSessionARMInfo);
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(pAllocator);
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    auto in_session = GetObjectInfoTable().GetVkDataGraphPipelineSessionARMInfo(session);
 
-    GetDeviceTable(in_device)->DestroyDataGraphPipelineSessionARM(in_device, in_session, in_pAllocator);
+    OverrideDestroyDataGraphPipelineSessionARM(GetDeviceTable(in_device->handle)->DestroyDataGraphPipelineSessionARM, in_device, in_session, pAllocator);
     RemoveHandle(session, &CommonObjectInfoTable::RemoveVkDataGraphPipelineSessionARMInfo);
 }
 

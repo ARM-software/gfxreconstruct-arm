@@ -2660,6 +2660,11 @@ void VulkanReplayConsumerBase::InitializeResourceAllocator(const VulkanPhysicalD
     functions.get_tensor_memory_requirements              = device_table->GetTensorMemoryRequirementsARM;
     functions.bind_tensor_memory                          = device_table->BindTensorMemoryARM;
     functions.cmd_copy_tensor                             = device_table->CmdCopyTensorARM;
+    functions.create_data_graph_pipeline_session          = device_table->CreateDataGraphPipelineSessionARM;
+    functions.get_data_graph_pipeline_session_memory_requirements =
+        device_table->GetDataGraphPipelineSessionMemoryRequirementsARM;
+    functions.bind_data_graph_pipeline_session_memory = device_table->BindDataGraphPipelineSessionMemoryARM;
+    functions.destroy_data_graph_pipeline_session     = device_table->DestroyDataGraphPipelineSessionARM;
 
     if (physical_device_info->parent_info.api_version >= VK_MAKE_VERSION(1, 1, 0))
     {
@@ -13942,6 +13947,246 @@ void VulkanReplayConsumerBase::OverrideGetDeviceMemoryOpaqueCaptureAddress(
     }
 
     allocator->GetDeviceMemoryOpaqueCaptureAddress(info, allocator_data);
+}
+VkResult
+VulkanReplayConsumerBase::OverrideCreateTensorARM(PFN_vkCreateTensorARM                                func,
+                                                  VkResult                                             result,
+                                                  const VulkanDeviceInfo*                              device_info,
+                                                  StructPointerDecoder<Decoded_VkTensorCreateInfoARM>* pCreateInfo,
+                                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                                  HandlePointerDecoder<VkTensorARM>*                   tensor)
+{
+    GFXRECON_ASSERT((device_info != nullptr) && (pCreateInfo != nullptr) && (tensor != nullptr) && !tensor->IsNull() &&
+                    (tensor->GetHandlePointer() != nullptr));
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    VulkanResourceAllocator::ResourceData allocator_data;
+    auto                                  replay_tensor = tensor->GetHandlePointer();
+    auto                                  capture_id    = (*tensor->GetPointer());
+
+    // We may need to update the create info struct, so make a copy of it for now.
+    auto                  replay_create_info   = pCreateInfo->GetPointer();
+    VkTensorCreateInfoARM modified_create_info = *replay_create_info;
+
+    auto* tensor_info = reinterpret_cast<VulkanTensorARMInfo*>(tensor->GetConsumerData(0));
+    GFXRECON_ASSERT(tensor_info != nullptr);
+
+    if (replaying_trimmed_capture_)
+    {
+        auto modified_create_info = const_cast<VkTensorCreateInfoARM*>(replay_create_info);
+        auto modified_description = const_cast<VkTensorDescriptionARM*>(replay_create_info->pDescription);
+        modified_description->usage |= VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM;
+        modified_description->usage |= VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM;
+    }
+
+    result = allocator->CreateTensor(
+        &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_tensor, &allocator_data);
+
+    if ((result == VK_SUCCESS) && (replay_create_info != nullptr) && ((*replay_tensor) != VK_NULL_HANDLE))
+    {
+        tensor_info->allocator_data = allocator_data;
+        tensor_info->usage          = replay_create_info->pDescription->usage;
+
+        if ((replay_create_info->sharingMode == VK_SHARING_MODE_CONCURRENT) &&
+            (replay_create_info->queueFamilyIndexCount > 0) && (replay_create_info->pQueueFamilyIndices != nullptr))
+        {
+            tensor_info->queue_family_index = replay_create_info->pQueueFamilyIndices[0];
+        }
+        else
+        {
+            tensor_info->queue_family_index = 0;
+        }
+    }
+    return result;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideCreateDataGraphPipelineSessionARM(
+    PFN_vkCreateDataGraphPipelineSessionARM                                func,
+    VkResult                                                               returnValue,
+    const VulkanDeviceInfo*                                                device_info,
+    StructPointerDecoder<Decoded_VkDataGraphPipelineSessionCreateInfoARM>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*                   pAllocator,
+    HandlePointerDecoder<VkDataGraphPipelineSessionARM>*                   pSession)
+{
+
+    GFXRECON_ASSERT((device_info != nullptr) && (pCreateInfo != nullptr) && (pSession != nullptr) &&
+                    !pSession->IsNull() && (pSession->GetHandlePointer() != nullptr));
+
+    auto allocator = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    VulkanResourceAllocator::ResourceData allocator_data;
+    auto                                  replay_session = pSession->GetHandlePointer();
+    auto                                  capture_id     = (*pSession->GetPointer());
+
+    // We may need to update the create info struct, so make a copy of it for now.
+    auto                                    replay_create_info   = pCreateInfo->GetPointer();
+    VkDataGraphPipelineSessionCreateInfoARM modified_create_info = *replay_create_info;
+
+    auto* data_graph_pipeline_session_info =
+        reinterpret_cast<VulkanDataGraphPipelineSessionARMInfo*>(pSession->GetConsumerData(0));
+    GFXRECON_ASSERT(data_graph_pipeline_session_info != nullptr);
+
+    VkResult result = allocator->CreateDataGraphPipelineSession(
+        &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_session, &allocator_data);
+
+    if ((result == VK_SUCCESS) && (replay_create_info != nullptr) && ((*replay_session) != VK_NULL_HANDLE))
+    {
+        data_graph_pipeline_session_info->allocator_data = allocator_data;
+        data_graph_pipeline_session_info->flags          = replay_create_info->flags;
+    }
+    return result;
+}
+
+void VulkanReplayConsumerBase::OverrideDestroyDataGraphPipelineSessionARM(
+    PFN_vkDestroyDataGraphPipelineSessionARM             func,
+    VulkanDeviceInfo*                                    device_info,
+    VulkanDataGraphPipelineSessionARMInfo*               data_graph_pipeline_session_info,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(func);
+
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    VkDataGraphPipelineSessionARM         data_graph_pipeline_session = VK_NULL_HANDLE;
+    VulkanResourceAllocator::ResourceData allocator_data              = 0;
+
+    if (data_graph_pipeline_session_info != nullptr)
+    {
+        data_graph_pipeline_session = data_graph_pipeline_session_info->handle;
+        allocator_data              = data_graph_pipeline_session_info->allocator_data;
+
+        data_graph_pipeline_session_info->allocator_data = 0;
+        allocator->DestroyDataGraphPipelineSession(
+            data_graph_pipeline_session, GetAllocationCallbacks(pAllocator), allocator_data);
+    }
+}
+
+void VulkanReplayConsumerBase::OverrideDestroyTensorARM(PFN_vkDestroyTensorARM func,
+                                                        VulkanDeviceInfo*      device_info,
+                                                        VulkanTensorARMInfo*   tensor_info,
+                                                        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(func);
+
+    assert(device_info != nullptr);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    VkTensorARM                           tensor         = VK_NULL_HANDLE;
+    VulkanResourceAllocator::ResourceData allocator_data = 0;
+
+    if (tensor_info != nullptr)
+    {
+        tensor         = tensor_info->handle;
+        allocator_data = tensor_info->allocator_data;
+
+        tensor_info->allocator_data = 0;
+        allocator->DestroyTensor(tensor, GetAllocationCallbacks(pAllocator), allocator_data);
+    }
+}
+
+VkResult VulkanReplayConsumerBase::OverrideBindDataGraphPipelineSessionMemoryARM(
+    PFN_vkBindDataGraphPipelineSessionMemoryARM                                func,
+    VkResult                                                                   returnValue,
+    const VulkanDeviceInfo*                                                    device_info,
+    uint32_t                                                                   bindInfoCount,
+    StructPointerDecoder<Decoded_VkBindDataGraphPipelineSessionMemoryInfoARM>* pBindInfos)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(func);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    std::vector<VulkanResourceAllocator::ResourceData> allocator_session_datas(bindInfoCount, 0);
+    std::vector<VulkanResourceAllocator::MemoryData>   allocator_memory_datas(bindInfoCount, 0);
+    std::vector<VkMemoryPropertyFlags>                 memory_property_flags(bindInfoCount, 0);
+
+    for (uint32_t i = 0; i < bindInfoCount; ++i)
+    {
+        auto& bind_meta_info = pBindInfos->GetMetaStructPointer()[i];
+
+        auto session_info = object_info_table_->GetVkDataGraphPipelineSessionARMInfo(bind_meta_info.session);
+        auto memory_info  = object_info_table_->GetVkDeviceMemoryInfo(bind_meta_info.memory);
+
+        if (session_info != nullptr)
+        {
+            allocator_session_datas[i] = session_info->allocator_data;
+        }
+
+        if (memory_info != nullptr)
+        {
+            allocator_memory_datas[i] = memory_info->allocator_data;
+        }
+    }
+
+    VkResult result = allocator->BindDataGraphPipelineSessionMemory(bindInfoCount,
+                                                                    pBindInfos->GetPointer(),
+                                                                    allocator_session_datas.data(),
+                                                                    allocator_memory_datas.data(),
+                                                                    memory_property_flags.data());
+    return result;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideBindTensorMemoryARM(
+    PFN_vkBindTensorMemoryARM                                func,
+    VkResult                                                 result,
+    const VulkanDeviceInfo*                                  device_info,
+    uint32_t                                                 bind_info_count,
+    StructPointerDecoder<Decoded_VkBindTensorMemoryInfoARM>* pBindInfos)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(func);
+
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+
+    std::vector<VulkanResourceAllocator::ResourceData> allocator_tensor_datas(bind_info_count, 0);
+    std::vector<VulkanResourceAllocator::MemoryData>   allocator_memory_datas(bind_info_count, 0);
+    std::vector<VkMemoryPropertyFlags>                 memory_property_flags(bind_info_count, 0);
+
+    for (uint32_t i = 0; i < bind_info_count; ++i)
+    {
+        auto& bind_meta_info = pBindInfos->GetMetaStructPointer()[i];
+
+        auto tensor_info = object_info_table_->GetVkTensorARMInfo(bind_meta_info.tensor);
+        auto memory_info = object_info_table_->GetVkDeviceMemoryInfo(bind_meta_info.memory);
+
+        if (tensor_info != nullptr)
+        {
+            allocator_tensor_datas[i] = tensor_info->allocator_data;
+        }
+
+        if (memory_info != nullptr)
+        {
+            allocator_memory_datas[i] = memory_info->allocator_data;
+        }
+    }
+
+    result = allocator->BindTensorMemory(bind_info_count,
+                                         pBindInfos->GetPointer(),
+                                         allocator_tensor_datas.data(),
+                                         allocator_memory_datas.data(),
+                                         memory_property_flags.data());
+    return result;
+}
+
+void VulkanReplayConsumerBase::OverrideGetTensorMemoryRequirementsARM(
+    PFN_vkGetTensorMemoryRequirementsARM                             func,
+    const VulkanDeviceInfo*                                          device_info,
+    StructPointerDecoder<Decoded_VkTensorMemoryRequirementsInfoARM>* pInfo,
+    StructPointerDecoder<Decoded_VkMemoryRequirements2>*             pMemoryRequirements)
+{
+    auto allocator = device_info->allocator.get();
+    assert(allocator != nullptr);
+    auto tensorInfo = GetObjectInfoTable().GetVkTensorARMInfo(pInfo->GetMetaStructPointer()->tensor);
+    allocator->GetTensorMemoryRequirementsARM(
+        pInfo->GetPointer(), pMemoryRequirements->GetPointer(), tensorInfo->allocator_data);
 }
 
 GFXRECON_END_NAMESPACE(decode)
