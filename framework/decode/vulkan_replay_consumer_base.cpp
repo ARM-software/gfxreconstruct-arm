@@ -3433,6 +3433,43 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
     std::vector<format::HandleId> capture_device_group;
     const auto*                   capture_next = decoded_capture_create_info->pNext;
 
+    // Query queue family properties
+    uint32_t queue_family_count = 0;
+    instance_table->GetPhysicalDeviceQueueFamilyProperties2(physical_device, &queue_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties2> queue_families(queue_family_count,
+                                                         { VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2, nullptr });
+    instance_table->GetPhysicalDeviceQueueFamilyProperties2(
+        physical_device, &queue_family_count, queue_families.data());
+
+    // Adjust queue counts to not exceed supported counts
+    for (uint32_t i = 0; i < modified_create_info.queueCreateInfoCount; ++i)
+    {
+        auto& queue_create_info     = const_cast<VkDeviceQueueCreateInfo&>(modified_create_info.pQueueCreateInfos[i]);
+        auto  requested_queue_count = queue_create_info.queueCount;
+        auto  queue_family_index    = queue_create_info.queueFamilyIndex;
+        if (queue_family_index >= queue_family_count)
+        {
+            GFXRECON_LOG_FATAL("vkCreateDevice: VkDeviceQueueCreateInfo[%u] requests family %u, "
+                               "but replay device exposes only %u families.",
+                               i,
+                               queue_family_index,
+                               queue_family_count);
+        }
+        else
+        {
+            auto queue_family_properties = queue_families[queue_family_index].queueFamilyProperties;
+            if (requested_queue_count > queue_family_properties.queueCount)
+            {
+                GFXRECON_LOG_WARNING("Requested %u queues for family index %u but only %u are supported. Reducing to "
+                                     "supported count.",
+                                     requested_queue_count,
+                                     queue_family_index,
+                                     queue_family_properties.queueCount);
+                queue_create_info.queueCount = queue_family_properties.queueCount;
+            }
+        }
+    }
+
     const auto* decoded_capture_device_group_create_info =
         GetPNextMetaStruct<Decoded_VkDeviceGroupDeviceCreateInfo>(decoded_capture_create_info->pNext);
     if (decoded_capture_device_group_create_info != nullptr)
