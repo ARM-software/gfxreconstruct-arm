@@ -12121,7 +12121,7 @@ decode::VulkanMicromapBuilder& VulkanReplayConsumerBase::GetMicromapBuilder(cons
 
 bool VulkanReplayConsumerBase::UseExtraDescriptorInfo(const VulkanDeviceInfo* device_info) const
 {
-    return options_.dumping_resources || UseAddressReplacement(device_info);
+    return options_.dumping_resources;
 }
 
 bool VulkanReplayConsumerBase::UseAddressReplacement(const VulkanDeviceInfo* device_info) const
