@@ -1,13 +1,19 @@
 #include "vulkan_raytracing_modifier.h"
 
+#include <cstdint>
+#include <numeric>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <utility>
+#include <vulkan/vulkan_core.h>
 
 #include "format/format.h"
 #include "format/format_arm.h"
+#include "generated/generated_vulkan_struct_decoders.h"
 #include "tools/optimize/vulkan_optimize_options.h"
 #include "util/defines.h"
+#include "util/logging.h"
 #include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
 #include "encode/struct_pointer_encoder.h"
@@ -32,8 +38,9 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddress(
     {
         return;
     }
-    const auto& buffer_id                 = pInfo->GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[returnValue] = buffer_id;
+    const auto& buffer_id                     = pInfo->GetMetaStructPointer()->buffer;
+    buffer_device_addresses_[returnValue]     = buffer_id;
+    buffer_entries_[buffer_id].device_address = returnValue;
 }
 
 void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressKHR(
@@ -46,8 +53,9 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressKHR(
     {
         return;
     }
-    const auto& buffer_id                 = pInfo->GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[returnValue] = buffer_id;
+    const auto& buffer_id                     = pInfo->GetMetaStructPointer()->buffer;
+    buffer_device_addresses_[returnValue]     = buffer_id;
+    buffer_entries_[buffer_id].device_address = returnValue;
 }
 
 void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressEXT(
@@ -60,8 +68,9 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressEXT(
     {
         return;
     }
-    const auto& buffer_id                 = pInfo->GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[returnValue] = buffer_id;
+    const auto& buffer_id                     = pInfo->GetMetaStructPointer()->buffer;
+    buffer_device_addresses_[returnValue]     = buffer_id;
+    buffer_entries_[buffer_id].device_address = returnValue;
 }
 
 void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKHR(
@@ -285,7 +294,7 @@ VulkanRayTracingModifier::GetAccelerationStructureDeviceAddressesInFillMemory(co
             {
                 continue;
             }
-            if (entry->second.destruction_index < block_index_)
+            if (buffer_entries_.at(entry->second.buf_handle).destruction_index < block_index_)
             {
                 continue;
             }
@@ -761,20 +770,24 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
     HandlePointerDecoder<VkAccelerationStructureKHR>*                   pAccelerationStructure)
 {
     format::HandleId handle = *pAccelerationStructure->GetPointer();
-    if (acceleration_structure_entries_.find(handle) == acceleration_structure_entries_.end())
-    {
-        acceleration_structure_entries_[handle].as_handle         = handle;
-        acceleration_structure_entries_[handle].buf_handle        = pCreateInfo->GetMetaStructPointer()->buffer;
-        acceleration_structure_entries_[handle].size              = pCreateInfo->GetPointer()->size;
-        acceleration_structure_entries_[handle].offset            = pCreateInfo->GetPointer()->offset;
-        acceleration_structure_entries_[handle].type              = pCreateInfo->GetPointer()->type;
-        acceleration_structure_entries_[handle].bind_descriptor   = false;
-        acceleration_structure_entries_[handle].creation_index    = call_info.index;
-        acceleration_structure_entries_[handle].destruction_index = UINT64_MAX;
-    }
-
     if (!IsModificationPass())
     {
+        auto [it, inserted]          = acceleration_structure_entries_.try_emplace(handle, AccelerationStructureInfo{});
+        it->second.as_handle         = handle;
+        it->second.buf_handle        = pCreateInfo->GetMetaStructPointer()->buffer;
+        it->second.size              = pCreateInfo->GetPointer()->size;
+        it->second.offset            = pCreateInfo->GetPointer()->offset;
+        it->second.type              = pCreateInfo->GetPointer()->type;
+        it->second.bind_descriptor   = false;
+        it->second.creation_index    = call_info.index;
+        it->second.destruction_index = UINT64_MAX;
+        VkDeviceAddress storage_buffer_address =
+            buffer_entries_[pCreateInfo->GetMetaStructPointer()->buffer].device_address;
+        if (storage_buffer_address != 0)
+        {
+            it->second.device_address = storage_buffer_address + it->second.offset;
+            acceleration_structure_device_addresses_[it->second.device_address].insert(handle);
+        }
         return;
     }
 
@@ -784,38 +797,65 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
         return;
     }
 
-    assert(acceleration_structure_entries_.count(handle) > 0);
-    if (acceleration_structure_build_infos_.find(handle) == acceleration_structure_build_infos_.end())
-    {
-        auto object = acceleration_structure_entries_[handle];
-        if (object.bind_descriptor && object.type != VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
-        {
-            auto entry = std::find_if(
-                acceleration_structure_entries_.begin(), acceleration_structure_entries_.end(), [&object](auto& entry) {
-                    const auto& object_entry = entry.second;
-                    return (object.buf_handle == object_entry.buf_handle) && (object.offset == object_entry.offset) &&
-                           (object.size == object_entry.size) && (!object_entry.bind_descriptor) &&
-                           (object_entry.type != VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR);
-                });
+    GFXRECON_ASSERT(acceleration_structure_entries_.contains(handle));
 
-            if (entry != acceleration_structure_entries_.end())
-            {
-                handle = entry->first;
-            }
-            else
-            {
-                return;
-            }
-        }
-        else
-        {
-            return;
-        }
+    const AccelerationStructureInfo& created_object = acceleration_structure_entries_[handle];
+
+    uint32_t max_total_prim_count = 0;
+    if (auto build_info = acceleration_structure_build_infos_.find(handle);
+        build_info != acceleration_structure_build_infos_.end())
+    {
+        max_total_prim_count =
+            std::accumulate(build_info->second.primitive_counts.begin(), build_info->second.primitive_counts.end(), 0);
     }
 
-    assert(acceleration_structure_build_infos_.count(handle) > 0);
-    if (acceleration_structure_build_infos_[handle].is_meta_copy &&
-        block_index_ < acceleration_structure_build_infos_[handle].process_compacted_as_index)
+    format::HandleId maximal_entry = handle;
+    for (const auto& [id, info_donor_candidate] : acceleration_structure_entries_)
+    {
+        if (id == handle)
+        {
+            continue;
+        }
+
+        if (created_object.device_address != info_donor_candidate.device_address)
+        {
+            continue;
+        }
+
+        if (created_object.type != info_donor_candidate.type)
+        {
+            continue;
+        }
+
+        if (buffer_entries_[created_object.buf_handle].creation_index >=
+            buffer_entries_[info_donor_candidate.buf_handle].destruction_index)
+        {
+            continue;
+        }
+
+        auto build_info_candidate = acceleration_structure_build_infos_.find(id);
+        if (build_info_candidate == acceleration_structure_build_infos_.end())
+        {
+            continue;
+        }
+
+        const std::vector<uint32_t>& prim_counts = build_info_candidate->second.primitive_counts;
+        uint32_t                     total       = std::accumulate(prim_counts.begin(), prim_counts.end(), 0);
+        if (max_total_prim_count < total)
+        {
+            maximal_entry        = id;
+            max_total_prim_count = total;
+        }
+    }
+    handle = maximal_entry;
+
+    auto build_info = acceleration_structure_build_infos_.find(handle);
+    if (build_info == acceleration_structure_build_infos_.end())
+    {
+        return;
+    }
+
+    if (build_info->second.is_meta_copy && block_index_ < build_info->second.process_compacted_as_index)
     {
         // delete the compacted AS function,
         // it will be inserted new AS function before ProcessCopyVulkanAccelerationStructuresMetaCommand
@@ -839,44 +879,12 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
         return;
     }
 
-    if (acceleration_structure_build_infos_[handle].is_first_built)
+    if (build_info->second.is_first_built)
     {
-        VkAccelerationStructureBuildGeometryInfoKHR pBuildInfo =
-            acceleration_structure_build_infos_[handle].build_infos;
-        pBuildInfo.pGeometries = acceleration_structure_build_infos_[handle].geometry_infos.data();
-        if (acceleration_structure_build_infos_[handle].omm_infos.size())
-        {
-            auto omm_info = acceleration_structure_build_infos_[handle].omm_infos.begin();
-            for (; omm_info != acceleration_structure_build_infos_[handle].omm_infos.end(); omm_info++)
-            {
-                if (omm_info->second.usageCountsCount)
-                {
-                    omm_info->second.pUsageCounts =
-                        acceleration_structure_build_infos_[handle].usage_infos[omm_info->first].data();
-                }
-                const_cast<VkAccelerationStructureGeometryKHR*>(pBuildInfo.pGeometries)[omm_info->first]
-                    .geometry.triangles.pNext = (void*)&omm_info->second;
-            }
-        }
-
-        uint32_t* max_primitive_counts = acceleration_structure_build_infos_[handle].primitive_counts.data();
-        VkAccelerationStructureBuildSizesInfoKHR pSizeInfo{
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0
-        };
-
-        auto new_call       = CreatePreCall();
-        new_call->type      = NewCallDataType::ApiCall;
-        new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkGetAccelerationStructureBuildSizesKHR;
-        new_call->thread_id = 1;
-        gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
-        encoder.EncodeHandleIdValue(device);
-        encoder.EncodeEnumValue(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR);
-        encode::EncodeStructPtr(&encoder, &pBuildInfo);
-        encoder.EncodeUInt32Array(max_primitive_counts, pBuildInfo.geometryCount);
-        encode::EncodeStructPtr(&encoder, &pSizeInfo);
+        EncodeVkGetAccelerationStructureBuildSizesKHR(device, build_info->second);
     }
 
-    if (acceleration_structure_build_infos_[handle].source_of_compaction != format::kNullHandleId)
+    if (build_info->second.source_of_compaction != format::kNullHandleId)
     {
         format::ParentToChildDependencyHeader header;
 
@@ -886,7 +894,7 @@ void VulkanRayTracingModifier::Process_vkCreateAccelerationStructureKHR(
                                                                  format::MetaDataType::kParentToChildDependency);
         header.thread_id                     = 1;
         header.dependency_type = format::ParentToChildDependencyType::kAccelerationStructureCompactionDependency;
-        header.parent_id       = acceleration_structure_build_infos_[handle].source_of_compaction;
+        header.parent_id       = build_info->second.source_of_compaction;
         header.child_count     = 1;
 
         auto new_call     = CreatePreCall();
@@ -952,58 +960,55 @@ void VulkanRayTracingModifier::Process_vkCmdBuildAccelerationStructuresKHR(
 
     for (uint32_t info_index = 0; info_index < infoCount; ++info_index)
     {
-        const auto& geometry_info      = pInfos->GetPointer()[info_index];
-        const auto& build_range_info   = ppBuildRangeInfos->GetPointer()[info_index];
-        const auto& geometry_meta_info = pInfos->GetMetaStructPointer()[info_index];
-        const auto& mode               = geometry_info.mode;
-        const auto& dst_as_id          = geometry_meta_info.dstAccelerationStructure;
+        const VkAccelerationStructureBuildGeometryInfoKHR& geometry_info = pInfos->GetPointer()[info_index];
+        const VkAccelerationStructureBuildRangeInfoKHR* build_range_info = ppBuildRangeInfos->GetPointer()[info_index];
+        const auto&                                     geometry_meta_info = pInfos->GetMetaStructPointer()[info_index];
+        const VkBuildAccelerationStructureModeKHR       mode               = geometry_info.mode;
+        const format::HandleId&                         dst_as_id = geometry_meta_info.dstAccelerationStructure;
 
-        if (acceleration_structure_build_infos_.find(dst_as_id) != acceleration_structure_build_infos_.end())
+        auto [build_info, inserted] =
+            acceleration_structure_build_infos_.try_emplace(dst_as_id, AccelerationStructureBuildInfo{});
+
+        // If the Acceleration Structure has already been build, we need update the build info on the need-to basis
+        // Also, this approach makes much more sense for TLAS then for BLAS, so we restrict it to what we know should
+        // work
+        if (!inserted && geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
         {
-            bool is_replaced = false;
-            for (uint32_t geometry_index = 0; geometry_index < geometry_info.geometryCount; ++geometry_index)
+            uint32_t total_cached = std::accumulate(
+                build_info->second.primitive_counts.begin(), build_info->second.primitive_counts.end(), 0);
+            uint32_t total_candidate = 0;
+            for (uint32_t g = 0; g < geometry_info.geometryCount; ++g)
             {
-                auto& geometry_data =
-                    const_cast<VkAccelerationStructureGeometryKHR*>(geometry_info.pGeometries)[geometry_index];
-                if (geometry_data.sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
-                {
-                    continue;
-                }
-
-                if (geometry_info.geometryCount ==
-                    acceleration_structure_build_infos_[dst_as_id].primitive_counts.size())
-                {
-                    uint32_t primitive_count =
-                        acceleration_structure_build_infos_[dst_as_id].primitive_counts[geometry_index];
-                    if (build_range_info[geometry_index].primitiveCount > primitive_count)
-                    {
-                        is_replaced = true;
-                    }
-                }
+                total_candidate += build_range_info[g].primitiveCount;
             }
-            if (!is_replaced)
+
+            if (total_candidate < total_cached)
             {
                 continue;
             }
         }
 
-        acceleration_structure_build_infos_[dst_as_id].is_first_built             = true;
-        acceleration_structure_build_infos_[dst_as_id].is_meta_copy               = false;
-        acceleration_structure_build_infos_[dst_as_id].process_compacted_as_index = 0;
-        acceleration_structure_build_infos_[dst_as_id].source_of_compaction       = format::kNullHandleId;
-        acceleration_structure_build_infos_[dst_as_id].build_infos                = geometry_info;
-        for (uint32_t geometry_index = 0; geometry_index < geometry_info.geometryCount; ++geometry_index)
+        build_info->second.is_first_built             = true;
+        build_info->second.is_meta_copy               = false;
+        build_info->second.process_compacted_as_index = 0;
+        build_info->second.source_of_compaction       = format::kNullHandleId;
+        build_info->second.info                       = geometry_info;
+
+        build_info->second.geometries.resize(geometry_info.geometryCount);
+        build_info->second.primitive_counts.resize(geometry_info.geometryCount);
+
+        for (uint32_t g = 0; g < geometry_info.geometryCount; ++g)
         {
-            auto& geometry_data =
-                const_cast<VkAccelerationStructureGeometryKHR*>(geometry_info.pGeometries)[geometry_index];
+            const auto& geometry_data = const_cast<VkAccelerationStructureGeometryKHR*>(geometry_info.pGeometries)[g];
             if (geometry_data.sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR)
             {
                 continue;
             }
 
-            acceleration_structure_build_infos_[dst_as_id].geometry_infos.push_back(geometry_data);
-            acceleration_structure_build_infos_[dst_as_id].primitive_counts.push_back(
-                build_range_info[geometry_index].primitiveCount);
+            build_info->second.geometries[g]       = geometry_data;
+            build_info->second.primitive_counts[g] = build_range_info[g].primitiveCount;
+
+            const auto& geometry_metadata = pInfos->GetMetaStructPointer()->pGeometries[g].GetMetaStructPointer();
             switch (geometry_data.geometryType)
             {
                 case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
@@ -1011,27 +1016,32 @@ void VulkanRayTracingModifier::Process_vkCmdBuildAccelerationStructuresKHR(
                     const auto& triangles = geometry_data.geometry.triangles;
                     if (triangles.pNext)
                     {
-                        VkAccelerationStructureTrianglesOpacityMicromapEXT* omm =
-                            (VkAccelerationStructureTrianglesOpacityMicromapEXT*)(triangles.pNext);
-                        if (omm->sType == VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT)
+                        const auto omm_info =
+                            reinterpret_cast<const VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                                triangles.pNext);
+                        if (omm_info->sType != VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT)
                         {
-                            acceleration_structure_build_infos_[dst_as_id].omm_infos[geometry_index] = *omm;
-                            for (uint32_t usage_index = 0; usage_index < omm->usageCountsCount; ++usage_index)
-                            {
-                                acceleration_structure_build_infos_[dst_as_id].usage_infos[geometry_index].push_back(
-                                    omm->pUsageCounts[usage_index]);
-                            }
+                            break;
+                        }
+                        const auto meta_omm_info =
+                            reinterpret_cast<const Decoded_VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                                geometry_metadata->geometry->triangles->pNext->GetMetaStructPointer());
+                        build_info->second.omm_infos[g]           = *omm_info;
+                        build_info->second.geometry_omm_id_map[g] = meta_omm_info->micromap;
+
+                        for (uint32_t usage_index = 0; usage_index < omm_info->usageCountsCount; ++usage_index)
+                        {
+                            build_info->second.usage_infos[g].push_back(omm_info->pUsageCounts[usage_index]);
                         }
                     }
                     break;
                 }
                 case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 {
-                    auto result = buffer_device_addresses_.find(geometry_data.geometry.instances.data.deviceAddress);
-                    if (result != buffer_device_addresses_.end())
-                    {
-                        instance_buffers_.insert(result->second);
-                    }
+                    instance_buffer_ranges_.emplace(geometry_data.geometry.instances.data.deviceAddress,
+                                                    geometry_data.geometry.instances.data.deviceAddress +
+                                                        geometry_info.geometryCount *
+                                                            sizeof(VkAccelerationStructureInstanceKHR));
                     break;
                 }
                 case VK_GEOMETRY_TYPE_AABBS_KHR:
@@ -1070,8 +1080,8 @@ void VulkanRayTracingModifier::Process_vkCmdCopyAccelerationStructureKHR(
         {
             if (info->decoded_value->mode == VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR)
             {
-                acceleration_structure_build_infos_[info->dst].build_infos                = {};
-                acceleration_structure_build_infos_[info->dst].geometry_infos             = {};
+                acceleration_structure_build_infos_[info->dst].info                       = {};
+                acceleration_structure_build_infos_[info->dst].geometries                 = {};
                 acceleration_structure_build_infos_[info->dst].omm_infos                  = {};
                 acceleration_structure_build_infos_[info->dst].usage_infos                = {};
                 acceleration_structure_build_infos_[info->dst].primitive_counts           = {};
@@ -1149,7 +1159,7 @@ void VulkanRayTracingModifier::ProcessBuildVulkanAccelerationStructuresMetaComma
         acceleration_structure_build_infos_[dst_as_id].is_meta_copy               = false;
         acceleration_structure_build_infos_[dst_as_id].process_compacted_as_index = 0;
         acceleration_structure_build_infos_[dst_as_id].source_of_compaction       = format::kNullHandleId;
-        acceleration_structure_build_infos_[dst_as_id].build_infos                = geometry_info;
+        acceleration_structure_build_infos_[dst_as_id].info                       = geometry_info;
         for (uint32_t geometry_index = 0; geometry_index < geometry_info.geometryCount; ++geometry_index)
         {
             auto& geometry_data =
@@ -1159,7 +1169,7 @@ void VulkanRayTracingModifier::ProcessBuildVulkanAccelerationStructuresMetaComma
                 continue;
             }
 
-            acceleration_structure_build_infos_[dst_as_id].geometry_infos.push_back(geometry_data);
+            acceleration_structure_build_infos_[dst_as_id].geometries.push_back(geometry_data);
             acceleration_structure_build_infos_[dst_as_id].primitive_counts.push_back(
                 build_range_info[geometry_index].primitiveCount);
             switch (geometry_data.geometryType)
@@ -1288,8 +1298,8 @@ void VulkanRayTracingModifier::ProcessCopyVulkanAccelerationStructuresMetaComman
             {
                 if (mode == VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR)
                 {
-                    acceleration_structure_build_infos_[dst_id].build_infos                = {};
-                    acceleration_structure_build_infos_[dst_id].geometry_infos             = {};
+                    acceleration_structure_build_infos_[dst_id].info                       = {};
+                    acceleration_structure_build_infos_[dst_id].geometries                 = {};
                     acceleration_structure_build_infos_[dst_id].omm_infos                  = {};
                     acceleration_structure_build_infos_[dst_id].usage_infos                = {};
                     acceleration_structure_build_infos_[dst_id].primitive_counts           = {};
@@ -1433,6 +1443,19 @@ void VulkanRayTracingModifier::Process_vkUpdateDescriptorSets(
                     }
                 }
             }
+            else if (write.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+                     write.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+            {
+                const BufferInfo& dst_entry =
+                    buffer_entries_.at(meta_write.pBufferInfo->GetMetaStructPointer()->buffer);
+                if (dst_entry.device_address != 0)
+                {
+                    transfer_ranges_.emplace(dst_entry.device_address + write.pBufferInfo->offset,
+                                             write.pBufferInfo->range == VK_WHOLE_SIZE
+                                                 ? dst_entry.size - write.pBufferInfo->offset
+                                                 : write.pBufferInfo->range);
+                }
+            }
         }
     }
 }
@@ -1469,19 +1492,79 @@ void VulkanRayTracingModifier::Process_vkCmdCopyBuffer(const ApiCallInfo&       
                                                        format::HandleId                            dstBuffer,
                                                        uint32_t                                    regionCount,
                                                        StructPointerDecoder<Decoded_VkBufferCopy>* pRegions)
-{}
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+    else
+    {
+        const BufferInfo& dst_entry = buffer_entries_.at(dstBuffer);
+        if (dst_entry.device_address != 0)
+        {
+            for (uint32_t i = 0; i < regionCount; ++i)
+            {
+                const VkBufferCopy& r = pRegions->GetPointer()[i];
+                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
+                                         dst_entry.device_address + r.dstOffset + r.size);
+            }
+        }
+    }
+}
 
 void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2(
     const ApiCallInfo&                               call_info,
     format::HandleId                                 commandBuffer,
     StructPointerDecoder<Decoded_VkCopyBufferInfo2>* pCopyBufferInfo)
-{}
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+    else
+    {
+        const VkCopyBufferInfo2* copy_info      = pCopyBufferInfo->GetPointer();
+        const auto*              meta_copy_info = pCopyBufferInfo->GetMetaStructPointer();
+
+        const BufferInfo& dst_entry = buffer_entries_.at(meta_copy_info->dstBuffer);
+        if (dst_entry.device_address != 0)
+        {
+            for (uint32_t i = 0; i < copy_info->regionCount; ++i)
+            {
+                const VkBufferCopy2& r = copy_info->pRegions[i];
+                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
+                                         dst_entry.device_address + r.dstOffset + r.size);
+            }
+        }
+    }
+}
 
 void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2KHR(
     const ApiCallInfo&                               call_info,
     format::HandleId                                 commandBuffer,
     StructPointerDecoder<Decoded_VkCopyBufferInfo2>* pCopyBufferInfo)
-{}
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+    else
+    {
+        const VkCopyBufferInfo2KHR* copy_info      = pCopyBufferInfo->GetPointer();
+        const auto*                 meta_copy_info = pCopyBufferInfo->GetMetaStructPointer();
+
+        const BufferInfo& dst_entry = buffer_entries_.at(meta_copy_info->dstBuffer);
+        if (dst_entry.device_address != 0)
+        {
+            for (uint32_t i = 0; i < copy_info->regionCount; ++i)
+            {
+                const VkBufferCopy2KHR& r = copy_info->pRegions[i];
+                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
+                                         dst_entry.device_address + r.dstOffset + r.size);
+            }
+        }
+    }
+}
 
 void VulkanRayTracingModifier::Process_vkCmdExecuteCommands(const ApiCallInfo&                     call_info,
                                                             format::HandleId                       commandBuffer,
@@ -1601,23 +1684,6 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit(const ApiCallInfo&         
                                                      StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
                                                      format::HandleId                            fence)
 {
-    if (IsModificationPass())
-    {
-        for (uint32_t info_index = 0; info_index < submitCount; info_index++)
-        {
-            const auto& submit_info      = pSubmits->GetPointer()[info_index];
-            const auto& submit_meta_info = pSubmits->GetMetaStructPointer()[info_index];
-
-            for (uint32_t cmd_buffer_index = 0; cmd_buffer_index < submit_info.commandBufferCount; cmd_buffer_index++)
-            {
-
-                const format::HandleId command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
-                command_buffers_with_compute_.erase(command_buffer);
-            }
-        }
-        return;
-    }
-
     for (uint32_t info_index = 0; info_index < submitCount; info_index++)
     {
         const auto& submit_info      = pSubmits->GetPointer()[info_index];
@@ -1628,8 +1694,7 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit(const ApiCallInfo&         
         {
 
             const format::HandleId command_buffer = submit_meta_info.pCommandBuffers.GetPointer()[cmd_buffer_index];
-            should_inspect                        = should_inspect || heuristic_check_compute(command_buffer);
-            command_buffers_with_compute_.erase(command_buffer);
+            should_inspect                        = should_inspect || HeuristicCheck(command_buffer);
         }
 
         // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
@@ -1666,9 +1731,8 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2(const ApiCallInfo&        
         {
 
             const format::HandleId command_buffer =
-                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
-            should_inspect = should_inspect || heuristic_check_compute(command_buffer);
-            command_buffers_with_compute_.erase(command_buffer);
+                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()[cmd_buffer_index].commandBuffer;
+            should_inspect = should_inspect || HeuristicCheck(command_buffer);
         }
 
         // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
@@ -1705,9 +1769,8 @@ void VulkanRayTracingModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo&     
         {
 
             const format::HandleId command_buffer =
-                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()->commandBuffer;
-            should_inspect = should_inspect || heuristic_check_compute(command_buffer);
-            command_buffers_with_compute_.erase(command_buffer);
+                submit_meta_info.pCommandBufferInfos->GetMetaStructPointer()[cmd_buffer_index].commandBuffer;
+            should_inspect = should_inspect || HeuristicCheck(command_buffer);
         }
 
         // This submit contains interesting work. We should inspect FillMemory commands associated with this submit
@@ -1742,13 +1805,133 @@ void VulkanRayTracingModifier::Process_vkCmdWriteAccelerationStructuresPropertie
     }
 }
 
-bool VulkanRayTracingModifier::heuristic_check_compute(format::HandleId command_buffer)
+bool VulkanRayTracingModifier::HeuristicCheck(format::HandleId command_buffer)
 {
-    if (command_buffers_with_compute_.count(command_buffer) > 0)
+    if (command_buffers_with_compute_.size() > 0)
     {
         return true;
     }
+    else
+    {
+        for (const auto& a : instance_buffer_ranges_)
+        {
+            for (const auto& b : transfer_ranges_)
+            {
+                int64_t s1, s2, d1, d2;
+                s1 = a.first + b.first;
+                s2 = a.second + b.second;
+                d1 = b.first - a.first;
+                d2 = b.second - a.second;
+                if (std::abs(s2 - s1) < d1 + d2)
+                {
+                    return true;
+                }
+            }
+        }
+    }
     return false;
+}
+
+void VulkanRayTracingModifier::EncodeVkGetAccelerationStructureBuildSizesKHR(format::HandleId                device,
+                                                                             AccelerationStructureBuildInfo& build_info)
+{
+    VkAccelerationStructureBuildGeometryInfoKHR pBuildInfo = build_info.info;
+    pBuildInfo.pGeometries                                 = build_info.geometries.data();
+    for (auto& [geometry, omm_info] : build_info.omm_infos)
+    {
+        if (omm_info.usageCountsCount > 0)
+        {
+            omm_info.pUsageCounts = build_info.usage_infos[geometry].data();
+        }
+        const_cast<VkAccelerationStructureGeometryKHR*>(pBuildInfo.pGeometries)[geometry].geometry.triangles.pNext =
+            (void*)&omm_info;
+    }
+
+    uint32_t*                                max_primitive_counts = build_info.primitive_counts.data();
+    VkAccelerationStructureBuildSizesInfoKHR pSizeInfo{
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0
+    };
+
+    auto new_call       = CreatePreCall();
+    new_call->type      = NewCallDataType::ApiCall;
+    new_call->call_id   = gfxrecon::format::ApiCallId::ApiCall_vkGetAccelerationStructureBuildSizesKHR;
+    new_call->thread_id = 1;
+    gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+    encoder.EncodeHandleIdValue(device);
+    encoder.EncodeEnumValue(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR); // TODO: hardcoding device build,
+                                                                              // could be host or host_or_device
+    // encode::EncodeStructPtr(&encoder, &pBuildInfo);
+
+    // Manually encoding, identical to generated except for pnext of triangles
+    encoder.EncodeStructPtrPreamble(&pBuildInfo, false, false);
+
+    encoder.EncodeEnumValue(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    EncodePNextStructIfValid(&encoder, nullptr);
+    encoder.EncodeEnumValue(pBuildInfo.type);
+    encoder.EncodeFlagsValue(pBuildInfo.flags);
+    encoder.EncodeEnumValue(pBuildInfo.mode);
+    encoder.EncodeHandleIdValue(format::kNullHandleId);
+    encoder.EncodeHandleIdValue(format::kNullHandleId);
+    encoder.EncodeUInt32Value(pBuildInfo.geometryCount);
+
+    encoder.EncodeStructArrayPreamble(pBuildInfo.pGeometries, pBuildInfo.geometryCount, false, false);
+
+    for (uint32_t g = 0; g < pBuildInfo.geometryCount; ++g)
+    {
+        encoder.EncodeEnumValue(pBuildInfo.pGeometries[g].sType);
+        EncodePNextStruct(&encoder, pBuildInfo.pGeometries[g].pNext);
+        encoder.EncodeEnumValue(pBuildInfo.pGeometries[g].geometryType);
+        switch (pBuildInfo.pGeometries[g].geometryType)
+        {
+            case VK_GEOMETRY_TYPE_TRIANGLES_KHR:
+                encoder.EncodeEnumValue(pBuildInfo.pGeometries[g].geometry.triangles.sType);
+                if (!build_info.omm_infos.empty())
+                {
+                    encoder.EncodeStructPtrPreamble(&(build_info.omm_infos[g]), false, false);
+
+                    encoder.EncodeEnumValue(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT);
+                    EncodePNextStruct(&encoder, build_info.omm_infos[g].pNext);
+                    encoder.EncodeEnumValue(build_info.omm_infos[g].indexType);
+                    EncodeStruct(&encoder, build_info.omm_infos[g].indexBuffer);
+                    encoder.EncodeUInt64Value(build_info.omm_infos[g].indexStride);
+                    encoder.EncodeUInt32Value(build_info.omm_infos[g].baseTriangle);
+                    encoder.EncodeUInt32Value(build_info.omm_infos[g].usageCountsCount);
+                    EncodeStructArray(
+                        &encoder, build_info.omm_infos[g].pUsageCounts, build_info.omm_infos[g].usageCountsCount);
+                    EncodeStructArray2D(
+                        &encoder, build_info.omm_infos[g].ppUsageCounts, build_info.omm_infos[g].usageCountsCount, 1);
+
+                    // todo: All this monstrocity is done for this line
+                    encoder.EncodeHandleIdValue(build_info.geometry_omm_id_map[g]);
+                }
+                else
+                {
+                    EncodePNextStruct(&encoder, nullptr);
+                }
+                encoder.EncodeEnumValue(pBuildInfo.pGeometries[g].geometry.triangles.vertexFormat);
+                EncodeStruct(&encoder, pBuildInfo.pGeometries[g].geometry.triangles.vertexData);
+                encoder.EncodeUInt64Value(pBuildInfo.pGeometries[g].geometry.triangles.vertexStride);
+                encoder.EncodeUInt32Value(pBuildInfo.pGeometries[g].geometry.triangles.maxVertex);
+                encoder.EncodeEnumValue(pBuildInfo.pGeometries[g].geometry.triangles.indexType);
+                EncodeStruct(&encoder, pBuildInfo.pGeometries[g].geometry.triangles.indexData);
+                EncodeStruct(&encoder, pBuildInfo.pGeometries[g].geometry.triangles.transformData);
+                break;
+            case VK_GEOMETRY_TYPE_AABBS_KHR:
+                EncodeStruct(&encoder, pBuildInfo.pGeometries[g].geometry.aabbs);
+                break;
+            case VK_GEOMETRY_TYPE_INSTANCES_KHR:
+                EncodeStruct(&encoder, pBuildInfo.pGeometries[g].geometry.instances);
+                break;
+            default:
+                break;
+        }
+        encoder.EncodeFlagsValue(pBuildInfo.pGeometries[g].flags);
+    }
+    EncodeStructArray2D(&encoder, pBuildInfo.ppGeometries, pBuildInfo.geometryCount, 1);
+    EncodeStruct(&encoder, pBuildInfo.scratchData);
+
+    encoder.EncodeUInt32Array(max_primitive_counts, pBuildInfo.geometryCount);
+    encode::EncodeStructPtr(&encoder, &pSizeInfo);
 }
 
 GFXRECON_END_NAMESPACE(decode)

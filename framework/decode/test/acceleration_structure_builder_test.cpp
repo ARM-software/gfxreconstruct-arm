@@ -77,9 +77,9 @@ struct AccelerationStructureSizeTestParameters
 // Contains scenarios of acceleration stucture size to be tested
 std::vector<AccelerationStructureSizeTestParameters> acceleration_structure_size_test_cases = {
     // clang-format off
-    {.captured_as_size = 256, .replay_as_size = 128, .storage_size = 256, .expected_storage_size = 256, .expected_as_size = 128},
-    {.captured_as_size = 256, .replay_as_size = 256, .storage_size = 256, .expected_storage_size = 512, .expected_as_size = 256},
-    {.captured_as_size = 256, .replay_as_size = 512, .storage_size = 256, .expected_storage_size = 768, .expected_as_size = 512},
+    {.captured_as_size = 256, .replay_as_size = 128, .storage_size = 256, .expected_storage_size = 128, .expected_as_size = 128},
+    {.captured_as_size = 256, .replay_as_size = 256, .storage_size = 256, .expected_storage_size = 256, .expected_as_size = 256},
+    {.captured_as_size = 256, .replay_as_size = 512, .storage_size = 256, .expected_storage_size = 512, .expected_as_size = 512},
     // clang-format on
 };
 

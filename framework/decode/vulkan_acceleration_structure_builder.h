@@ -30,6 +30,7 @@
 #include "decode/vulkan_object_info_table.h"
 #include "decode/vulkan_device_address_tracker.h"
 #include "decode/vulkan_internal_buffer_manager.h"
+#include "format/format.h"
 #include "util/defines.h"
 
 #include <memory>
@@ -85,8 +86,6 @@ class VulkanAccelerationStructureBuilder
                                            VulkanAccelerationStructureKHRInfo*         acceleration_structure_info,
                                            VkAccelerationStructureKHR*                 handle);
 
-    void OnDestroyAccelerationStructure(const VulkanAccelerationStructureKHRInfo* acceleration_structure_info);
-
     void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
     void ProcessBuildVulkanAccelerationStructuresMetaCommand(
@@ -118,8 +117,6 @@ class VulkanAccelerationStructureBuilder
     // called before command gets executed
     // inject duplicate of this command to retrieve compact sizes
     void OnGetQueryPoolResults(const VulkanDeviceInfo* device_info, const VulkanQueryPoolInfo* query_pool_info);
-
-    VkDeviceAddress GetActualDeviceAddress(VkAccelerationStructureKHR handle);
 
   private:
     void InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table);
@@ -196,7 +193,7 @@ class VulkanAccelerationStructureBuilder
     {
         uint32_t                                                        first_query;
         std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> buffer_info_wrapper;
-        std::vector<VkAccelerationStructureKHR>                         parents;
+        std::vector<VkAccelerationStructureKHR>                         sources;
     };
 
     // holds information gathered during vkCmdCopyQueryPoolResults that needs to be processed before
@@ -207,43 +204,14 @@ class VulkanAccelerationStructureBuilder
 
     std::unordered_map<format::HandleId, VkAccelerationStructureKHR> compaction_child_to_parent_dependency_;
 
-    std::unordered_map<VkBuffer, std::vector<std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>>
-        storage_buffers_to_be_destroyed_;
+    std::unordered_multimap<format::HandleId, std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper>>
+        replaced_buffers_;
 
-    struct AccelerationStructureData
-    {
-        VkAccelerationStructureCreateInfoKHR                            create_info;
-        VkAccelerationStructureBuildSizesInfoKHR                        new_build_sizes;
-        std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> new_storage;
-
-        AccelerationStructureData& operator=(AccelerationStructureData&& other) noexcept
-        {
-            if (this != &other)
-            {
-                create_info     = other.create_info;
-                new_build_sizes = other.new_build_sizes;
-                new_storage     = std::move(other.new_storage);
-            }
-            return *this;
-        }
-    };
-
-    VkAccelerationStructureBuildSizesInfoKHR last_build_sizes_{
-        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR, nullptr, 0, 0, 0
-    };
-    std::unordered_map<VkAccelerationStructureKHR, AccelerationStructureData> acceleration_structures_;
-    std::unordered_map<VkBuffer, std::vector<VkAccelerationStructureKHR>>     buffer_binding_acceleration_structures_;
+    VkAccelerationStructureBuildSizesInfoKHR last_build_sizes_{};
 
     CommandExecuteObjects cmd_execute_obj_;
 
   private:
-    VkDeviceAddress GetAccelerationStructureDeviceAddress(VkAccelerationStructureKHR acceleration_structure);
-
-    VkAccelerationStructureKHR CreateAccelerationStructure(VkAccelerationStructureBuildGeometryInfoKHR& geometry_info,
-                                                           VkAccelerationStructureBuildRangeInfoKHR*    range_info,
-                                                           const VkAccelerationStructureBuildSizesInfoKHR& size_info,
-                                                           VkBuffer                                        storage);
-
     void InitializeInternalExecObjects();
     void BeginCommandBuffer();
     void ExecuteCommandBuffer();

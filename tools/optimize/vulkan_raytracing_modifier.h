@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <vulkan/vulkan_core.h>
 
 #include "decode/api_decoder.h"
@@ -302,6 +303,13 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
                                            StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
                                            format::HandleId                             fence) override;
 
+    virtual void ProcessFrameEndMarker(uint64_t frame_number) override
+    {
+        command_buffers_with_compute_.clear();
+        instance_buffer_ranges_.clear();
+        transfer_ranges_.clear();
+    }
+
   private:
     std::vector<format::ShaderHandleLocationInfo> GetShaderGroupHandlesInFillMemory(const void* data, size_t size);
 
@@ -332,6 +340,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
         VkBufferCreateFlags flags;
         uint64_t            creation_index;
         uint64_t            destruction_index;
+        VkDeviceAddress     device_address{ 0 };
     };
 
     struct MemoryBindingRecord
@@ -367,9 +376,10 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     struct AccelerationStructureBuildInfo
     {
-        VkAccelerationStructureBuildGeometryInfoKHR                                      build_infos;
-        std::vector<VkAccelerationStructureGeometryKHR>                                  geometry_infos;
+        VkAccelerationStructureBuildGeometryInfoKHR                                      info;
+        std::vector<VkAccelerationStructureGeometryKHR>                                  geometries;
         std::unordered_map<uint64_t, VkAccelerationStructureTrianglesOpacityMicromapEXT> omm_infos;
+        std::unordered_map<uint64_t, format::HandleId>                                   geometry_omm_id_map;
         std::unordered_map<uint64_t, std::vector<VkMicromapUsageEXT>>                    usage_infos;
         std::vector<uint32_t>                                                            primitive_counts;
         bool                                                                             is_first_built;
@@ -448,14 +458,17 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // Filled during first pass
     std::list<uint64_t> fill_memory_indices_to_inspect_;
 
-    std::unordered_set<format::HandleId> instance_buffers_;
+    std::set<std::pair<VkDeviceAddress, VkDeviceAddress>> instance_buffer_ranges_;
+    std::set<std::pair<VkDeviceAddress, VkDeviceAddress>> transfer_ranges_;
 
     // -----init buffer handle-----InitBufferObject
     std::unordered_map<format::HandleId, InitBufferInfo> init_buffer_entries_;
 
     VulkanOptimizationOptions options_;
 
-    bool heuristic_check_compute(format::HandleId command_buffer);
+    bool HeuristicCheck(format::HandleId command_buffer);
+
+    void EncodeVkGetAccelerationStructureBuildSizesKHR(format::HandleId device, AccelerationStructureBuildInfo& info);
 };
 
 GFXRECON_END_NAMESPACE(decode)

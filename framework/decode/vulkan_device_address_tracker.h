@@ -25,6 +25,7 @@
 #define GFXRECON_DECODE_VULKAN_DEVICE_ADDRESS_TRACKER_H
 
 #include "decode/vulkan_object_info.h"
+#include "format/format.h"
 #include "vulkan_object_info_table.h"
 #include <map>
 #include <unordered_map>
@@ -113,7 +114,7 @@ class VulkanDeviceAddressTracker
      * @param   capture_address  a capture-time VkDeviceAddress for an acceleration-structure.
      * @return  a const-ref to a set of (alias) const AccelerationStructureKHRInfo*.
      */
-    [[nodiscard]] const std::unordered_set<const VulkanAccelerationStructureKHRInfo*>&
+    [[nodiscard]] const std::unordered_set<format::HandleId>&
     GetAccelerationStructuresByCaptureDeviceAddress(VkDeviceAddress capture_address) const;
 
     /**
@@ -124,6 +125,15 @@ class VulkanDeviceAddressTracker
      */
     [[nodiscard]] const VulkanAccelerationStructureKHRInfo*
     GetAccelerationStructureByHandle(VkAccelerationStructureKHR handle) const;
+
+    /**
+     * @brief   Retrieve an acceleration-structure info-struct by providing its ID.
+     *
+     * @param   handle_id  a replay-time ID.
+     * @return  a const-pointer to a found AccelerationStructureKHRInfo or nullptr.
+     */
+    [[nodiscard]] const VulkanAccelerationStructureKHRInfo*
+    GetAccelerationStructureByID(format::HandleId handle_id) const;
 
     /**
      * @brief   Create and return a lookup-table containing all internally stored acceleration-structure addresses.

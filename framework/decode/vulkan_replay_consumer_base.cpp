@@ -9932,17 +9932,11 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
         }
 
         result = func(device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_accel_struct);
-
-        // track newly created acceleration-structure
-        GetDeviceAddressTracker(device_info).TrackAccelerationStructure(acceleration_structure_info);
     }
     else
     {
         modified_create_info.createFlags &= ~VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
         modified_create_info.deviceAddress = 0;
-
-        format::HandleId  buffer      = pCreateInfo->GetMetaStructPointer()->buffer;
-        VulkanBufferInfo* buffer_info = GetObjectInfoTable().GetVkBufferInfo(buffer);
 
         result = GetAccelerationStructureBuilder(device_info)
                      .OnCreateAccelerationStructure(device_info,
@@ -11384,11 +11378,6 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
     else
     {
         return;
-    }
-
-    if (use_acceleration_structure_builder_)
-    {
-        GetAccelerationStructureBuilder(device_info).OnDestroyAccelerationStructure(acceleration_structure_info);
     }
 
     func(device_info->handle, acceleration_structure, GetAllocationCallbacks(pAllocator));
