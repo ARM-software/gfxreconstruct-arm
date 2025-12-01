@@ -188,8 +188,6 @@
     "vkGetDeviceMemoryOpaqueCaptureAddressKHR": "OverrideGetDeviceMemoryOpaqueCaptureAddress",
     "vkGetPastPresentationTimingGOOGLE": "OverrideGetPastPresentationTimingGOOGLE",
     "vkGetRefreshCycleDurationGOOGLE": "OverrideGetRefreshCycleDurationGOOGLE",
-    "vkGetPhysicalDeviceSurfaceFormatsKHR": "OverrideGetPhysicalDeviceSurfaceFormatsKHR",
-    "vkGetPhysicalDeviceSurfaceFormats2KHR": "OverrideGetPhysicalDeviceSurfaceFormats2KHR",
     "vkCreateTensorARM": "OverrideCreateTensorARM",
     "vkDestroyTensorARM": "OverrideDestroyTensorARM",
     "vkBindTensorMemoryARM": "OverrideBindTensorMemoryARM",
