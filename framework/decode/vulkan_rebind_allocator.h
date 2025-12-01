@@ -513,7 +513,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     {
         MemoryInfoType               memory_info_type;
         std::vector<BoundMemoryInfo> bound_memory_infos;
-        std::vector<VkDeviceSize>    original_sizes; // video_session is array, the others are single.
+        std::vector<VkMemoryRequirements> capture_mem_reqs{};
         VkObjectType                 object_type{ VK_OBJECT_TYPE_UNKNOWN };
         VkFlags                      usage{ 0 };
         VkImageTiling                tiling{};

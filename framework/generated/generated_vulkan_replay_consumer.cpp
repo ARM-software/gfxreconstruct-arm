@@ -11492,7 +11492,6 @@ void VulkanReplayConsumer::Process_vkCreateDataGraphPipelineSessionARM(
     VulkanDataGraphPipelineSessionARMInfo handle_info;
     pSession->SetConsumerData(0, &handle_info);
 
-    PushRecaptureHandleId(pSession->GetPointer());
     VkResult replay_result = OverrideCreateDataGraphPipelineSessionARM(GetDeviceTable(in_device->handle)->CreateDataGraphPipelineSessionARM, returnValue, in_device, pCreateInfo, pAllocator, pSession);
     CheckResult("vkCreateDataGraphPipelineSessionARM", returnValue, replay_result, call_info);
 

@@ -443,13 +443,12 @@ void VulkanRebindAllocator::GetBufferMemoryRequirements(VkBuffer              bu
     {
         auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
 
-        if (resource_alloc_info->original_sizes.empty())
+        if (resource_alloc_info->capture_mem_reqs.empty())
         {
-            resource_alloc_info->original_sizes.resize(1);
+            resource_alloc_info->capture_mem_reqs.resize(1);
         }
-        resource_alloc_info->original_sizes[0] = memory_requirements->size;
+        resource_alloc_info->capture_mem_reqs[0] = *memory_requirements;
     }
-
     functions_.get_buffer_memory_requirements(device_, buffer, memory_requirements);
 }
 
@@ -461,13 +460,12 @@ void VulkanRebindAllocator::GetBufferMemoryRequirements2(const VkBufferMemoryReq
     {
         auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
 
-        if (resource_alloc_info->original_sizes.empty())
+        if (resource_alloc_info->capture_mem_reqs.empty())
         {
-            resource_alloc_info->original_sizes.resize(1);
+            resource_alloc_info->capture_mem_reqs.resize(1);
         }
-        resource_alloc_info->original_sizes[0] = memory_requirements->memoryRequirements.size;
+        resource_alloc_info->capture_mem_reqs[0] = memory_requirements->memoryRequirements;
     }
-
     functions_.get_buffer_memory_requirements2(device_, info, memory_requirements);
 }
 
@@ -512,13 +510,12 @@ void VulkanRebindAllocator::GetImageMemoryRequirements(VkImage               ima
     {
         auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
 
-        if (resource_alloc_info->original_sizes.empty())
+        if (resource_alloc_info->capture_mem_reqs.empty())
         {
-            resource_alloc_info->original_sizes.resize(1);
+            resource_alloc_info->capture_mem_reqs.resize(1);
         }
-        resource_alloc_info->original_sizes[0] = memory_requirements->size;
+        resource_alloc_info->capture_mem_reqs[0] = *memory_requirements;
     }
-
     functions_.get_image_memory_requirements(device_, image, memory_requirements);
 }
 
@@ -530,13 +527,12 @@ void VulkanRebindAllocator::GetImageMemoryRequirements2(const VkImageMemoryRequi
     {
         auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
 
-        if (resource_alloc_info->original_sizes.empty())
+        if (resource_alloc_info->capture_mem_reqs.empty())
         {
-            resource_alloc_info->original_sizes.resize(1);
+            resource_alloc_info->capture_mem_reqs.resize(1);
         }
-        resource_alloc_info->original_sizes[0] = memory_requirements->memoryRequirements.size;
+        resource_alloc_info->capture_mem_reqs[0] = memory_requirements->memoryRequirements;
     }
-
     functions_.get_image_memory_requirements2(device_, info, memory_requirements);
 }
 
@@ -546,17 +542,17 @@ VulkanRebindAllocator::GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR vi
                                                             VkVideoSessionMemoryRequirementsKHR* memory_requirements,
                                                             ResourceData                         allocator_data)
 {
-    if (memory_requirements != nullptr && allocator_data != 0)
+    if (allocator_data != 0 && *memory_requirements_count > 0)
     {
         auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
-        resource_alloc_info->original_sizes.resize(*memory_requirements_count);
+
+        resource_alloc_info->capture_mem_reqs.resize(*memory_requirements_count);
 
         for (uint32_t i = 0; i < *memory_requirements_count; ++i)
         {
-            resource_alloc_info->original_sizes[i] = memory_requirements[i].memoryRequirements.size;
+            resource_alloc_info->capture_mem_reqs[i] = memory_requirements[i].memoryRequirements;
         }
     }
-
     return functions_.get_video_session_memory_requirements(
         device_, video_session, memory_requirements_count, memory_requirements);
 }
@@ -2602,19 +2598,19 @@ void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineS
 
         for (auto& mem_info : resource_alloc_info->bound_memory_infos)
         {
-            auto mem_alc_info = mem_info->memory_info;
+            auto mem_alc_info = mem_info.memory_info;
             if (mem_alc_info != nullptr)
             {
                 mem_alc_info->original_objects.erase(VK_HANDLE_TO_UINT64(data_graph_pipeline_session));
             }
 
-            if (mem_info->allocation != VK_NULL_HANDLE)
+            if (mem_info.allocation != VK_NULL_HANDLE)
             {
-                if (mem_info->mapped_pointer != nullptr)
+                if (mem_info.mapped_pointer != nullptr)
                 {
-                    vmaUnmapMemory(allocator_, mem_info->allocation);
+                    vmaUnmapMemory(allocator_, mem_info.allocation);
                 }
-                vmaFreeMemory(allocator_, mem_info->allocation);
+                vmaFreeMemory(allocator_, mem_info.allocation);
             }
         }
         delete resource_alloc_info;
@@ -2747,21 +2743,7 @@ VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_cou
             capture_mem_req = resource_alloc_info->capture_mem_reqs[0];
         }
 
-        VmaMemoryInfo mem_info                      = {};
-        mem_info.memory_info                        = memory_alloc_info;
-        mem_info.capture_mem_req                    = capture_mem_req;
-        mem_info.replay_mem_req                     = replay_mem_req;
-        mem_info.requires_dedicated_allocation      = false;
-        mem_info.prefers_dedicated_allocation       = false;
-        mem_info.alc_create_info                    = aci;
-        mem_info.offset_from_original_device_memory = memory_offset;
-
         result = vmaAllocateMemory(allocator_, &replay_mem_req, &aci, &allocation, &alloc_info);
-
-        if (result == VK_SUCCESS)
-        {
-            memory_alloc_info->vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        }
 
         VkBindDataGraphPipelineSessionMemoryInfoARM bind_session_memory_info{
             VK_STRUCTURE_TYPE_BIND_DATA_GRAPH_PIPELINE_SESSION_MEMORY_INFO_ARM
@@ -2793,8 +2775,10 @@ VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_cou
         UpdateAllocInfo(*resource_alloc_info,
                         VK_HANDLE_TO_UINT64(session),
                         MemoryInfoType::kBasic,
+                        memory_offset,
+                        allocation,
+                        alloc_info,
                         *memory_alloc_info,
-                        mem_info,
                         bind_memory_properties[i]);
 
         GFXRECON_LOG_INFO("Bind[%u]: SUCCESS session=0x%llx mem=0x%llx offset=%" PRIu64 " size=%" PRIu64,
@@ -3164,8 +3148,8 @@ void VulkanRebindAllocator::GetTensorMemoryRequirementsARM(
 {
     if (allocator_data != 0)
     {
-        auto resource_alloc_info            = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
-        resource_alloc_info->original_sizes = { memory_requirements->memoryRequirements.size };
+        auto resource_alloc_info              = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        resource_alloc_info->capture_mem_reqs = { memory_requirements->memoryRequirements };
     }
 
     functions_.get_tensor_memory_requirements(device_, tensor_memory_requirements, memory_requirements);
