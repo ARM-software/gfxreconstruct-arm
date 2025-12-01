@@ -161,10 +161,6 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
         // no info, cant make a good decision, reuse
         is_recreated         = false;
         modified_create_info = *create_info;
-        GFXRECON_LOG_WARNING("Fallback path %" PRIu64, acceleration_structure_info->capture_id);
-        GFXRECON_LOG_WARNING(
-            "\t %s",
-            acceleration_structure_info->type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR ? "Top" : "Bottom");
     }
 
     if (is_recreated)
@@ -402,7 +398,7 @@ void VulkanAccelerationStructureBuilder::OnCmdBuildAccelerationStructures(
 {
     for (uint32_t i = 0; i < info_count; ++i)
     {
-        VkAccelerationStructureBuildSizesInfoKHR quieried{
+        VkAccelerationStructureBuildSizesInfoKHR queried{
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
         };
 
@@ -416,21 +412,22 @@ void VulkanAccelerationStructureBuilder::OnCmdBuildAccelerationStructures(
                                                           VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
                                                           &geometry_infos[i],
                                                           max_primitive_counts.data(),
-                                                          &quieried);
+                                                          &queried);
         auto cached_info =
             device_address_tracker_.GetAccelerationStructureByHandle(geometry_infos[i].dstAccelerationStructure);
-        if (cached_info->size < quieried.accelerationStructureSize)
+        if (cached_info->size < queried.accelerationStructureSize)
         {
-            GFXRECON_LOG_WARNING("Wrong cached size on %" PRIu64, cached_info->capture_id);
-            GFXRECON_LOG_WARNING("\t cached %" PRIu64, cached_info->size);
-            GFXRECON_LOG_WARNING("\t queried %" PRIu64, quieried.accelerationStructureSize);
+            GFXRECON_LOG_ERROR("Acceleration Structure %" PRIu64 " cannot be built, insufficient storage",
+                               cached_info->capture_id);
+            GFXRECON_LOG_ERROR("\t required: %" PRIu64, queried.accelerationStructureSize);
+            GFXRECON_LOG_ERROR("\t allocated: %" PRIu64, cached_info->size);
             GFXRECON_ASSERT(false);
         }
 
-        VkDeviceSize scratch_size = quieried.buildScratchSize;
+        VkDeviceSize scratch_size = queried.buildScratchSize;
         if (geometry_infos[i].mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR)
         {
-            scratch_size = quieried.updateScratchSize;
+            scratch_size = queried.updateScratchSize;
         }
 
         UpdateScratchDeviceAddress(command_buffer, geometry_infos[i], scratch_size);

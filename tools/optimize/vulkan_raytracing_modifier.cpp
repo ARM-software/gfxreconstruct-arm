@@ -1866,7 +1866,7 @@ void VulkanRayTracingModifier::EncodeVkGetAccelerationStructureBuildSizesKHR(for
     encoder.EncodeStructPtrPreamble(&pBuildInfo, false, false);
 
     encoder.EncodeEnumValue(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    EncodePNextStructIfValid(&encoder, nullptr);
+    EncodePNextStruct(&encoder, nullptr);
     encoder.EncodeEnumValue(pBuildInfo.type);
     encoder.EncodeFlagsValue(pBuildInfo.flags);
     encoder.EncodeEnumValue(pBuildInfo.mode);
