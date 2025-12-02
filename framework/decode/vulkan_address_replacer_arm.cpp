@@ -173,7 +173,7 @@ void VulkanAddressReplacerARM::ProcessGetDescriptorEXT(const VulkanDeviceInfo*  
         case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
         {
             addressInfo = const_cast<VkDescriptorAddressInfoEXT*>(descriptorData.pUniformTexelBuffer);
-            if (!address_remap(descriptorData.accelerationStructure, address_tracker))
+            if (!address_remap(addressInfo->address, address_tracker))
             {
                 GFXRECON_LOG_WARNING_ONCE(
                     "VulkanAddressReplacer::ProcessGetDescriptorEXT: UNIFOR_TEXEL_BUFFER address remap failed");
@@ -183,7 +183,7 @@ void VulkanAddressReplacerARM::ProcessGetDescriptorEXT(const VulkanDeviceInfo*  
         case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
         {
             addressInfo = const_cast<VkDescriptorAddressInfoEXT*>(descriptorData.pStorageTexelBuffer);
-            if (!address_remap(descriptorData.accelerationStructure, address_tracker))
+            if (!address_remap(addressInfo->address, address_tracker))
             {
                 GFXRECON_LOG_WARNING_ONCE(
                     "VulkanAddressReplacer::ProcessGetDescriptorEXT: STORAGE_TEXEL_BUFFER remap failed");
@@ -193,7 +193,7 @@ void VulkanAddressReplacerARM::ProcessGetDescriptorEXT(const VulkanDeviceInfo*  
         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
         {
             addressInfo = const_cast<VkDescriptorAddressInfoEXT*>(descriptorData.pUniformBuffer);
-            if (!address_remap(descriptorData.accelerationStructure, address_tracker))
+            if (!address_remap(addressInfo->address, address_tracker))
             {
                 GFXRECON_LOG_WARNING_ONCE(
                     "VulkanAddressReplacer::ProcessGetDescriptorEXT: UNIFORM_BUFFER remap failed");
@@ -203,7 +203,7 @@ void VulkanAddressReplacerARM::ProcessGetDescriptorEXT(const VulkanDeviceInfo*  
         case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
         {
             addressInfo = const_cast<VkDescriptorAddressInfoEXT*>(descriptorData.pStorageBuffer);
-            if (!address_remap(descriptorData.accelerationStructure, address_tracker))
+            if (!address_remap(addressInfo->address, address_tracker))
             {
                 GFXRECON_LOG_WARNING_ONCE(
                     "VulkanAddressReplacer::ProcessGetDescriptorEXT: STORAGE_BUFFER remap failed");
