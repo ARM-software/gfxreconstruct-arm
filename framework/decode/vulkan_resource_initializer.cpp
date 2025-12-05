@@ -26,13 +26,13 @@
 #include "decode/copy_shaders.h"
 #include "decode/decoder_util.h"
 #include "graphics/vulkan_util.h"
+#include "util/logging.h"
 #include "util/platform.h"
 
 #include "Vulkan-Utility-Libraries/vk_format_utils.h"
 
 #include <algorithm>
 #include <cassert>
-#include <limits>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -1185,9 +1185,13 @@ VkResult VulkanResourceInitializer::ExecuteCommandBuffer(VkQueue queue, VkComman
         return result;
     }
 
-    // Wait a sensible amount of time (10 seconds) to avoid hanging in case a prior
+    // Wait a sensible amount of time (1 minute) to avoid hanging in case a prior
     // operation caused the GPU to hang or crash.
-    result = device_table_->WaitForFences(device_, 1, &fence, VK_TRUE, 10000000000);
+    result = device_table_->WaitForFences(device_, 1, &fence, VK_TRUE, 60'000'000'000ul);
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("Timeout while initializing resources may result in a crash.")
+    }
 
     device_table_->DestroyFence(device_, fence, nullptr);
 
