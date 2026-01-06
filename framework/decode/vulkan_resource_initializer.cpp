@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -1185,9 +1186,9 @@ VkResult VulkanResourceInitializer::ExecuteCommandBuffer(VkQueue queue, VkComman
         return result;
     }
 
-    // Wait a sensible amount of time (1 minute) to avoid hanging in case a prior
-    // operation caused the GPU to hang or crash.
-    result = device_table_->WaitForFences(device_, 1, &fence, VK_TRUE, 60'000'000'000ul);
+    // Wait until the previous operation completes
+    // There are slow platforms that require a long timeout
+    result = device_table_->WaitForFences(device_, 1, &fence, VK_TRUE, UINT64_MAX);
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Timeout while initializing resources may result in a crash.")
