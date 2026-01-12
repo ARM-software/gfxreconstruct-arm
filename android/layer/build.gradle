@@ -1,6 +1,10 @@
 apply plugin: 'com.android.library'
 
 android {
+    def propVersion = providers.gradleProperty("Version")
+    def propMaxThreadsPerBuildTask = providers.gradleProperty("MaxThreadsPerBuildTask")
+    def propEnableCcache = providers.gradleProperty("EnableCcache")
+
     compileSdkVersion 33
     namespace 'com.lunarg.gfxreconstruct.layer'
     ndkVersion '26.3.11579264'
@@ -8,7 +12,7 @@ android {
         minSdkVersion 26
         targetSdkVersion 33
         versionCode 1
-        versionName project.findProperty("Version") ?: "1.0"
+        versionName propVersion.present ? propVersion.get() : "unknown"
         ndk {
             if (project.hasProperty("armeabi-v7a")) {
                 abiFilters 'armeabi-v7a'
@@ -27,18 +31,18 @@ android {
                 cppFlags "-fexceptions", "-std=c++17", "-Wno-nullability-completeness"
                 arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static"
 
-                if (project.hasProperty("Version"))
+                if (propVersion.present)
                 {
-                    arguments.add("-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${project.getProperty('Version')}")
+                    arguments.add("-DGFXRECON_PROJECT_VERSION_DESIGNATION=-${propVersion.get()}")
                 }
 
-                if (project.hasProperty("MaxThreadsPerBuildTask")) {
+                if (propMaxThreadsPerBuildTask.present) {
                     arguments.add("-DCMAKE_JOB_POOL_COMPILE:STRING=build")
                     arguments.add("-DCMAKE_JOB_POOL_LINK:STRING=build")
-                    arguments.add("-DCMAKE_JOB_POOLS:STRING=build=${project.getProperty('MaxThreadsPerBuildTask')}")
+                    arguments.add("-DCMAKE_JOB_POOLS:STRING=build=${propMaxThreadsPerBuildTask.get()}")
                 }
 
-                if (project.hasProperty("EnableCcache")) {
+                if (propEnableCcache.present) {
                     arguments.add("-DCMAKE_C_COMPILER_LAUNCHER=ccache")
                     arguments.add("-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
                 }
