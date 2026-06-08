@@ -130,6 +130,8 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_info.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_table_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/unordered_state_map.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_smart_memory_tracker.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_smart_memory_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker_initializers.h

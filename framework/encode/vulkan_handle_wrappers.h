@@ -37,6 +37,7 @@
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "util/page_guard_manager.h"
+#include "util/range_list.h"
 
 #include "vulkan/vulkan.h"
 #include "vulkan/vulkan_core.h"
@@ -512,8 +513,9 @@ struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
     // TODO: Base pipeline
     // TODO: Pipeline cache
 
-    std::unordered_set<AssetWrapperBase*> modified_assets;
-    std::vector<CommandBufferWrapper*>    secondaries;
+    std::unordered_set<AssetWrapperBase*>                  modified_assets;
+    std::unordered_map<AssetWrapperBase*, util::RangeList> smart_touched_assets;
+    std::vector<CommandBufferWrapper*>                     secondaries;
 };
 
 struct DeferredOperationKHRWrapper : public HandleWrapper<VkDeferredOperationKHR>

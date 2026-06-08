@@ -601,6 +601,12 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
         }
     }
 
+    if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kSmart &&
+        (capture_mode_ & kModeWrite) == kModeWrite)
+    {
+        capture_mode_ |= kModeTrack;
+    }
+
     if (success)
     {
         compressor_ = std::unique_ptr<util::Compressor>(format::CreateCompressor(file_options_.compression_type));
@@ -1583,6 +1589,12 @@ void CommonCaptureManager::WriteResizeWindowCmd(format::ApiFamilyId api_family,
 void CommonCaptureManager::WriteFillMemoryCmd(
     format::ApiFamilyId api_family, format::HandleId memory_id, uint64_t offset, uint64_t size, const void* data)
 {
+    WriteFillMemoryRangeCmd(api_family, memory_id, offset, size, static_cast<const uint8_t*>(data) + offset);
+}
+
+void CommonCaptureManager::WriteFillMemoryRangeCmd(
+    format::ApiFamilyId api_family, format::HandleId memory_id, uint64_t offset, uint64_t size, const void* data)
+{
     if (!IsCaptureApp())
     {
         return;
@@ -1594,7 +1606,7 @@ void CommonCaptureManager::WriteFillMemoryCmd(
 
         format::FillMemoryCommandHeader fill_cmd;
         size_t                          header_size       = sizeof(format::FillMemoryCommandHeader);
-        const uint8_t*                  uncompressed_data = (static_cast<const uint8_t*>(data) + offset);
+        const uint8_t*                  uncompressed_data = static_cast<const uint8_t*>(data);
         size_t                          uncompressed_size = static_cast<size_t>(size);
 
         auto thread_data = GetThreadData();
@@ -1816,6 +1828,10 @@ void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation
     else if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kAssisted)
     {
         capture_options["memory-tracking-mode"] = "assisted";
+    }
+    else if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kSmart)
+    {
+        capture_options["memory-tracking-mode"] = "smart";
     }
     else if (memory_tracking_mode_ == CaptureSettings::MemoryTrackingMode::kNone)
     {

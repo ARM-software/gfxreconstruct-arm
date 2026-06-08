@@ -3452,6 +3452,17 @@ void VulkanCaptureManager::PostProcess_vkMapMemory(VkResult         result,
                 std::lock_guard<std::mutex> lock(GetMappedMemoryLock());
                 mapped_memory_.insert(wrapper);
             }
+            else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+            {
+                VkDeviceSize mapped_size = size;
+                if (mapped_size == VK_WHOLE_SIZE)
+                {
+                    assert(offset <= wrapper->allocation_size);
+                    mapped_size = wrapper->allocation_size - offset;
+                }
+
+                smart_memory_tracker_.MapMemory(wrapper->handle_id, (*ppData), offset, mapped_size);
+            }
         }
         else
         {
@@ -3538,6 +3549,30 @@ void VulkanCaptureManager::PreProcess_vkFlushMappedMemoryRanges(VkDevice        
                 }
             }
         }
+        else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+        {
+            for (uint32_t i = 0; i < memoryRangeCount; ++i)
+            {
+                auto memory_wrapper =
+                    vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(pMemoryRanges[i].memory);
+
+                if ((memory_wrapper != nullptr) && (memory_wrapper->mapped_data != nullptr))
+                {
+                    VkDeviceSize size = pMemoryRanges[i].size;
+                    if (size == VK_WHOLE_SIZE)
+                    {
+                        assert(pMemoryRanges[i].offset <= memory_wrapper->allocation_size);
+                        size = memory_wrapper->allocation_size - pMemoryRanges[i].offset;
+                    }
+
+                    smart_memory_tracker_.FlushRange(memory_wrapper->handle_id, pMemoryRanges[i].offset, size);
+                }
+                else
+                {
+                    GFXRECON_LOG_WARNING("vkFlushMappedMemoryRanges called for memory that is not mapped");
+                }
+            }
+        }
         else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kAssisted)
         {
             const vulkan_wrappers::DeviceMemoryWrapper* current_memory_wrapper = nullptr;
@@ -3620,6 +3655,11 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
                 mapped_memory_.erase(wrapper);
             }
         }
+        else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+        {
+            smart_memory_tracker_.FlushMappedMemory(wrapper->handle_id);
+            smart_memory_tracker_.UnmapMemory(wrapper->handle_id);
+        }
 
         if (IsCaptureModeTrack())
         {
@@ -3681,6 +3721,11 @@ void VulkanCaptureManager::PreProcess_vkFreeMemory(VkDevice                     
                 std::lock_guard<std::mutex> lock(GetMappedMemoryLock());
                 mapped_memory_.erase(wrapper);
             }
+            else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+            {
+                smart_memory_tracker_.FlushMappedMemory(wrapper->handle_id);
+                smart_memory_tracker_.UnmapMemory(wrapper->handle_id);
+            }
         }
     }
 }
@@ -3713,6 +3758,10 @@ void VulkanCaptureManager::PostProcess_vkFreeMemory(VkDevice                    
             {
                 manager->FreePersistentShadowMemory(wrapper->shadow_allocation);
             }
+        }
+        else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+        {
+            smart_memory_tracker_.RemoveMemory(wrapper->handle_id);
         }
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -3829,7 +3878,7 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit(std::shared_lock<CommonCaptu
         state_tracker_->TrackAssetsInSubmission(submitCount, pSubmits);
     }
 
-    QueueSubmitWriteFillMemoryCmd();
+    QueueSubmitWriteFillMemoryCmd(submitCount, pSubmits);
 
     PreQueueSubmit(current_lock);
 
@@ -3872,7 +3921,7 @@ void VulkanCaptureManager::PreProcess_vkQueueSubmit2(
         state_tracker_->TrackAssetsInSubmission(submitCount, pSubmits);
     }
 
-    QueueSubmitWriteFillMemoryCmd();
+    QueueSubmitWriteFillMemoryCmd(submitCount, pSubmits);
 
     PreQueueSubmit(current_lock);
 
@@ -3925,10 +3974,56 @@ void VulkanCaptureManager::MapMemoryWriteFixShadowMemoryCmd(format::HandleId mem
     }
 }
 
-void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd()
+void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo* submits)
 {
-    if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
-        GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
+    if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+    {
+        if (state_tracker_ != nullptr)
+        {
+            smart_memory_tracker_.ProcessSubmit(state_tracker_->GetSmartTouchedMemoryRanges(submit_count, submits));
+        }
+    }
+    else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
+    {
+        util::PageGuardManager* manager = util::PageGuardManager::Get();
+        assert(manager != nullptr);
+
+        manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
+            WriteFillMemoryCmd(memory_id, offset, size, start_address);
+        });
+    }
+    else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUnassisted)
+    {
+        std::lock_guard<std::mutex> lock(GetMappedMemoryLock());
+
+        for (auto wrapper : mapped_memory_)
+        {
+            VkDeviceSize size = wrapper->mapped_size;
+            if (size == VK_WHOLE_SIZE)
+            {
+                assert(wrapper->mapped_offset <= wrapper->allocation_size);
+                size = wrapper->allocation_size - wrapper->mapped_offset;
+            }
+
+            // If the memory is mapped, write the entire mapped region.
+            // We set offset to 0, because the pointer returned by vkMapMemory already includes the offset.
+            WriteFillMemoryCmd(wrapper->handle_id, 0, size, wrapper->mapped_data);
+        }
+    }
+}
+
+void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo2* submits)
+{
+    if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+    {
+        if (state_tracker_ != nullptr)
+        {
+            smart_memory_tracker_.ProcessSubmit(state_tracker_->GetSmartTouchedMemoryRanges(submit_count, submits));
+        }
+    }
+    else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+             GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
     {
         util::PageGuardManager* manager = util::PageGuardManager::Get();
         assert(manager != nullptr);
@@ -4351,6 +4446,22 @@ void VulkanCaptureManager::PostProcess_vkAllocateMemory(VkDevice                
                                                         const VkAllocationCallbacks* pAllocator,
                                                         VkDeviceMemory*              pMemory)
 {
+    GFXRECON_UNREFERENCED_PARAMETER(pAllocator);
+
+    if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart && pAllocateInfo != nullptr &&
+        pMemory != nullptr && *pMemory != VK_NULL_HANDLE)
+    {
+        auto memory_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(*pMemory);
+        auto device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+
+        if (memory_wrapper != nullptr && device_wrapper != nullptr)
+        {
+            const VkMemoryPropertyFlags properties =
+                GetMemoryProperties(device_wrapper, pAllocateInfo->memoryTypeIndex);
+            smart_memory_tracker_.TrackMemory(memory_wrapper->handle_id, pAllocateInfo->allocationSize, properties);
+        }
+    }
+
     if (common_manager_->debug_set_objects_name_)
     {
         SetObjectName<DeviceMemoryWrapper>(device, *pMemory);

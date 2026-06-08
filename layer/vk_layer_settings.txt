@@ -58,8 +58,8 @@ lunarg_gfxreconstruct.capture_compression_type = LZ4
 # =====================
 # <LayerIdentifier>.memory_tracking_mode
 # Specifies the memory tracking mode to use for detecting modifications to
-# mapped Vulkan memory objects. Available options are: page_guard, assisted, and
-# unassisted.
+# mapped Vulkan memory objects. Available options are: page_guard, smart,
+# assisted, and unassisted.
 lunarg_gfxreconstruct.memory_tracking_mode = page_guard
 
 # Page Guard Copy on Map

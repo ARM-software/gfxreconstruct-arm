@@ -700,6 +700,7 @@ inline void InitializeState<VkDevice, vulkan_wrappers::BufferWrapper, VkBufferCr
     wrapper->create_parameters = std::move(create_parameters);
 
     wrapper->created_size = create_info->size;
+    wrapper->size         = create_info->size;
 
     if ((create_info->flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT) != 0)
     {

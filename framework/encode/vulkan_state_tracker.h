@@ -782,6 +782,12 @@ class VulkanStateTracker
 
     void TrackAssetsInSubmission(uint32_t submitCount, const VkSubmitInfo2* pSubmits);
 
+    std::unordered_map<format::HandleId, util::RangeList> GetSmartTouchedMemoryRanges(uint32_t            submit_count,
+                                                                                      const VkSubmitInfo* submits);
+
+    std::unordered_map<format::HandleId, util::RangeList> GetSmartTouchedMemoryRanges(uint32_t             submit_count,
+                                                                                      const VkSubmitInfo2* submits);
+
     void TrackAssetsInMemory(format::HandleId memory_id);
 
     void TrackBeginRendering(VkCommandBuffer commandBuffer, const VkRenderingInfo* pRenderingInfo);
@@ -899,6 +905,17 @@ class VulkanStateTracker
     void InsertImageAssetInCommandBuffer(VkCommandBuffer command_buffer, VkImage image);
 
     void InsertBufferAssetInCommandBuffer(VkCommandBuffer command_buffer, VkBuffer buffer);
+
+    void InsertBufferAssetRangeInCommandBuffer(VkCommandBuffer command_buffer,
+                                               VkBuffer        buffer,
+                                               VkDeviceSize    offset,
+                                               VkDeviceSize    size);
+
+    void CollectSmartTouchedMemoryRanges(const vulkan_wrappers::CommandBufferWrapper*           command_wrapper,
+                                         std::unordered_map<format::HandleId, util::RangeList>* touched_ranges) const;
+
+    void AddSmartTouchedAssetRange(const vulkan_wrappers::AssetWrapperBase*               asset,
+                                   std::unordered_map<format::HandleId, util::RangeList>* touched_ranges) const;
 
     void TrackMappedAssetsWrites(format::HandleId memory_id);
 

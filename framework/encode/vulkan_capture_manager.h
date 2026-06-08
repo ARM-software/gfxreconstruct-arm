@@ -32,6 +32,7 @@
 #include "encode/parameter_buffer.h"
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
+#include "encode/vulkan_smart_memory_tracker.h"
 #include "encode/vulkan_state_tracker.h"
 #include "format/api_call_id.h"
 #include "format/format.h"
@@ -1943,7 +1944,7 @@ class VulkanCaptureManager : public ApiCaptureManager
                                              const VkHostImageLayoutTransitionInfo* pTransitions);
 
   protected:
-    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
+    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan), smart_memory_tracker_(this) {}
 
     virtual ~VulkanCaptureManager() {}
 
@@ -2090,7 +2091,8 @@ class VulkanCaptureManager : public ApiCaptureManager
     virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock) override;
 
   private:
-    void QueueSubmitWriteFillMemoryCmd();
+    void QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo* submits);
+    void QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo2* submits);
     void MapMemoryWriteFixShadowMemoryCmd(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory);
 
     static std::mutex                               instance_lock_;
@@ -2098,6 +2100,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     static graphics::VulkanLayerTable               vulkan_layer_table_;
     std::set<vulkan_wrappers::DeviceMemoryWrapper*> mapped_memory_; // Track mapped memory for unassisted tracking mode.
     std::unique_ptr<VulkanStateTracker>             state_tracker_;
+    VulkanSmartMemoryTracker                        smart_memory_tracker_;
     std::vector<const char*>                        faked_extensions_;
     HardwareBufferMap                               hardware_buffers_;
     std::mutex                                      deferred_operation_mutex;

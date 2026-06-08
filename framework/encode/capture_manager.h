@@ -553,6 +553,9 @@ class CommonCaptureManager
     void WriteFillMemoryCmd(
         format::ApiFamilyId api_family, format::HandleId memory_id, uint64_t offset, uint64_t size, const void* data);
 
+    void WriteFillMemoryRangeCmd(
+        format::ApiFamilyId api_family, format::HandleId memory_id, uint64_t offset, uint64_t size, const void* data);
+
     void WriteCreateHeapAllocationCmd(uint64_t allocation_id, uint64_t allocation_size);
 
     void WriteFixDeviceAddressCmd(format::ApiFamilyId          api_family,

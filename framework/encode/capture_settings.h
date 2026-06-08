@@ -189,6 +189,9 @@ class CaptureSettings
         // allocation but in this case the memory is monitored using the userfaultfd mechanism provided by the linux
         // kernel.
         kUserfaultfd = 3,
+        // Track mapped memory with streaming Vulkan resource usage. This mode keeps the application's mapped pointer
+        // unchanged and emits changed bytes only for exposed ranges used by submitted work.
+        kSmart = 4,
         // Track nothing (disable memory tracking).
         kNone = UINT16_MAX
     };

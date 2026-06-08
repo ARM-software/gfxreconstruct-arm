@@ -69,6 +69,7 @@ void VulkanStateTracker::TrackCommandExecution(vulkan_wrappers::CommandBufferWra
         wrapper->recorded_queries.clear();
         wrapper->tlas_build_info_map.clear();
         wrapper->modified_assets.clear();
+        wrapper->smart_touched_assets.clear();
         wrapper->secondaries.clear();
         for (uint32_t point = vulkan_state_info::kBindPoint_graphics; point != vulkan_state_info::kBindPoint_count;
              ++point)
@@ -137,6 +138,7 @@ void VulkanStateTracker::TrackResetCommandPool(VkCommandPool command_pool)
         entry.second->recorded_queries.clear();
         entry.second->tlas_build_info_map.clear();
         entry.second->modified_assets.clear();
+        entry.second->smart_touched_assets.clear();
         entry.second->secondaries.clear();
         for (uint32_t point = vulkan_state_info::kBindPoint_graphics; point != vulkan_state_info::kBindPoint_count;
              ++point)
@@ -397,6 +399,11 @@ void VulkanStateTracker::TrackBufferMemoryBinding(
     wrapper->bind_offset    = memoryOffset;
     wrapper->bind_pnext     = nullptr;
 
+    // BufferWrapper shadows AssetWrapperBase binding fields; keep the base fields in sync for generic asset users.
+    AssetWrapperBase* asset = wrapper;
+    asset->bind_memory_id   = wrapper->bind_memory_id;
+    asset->bind_offset      = wrapper->bind_offset;
+
     vulkan_wrappers::DeviceMemoryWrapper* mem_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
     assert(mem_wrapper != nullptr);
@@ -555,13 +562,13 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                     encode::AccelerationStructureInputBuffer& buffer =
                         dst_command.input_buffers[target_buffer_wrapper->handle_id];
 
-                    buffer.capture_address                          = address;
-                    buffer.handle                                   = target_buffer_wrapper->handle;
-                    buffer.handle_id                                = target_buffer_wrapper->handle_id;
-                    buffer.bind_device                              = target_buffer_wrapper->bind_device;
-                    buffer.queue_family_index                       = target_buffer_wrapper->queue_family_index;
-                    buffer.created_size                             = target_buffer_wrapper->size;
-                    buffer.usage                                    = target_buffer_wrapper->usage;
+                    buffer.capture_address                             = address;
+                    buffer.handle                                      = target_buffer_wrapper->handle;
+                    buffer.handle_id                                   = target_buffer_wrapper->handle_id;
+                    buffer.bind_device                                 = target_buffer_wrapper->bind_device;
+                    buffer.queue_family_index                          = target_buffer_wrapper->queue_family_index;
+                    buffer.created_size                                = target_buffer_wrapper->size;
+                    buffer.usage                                       = target_buffer_wrapper->usage;
                     target_buffer_wrapper->as_target_storage_buffer_id = wrapper->buffer->handle_id;
                 }
             }
@@ -3041,6 +3048,10 @@ void VulkanStateTracker::InsertImageAssetInCommandBuffer(VkCommandBuffer command
         assert(image_wrapper != nullptr);
 
         cmd_buf_wrapper->modified_assets.insert(image_wrapper);
+        if (image_wrapper->size > 0)
+        {
+            cmd_buf_wrapper->smart_touched_assets[image_wrapper].AddRange(0, image_wrapper->size);
+        }
     }
 }
 
@@ -3057,6 +3068,42 @@ void VulkanStateTracker::InsertBufferAssetInCommandBuffer(VkCommandBuffer comman
         assert(buffer_wrapper != nullptr);
 
         cmd_buf_wrapper->modified_assets.insert(buffer_wrapper);
+        const VkDeviceSize size = buffer_wrapper->size != 0 ? buffer_wrapper->size : buffer_wrapper->created_size;
+        if (size > 0)
+        {
+            cmd_buf_wrapper->smart_touched_assets[buffer_wrapper].AddRange(0, size);
+        }
+    }
+}
+
+void VulkanStateTracker::InsertBufferAssetRangeInCommandBuffer(VkCommandBuffer command_buffer,
+                                                               VkBuffer        buffer,
+                                                               VkDeviceSize    offset,
+                                                               VkDeviceSize    size)
+{
+    if (command_buffer != VK_NULL_HANDLE && buffer != VK_NULL_HANDLE && size != 0)
+    {
+        vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
+            vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(command_buffer);
+        assert(cmd_buf_wrapper != nullptr);
+
+        vulkan_wrappers::BufferWrapper* buffer_wrapper =
+            vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(buffer);
+        assert(buffer_wrapper != nullptr);
+
+        const VkDeviceSize buffer_size =
+            buffer_wrapper->size != 0 ? buffer_wrapper->size : buffer_wrapper->created_size;
+        if (offset >= buffer_size)
+        {
+            return;
+        }
+
+        if (size == VK_WHOLE_SIZE || size > (buffer_size - offset))
+        {
+            size = buffer_size - offset;
+        }
+
+        cmd_buf_wrapper->smart_touched_assets[buffer_wrapper].AddRange(offset, size);
     }
 }
 
@@ -3066,6 +3113,13 @@ void VulkanStateTracker::TrackCmdCopyBuffer(VkCommandBuffer     commandBuffer,
                                             uint32_t            regionCount,
                                             const VkBufferCopy* pRegions)
 {
+    if (pRegions != nullptr)
+    {
+        for (uint32_t i = 0; i < regionCount; ++i)
+        {
+            InsertBufferAssetRangeInCommandBuffer(commandBuffer, srcBuffer, pRegions[i].srcOffset, pRegions[i].size);
+        }
+    }
     InsertBufferAssetInCommandBuffer(commandBuffer, dstBuffer);
 }
 
@@ -3087,6 +3141,13 @@ void VulkanStateTracker::TrackCmdCopyBufferToImage(VkCommandBuffer          comm
                                                    uint32_t                 regionCount,
                                                    const VkBufferImageCopy* pRegions)
 {
+    if (pRegions != nullptr)
+    {
+        for (uint32_t i = 0; i < regionCount; ++i)
+        {
+            InsertBufferAssetRangeInCommandBuffer(commandBuffer, srcBuffer, pRegions[i].bufferOffset, VK_WHOLE_SIZE);
+        }
+    }
     InsertImageAssetInCommandBuffer(commandBuffer, dstImage);
 }
 
@@ -3097,6 +3158,7 @@ void VulkanStateTracker::TrackCmdCopyImageToBuffer(VkCommandBuffer          comm
                                                    uint32_t                 regionCount,
                                                    const VkBufferImageCopy* pRegions)
 {
+    InsertImageAssetInCommandBuffer(commandBuffer, srcImage);
     InsertBufferAssetInCommandBuffer(commandBuffer, dstBuffer);
 }
 
@@ -3104,6 +3166,16 @@ void VulkanStateTracker::TrackCmdCopyBuffer2(VkCommandBuffer commandBuffer, cons
 {
     if (pCopyBufferInfo != nullptr)
     {
+        if (pCopyBufferInfo->pRegions != nullptr)
+        {
+            for (uint32_t i = 0; i < pCopyBufferInfo->regionCount; ++i)
+            {
+                InsertBufferAssetRangeInCommandBuffer(commandBuffer,
+                                                      pCopyBufferInfo->srcBuffer,
+                                                      pCopyBufferInfo->pRegions[i].srcOffset,
+                                                      pCopyBufferInfo->pRegions[i].size);
+            }
+        }
         InsertBufferAssetInCommandBuffer(commandBuffer, pCopyBufferInfo->dstBuffer);
     }
 }
@@ -3121,6 +3193,16 @@ void VulkanStateTracker::TrackCmdCopyBufferToImage2(VkCommandBuffer             
 {
     if (pCopyBufferToImageInfo != nullptr)
     {
+        if (pCopyBufferToImageInfo->pRegions != nullptr)
+        {
+            for (uint32_t i = 0; i < pCopyBufferToImageInfo->regionCount; ++i)
+            {
+                InsertBufferAssetRangeInCommandBuffer(commandBuffer,
+                                                      pCopyBufferToImageInfo->srcBuffer,
+                                                      pCopyBufferToImageInfo->pRegions[i].bufferOffset,
+                                                      VK_WHOLE_SIZE);
+            }
+        }
         InsertImageAssetInCommandBuffer(commandBuffer, pCopyBufferToImageInfo->dstImage);
     }
 }
@@ -3130,6 +3212,7 @@ void VulkanStateTracker::TrackCmdCopyImageToBuffer2(VkCommandBuffer             
 {
     if (pCopyImageToBufferInfo != nullptr)
     {
+        InsertImageAssetInCommandBuffer(commandBuffer, pCopyImageToBufferInfo->srcImage);
         InsertBufferAssetInCommandBuffer(commandBuffer, pCopyImageToBufferInfo->dstBuffer);
     }
 }
@@ -3260,6 +3343,7 @@ void VulkanStateTracker::TrackCmdDrawMeshTasksIndirectNV(
 {
     if (drawCount)
     {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * drawCount);
         vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3276,6 +3360,8 @@ void VulkanStateTracker::TrackCmdDrawMeshTasksIndirectCountNV(VkCommandBuffer co
 {
     if (maxDrawCount)
     {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * maxDrawCount);
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, countBuffer, countBufferOffset, sizeof(uint32_t));
         vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3300,6 +3386,7 @@ void VulkanStateTracker::TrackCmdDrawMeshTasksIndirectEXT(
 {
     if (drawCount)
     {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * drawCount);
         vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3316,6 +3403,8 @@ void VulkanStateTracker::TrackCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer c
 {
     if (maxDrawCount)
     {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * maxDrawCount);
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, countBuffer, countBufferOffset, sizeof(uint32_t));
         vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
             vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
         TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3402,6 +3491,31 @@ void VulkanStateTracker::TrackPipelineDescriptors(vulkan_wrappers::CommandBuffer
                         if (img_view_wrapper != nullptr && img_view_wrapper->image != nullptr)
                         {
                             command_wrapper->modified_assets.insert(img_view_wrapper->image);
+                            if (img_view_wrapper->image->size > 0)
+                            {
+                                command_wrapper->smart_touched_assets[img_view_wrapper->image].AddRange(
+                                    0, img_view_wrapper->image->size);
+                            }
+                        }
+                    }
+                }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                {
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
+                    {
+                        vulkan_wrappers::ImageViewWrapper* img_view_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageViewWrapper>(
+                                descriptor_binding.second.images[a].imageView);
+
+                        if (img_view_wrapper != nullptr && img_view_wrapper->image != nullptr &&
+                            img_view_wrapper->image->size > 0)
+                        {
+                            command_wrapper->smart_touched_assets[img_view_wrapper->image].AddRange(
+                                0, img_view_wrapper->image->size);
                         }
                     }
                 }
@@ -3418,6 +3532,45 @@ void VulkanStateTracker::TrackPipelineDescriptors(vulkan_wrappers::CommandBuffer
                         if (buf_wrapper != nullptr)
                         {
                             command_wrapper->modified_assets.insert(buf_wrapper);
+                            const VkDeviceSize buffer_size =
+                                buf_wrapper->size != 0 ? buf_wrapper->size : buf_wrapper->created_size;
+                            VkDeviceSize offset = descriptor_binding.second.storage_buffers[a].offset;
+                            VkDeviceSize range  = descriptor_binding.second.storage_buffers[a].range;
+                            if (offset < buffer_size)
+                            {
+                                if (range == VK_WHOLE_SIZE || range > (buffer_size - offset))
+                                {
+                                    range = buffer_size - offset;
+                                }
+                                command_wrapper->smart_touched_assets[buf_wrapper].AddRange(offset, range);
+                            }
+                        }
+                    }
+                }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+                {
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
+                    {
+                        vulkan_wrappers::BufferWrapper* buf_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferWrapper>(
+                                descriptor_binding.second.buffers[a].buffer);
+                        if (buf_wrapper != nullptr)
+                        {
+                            const VkDeviceSize buffer_size =
+                                buf_wrapper->size != 0 ? buf_wrapper->size : buf_wrapper->created_size;
+                            VkDeviceSize offset = descriptor_binding.second.buffers[a].offset;
+                            VkDeviceSize range  = descriptor_binding.second.buffers[a].range;
+                            if (offset < buffer_size)
+                            {
+                                if (range == VK_WHOLE_SIZE || range > (buffer_size - offset))
+                                {
+                                    range = buffer_size - offset;
+                                }
+                                command_wrapper->smart_touched_assets[buf_wrapper].AddRange(offset, range);
+                            }
                         }
                     }
                 }
@@ -3433,6 +3586,34 @@ void VulkanStateTracker::TrackPipelineDescriptors(vulkan_wrappers::CommandBuffer
                         if (buf_view_wrapper != nullptr && buf_view_wrapper->buffer != nullptr)
                         {
                             command_wrapper->modified_assets.insert(buf_view_wrapper->buffer);
+                            const VkDeviceSize size = buf_view_wrapper->buffer->size != 0
+                                                          ? buf_view_wrapper->buffer->size
+                                                          : buf_view_wrapper->buffer->created_size;
+                            if (size > 0)
+                            {
+                                command_wrapper->smart_touched_assets[buf_view_wrapper->buffer].AddRange(0, size);
+                            }
+                        }
+                    }
+                }
+                break;
+
+                case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+                {
+                    for (uint32_t a = 0; a < descriptor_binding.second.count; ++a)
+                    {
+                        vulkan_wrappers::BufferViewWrapper* buf_view_wrapper =
+                            vulkan_wrappers::GetWrapper<vulkan_wrappers::BufferViewWrapper>(
+                                descriptor_binding.second.uniform_texel_buffer_views[a]);
+                        if (buf_view_wrapper != nullptr && buf_view_wrapper->buffer != nullptr)
+                        {
+                            const VkDeviceSize size = buf_view_wrapper->buffer->size != 0
+                                                          ? buf_view_wrapper->buffer->size
+                                                          : buf_view_wrapper->buffer->created_size;
+                            if (size > 0)
+                            {
+                                command_wrapper->smart_touched_assets[buf_view_wrapper->buffer].AddRange(0, size);
+                            }
                         }
                     }
                 }
@@ -3472,6 +3653,11 @@ void VulkanStateTracker::TrackCmdDrawIndexed(VkCommandBuffer commandBuffer,
 void VulkanStateTracker::TrackCmdDrawIndirect(
     VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
 {
+    if (drawCount > 0)
+    {
+        const VkDeviceSize size = (drawCount == 1) ? sizeof(VkDrawIndirectCommand) : stride * drawCount;
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, size);
+    }
     vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
     TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3480,6 +3666,11 @@ void VulkanStateTracker::TrackCmdDrawIndirect(
 void VulkanStateTracker::TrackCmdDrawIndexedIndirect(
     VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
 {
+    if (drawCount > 0)
+    {
+        const VkDeviceSize size = (drawCount == 1) ? sizeof(VkDrawIndexedIndirectCommand) : stride * drawCount;
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, size);
+    }
     vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
     TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3493,6 +3684,11 @@ void VulkanStateTracker::TrackCmdDrawIndirectCount(VkCommandBuffer commandBuffer
                                                    uint32_t        maxDrawCount,
                                                    uint32_t        stride)
 {
+    if (maxDrawCount > 0)
+    {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * maxDrawCount);
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, countBuffer, countBufferOffset, sizeof(uint32_t));
+    }
     vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
     TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3506,6 +3702,11 @@ void VulkanStateTracker::TrackCmdDrawIndexedIndirectCount(VkCommandBuffer comman
                                                           uint32_t        maxDrawCount,
                                                           uint32_t        stride)
 {
+    if (maxDrawCount > 0)
+    {
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, stride * maxDrawCount);
+        InsertBufferAssetRangeInCommandBuffer(commandBuffer, countBuffer, countBufferOffset, sizeof(uint32_t));
+    }
     vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
     TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
@@ -3519,9 +3720,8 @@ void VulkanStateTracker::TrackCmdDrawIndirectCountKHR(VkCommandBuffer commandBuf
                                                       uint32_t        maxDrawCount,
                                                       uint32_t        stride)
 {
-    vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
-        vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
-    TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
+    TrackCmdDrawIndirectCount(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    return;
 }
 
 void VulkanStateTracker::TrackCmdDrawIndexedIndirectCountKHR(VkCommandBuffer commandBuffer,
@@ -3532,9 +3732,9 @@ void VulkanStateTracker::TrackCmdDrawIndexedIndirectCountKHR(VkCommandBuffer com
                                                              uint32_t        maxDrawCount,
                                                              uint32_t        stride)
 {
-    vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
-        vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
-    TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_graphics);
+    TrackCmdDrawIndexedIndirectCount(
+        commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    return;
 }
 
 void VulkanStateTracker::TrackCmdDispatch(VkCommandBuffer commandBuffer,
@@ -3549,6 +3749,7 @@ void VulkanStateTracker::TrackCmdDispatch(VkCommandBuffer commandBuffer,
 
 void VulkanStateTracker::TrackCmdDispatchIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset)
 {
+    InsertBufferAssetRangeInCommandBuffer(commandBuffer, buffer, offset, sizeof(VkDispatchIndirectCommand));
     vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(commandBuffer);
     TrackPipelineDescriptors(cmd_buf_wrapper, vulkan_state_info::PipelineBindPoints::kBindPoint_compute);
@@ -3691,6 +3892,115 @@ void VulkanStateTracker::TrackAssetsInSubmission(uint32_t submitCount, const VkS
         }
 
         TrackMappedAssetsWrites(format::kNullHandleId);
+    }
+}
+
+std::unordered_map<format::HandleId, util::RangeList>
+VulkanStateTracker::GetSmartTouchedMemoryRanges(uint32_t submit_count, const VkSubmitInfo* submits)
+{
+    std::unordered_map<format::HandleId, util::RangeList> touched_ranges;
+
+    if (submits != nullptr)
+    {
+        for (uint32_t s = 0; s < submit_count; ++s)
+        {
+            for (uint32_t c = 0; c < submits[s].commandBufferCount; ++c)
+            {
+                auto command_wrapper =
+                    vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(submits[s].pCommandBuffers[c]);
+                CollectSmartTouchedMemoryRanges(command_wrapper, &touched_ranges);
+            }
+        }
+    }
+
+    return touched_ranges;
+}
+
+std::unordered_map<format::HandleId, util::RangeList>
+VulkanStateTracker::GetSmartTouchedMemoryRanges(uint32_t submit_count, const VkSubmitInfo2* submits)
+{
+    std::unordered_map<format::HandleId, util::RangeList> touched_ranges;
+
+    if (submits != nullptr)
+    {
+        for (uint32_t s = 0; s < submit_count; ++s)
+        {
+            for (uint32_t c = 0; c < submits[s].commandBufferInfoCount; ++c)
+            {
+                auto command_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
+                    submits[s].pCommandBufferInfos[c].commandBuffer);
+                CollectSmartTouchedMemoryRanges(command_wrapper, &touched_ranges);
+            }
+        }
+    }
+
+    return touched_ranges;
+}
+
+void VulkanStateTracker::CollectSmartTouchedMemoryRanges(
+    const vulkan_wrappers::CommandBufferWrapper*           command_wrapper,
+    std::unordered_map<format::HandleId, util::RangeList>* touched_ranges) const
+{
+    if (command_wrapper == nullptr || touched_ranges == nullptr)
+    {
+        return;
+    }
+
+    for (const auto& entry : command_wrapper->smart_touched_assets)
+    {
+        const auto* asset = entry.first;
+        if (asset != nullptr && asset->bind_memory_id != format::kNullHandleId)
+        {
+            (*touched_ranges)[asset->bind_memory_id].AddRanges(entry.second, asset->bind_offset);
+        }
+    }
+
+    for (format::HandleId handle_id :
+         command_wrapper->command_handles[vulkan_state_info::CommandHandleType::BufferHandle])
+    {
+        AddSmartTouchedAssetRange(state_table_.GetVulkanBufferWrapper(handle_id), touched_ranges);
+    }
+
+    for (format::HandleId handle_id :
+         command_wrapper->command_handles[vulkan_state_info::CommandHandleType::BufferViewHandle])
+    {
+        const vulkan_wrappers::BufferViewWrapper* buffer_view = state_table_.GetVulkanBufferViewWrapper(handle_id);
+        if (buffer_view != nullptr)
+        {
+            AddSmartTouchedAssetRange(buffer_view->buffer, touched_ranges);
+        }
+    }
+
+    for (format::HandleId handle_id :
+         command_wrapper->command_handles[vulkan_state_info::CommandHandleType::ImageHandle])
+    {
+        AddSmartTouchedAssetRange(state_table_.GetVulkanImageWrapper(handle_id), touched_ranges);
+    }
+
+    for (format::HandleId handle_id :
+         command_wrapper->command_handles[vulkan_state_info::CommandHandleType::ImageViewHandle])
+    {
+        const vulkan_wrappers::ImageViewWrapper* image_view = state_table_.GetVulkanImageViewWrapper(handle_id);
+        if (image_view != nullptr)
+        {
+            AddSmartTouchedAssetRange(image_view->image, touched_ranges);
+        }
+    }
+
+    for (const vulkan_wrappers::CommandBufferWrapper* secondary : command_wrapper->secondaries)
+    {
+        CollectSmartTouchedMemoryRanges(secondary, touched_ranges);
+    }
+}
+
+void VulkanStateTracker::AddSmartTouchedAssetRange(
+    const vulkan_wrappers::AssetWrapperBase*               asset,
+    std::unordered_map<format::HandleId, util::RangeList>* touched_ranges) const
+{
+    if (asset != nullptr && touched_ranges != nullptr && asset->bind_memory_id != format::kNullHandleId &&
+        asset->size > 0)
+    {
+        (*touched_ranges)[asset->bind_memory_id].AddRange(asset->bind_offset, asset->size);
     }
 }
 
