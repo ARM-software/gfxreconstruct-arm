@@ -30,6 +30,123 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 Dx12ReplayConsumerArmFeatures::Dx12ReplayConsumerArmFeatures(Dx12ReplayConsumerBase* consumer) : consumer_(consumer) {}
 
+void Dx12ReplayConsumerArmFeatures::TrackPlaceholderSharedResource(format::HandleId resource_id)
+{
+    placeholder_shared_resources_.insert(resource_id);
+}
+
+void Dx12ReplayConsumerArmFeatures::ForgetPlaceholder(format::HandleId object_id)
+{
+    placeholder_shared_resources_.erase(object_id);
+    outgoing_shared_fences_.erase(object_id);
+}
+
+void Dx12ReplayConsumerArmFeatures::TrackOutgoingSharedFence(format::HandleId fence_id)
+{
+    outgoing_shared_fences_.insert(fence_id);
+}
+
+bool Dx12ReplayConsumerArmFeatures::IsOutgoingSharedFence(format::HandleId fence_id) const
+{
+    return outgoing_shared_fences_.count(fence_id) > 0;
+}
+
+void Dx12ReplayConsumerArmFeatures::OnSharedResourceGetDesc(DxObjectInfo*              resource_object_info,
+                                                            const D3D12_RESOURCE_DESC* captured_desc)
+{
+    if ((resource_object_info == nullptr) || (captured_desc == nullptr))
+    {
+        return;
+    }
+
+    if (placeholder_shared_resources_.count(resource_object_info->capture_id) == 0)
+    {
+        return;
+    }
+
+    // The supported imported-resource trace calls GetDesc before creating any descriptor or GPU use.
+    if (RecreateSharedResourcePlaceholder(resource_object_info, *captured_desc))
+    {
+        placeholder_shared_resources_.erase(resource_object_info->capture_id);
+    }
+}
+
+bool Dx12ReplayConsumerArmFeatures::RecreateSharedResourcePlaceholder(DxObjectInfo*              resource_object_info,
+                                                                      const D3D12_RESOURCE_DESC& captured_desc)
+{
+    auto resource_info = GetExtraInfo<D3D12ResourceInfo>(resource_object_info);
+    if ((resource_object_info->object == nullptr) || (resource_info == nullptr))
+    {
+        return false;
+    }
+
+    auto                               placeholder = static_cast<ID3D12Resource*>(resource_object_info->object);
+    graphics::dx12::ID3D12DeviceComPtr device      = nullptr;
+    if (FAILED(placeholder->GetDevice(IID_PPV_ARGS(&device))) || (device == nullptr))
+    {
+        return false;
+    }
+
+    D3D12_HEAP_PROPERTIES heap_properties = {};
+    heap_properties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC desc = captured_desc;
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER)
+    {
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    }
+
+    ID3D12Resource* sized_resource = nullptr;
+    HRESULT         create_result  = device->CreateCommittedResource(&heap_properties,
+                                                            D3D12_HEAP_FLAG_NONE,
+                                                            &desc,
+                                                            D3D12_RESOURCE_STATE_COMMON,
+                                                            nullptr,
+                                                            IID_PPV_ARGS(&sized_resource));
+    if (FAILED(create_result) || (sized_resource == nullptr))
+    {
+        GFXRECON_LOG_WARNING("Unable to recreate placeholder shared resource %" PRIu64
+                             " at its captured description (%s); keeping the minimal placeholder.",
+                             resource_object_info->capture_id,
+                             enumutil::GetResultValueString(create_result).c_str());
+        return false;
+    }
+
+    for (uint64_t i = 1; i < resource_object_info->ref_count; ++i)
+    {
+        sized_resource->AddRef();
+    }
+
+    if (resource_object_info->object != nullptr)
+    {
+        const uint64_t release_count = (resource_object_info->ref_count == 0) ? 1 : resource_object_info->ref_count;
+        for (uint64_t i = 0; i < release_count; ++i)
+        {
+            static_cast<IUnknown*>(resource_object_info->object)->Release();
+        }
+    }
+    resource_object_info->object = sized_resource;
+
+    resource_info->desc                  = {};
+    resource_info->desc.Dimension        = desc.Dimension;
+    resource_info->desc.Alignment        = desc.Alignment;
+    resource_info->desc.Width            = desc.Width;
+    resource_info->desc.Height           = desc.Height;
+    resource_info->desc.DepthOrArraySize = desc.DepthOrArraySize;
+    resource_info->desc.MipLevels        = desc.MipLevels;
+    resource_info->desc.Format           = desc.Format;
+    resource_info->desc.SampleDesc       = desc.SampleDesc;
+    resource_info->desc.Layout           = desc.Layout;
+    resource_info->desc.Flags            = desc.Flags;
+
+    resource_info->subresource_count = graphics::Dx12ResourceDataUtil::GetSubresourceCount(sized_resource);
+    resource_info->resource_state_infos.assign(
+        resource_info->subresource_count,
+        graphics::dx12::ResourceStateInfo{ D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_BARRIER_FLAG_NONE });
+
+    return true;
+}
+
 void Dx12ReplayConsumerArmFeatures::CheckReplayResult(const char* call_name,
                                                       HRESULT     capture_result,
                                                       HRESULT     replay_result)
@@ -739,6 +856,31 @@ void Dx12ReplayConsumerArmFeatures::SetResourceReplayRequiredSize(
             }
         }
     }
+}
+
+HRESULT Dx12ReplayConsumerArmFeatures::CreateSharedResourcePlaceholder(ID3D12Device* device, void** out_object)
+{
+    D3D12_HEAP_PROPERTIES heap_properties = {};
+    heap_properties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width               = 1;
+    desc.Height              = 1;
+    desc.DepthOrArraySize    = 1;
+    desc.MipLevels           = 1;
+    desc.Format              = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count    = 1;
+    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+
+    return device->CreateCommittedResource(&heap_properties,
+                                           D3D12_HEAP_FLAG_NONE,
+                                           &desc,
+                                           D3D12_RESOURCE_STATE_COMMON,
+                                           nullptr,
+                                           __uuidof(ID3D12Resource),
+                                           out_object);
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -36,6 +36,7 @@
 #include "util/defines.h"
 #include "util/file_output_stream.h"
 #include "util/memory_output_stream.h"
+#include "util/output_stream.h"
 #include "generated/generated_dx12_state_table.h"
 
 #include <unordered_set>
@@ -46,7 +47,7 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 class Dx12StateWriter
 {
   public:
-    Dx12StateWriter(util::FileOutputStream* output_stream,
+    Dx12StateWriter(util::OutputStream*     output_stream,
                     util::Compressor*       compressor,
                     format::ThreadId        thread_id,
                     util::FileOutputStream* asset_file_stream = nullptr);
@@ -59,10 +60,22 @@ class Dx12StateWriter
     void WriteState(const Dx12StateTable& state_table, uint64_t frame_number);
 #endif // GFXRECON_AGS_SUPPORT
 
+    // Emits a content snapshot synchronized with its consumer queue.
+    uint64_t WriteSharedResourceContent(ID3D12Resource_Wrapper*                               resource_wrapper,
+                                        const std::vector<graphics::dx12::ResourceStateInfo>& resource_states,
+                                        ID3D12CommandQueue*                                   consumer_queue,
+                                        graphics::Dx12ResourceDataUtil*                       resource_data_util);
+
   private:
+    bool HasKnownSharedResourceStates(ID3D12Resource_Wrapper*                               resource_wrapper,
+                                      const ID3D12ResourceInfo*                             resource_info,
+                                      const std::vector<graphics::dx12::ResourceStateInfo>& resource_states) const;
+
     struct ResourceSnapshotInfo
     {
-        ID3D12Resource_Wrapper* resource_wrapper{ nullptr };
+        ID3D12Resource_Wrapper*                        resource_wrapper{ nullptr };
+        bool                                           synchronize_with_swapchain_queue{ true };
+        std::vector<graphics::dx12::ResourceStateInfo> resource_states;
     };
 
     // TODO: This is similar to the method in VulkanStateWriter. Possibly refactor to share common code.
@@ -158,8 +171,8 @@ class Dx12StateWriter
     WriteResourceSnapshots(const std::unordered_map<format::HandleId, std::vector<ResourceSnapshotInfo>>& snapshots,
                            const std::unordered_map<format::HandleId, uint64_t>& max_resource_sizes);
 
-    void WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* resource_data_util,
-                               const ResourceSnapshotInfo&     snapshot);
+    uint64_t WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* resource_data_util,
+                                   const ResourceSnapshotInfo&     snapshot);
 
     // Sync to ensure all pending command queues are completed before processing state writing.
     void WaitForCommandQueues(const Dx12StateTable& state_table);
@@ -221,7 +234,7 @@ class Dx12StateWriter
     void WriteAgsDriverExtensionsDX12CreateDevice(const AgsStateTable& ags_state_table);
 #endif // GFXRECON_AGS_SUPPORT
 
-    util::FileOutputStream*  output_stream_;
+    util::OutputStream*      output_stream_;
     util::Compressor*        compressor_;
     std::vector<uint8_t>     compressed_parameter_buffer_;
     format::ThreadId         thread_id_;

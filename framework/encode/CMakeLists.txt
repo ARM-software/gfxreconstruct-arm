@@ -69,6 +69,8 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_writer.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_capture_manager.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_capture_manager.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_capture_manager_arm_features.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_capture_manager_arm_features.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_dispatch_table.h>
                     ${CMAKE_CURRENT_LIST_DIR}/descriptor_update_template_info.h
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_dll_initializer.h>

@@ -212,6 +212,10 @@ class ApiCaptureManager
     bool GetDisableMetaCommandSetting() const { return common_manager_->GetDisableMetaCommandSetting(); }
     bool GetOriginalWaveSizeSetting() const { return common_manager_->GetOriginalWaveSizeSetting(); }
     auto GetAccelStructPaddingSetting() const { return common_manager_->GetAccelStructPaddingSetting(); }
+    bool GetCaptureOpenSharedResourceRefreshSetting() const
+    {
+        return common_manager_->GetCaptureOpenSharedResourceRefreshSetting();
+    }
 
     void WriteResizeWindowCmd(format::HandleId surface_id, uint32_t width, uint32_t height)
     {

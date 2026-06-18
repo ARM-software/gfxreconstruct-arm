@@ -104,6 +104,8 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 #define CAPTURE_QUEUE_SUBMITS_UPPER                          "CAPTURE_QUEUE_SUBMITS"
 #define CAPTURE_USE_ASSET_FILE_LOWER                         "capture_use_asset_file"
 #define CAPTURE_USE_ASSET_FILE_UPPER                         "CAPTURE_USE_ASSET_FILE"
+#define CAPTURE_OPEN_SHARED_RESOURCE_REFRESH_LOWER           "capture_open_shared_resource_refresh"
+#define CAPTURE_OPEN_SHARED_RESOURCE_REFRESH_UPPER           "CAPTURE_OPEN_SHARED_RESOURCE_REFRESH"
 #define PAGE_GUARD_COPY_ON_MAP_LOWER                         "page_guard_copy_on_map"
 #define PAGE_GUARD_COPY_ON_MAP_UPPER                         "PAGE_GUARD_COPY_ON_MAP"
 #define PAGE_GUARD_SEPARATE_READ_LOWER                       "page_guard_separate_read"
@@ -282,6 +284,7 @@ class CaptureSettings
         bool                         quit_after_frame_ranges{ false };
         bool                         force_fifo_present_mode{ true };
         bool                         use_asset_file{ false };
+        bool                         capture_open_shared_resource_refresh{ true };
         bool                         ignore_frame_boundary_android{ false };
         bool                         skip_threads_with_invalid_data{ false };
         std::vector<std::string>     capture_environment;

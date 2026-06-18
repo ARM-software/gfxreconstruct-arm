@@ -63,6 +63,7 @@ const char kCaptureFileFlushEnvVar[]                         = GFXRECON_OPTION_S
 const char kCaptureFileNameEnvVar[]                          = GFXRECON_OPTION_STR(CAPTURE_FILE_NAME);
 const char kCaptureFileUseTimestampEnvVar[]                  = GFXRECON_OPTION_STR(CAPTURE_FILE_USE_TIMESTAMP);
 const char kCaptureUseAssetFileEnvVar[]                      = GFXRECON_OPTION_STR(CAPTURE_USE_ASSET_FILE);
+const char kCaptureOpenSharedResourceRefreshEnvVar[]         = GFXRECON_OPTION_STR(CAPTURE_OPEN_SHARED_RESOURCE_REFRESH);
 const char kLogAllowIndentsEnvVar[]                          = GFXRECON_OPTION_STR(LOG_ALLOW_INDENTS);
 const char kLogBreakOnErrorEnvVar[]                          = GFXRECON_OPTION_STR(LOG_BREAK_ON_ERROR);
 const char kLogDetailedEnvVar[]                              = GFXRECON_OPTION_STR(LOG_DETAILED);
@@ -161,6 +162,7 @@ const std::string kOptionKeyCaptureTriggerFrames                     = std::stri
 const std::string kOptionKeyCaptureIUnknownWrapping                  = std::string(kSettingsFilter) + std::string(CAPTURE_IUNKNOWN_WRAPPING_LOWER);
 const std::string kOptionKeyCaptureQueueSubmits                      = std::string(kSettingsFilter) + std::string(CAPTURE_QUEUE_SUBMITS_LOWER);
 const std::string kOptionKeyCaptureUseAssetFile                      = std::string(kSettingsFilter) + std::string(CAPTURE_USE_ASSET_FILE_LOWER);
+const std::string kOptionCaptureOpenSharedResourceRefresh            = std::string(kSettingsFilter) + std::string(CAPTURE_OPEN_SHARED_RESOURCE_REFRESH_LOWER);
 const std::string kOptionKeyPageGuardCopyOnMap                       = std::string(kSettingsFilter) + std::string(PAGE_GUARD_COPY_ON_MAP_LOWER);
 const std::string kOptionKeyPageGuardSeparateRead                    = std::string(kSettingsFilter) + std::string(PAGE_GUARD_SEPARATE_READ_LOWER);
 const std::string kOptionKeyPageGuardPersistentMemory                = std::string(kSettingsFilter) + std::string(PAGE_GUARD_PERSISTENT_MEMORY_LOWER);
@@ -330,6 +332,7 @@ void CaptureSettings::LoadOptionsEnvVar(OptionsMap* options, bool load_log_setti
     LoadSingleOptionEnvVar(options, kCaptureTriggerFramesEnvVar, kOptionKeyCaptureTriggerFrames);
     LoadSingleOptionEnvVar(options, kCaptureQueueSubmitsEnvVar, kOptionKeyCaptureQueueSubmits);
     LoadSingleOptionEnvVar(options, kCaptureUseAssetFileEnvVar, kOptionKeyCaptureUseAssetFile);
+    LoadSingleOptionEnvVar(options, kCaptureOpenSharedResourceRefreshEnvVar, kOptionCaptureOpenSharedResourceRefresh);
 
     // Page guard environment variables
     LoadSingleOptionEnvVar(options, kPageGuardCopyOnMapEnvVar, kOptionKeyPageGuardCopyOnMap);
@@ -602,6 +605,9 @@ void CaptureSettings::ProcessOptions(OptionsMap* options, CaptureSettings* setti
         FindOption(options, kOptionAccelStructPadding), settings->trace_settings_.accel_struct_padding);
     settings->trace_settings_.original_wave_size =
         ParseBoolString(FindOption(options, kOptionOriginalWaveSize), settings->trace_settings_.original_wave_size);
+    settings->trace_settings_.capture_open_shared_resource_refresh =
+        ParseBoolString(FindOption(options, kOptionCaptureOpenSharedResourceRefresh),
+                        settings->trace_settings_.capture_open_shared_resource_refresh);
 
     // IUnknown wrapping option
     settings->trace_settings_.iunknown_wrapping = ParseBoolString(

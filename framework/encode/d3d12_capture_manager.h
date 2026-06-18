@@ -29,6 +29,7 @@
 
 #include <cassert>
 #include <stdint.h>
+#include <memory>
 
 #include "encode/ags_dispatch_table.h"
 #include "encode/d3d12_dispatch_table.h"
@@ -37,9 +38,12 @@
 #include "encode/dx12_rv_annotator.h"
 #include "generated/generated_dx12_wrappers.h"
 #include "graphics/dx12_image_renderer.h"
+#include "graphics/dx12_util.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
+
+class D3D12CaptureManagerArmFeatures;
 
 class D3D12CaptureManager : public ApiCaptureManager
 {
@@ -390,6 +394,25 @@ class D3D12CaptureManager : public ApiCaptureManager
                                                             const DXGI_FORMAT*              castable_formats,
                                                             REFIID                          riid,
                                                             void**                          resource);
+
+    void PostProcess_ID3D12Device_OpenSharedHandle(
+        ID3D12Device_Wrapper* wrapper, HRESULT result, HANDLE NTHandle, REFIID riid, void** ppvObj);
+
+    void PreProcess_ID3D12GraphicsCommandList_CopyTextureRegion(ID3D12GraphicsCommandList_Wrapper* wrapper,
+                                                                const D3D12_TEXTURE_COPY_LOCATION* pDst,
+                                                                UINT                               DstX,
+                                                                UINT                               DstY,
+                                                                UINT                               DstZ,
+                                                                const D3D12_TEXTURE_COPY_LOCATION* pSrc,
+                                                                const D3D12_BOX*                   pSrcBox);
+
+    void PostProcess_ID3D12Device_CreateSharedHandle(ID3D12Device_Wrapper*      wrapper,
+                                                     HRESULT                    result,
+                                                     ID3D12DeviceChild*         pObject,
+                                                     const SECURITY_ATTRIBUTES* pAttributes,
+                                                     DWORD                      Access,
+                                                     LPCWSTR                    Name,
+                                                     HANDLE*                    pHandle);
 
     void PreProcess_ID3D12Device3_OpenExistingHeapFromAddress(ID3D12Device3_Wrapper* wrapper,
                                                               const void*            address,
@@ -921,7 +944,7 @@ class D3D12CaptureManager : public ApiCaptureManager
   protected:
     D3D12CaptureManager();
 
-    virtual ~D3D12CaptureManager() {}
+    virtual ~D3D12CaptureManager();
 
     virtual void CreateStateTracker() override { state_tracker_ = std::make_unique<Dx12StateTracker>(); }
 
@@ -975,6 +998,8 @@ class D3D12CaptureManager : public ApiCaptureManager
     void InitializeID3D12DeviceInfo(IUnknown* pAdapter, void** device);
 
   private:
+    friend class D3D12CaptureManagerArmFeatures;
+
     void     WriteDxgiAdapterInfoCommand(const format::DxgiAdapterDesc& adapter_desc);
     void     CheckWriteWatchIgnored(D3D12_HEAP_FLAGS flags, format::HandleId id);
     bool     UseWriteWatch(D3D12_HEAP_TYPE type, D3D12_HEAP_FLAGS flags, D3D12_CPU_PAGE_PROPERTY page_property);
@@ -983,6 +1008,17 @@ class D3D12CaptureManager : public ApiCaptureManager
     uint64_t GetResourceSizeInBytes(ID3D12Device_Wrapper* device_wrapper, const D3D12_RESOURCE_DESC* desc);
     uint64_t GetResourceSizeInBytes(ID3D12Device8_Wrapper* device_wrapper, const D3D12_RESOURCE_DESC1* desc);
     void     UpdateSwapChainSize(uint32_t width, uint32_t height, IDXGISwapChain1* swapchain);
+
+    void WritePendingSharedResourceSnapshots(ID3D12CommandQueue_Wrapper* queue_wrapper,
+                                             UINT                        num_lists,
+                                             ID3D12CommandList* const*   lists);
+    void ClearPendingSharedResourceSnapshots(format::HandleId command_list_id);
+    void TrackWriteModeResourceBarriers(ID3D12CommandList_Wrapper*    list_wrapper,
+                                        UINT                          num_barriers,
+                                        const D3D12_RESOURCE_BARRIER* barriers,
+                                        bool                          record_barriers = true);
+    void TrackWriteModeExecuteCommandLists(UINT num_lists, ID3D12CommandList* const* lists);
+
     PFN_D3D12_GET_DEBUG_INTERFACE GetDebugInterfacePtr();
     void                          EnableDebugLayer();
     void                          EnableDRED();
@@ -995,6 +1031,8 @@ class D3D12CaptureManager : public ApiCaptureManager
 
     static D3D12CaptureManager*       singleton_;
     std::set<ID3D12Resource_Wrapper*> mapped_resources_; ///< Track mapped resources for unassisted tracking mode.
+
+    std::unique_ptr<D3D12CaptureManagerArmFeatures> arm_features_;
     DxgiDispatchTable  dxgi_dispatch_table_;  ///< DXGI dispatch table for functions retrieved from the DXGI DLL.
     D3D12DispatchTable d3d12_dispatch_table_; ///< D3D12 dispatch table for functions retrieved from the D3D12 DLL.
     AgsDispatchTable   ags_dispatch_table_;   ///< ags dispatch table for functions retrieved from the AGS DLL.
@@ -1011,7 +1049,6 @@ class D3D12CaptureManager : public ApiCaptureManager
 
     DxgiDebugDispatchTable dxgi_debug_dispatch_table_; ///< DXGIDebug dispatch table for functions retrieved from the
                                                        ///< DXGIDebug DLL.
-
     std::unique_ptr<Dx12StateTracker> state_tracker_;
 
     std::unique_ptr<graphics::DX12ImageRenderer> frame_buffer_renderer_;

@@ -483,6 +483,10 @@ class CommonCaptureManager
     {
         return force_fifo_present_mode_;
     }
+    bool GetCaptureOpenSharedResourceRefreshSetting() const
+    {
+        return capture_open_shared_resource_refresh_;
+    }
     auto GetTrimBoundary() const
     {
         return trim_boundary_;
@@ -713,6 +717,7 @@ class CommonCaptureManager
     uint32_t                                fence_query_delay_limit_;
     std::vector<uint64_t>                   buffer_usages_to_ignore_;
     bool                                    force_fifo_present_mode_;
+    bool                                    capture_open_shared_resource_refresh_;
     bool                                    use_asset_file_;
     bool                                    write_assets_;
     bool                                    previous_write_assets_;

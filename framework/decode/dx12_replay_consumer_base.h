@@ -284,6 +284,11 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                          UINT                                      NumCommandLists,
                                                          HandlePointerDecoder<ID3D12CommandList*>* ppCommandLists);
 
+    void PostCall_ID3D12Resource_GetDesc(const ApiCallInfo&          call_info,
+                                         DxObjectInfo*               resource_object_info,
+                                         Decoded_D3D12_RESOURCE_DESC return_value,
+                                         D3D12_RESOURCE_DESC         replay_result);
+
     void PostCall_ID3D12CommandQueue_UpdateTileMappings(
         const ApiCallInfo&                                             call_info,
         DxObjectInfo*                                                  object_info,
@@ -315,6 +320,16 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                      Decoded_D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptorRangeStart,
                                                      Decoded_D3D12_CPU_DESCRIPTOR_HANDLE SrcDescriptorRangeStart,
                                                      D3D12_DESCRIPTOR_HEAP_TYPE          DescriptorHeapsType);
+
+    void PostCall_ID3D12Device_CreateSharedHandle(const ApiCallInfo& call_info,
+                                                  DxObjectInfo*      device_object_info,
+                                                  HRESULT            return_value,
+                                                  HRESULT            replay_result,
+                                                  format::HandleId   pObject,
+                                                  StructPointerDecoder<Decoded__SECURITY_ATTRIBUTES>* pAttributes,
+                                                  DWORD                                               Access,
+                                                  WStringDecoder*                                     Name,
+                                                  PointerDecoder<uint64_t, void*>*                    pHandle);
 
     void PreCall_ID3D12GraphicsCommandList4_CopyRaytracingAccelerationStructure(
         const ApiCallInfo&                                call_info,

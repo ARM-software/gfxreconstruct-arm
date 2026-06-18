@@ -253,6 +253,36 @@ struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateReser
 };
 
 template <>
+struct CustomWrapperPreCall<format::ApiCallId::ApiCall_ID3D12GraphicsCommandList_CopyTextureRegion>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PreProcess_ID3D12GraphicsCommandList_CopyTextureRegion(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Device_OpenSharedHandle>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_ID3D12Device_OpenSharedHandle(args...);
+    }
+};
+
+template <>
+struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateSharedHandle>
+{
+    template <typename... Args>
+    static void Dispatch(D3D12CaptureManager* manager, Args... args)
+    {
+        manager->PostProcess_ID3D12Device_CreateSharedHandle(args...);
+    }
+};
+
+template <>
 struct CustomWrapperPostCall<format::ApiCallId::ApiCall_ID3D12Device4_CreateReservedResource1>
 {
     template <typename... Args>

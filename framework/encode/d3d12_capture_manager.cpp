@@ -26,13 +26,18 @@
 #include "encode/d3d12_capture_manager.h"
 
 #include "graphics/dx12_util.h"
+#include "encode/d3d12_capture_manager_arm_features.h"
 #include "encode/custom_dx12_struct_unwrappers.h"
 #include "encode/dx12_object_wrapper_info.h"
 #include "encode/dx12_state_writer.h"
+
+#include <mutex>
+#include <vector>
 #include "generated/generated_dx12_wrapper_creators.h"
 #include "generated/generated_dx12_struct_unwrappers.h"
 #include "generated/generated_dx12_api_call_encoders.h"
 #include "decode/dx12_enum_util.h"
+#include "util/platform.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -45,8 +50,11 @@ thread_local uint32_t D3D12CaptureManager::call_scope_ = 0;
 D3D12CaptureManager::D3D12CaptureManager() :
     ApiCaptureManager(format::ApiFamilyId::ApiFamily_D3D12), dxgi_dispatch_table_{}, d3d12_dispatch_table_{},
     debug_layer_enabled_(false), debug_device_lost_enabled_(false),
-    track_enable_debug_layer_object_id_(format::kNullHandleId), frame_buffer_renderer_(nullptr)
+    track_enable_debug_layer_object_id_(format::kNullHandleId), frame_buffer_renderer_(nullptr),
+    arm_features_(std::make_unique<D3D12CaptureManagerArmFeatures>(this))
 {}
+
+D3D12CaptureManager::~D3D12CaptureManager() = default;
 
 bool D3D12CaptureManager::CreateInstance()
 {
@@ -329,6 +337,7 @@ void D3D12CaptureManager::InitializeID3D12ResourceInfo(ID3D12Device_Wrapper*    
     info->layout          = layout;
     info->heap_offset     = heap_offset;
     info->heap_wrapper    = heap_wrapper;
+    info->initial_state   = initial_state;
     if (heap_wrapper != nullptr)
     {
         info->heap_id = heap_wrapper->GetCaptureId();
@@ -604,6 +613,15 @@ void D3D12CaptureManager::PreProcess_IDXGISwapChain_ResizeBuffers(
 
 void D3D12CaptureManager::PrePresent(IDXGISwapChain_Wrapper* swapchain_wrapper)
 {
+    if (swapchain_wrapper != nullptr)
+    {
+        auto swapchain_info = swapchain_wrapper->GetObjectInfo();
+        if ((swapchain_info != nullptr) && swapchain_info->command_queue)
+        {
+            arm_features_->RefreshShaderResourceSnapshots(swapchain_info->command_queue);
+        }
+    }
+
     if (ShouldTriggerScreenshot())
     {
         auto swapchain_info = swapchain_wrapper->GetObjectInfo();
@@ -890,6 +908,35 @@ void D3D12CaptureManager::PostProcess_ID3D12Device_CreateCommittedResource(
 
         CheckWriteWatchIgnored(heap_flags, resource_wrapper->GetCaptureId());
     }
+}
+
+void D3D12CaptureManager::PostProcess_ID3D12Device_CreateSharedHandle(ID3D12Device_Wrapper*      wrapper,
+                                                                      HRESULT                    result,
+                                                                      ID3D12DeviceChild*         pObject,
+                                                                      const SECURITY_ATTRIBUTES* pAttributes,
+                                                                      DWORD                      Access,
+                                                                      LPCWSTR                    Name,
+                                                                      HANDLE*                    pHandle)
+{
+    arm_features_->PostProcessCreateSharedHandle(wrapper, result, pObject, pAttributes, Access, Name, pHandle);
+}
+
+void D3D12CaptureManager::PreProcess_ID3D12GraphicsCommandList_CopyTextureRegion(
+    ID3D12GraphicsCommandList_Wrapper* wrapper,
+    const D3D12_TEXTURE_COPY_LOCATION* pDst,
+    UINT                               DstX,
+    UINT                               DstY,
+    UINT                               DstZ,
+    const D3D12_TEXTURE_COPY_LOCATION* pSrc,
+    const D3D12_BOX*                   pSrcBox)
+{
+    arm_features_->PreProcessCopyTextureRegion(wrapper, pDst, DstX, DstY, DstZ, pSrc, pSrcBox);
+}
+
+void D3D12CaptureManager::PostProcess_ID3D12Device_OpenSharedHandle(
+    ID3D12Device_Wrapper* wrapper, HRESULT result, HANDLE NTHandle, REFIID riid, void** ppvObj)
+{
+    arm_features_->PostProcessOpenSharedHandle(wrapper, result, NTHandle, riid, ppvObj);
 }
 
 void D3D12CaptureManager::PostProcess_ID3D12Device_CreatePlacedResource(ID3D12Device_Wrapper*      wrapper,
@@ -1768,6 +1815,7 @@ void D3D12CaptureManager::Destroy_ID3D12Resource(ID3D12Resource_Wrapper* wrapper
         auto info = wrapper->GetObjectInfo();
         assert(info != nullptr);
 
+        arm_features_->DestroyResource(wrapper);
         if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard)
         {
             util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -1818,16 +1866,37 @@ void D3D12CaptureManager::Destroy_ID3D12Resource(ID3D12Resource_Wrapper* wrapper
     }
 }
 
+void D3D12CaptureManager::WritePendingSharedResourceSnapshots(ID3D12CommandQueue_Wrapper* queue_wrapper,
+                                                              UINT                        num_lists,
+                                                              ID3D12CommandList* const*   lists)
+{
+    arm_features_->WritePendingSharedResourceSnapshots(queue_wrapper, num_lists, lists);
+}
+
+void D3D12CaptureManager::ClearPendingSharedResourceSnapshots(format::HandleId command_list_id)
+{
+    arm_features_->ClearPendingSharedResourceSnapshots(command_list_id);
+}
+
+void D3D12CaptureManager::TrackWriteModeResourceBarriers(ID3D12CommandList_Wrapper*    list_wrapper,
+                                                         UINT                          num_barriers,
+                                                         const D3D12_RESOURCE_BARRIER* barriers,
+                                                         bool                          record_barriers)
+{
+    arm_features_->TrackWriteModeResourceBarriers(list_wrapper, num_barriers, barriers, record_barriers);
+}
+
+void D3D12CaptureManager::TrackWriteModeExecuteCommandLists(UINT num_lists, ID3D12CommandList* const* lists)
+{
+    arm_features_->TrackWriteModeExecuteCommandLists(num_lists, lists);
+}
+
 void D3D12CaptureManager::PreProcess_ID3D12CommandQueue_ExecuteCommandLists(
     std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
     ID3D12CommandQueue_Wrapper*                            wrapper,
     UINT                                                   num_lists,
     ID3D12CommandList* const*                              lists)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(wrapper);
-    GFXRECON_UNREFERENCED_PARAMETER(num_lists);
-    GFXRECON_UNREFERENCED_PARAMETER(lists);
-
     if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard)
     {
         util::PageGuardManager* manager = util::PageGuardManager::Get();
@@ -1874,7 +1943,13 @@ void D3D12CaptureManager::PreProcess_ID3D12CommandQueue_ExecuteCommandLists(
         }
     }
 
-    // Split commandlist is for trim drawcalls. It means that this is a extra ExecuteCommandLists. It shouldn't count
+    WritePendingSharedResourceSnapshots(wrapper, num_lists, lists);
+    if (IsCaptureModeDisabled())
+    {
+        return;
+    }
+
+    // Split commandlist is for trim drawcalls. It means that this is an extra ExecuteCommandLists. It shouldn't count
     // queue_submit_count_.
     if (!(IsTrimEnabled() && GetTrimBoundary() == CaptureSettings::TrimBoundary::kDrawCalls &&
           HasSplitCommandLists(num_lists, lists)))
@@ -1910,6 +1985,11 @@ void D3D12CaptureManager::PostProcess_ID3D12CommandQueue_ExecuteCommandLists(
     UINT                                                   num_lists,
     ID3D12CommandList* const*                              lists)
 {
+    if (IsCaptureModeDisabled())
+    {
+        return;
+    }
+
     // Split commandlists are for trim drawcalls. It means that this is a extra ExecuteCommandLists. It shouldn't count
     // queue_submit_count_.
     if (!(IsTrimEnabled() && GetTrimBoundary() == CaptureSettings::TrimBoundary::kDrawCalls &&
@@ -1921,6 +2001,10 @@ void D3D12CaptureManager::PostProcess_ID3D12CommandQueue_ExecuteCommandLists(
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackExecuteCommandLists(wrapper, num_lists, lists);
+    }
+    else if (IsCaptureModeWrite())
+    {
+        TrackWriteModeExecuteCommandLists(num_lists, lists);
     }
 }
 
@@ -2612,7 +2696,12 @@ void D3D12CaptureManager::PostProcess_ID3D12GraphicsCommandList_ResourceBarrier(
 {
     if (IsCaptureModeTrack())
     {
+        TrackWriteModeResourceBarriers(list_wrapper, num_barriers, barriers, false);
         state_tracker_->TrackResourceBarriers(list_wrapper, num_barriers, barriers);
+    }
+    else if (IsCaptureModeWrite())
+    {
+        TrackWriteModeResourceBarriers(list_wrapper, num_barriers, barriers);
     }
 }
 
@@ -2621,9 +2710,18 @@ void D3D12CaptureManager::PostProcess_ID3D12GraphicsCommandList_Reset(ID3D12Comm
                                                                       ID3D12CommandAllocator*    pAllocator,
                                                                       ID3D12PipelineState*       pInitialState)
 {
+    if (SUCCEEDED(result) && (list_wrapper != nullptr))
+    {
+        ClearPendingSharedResourceSnapshots(list_wrapper->GetCaptureId());
+    }
+
     if (IsCaptureModeTrack())
     {
         state_tracker_->TrackCommandList_Reset(list_wrapper, pAllocator, pInitialState);
+    }
+    else if (SUCCEEDED(result) && IsCaptureModeWrite() && (list_wrapper != nullptr))
+    {
+        list_wrapper->GetObjectInfo()->transition_barriers.clear();
     }
 }
 
@@ -2832,6 +2930,8 @@ void D3D12CaptureManager::PostProcess_ID3D12Device_CreateShaderResourceView(
             state_tracker_->TrackDescriptorGpuVa(DestDescriptor.ptr, pDesc->RaytracingAccelerationStructure.Location);
         }
     }
+
+    arm_features_->PostProcessCreateShaderResourceView(pResource);
 }
 
 void D3D12CaptureManager::PostProcess_ID3D12Device_CreateUnorderedAccessView(

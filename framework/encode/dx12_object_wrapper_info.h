@@ -36,6 +36,7 @@
 #include <dxgi1_5.h>
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -438,6 +439,9 @@ struct ID3D12ResourceInfo : public DxWrapperInfo
     std::vector<DxTileMappingInfo> tile_mappings;
 
     bool is_swapchain_buffer{ false };
+
+    // Identified by an explicit CreateSharedHandle or OpenSharedHandle call.
+    std::atomic_bool is_explicit_shared_resource{ false };
 
     D3D12_GPU_VIRTUAL_ADDRESS gpu_va{ 0 };
 

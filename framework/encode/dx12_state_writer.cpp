@@ -32,10 +32,144 @@
 #include "graphics/dx12_resource_data_util.h"
 #include "graphics/dx12_util.h"
 
+#include <memory>
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 
-Dx12StateWriter::Dx12StateWriter(util::FileOutputStream* output_stream,
+bool Dx12StateWriter::HasKnownSharedResourceStates(
+    ID3D12Resource_Wrapper*                               resource_wrapper,
+    const ID3D12ResourceInfo*                             resource_info,
+    const std::vector<graphics::dx12::ResourceStateInfo>& resource_states) const
+{
+    GFXRECON_ASSERT(resource_wrapper != nullptr);
+    GFXRECON_ASSERT(resource_info != nullptr);
+
+    const auto resource_id = resource_wrapper->GetCaptureId();
+    if (resource_info->device_wrapper == nullptr)
+    {
+        GFXRECON_LOG_WARNING("Skipping shared resource snapshot (id = %" PRIu64 "): device is unavailable.",
+                             resource_id);
+        return false;
+    }
+
+    if ((resource_info->num_subresources == 0) || (resource_info->subresource_sizes == nullptr) ||
+        (resource_states.size() != resource_info->num_subresources))
+    {
+        GFXRECON_LOG_WARNING("Skipping shared resource snapshot (id = %" PRIu64 "): resource state is unknown.",
+                             resource_id);
+        return false;
+    }
+
+    for (const auto& state_info : resource_states)
+    {
+        if (state_info.barrier_flags != D3D12_RESOURCE_BARRIER_FLAG_NONE)
+        {
+            GFXRECON_LOG_WARNING("Skipping shared resource snapshot (id = %" PRIu64
+                                 "): a split resource transition is pending.",
+                                 resource_id);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+uint64_t
+Dx12StateWriter::WriteSharedResourceContent(ID3D12Resource_Wrapper*                               resource_wrapper,
+                                            const std::vector<graphics::dx12::ResourceStateInfo>& resource_states,
+                                            ID3D12CommandQueue*                                   consumer_queue,
+                                            graphics::Dx12ResourceDataUtil*                       resource_data_util)
+{
+    if (resource_wrapper == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to snapshot shared resource: resource wrapper is null.");
+        return 0;
+    }
+
+    if (resource_data_util == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to snapshot shared resource (id = %" PRIu64 "): readback utility is unavailable.",
+                           resource_wrapper->GetCaptureId());
+        return 0;
+    }
+
+    auto resource_info = resource_wrapper->GetObjectInfo();
+    if ((resource_info == nullptr) || (resource_info->device_wrapper == nullptr))
+    {
+        GFXRECON_LOG_ERROR("Failed to snapshot shared resource (id = %" PRIu64
+                           "): resource information is unavailable.",
+                           resource_wrapper->GetCaptureId());
+        return 0;
+    }
+
+    auto resource = resource_wrapper->GetWrappedObjectAs<ID3D12Resource>();
+    if (resource == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to snapshot opened shared resource (id = %" PRIu64 "): native resource is null.",
+                           resource_wrapper->GetCaptureId());
+        return 0;
+    }
+
+    if (!HasKnownSharedResourceStates(resource_wrapper, resource_info.get(), resource_states))
+    {
+        return 0;
+    }
+
+    if (consumer_queue == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to snapshot shared resource (id = %" PRIu64 "): consumer queue is unavailable.",
+                           resource_wrapper->GetCaptureId());
+        return 0;
+    }
+
+    HRESULT result = graphics::dx12::WaitForQueue(consumer_queue);
+    if (FAILED(result))
+    {
+        GFXRECON_LOG_ERROR("Failed to wait for shared resource consumer queue (id = %" PRIu64 ", error = %lx).",
+                           resource_wrapper->GetCaptureId(),
+                           result);
+        return 0;
+    }
+
+    uint64_t resource_size = 0;
+    for (size_t i = 0; i < resource_info->num_subresources; ++i)
+    {
+        resource_size += resource_info->subresource_sizes[i];
+    }
+
+    uint64_t               block_count = 0;
+    const format::HandleId device_id   = resource_info->device_wrapper->GetCaptureId();
+
+    format::BeginResourceInitCommand begin_cmd{};
+    begin_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(begin_cmd);
+    begin_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+    begin_cmd.meta_header.meta_data_id =
+        format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_D3D12, format::MetaDataType::kBeginResourceInitCommand);
+    begin_cmd.thread_id       = thread_id_;
+    begin_cmd.device_id       = device_id;
+    begin_cmd.total_copy_size = resource_size;
+    begin_cmd.max_copy_size   = resource_size;
+    output_stream_->Write(&begin_cmd, sizeof(begin_cmd));
+
+    ResourceSnapshotInfo snapshot;
+    snapshot.resource_wrapper                 = resource_wrapper;
+    snapshot.resource_states                  = resource_states;
+    snapshot.synchronize_with_swapchain_queue = false;
+    block_count += WriteResourceSnapshot(resource_data_util, snapshot);
+
+    format::EndResourceInitCommand end_cmd{};
+    end_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(end_cmd);
+    end_cmd.meta_header.block_header.type = format::kMetaDataBlock;
+    end_cmd.meta_header.meta_data_id =
+        format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_D3D12, format::MetaDataType::kEndResourceInitCommand);
+    end_cmd.thread_id = thread_id_;
+    end_cmd.device_id = device_id;
+    output_stream_->Write(&end_cmd, sizeof(end_cmd));
+    return (block_count != 0) ? block_count + 2 : 0;
+}
+
+Dx12StateWriter::Dx12StateWriter(util::OutputStream*     output_stream,
                                  util::Compressor*       compressor,
                                  format::ThreadId        thread_id,
                                  util::FileOutputStream* asset_file_stream) :
@@ -1085,12 +1219,14 @@ void Dx12StateWriter::WriteResourceSnapshots(
     }
 }
 
-void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* resource_data_util,
-                                            const ResourceSnapshotInfo&     snapshot)
+uint64_t Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* resource_data_util,
+                                                const ResourceSnapshotInfo&     snapshot)
 {
-    auto resource_wrapper = snapshot.resource_wrapper;
-    auto resource_info    = resource_wrapper->GetObjectInfo();
-    auto resource         = resource_wrapper->GetWrappedObjectAs<ID3D12Resource>();
+    auto        resource_wrapper = snapshot.resource_wrapper;
+    auto        resource_info    = resource_wrapper->GetObjectInfo();
+    auto        resource         = resource_wrapper->GetWrappedObjectAs<ID3D12Resource>();
+    const auto& resource_states =
+        snapshot.resource_states.empty() ? resource_info->subresource_transitions : snapshot.resource_states;
 
     uint64_t subresource_count      = 0;
     uint64_t total_subresource_size = 0;
@@ -1108,7 +1244,7 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
     bool try_map_and_copy = !is_reserved_resouce && !is_texture_with_unknown_layout;
 
     graphics::dx12::ID3D12CommandQueueComPtr queue = nullptr;
-    if (resource_info->swapchain_wrapper)
+    if (snapshot.synchronize_with_swapchain_queue && resource_info->swapchain_wrapper)
     {
         // Needs swapchain's queue to write its buffer.
         auto swapchain_info = resource_info->swapchain_wrapper->GetObjectInfo();
@@ -1117,14 +1253,15 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
     // Read the data from the resource.
     HRESULT result = resource_data_util->ReadFromResource(resource,
                                                           try_map_and_copy,
-                                                          resource_info->subresource_transitions,
-                                                          resource_info->subresource_transitions,
+                                                          resource_states,
+                                                          resource_states,
                                                           temp_subresource_data_,
                                                           temp_subresource_offsets_,
                                                           temp_subresource_sizes_,
                                                           nullptr,
                                                           queue);
 
+    uint64_t block_count = 0;
     if (SUCCEEDED(result))
     {
         // Write the subresource data to the output.
@@ -1150,8 +1287,8 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
             upload_cmd.resource_id    = resource_wrapper->GetCaptureId();
             upload_cmd.subresource    = i;
             upload_cmd.initial_state  = resource_info->initial_state;
-            upload_cmd.resource_state = resource_info->subresource_transitions[i].states;
-            upload_cmd.barrier_flags  = resource_info->subresource_transitions[i].barrier_flags;
+            upload_cmd.resource_state = resource_states[i].states;
+            upload_cmd.barrier_flags  = resource_states[i].barrier_flags;
             upload_cmd.data_size      = subresource_size;
 
             // Compress block data.
@@ -1175,6 +1312,7 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
             // Write upload block to file.
             output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
             output_stream_->Write(subresource_data, subresource_size);
+            ++block_count;
         }
     }
     else
@@ -1183,6 +1321,7 @@ void Dx12StateWriter::WriteResourceSnapshot(graphics::Dx12ResourceDataUtil* reso
                            "). Resource data will not be written to capture file.",
                            resource_wrapper->GetCaptureId());
     }
+    return block_count;
 }
 
 void Dx12StateWriter::WriteTileMappings(const Dx12StateTable& state_table, ID3D12ResourceInfo* resource_info)

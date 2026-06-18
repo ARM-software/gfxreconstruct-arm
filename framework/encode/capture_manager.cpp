@@ -432,6 +432,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     ignore_frame_boundary_android_   = trace_settings.ignore_frame_boundary_android;
     skip_threads_with_invalid_data_  = trace_settings.skip_threads_with_invalid_data;
     original_wave_size_              = trace_settings.original_wave_size;
+    capture_open_shared_resource_refresh_ = trace_settings.capture_open_shared_resource_refresh;
 
     fence_query_delay_                   = trace_settings.fence_query_delay;
     fence_query_delay_unit_              = trace_settings.fence_query_delay_unit;
@@ -1869,6 +1870,10 @@ void CommonCaptureManager::WriteCaptureOptions(nlohmann::ordered_json& operation
     if (force_fifo_present_mode_ != default_settings.force_fifo_present_mode)
     {
         capture_options["force-fifo-present-mode"] = force_fifo_present_mode_;
+    }
+    if (capture_open_shared_resource_refresh_ != default_settings.capture_open_shared_resource_refresh)
+    {
+        capture_options["capture-open-shared-resource-refresh"] = capture_open_shared_resource_refresh_;
     }
 
     if (buffer_usages_to_ignore_ != default_settings.buffer_usages_to_ignore)

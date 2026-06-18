@@ -205,6 +205,16 @@ struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateDepthS
 };
 
 template <>
+struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Resource_GetDesc>
+{
+    template <typename... Args>
+    static void Dispatch(Dx12ReplayConsumerBase* replay, Args... args)
+    {
+        replay->PostCall_ID3D12Resource_GetDesc(args...);
+    }
+};
+
+template <>
 struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12GraphicsCommandList_OMSetRenderTargets>
 {
     template <typename... Args>
@@ -241,6 +251,16 @@ struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CopyDescript
     static void Dispatch(Dx12ReplayConsumerBase* replay, Args... args)
     {
         replay->PostCall_ID3D12Device_CopyDescriptors(args...);
+    }
+};
+
+template <>
+struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateSharedHandle>
+{
+    template <typename... Args>
+    static void Dispatch(Dx12ReplayConsumerBase* replay, Args... args)
+    {
+        replay->PostCall_ID3D12Device_CreateSharedHandle(args...);
     }
 };
 

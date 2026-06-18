@@ -29,6 +29,8 @@
 #include "decode/custom_dx12_struct_decoders_forward.h"
 #include "decode/dx12_object_info.h"
 
+#include <unordered_set>
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -87,8 +89,20 @@ class Dx12ReplayConsumerArmFeatures
                                        D3D12_RESOURCE_STATES                               resource_state,
                                        format::HandleId                                    resource_id);
 
+    HRESULT CreateSharedResourcePlaceholder(ID3D12Device* device, void** out_object);
+    void    TrackPlaceholderSharedResource(format::HandleId resource_id);
+    void    ForgetPlaceholder(format::HandleId object_id);
+    void    TrackOutgoingSharedFence(format::HandleId fence_id);
+    bool    IsOutgoingSharedFence(format::HandleId fence_id) const;
+    void    OnSharedResourceGetDesc(DxObjectInfo* resource_object_info, const D3D12_RESOURCE_DESC* captured_desc);
+
   private:
-    Dx12ReplayConsumerBase* consumer_;
+    bool RecreateSharedResourcePlaceholder(DxObjectInfo*              resource_object_info,
+                                           const D3D12_RESOURCE_DESC& captured_desc);
+
+    Dx12ReplayConsumerBase*              consumer_;
+    std::unordered_set<format::HandleId> placeholder_shared_resources_;
+    std::unordered_set<format::HandleId> outgoing_shared_fences_;
 };
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

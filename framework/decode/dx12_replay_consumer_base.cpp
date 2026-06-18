@@ -1093,6 +1093,7 @@ void Dx12ReplayConsumerBase::RemoveObject(DxObjectInfo* info)
 {
     if (info != nullptr)
     {
+        arm_features_->ForgetPlaceholder(info->capture_id);
         DestroyObjectExtraInfo(info, true);
         object_mapping::RemoveObject(info->capture_id, &object_info_table_);
     }
@@ -1192,7 +1193,7 @@ void* Dx12ReplayConsumerBase::PreProcessExternalObject(uint64_t          object_
             }
             else
             {
-                GFXRECON_LOG_ERROR("%s: Unable to retrieve NTHandle.", call_name);
+                GFXRECON_LOG_DEBUG("%s: Unable to retrieve NTHandle.", call_name);
             }
             break;
         }
@@ -3636,6 +3637,29 @@ HRESULT Dx12ReplayConsumerBase::OverrideCommandQueueWait(DxObjectInfo* replay_ob
     if (fence_info != nullptr)
     {
         fence = static_cast<ID3D12Fence*>(fence_info->object);
+
+        auto fence_extra_info = GetExtraInfo<D3D12FenceInfo>(fence_info);
+        if (arm_features_->IsOutgoingSharedFence(fence_info->capture_id) && (fence_extra_info != nullptr) &&
+            (fence_extra_info->last_signaled_value < value) && (fence != nullptr) &&
+            (fence->GetCompletedValue() < value))
+        {
+            HRESULT signal_result = graphics::dx12::WaitForQueue(replay_object);
+            if (SUCCEEDED(signal_result))
+            {
+                signal_result = fence->Signal(value);
+            }
+            if (FAILED(signal_result))
+            {
+                GFXRECON_LOG_ERROR("ID3D12CommandQueue::Wait: failed to emulate shared fence %" PRIu64
+                                   " signal value %" PRIu64 " (%s).",
+                                   fence_info->capture_id,
+                                   value,
+                                   enumutil::GetResultValueString(signal_result).c_str());
+                return signal_result;
+            }
+
+            ProcessFenceSignal(fence_info, value);
+        }
     }
 
     auto replay_result = replay_object->Wait(fence, value);
@@ -4933,7 +4957,6 @@ IDXGIAdapter* Dx12ReplayConsumerBase::GetAdapter()
     return adapter_found;
 }
 
-
 // Helper to initialize the resource's D3D12ResourceInfo and set its is_reserved_resource = true.
 static void SetIsReservedResource(HandlePointerDecoder<void*>* resource)
 {
@@ -6113,15 +6136,39 @@ HRESULT Dx12ReplayConsumerBase::OverrideOpenSharedHandle(DxObjectInfo*          
                                                          Decoded_GUID                 riid,
                                                          HandlePointerDecoder<void*>* ppvObj)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    // Calls that failed at capture or have no output pointer cannot produce a replay object.
+    // Preserve their captured results without resolving, opening, or substituting a handle.
+    if (FAILED(original_result) || ppvObj->IsNull())
+    {
+        return original_result;
+    }
 
     auto  device        = static_cast<ID3D12Device*>(device_object_info->object);
     auto  in_NTHandle   = static_cast<HANDLE>(PreProcessExternalObject(
         NTHandle, format::ApiCallId::ApiCall_ID3D12Device_OpenSharedHandle, "ID3D12Device_OpenSharedHandle"));
     auto& riid_value    = *riid.decoded_value;
-    auto  out_p_ppvObj  = ppvObj->GetPointer();
     auto  out_hp_ppvObj = ppvObj->GetHandlePointer();
-    auto  replay_result = device->OpenSharedHandle(in_NTHandle, riid_value, out_hp_ppvObj);
+
+    const bool replay_handle_available = in_NTHandle != nullptr;
+    HRESULT    replay_result           = E_HANDLE;
+    if (replay_handle_available)
+    {
+        replay_result = device->OpenSharedHandle(in_NTHandle, riid_value, out_hp_ppvObj);
+    }
+
+    bool substituted_resource = false;
+    if (!replay_handle_available && IsEqualIID(riid_value, __uuidof(ID3D12Resource)))
+    {
+        replay_result = arm_features_->CreateSharedResourcePlaceholder(device, out_hp_ppvObj);
+        if (SUCCEEDED(replay_result))
+        {
+            substituted_resource = true;
+            GFXRECON_LOG_WARNING("ID3D12Device_OpenSharedHandle: the shared NT handle for object %" PRIu64
+                                 "could not be resolved at replay (it was likely produced by a process that was "
+                                 "not captured); substituting a temporary resource placeholder until GetDesc.",
+                                 *ppvObj->GetPointer());
+        }
+    }
 
     if (SUCCEEDED(replay_result) && !ppvObj->IsNull())
     {
@@ -6131,20 +6178,67 @@ HRESULT Dx12ReplayConsumerBase::OverrideOpenSharedHandle(DxObjectInfo*          
             // For standard resource creation, the resource state would be initilized based on the InitialState
             // parameter. For this case, we don't know what the initial state was so initilize to the common state.
             InitialResourceExtraInfo(device_object_info->capture_id, ppvObj, D3D12_RESOURCE_STATE_COMMON, false);
+
+            if (substituted_resource)
+            {
+                arm_features_->TrackPlaceholderSharedResource(*ppvObj->GetPointer());
+            }
         }
         else if (IsEqualIID(riid_value, __uuidof(ID3D12Fence)) || IsEqualIID(riid_value, __uuidof(ID3D12Fence1)))
         {
-            auto fence_info = std::make_unique<D3D12FenceInfo>();
-
-            // For ID3D12Device::CreateFence, this would be initialized with the InitialValue parameter. For this case,
-            // we don't know what the initial value was so initialize to zero.
+            auto fence_info                 = std::make_unique<D3D12FenceInfo>();
             fence_info->last_signaled_value = 0;
-
             SetExtraInfo(ppvObj, std::move(fence_info));
         }
     }
 
     return replay_result;
+}
+
+void Dx12ReplayConsumerBase::PostCall_ID3D12Resource_GetDesc(const ApiCallInfo&          call_info,
+                                                             DxObjectInfo*               resource_object_info,
+                                                             Decoded_D3D12_RESOURCE_DESC return_value,
+                                                             D3D12_RESOURCE_DESC         replay_result)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(call_info);
+    GFXRECON_UNREFERENCED_PARAMETER(replay_result);
+
+    arm_features_->OnSharedResourceGetDesc(resource_object_info, return_value.decoded_value);
+}
+
+void Dx12ReplayConsumerBase::PostCall_ID3D12Device_CreateSharedHandle(
+    const ApiCallInfo&                                  call_info,
+    DxObjectInfo*                                       device_object_info,
+    HRESULT                                             return_value,
+    HRESULT                                             replay_result,
+    format::HandleId                                    pObject,
+    StructPointerDecoder<Decoded__SECURITY_ATTRIBUTES>* pAttributes,
+    DWORD                                               Access,
+    WStringDecoder*                                     Name,
+    PointerDecoder<uint64_t, void*>*                    pHandle)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(call_info);
+    GFXRECON_UNREFERENCED_PARAMETER(device_object_info);
+    GFXRECON_UNREFERENCED_PARAMETER(replay_result);
+    GFXRECON_UNREFERENCED_PARAMETER(pAttributes);
+    GFXRECON_UNREFERENCED_PARAMETER(Access);
+    GFXRECON_UNREFERENCED_PARAMETER(Name);
+    GFXRECON_UNREFERENCED_PARAMETER(pHandle);
+
+    if (SUCCEEDED(return_value))
+    {
+        auto object_info = GetObjectInfo(pObject);
+        if ((object_info != nullptr) && (object_info->object != nullptr))
+        {
+            ID3D12Fence* fence  = nullptr;
+            HRESULT      result = static_cast<IUnknown*>(object_info->object)->QueryInterface(IID_PPV_ARGS(&fence));
+            if (SUCCEEDED(result) && (fence != nullptr))
+            {
+                arm_features_->TrackOutgoingSharedFence(pObject);
+                fence->Release();
+            }
+        }
+    }
 }
 
 HRESULT
