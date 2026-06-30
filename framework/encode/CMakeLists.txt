@@ -108,6 +108,8 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_rv_annotation_util.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_rv_annotation_util.cpp>
                     ${CMAKE_CURRENT_LIST_DIR}/handle_unwrap_memory.h
+                    ${CMAKE_CURRENT_LIST_DIR}/memory_diff_tracker.h
+                    ${CMAKE_CURRENT_LIST_DIR}/memory_diff_tracker.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/parameter_buffer.h
                     ${CMAKE_CURRENT_LIST_DIR}/parameter_encoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/scoped_destroy_lock.h
@@ -209,6 +211,7 @@ if (${RUN_TESTS})
     add_executable(gfxrecon_encode_test "")
     target_sources(gfxrecon_encode_test PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/test/main.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test/test_memory_diff_tracker.cpp
         ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp)
     target_link_libraries(gfxrecon_encode_test PRIVATE gfxrecon_encode)
     if (MSVC)

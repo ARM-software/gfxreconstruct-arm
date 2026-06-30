@@ -23,6 +23,7 @@
 #ifndef GFXRECON_ENCODE_VULKAN_SMART_MEMORY_TRACKER_H
 #define GFXRECON_ENCODE_VULKAN_SMART_MEMORY_TRACKER_H
 
+#include "encode/memory_diff_tracker.h"
 #include "format/format.h"
 #include "util/range_list.h"
 
@@ -30,14 +31,13 @@
 
 #include <cstdint>
 #include <unordered_map>
-#include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 
 class ApiCaptureManager;
 
-class VulkanSmartMemoryTracker
+class VulkanSmartMemoryTracker : private MemoryDiffTracker::RangeWriter
 {
   public:
     explicit VulkanSmartMemoryTracker(ApiCaptureManager* capture_manager);
@@ -62,20 +62,18 @@ class VulkanSmartMemoryTracker
         uint64_t              mapped_offset{ 0 };
         uint64_t              mapped_size{ 0 };
         util::RangeList       exposed_ranges;
-        util::RangeList       baseline_valid_ranges;
-        std::vector<uint8_t>  baseline;
     };
 
   private:
     static uint64_t ClampRangeSize(uint64_t offset, uint64_t size, uint64_t limit);
 
-    void WriteRange(format::HandleId memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
-    bool EnsureBaseline(MemoryInfo* memory_info);
+    void WriteRange(format::HandleId memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
     void EmitRange(format::HandleId memory_id, MemoryInfo* memory_info, uint64_t offset, uint64_t size);
     void EmitMappedIntersections(format::HandleId memory_id, MemoryInfo* memory_info, const util::RangeList& ranges);
 
   private:
     ApiCaptureManager*                               capture_manager_{ nullptr };
+    MemoryDiffTracker                                diff_tracker_;
     std::unordered_map<format::HandleId, MemoryInfo> memory_info_;
 };
 

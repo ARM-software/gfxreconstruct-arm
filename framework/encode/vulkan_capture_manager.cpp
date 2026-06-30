@@ -71,6 +71,21 @@ std::mutex                 VulkanCaptureManager::instance_lock_;
 VulkanCaptureManager*      VulkanCaptureManager::singleton_ = nullptr;
 graphics::VulkanLayerTable VulkanCaptureManager::vulkan_layer_table_;
 
+VulkanCaptureManager::PageGuardDiffRangeWriter::PageGuardDiffRangeWriter(VulkanCaptureManager* capture_manager) :
+    capture_manager_(capture_manager)
+{}
+
+void VulkanCaptureManager::PageGuardDiffRangeWriter::WriteRange(format::HandleId memory_id,
+                                                                uint64_t         offset,
+                                                                uint64_t         size,
+                                                                const uint8_t*   data)
+{
+    if (capture_manager_ != nullptr)
+    {
+        capture_manager_->WriteFillMemoryRangeCmd(memory_id, offset, size, data);
+    }
+}
+
 bool VulkanCaptureManager::CreateInstance()
 {
     bool result = CommonCaptureManager::CreateInstance<VulkanCaptureManager>();
@@ -3539,7 +3554,7 @@ void VulkanCaptureManager::PreProcess_vkFlushMappedMemoryRanges(VkDevice        
                         manager->ProcessMemoryEntry(
                             current_memory_wrapper->handle_id,
                             [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                                WriteFillMemoryCmd(memory_id, offset, size, start_address);
+                                ProcessPageGuardMemoryDiff(memory_id, start_address, offset, size);
                             });
                     }
                     else
@@ -3632,7 +3647,7 @@ void VulkanCaptureManager::PreProcess_vkUnmapMemory(VkDevice device, VkDeviceMem
 
             manager->ProcessMemoryEntry(wrapper->handle_id,
                                         [this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-                                            WriteFillMemoryCmd(memory_id, offset, size, start_address);
+                                            ProcessPageGuardMemoryDiff(memory_id, start_address, offset, size);
                                         });
 
             manager->RemoveTrackedMemory(wrapper->handle_id);
@@ -3742,9 +3757,11 @@ void VulkanCaptureManager::PostProcess_vkFreeMemory(VkDevice                    
         // Destroy external resources.
         auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(memory);
 
-        if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
-            GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
+        if ((wrapper != nullptr) && (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+                                     GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd))
         {
+            page_guard_diff_tracker_.RemoveMemory(wrapper->handle_id);
+
             util::PageGuardManager* manager = util::PageGuardManager::Get();
             assert(manager != nullptr);
 
@@ -3759,7 +3776,7 @@ void VulkanCaptureManager::PostProcess_vkFreeMemory(VkDevice                    
                 manager->FreePersistentShadowMemory(wrapper->shadow_allocation);
             }
         }
-        else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
+        else if ((wrapper != nullptr) && GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
         {
             smart_memory_tracker_.RemoveMemory(wrapper->handle_id);
         }
@@ -3974,6 +3991,15 @@ void VulkanCaptureManager::MapMemoryWriteFixShadowMemoryCmd(format::HandleId mem
     }
 }
 
+void VulkanCaptureManager::ProcessPageGuardMemoryDiff(uint64_t memory_id,
+                                                      void*    start_address,
+                                                      size_t   offset,
+                                                      size_t   size)
+{
+    const uint8_t* data = static_cast<const uint8_t*>(start_address) + offset;
+    page_guard_diff_tracker_.EmitRange(memory_id, offset, offset, size, data);
+}
+
 void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo* submits)
 {
     if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
@@ -3990,7 +4016,7 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, 
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-            WriteFillMemoryCmd(memory_id, offset, size, start_address);
+            ProcessPageGuardMemoryDiff(memory_id, start_address, offset, size);
         });
     }
     else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUnassisted)
@@ -4029,7 +4055,7 @@ void VulkanCaptureManager::QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, 
         assert(manager != nullptr);
 
         manager->ProcessMemoryEntries([this](uint64_t memory_id, void* start_address, size_t offset, size_t size) {
-            WriteFillMemoryCmd(memory_id, offset, size, start_address);
+            ProcessPageGuardMemoryDiff(memory_id, start_address, offset, size);
         });
     }
     else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUnassisted)
@@ -4448,17 +4474,30 @@ void VulkanCaptureManager::PostProcess_vkAllocateMemory(VkDevice                
 {
     GFXRECON_UNREFERENCED_PARAMETER(pAllocator);
 
-    if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart && pAllocateInfo != nullptr &&
-        pMemory != nullptr && *pMemory != VK_NULL_HANDLE)
+    if (pAllocateInfo != nullptr && pMemory != nullptr && *pMemory != VK_NULL_HANDLE)
     {
-        auto memory_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(*pMemory);
-        auto device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+        vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
+            vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(*pMemory);
 
-        if (memory_wrapper != nullptr && device_wrapper != nullptr)
+        if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kSmart)
         {
-            const VkMemoryPropertyFlags properties =
-                GetMemoryProperties(device_wrapper, pAllocateInfo->memoryTypeIndex);
-            smart_memory_tracker_.TrackMemory(memory_wrapper->handle_id, pAllocateInfo->allocationSize, properties);
+            vulkan_wrappers::DeviceWrapper* device_wrapper =
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+
+            if (memory_wrapper != nullptr && device_wrapper != nullptr)
+            {
+                const VkMemoryPropertyFlags properties =
+                    GetMemoryProperties(device_wrapper, pAllocateInfo->memoryTypeIndex);
+                smart_memory_tracker_.TrackMemory(memory_wrapper->handle_id, pAllocateInfo->allocationSize, properties);
+            }
+        }
+        else if (GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kPageGuard ||
+                 GetMemoryTrackingMode() == CaptureSettings::MemoryTrackingMode::kUserfaultfd)
+        {
+            if (memory_wrapper != nullptr)
+            {
+                page_guard_diff_tracker_.TrackMemory(memory_wrapper->handle_id, pAllocateInfo->allocationSize);
+            }
         }
     }
 

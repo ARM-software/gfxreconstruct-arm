@@ -29,6 +29,7 @@
 
 #include "encode/capture_settings.h"
 #include "encode/descriptor_update_template_info.h"
+#include "encode/memory_diff_tracker.h"
 #include "encode/parameter_buffer.h"
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
@@ -1944,7 +1945,10 @@ class VulkanCaptureManager : public ApiCaptureManager
                                              const VkHostImageLayoutTransitionInfo* pTransitions);
 
   protected:
-    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan), smart_memory_tracker_(this) {}
+    VulkanCaptureManager() :
+        ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan), page_guard_diff_writer_(this),
+        page_guard_diff_tracker_(&page_guard_diff_writer_), smart_memory_tracker_(this)
+    {}
 
     virtual ~VulkanCaptureManager() {}
 
@@ -2022,6 +2026,17 @@ class VulkanCaptureManager : public ApiCaptureManager
     }
 
   private:
+    class PageGuardDiffRangeWriter : public MemoryDiffTracker::RangeWriter
+    {
+      public:
+        explicit PageGuardDiffRangeWriter(VulkanCaptureManager* capture_manager);
+
+        void WriteRange(format::HandleId memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
+
+      private:
+        VulkanCaptureManager* capture_manager_{ nullptr };
+    };
+
     struct HardwareBufferInfo
     {
         format::HandleId      memory_id;
@@ -2094,12 +2109,15 @@ class VulkanCaptureManager : public ApiCaptureManager
     void QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo* submits);
     void QueueSubmitWriteFillMemoryCmd(uint32_t submit_count, const VkSubmitInfo2* submits);
     void MapMemoryWriteFixShadowMemoryCmd(format::HandleId memory_id, uint64_t map_memory, uint64_t shadow_memory);
+    void ProcessPageGuardMemoryDiff(uint64_t memory_id, void* start_address, size_t offset, size_t size);
 
     static std::mutex                               instance_lock_;
     static VulkanCaptureManager*                    singleton_;
     static graphics::VulkanLayerTable               vulkan_layer_table_;
     std::set<vulkan_wrappers::DeviceMemoryWrapper*> mapped_memory_; // Track mapped memory for unassisted tracking mode.
     std::unique_ptr<VulkanStateTracker>             state_tracker_;
+    PageGuardDiffRangeWriter                        page_guard_diff_writer_;
+    MemoryDiffTracker                               page_guard_diff_tracker_;
     VulkanSmartMemoryTracker                        smart_memory_tracker_;
     std::vector<const char*>                        faked_extensions_;
     HardwareBufferMap                               hardware_buffers_;

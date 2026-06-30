@@ -63,7 +63,7 @@ class VulkanSwapchain
     virtual void CleanDeviceResources(VkDevice, const graphics::VulkanDeviceTable*) {}
 
     VulkanSwapchainOptions GetOptions() { return swapchain_options_; }
-    void SetOptions(const VulkanSwapchainOptions& options) { swapchain_options_ = options; }
+    void                   SetOptions(const VulkanSwapchainOptions& options) { swapchain_options_ = options; }
 
     virtual VkResult CreateSurface(VkResult                             original_result,
                                    VulkanInstanceInfo*                  instance_info,

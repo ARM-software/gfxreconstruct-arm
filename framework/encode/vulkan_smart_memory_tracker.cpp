@@ -23,47 +23,29 @@
 #include "encode/vulkan_smart_memory_tracker.h"
 
 #include "encode/api_capture_manager.h"
-#include "util/logging.h"
-#include "util/platform.h"
-
 #include <algorithm>
-#include <cinttypes>
-#include <cstring>
-#include <limits>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
 
-constexpr size_t kDiffWordSize = sizeof(uint64_t);
-
-static inline uint64_t LoadDiffWord(const uint8_t* data)
-{
-    uint64_t word = 0;
-    std::memcpy(&word, data, kDiffWordSize);
-    return word;
-}
-
-static inline void StoreDiffWord(uint8_t* data, uint64_t word)
-{
-    std::memcpy(data, &word, kDiffWordSize);
-}
-
 VulkanSmartMemoryTracker::VulkanSmartMemoryTracker(ApiCaptureManager* capture_manager) :
-    capture_manager_(capture_manager)
+    capture_manager_(capture_manager), diff_tracker_(this)
 {}
 
 void VulkanSmartMemoryTracker::TrackMemory(format::HandleId      memory_id,
                                            uint64_t              allocation_size,
                                            VkMemoryPropertyFlags property_flags)
 {
-    auto& info           = memory_info_[memory_id];
+    MemoryInfo& info     = memory_info_[memory_id];
     info.allocation_size = allocation_size;
     info.property_flags  = property_flags;
+    diff_tracker_.TrackMemory(memory_id, allocation_size);
 }
 
 void VulkanSmartMemoryTracker::RemoveMemory(format::HandleId memory_id)
 {
     memory_info_.erase(memory_id);
+    diff_tracker_.RemoveMemory(memory_id);
 }
 
 void VulkanSmartMemoryTracker::MapMemory(format::HandleId memory_id,
@@ -190,25 +172,6 @@ uint64_t VulkanSmartMemoryTracker::ClampRangeSize(uint64_t offset, uint64_t size
     return size;
 }
 
-bool VulkanSmartMemoryTracker::EnsureBaseline(MemoryInfo* memory_info)
-{
-    assert(memory_info != nullptr);
-
-    if (memory_info->baseline.empty())
-    {
-        if (memory_info->allocation_size > std::numeric_limits<size_t>::max())
-        {
-            GFXRECON_LOG_ERROR("Smart memory tracking cannot allocate a baseline for memory allocation size %" PRIu64,
-                               memory_info->allocation_size);
-            return false;
-        }
-
-        memory_info->baseline.resize(static_cast<size_t>(memory_info->allocation_size), 0);
-    }
-
-    return true;
-}
-
 void VulkanSmartMemoryTracker::EmitRange(format::HandleId memory_id,
                                          MemoryInfo*      memory_info,
                                          uint64_t         offset,
@@ -221,93 +184,15 @@ void VulkanSmartMemoryTracker::EmitRange(format::HandleId memory_id,
         return;
     }
 
-    if (!EnsureBaseline(memory_info))
-    {
-        return;
-    }
-
     if (offset < memory_info->mapped_offset || size > memory_info->mapped_size ||
         (offset - memory_info->mapped_offset) > (memory_info->mapped_size - size))
     {
         return;
     }
 
-    if (offset > std::numeric_limits<size_t>::max() || size > std::numeric_limits<size_t>::max())
-    {
-        GFXRECON_LOG_ERROR(
-            "Smart memory tracking range is too large to process: offset=%" PRIu64 ", size=%" PRIu64, offset, size);
-        return;
-    }
-
-    const size_t baseline_offset = static_cast<size_t>(offset);
-    const size_t range_size      = static_cast<size_t>(size);
-    const size_t mapped_offset   = static_cast<size_t>(offset - memory_info->mapped_offset);
-
-    const uint8_t* data     = memory_info->mapped_data + mapped_offset;
-    uint8_t*       baseline = memory_info->baseline.data() + baseline_offset;
-
-    if (!memory_info->baseline_valid_ranges.ContainsRange(offset, size))
-    {
-        WriteRange(memory_id, offset - memory_info->mapped_offset, size, data);
-        util::platform::MemoryCopy(baseline, range_size, data, range_size);
-        memory_info->baseline_valid_ranges.AddRange(offset, size);
-        return;
-    }
-
-    const uint64_t relative_base = offset - memory_info->mapped_offset;
-
-    size_t cursor = 0;
-    while ((range_size - cursor) >= kDiffWordSize)
-    {
-        while ((range_size - cursor) >= kDiffWordSize && LoadDiffWord(baseline + cursor) == LoadDiffWord(data + cursor))
-        {
-            cursor += kDiffWordSize;
-        }
-
-        const size_t changed_begin = cursor;
-
-        while ((range_size - cursor) >= kDiffWordSize)
-        {
-            const uint64_t data_word = LoadDiffWord(data + cursor);
-            if (LoadDiffWord(baseline + cursor) == data_word)
-            {
-                break;
-            }
-
-            StoreDiffWord(baseline + cursor, data_word);
-            cursor += kDiffWordSize;
-        }
-
-        if (cursor > changed_begin)
-        {
-            const uint64_t relative_offset = relative_base + changed_begin;
-            const uint64_t changed_size    = cursor - changed_begin;
-            WriteRange(memory_id, relative_offset, changed_size, data + changed_begin);
-        }
-    }
-
-    while (cursor < range_size)
-    {
-        while (cursor < range_size && baseline[cursor] == data[cursor])
-        {
-            ++cursor;
-        }
-
-        const size_t changed_begin = cursor;
-
-        while (cursor < range_size && baseline[cursor] != data[cursor])
-        {
-            baseline[cursor] = data[cursor];
-            ++cursor;
-        }
-
-        if (cursor > changed_begin)
-        {
-            const uint64_t relative_offset = relative_base + changed_begin;
-            const uint64_t changed_size    = cursor - changed_begin;
-            WriteRange(memory_id, relative_offset, changed_size, data + changed_begin);
-        }
-    }
+    const uint64_t mapped_offset = offset - memory_info->mapped_offset;
+    const uint8_t* data          = memory_info->mapped_data + mapped_offset;
+    diff_tracker_.EmitRange(memory_id, offset, mapped_offset, size, data);
 }
 
 void VulkanSmartMemoryTracker::EmitMappedIntersections(format::HandleId       memory_id,
