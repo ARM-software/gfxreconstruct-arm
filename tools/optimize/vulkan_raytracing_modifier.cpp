@@ -1413,11 +1413,18 @@ void VulkanRayTracingModifier::Process_vkUpdateDescriptorSets(
                     buffer_entries_.at(meta_write.pBufferInfo->GetMetaStructPointer()->buffer);
                 if (dst_entry.device_address != 0)
                 {
-                    transfer_ranges_.emplace(
-                        dst_entry.device_address + write.pBufferInfo->offset,
-                        dst_entry.device_address + write.pBufferInfo->offset + write.pBufferInfo->range == VK_WHOLE_SIZE
-                            ? dst_entry.size - write.pBufferInfo->offset
-                            : write.pBufferInfo->range);
+                    if (write.pBufferInfo->range == VK_WHOLE_SIZE)
+                    {
+                        transfer_ranges_.emplace(dst_entry.device_address + write.pBufferInfo->offset,
+                                                 dst_entry.device_address + write.pBufferInfo->offset + dst_entry.size -
+                                                     write.pBufferInfo->offset);
+                    }
+                    else
+                    {
+                        transfer_ranges_.emplace(dst_entry.device_address + write.pBufferInfo->offset,
+                                                 dst_entry.device_address + write.pBufferInfo->offset +
+                                                     write.pBufferInfo->range);
+                    }
                 }
             }
         }
