@@ -112,7 +112,8 @@ const std::unordered_map<VkResult, VkResult> kResultValuesAllowedDifferentCodeTh
     { VK_ERROR_OUT_OF_DATE_KHR, VK_SUCCESS },
     { VK_SUBOPTIMAL_KHR, VK_SUCCESS },
     { VK_ERROR_FORMAT_NOT_SUPPORTED, VK_SUCCESS },
-    { VK_ERROR_OUT_OF_POOL_MEMORY, VK_SUCCESS }
+    { VK_ERROR_OUT_OF_POOL_MEMORY, VK_SUCCESS },
+    { VK_EVENT_RESET, VK_EVENT_SET }
 };
 
 static void StripSubmitCommandBuffers(VkSubmitInfo* submit_infos, uint32_t submit_count)
