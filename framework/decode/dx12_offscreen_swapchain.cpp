@@ -384,7 +384,7 @@ HRESULT Dx12OffscreenSwapchain::Present(UINT SyncInterval, UINT Flags)
 HRESULT Dx12OffscreenSwapchain::ResizeBuffers(
     UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-    // Release existing back buffers — buffers are owned by ComPtr, cleared before realloc
+    // Release existing back buffers - buffers are owned by ComPtr, cleared before realloc
     m_back_buffers.clear();
 
     if (BufferCount == 0)
