@@ -66,8 +66,6 @@ if (MSVC)
     else()
       target_link_options(gfxrecon-replay PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
     endif()
-else ()
-    target_link_options(gfxrecon-replay PUBLIC "-rdynamic")
 endif()
 
 # A multithreaded Vulkan driver loaded through dlopen() mechanism
