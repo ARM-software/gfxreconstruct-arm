@@ -711,7 +711,27 @@ void VulkanDecoderBase::DispatchVulkanAccelerationStructuresBuildMetaCommand(con
             uint32_t geometry_count = pInfos.GetPointer()[i].geometryCount;
             for (uint32_t g = 0; g < geometry_count; ++g)
             {
-                instance_buffers.emplace_back(ppRangeInfos.GetPointer()[g]->primitiveCount);
+                if ((i >= ppRangeInfos.GetLength()) || (ppRangeInfos.GetPointer()[i] == nullptr) ||
+                    (g >= ppRangeInfos.GetInnerLength(i)))
+                {
+                    GFXRECON_LOG_ERROR("Invalid acceleration structure build range info at build %u geometry %u", i, g);
+                    return;
+                }
+
+                if (bytes_read > buffer_size)
+                {
+                    GFXRECON_LOG_ERROR("Acceleration structure metacommand payload is truncated");
+                    return;
+                }
+                const size_t instance_count = ppRangeInfos.GetPointer()[i][g].primitiveCount;
+                const size_t remaining      = buffer_size - bytes_read;
+                if (instance_count > (remaining / sizeof(VkAccelerationStructureInstanceKHR)))
+                {
+                    GFXRECON_LOG_ERROR("Acceleration structure instance data exceeds metacommand payload");
+                    return;
+                }
+
+                instance_buffers.emplace_back(instance_count);
                 util::platform::MemoryCopy(instance_buffers.back().data(),
                                            instance_buffers.back().size() * sizeof(VkAccelerationStructureInstanceKHR),
                                            parameter_buffer + bytes_read,
