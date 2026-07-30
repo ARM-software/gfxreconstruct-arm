@@ -762,6 +762,9 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     VmaMemoryUsage AdjustMemoryUsage(VmaMemoryUsage desired_usage, const VkMemoryRequirements& replay_requirements);
 
+    std::vector<VmaAllocationCreateInfo> BuildAllocationRequests(const VmaAllocationCreateInfo& base_request,
+                                                                 VkMemoryPropertyFlags capture_properties) const;
+
     VmaMemoryUsage GetAliasedGroupMemoryUsage(uint8_t                     aliasing_group,
                                               const MemoryAllocInfo&      memory_alloc_info,
                                               const VkMemoryRequirements& replay_requirements);

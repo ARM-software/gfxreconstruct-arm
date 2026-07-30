@@ -915,24 +915,47 @@ VulkanRebindAllocator::AllocateMemoryForBuffer(VkBuffer                         
         return VK_SUCCESS;
     }
 
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_req;
-    mem_info.replay_mem_req                     = replay_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = memory_offset;
+    const auto capture_properties =
+        device_memory_properties.memoryTypes[memory_alloc_info.original_index].propertyFlags;
+    const auto allocation_requests = BuildAllocationRequests(create_info, capture_properties);
+    VkResult   result              = VK_ERROR_FEATURE_NOT_PRESENT;
 
-    auto result =
-        vmaAllocateMemoryForBuffer(allocator_, buffer, &create_info, &mem_info.allocation, &mem_info.allocation_info);
-
-    if (result >= 0)
+    for (const auto& allocation_request : allocation_requests)
     {
-        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
-        memory_alloc_info.bound_ranges.push_back(
-            { VK_HANDLE_TO_UINT64(buffer), memory_offset, footprint, *vma_mem_info, replay_req.size });
+        if (FindVmaMemoryInfo(memory_alloc_info,
+                              memory_offset,
+                              capture_req,
+                              replay_req,
+                              requires_dedicated_allocation,
+                              prefers_dedicated_allocation,
+                              allocation_request,
+                              vma_mem_info))
+        {
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(buffer), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            return VK_SUCCESS;
+        }
+
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = &memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_req;
+        mem_info.replay_mem_req                     = replay_req;
+        mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+        mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+        mem_info.alc_create_info                    = allocation_request;
+        mem_info.offset_from_original_device_memory = memory_offset;
+
+        result = vmaAllocateMemoryForBuffer(
+            allocator_, buffer, &allocation_request, &mem_info.allocation, &mem_info.allocation_info);
+
+        if (result >= 0)
+        {
+            memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+            *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(buffer), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            break;
+        }
     }
     return result;
 }
@@ -1292,24 +1315,47 @@ VkResult VulkanRebindAllocator::AllocateMemoryForImage(VkImage                  
         return VK_SUCCESS;
     }
 
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_req;
-    mem_info.replay_mem_req                     = replay_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = memory_offset;
+    const auto capture_properties =
+        device_memory_properties.memoryTypes[memory_alloc_info.original_index].propertyFlags;
+    const auto allocation_requests = BuildAllocationRequests(create_info, capture_properties);
+    VkResult   result              = VK_ERROR_FEATURE_NOT_PRESENT;
 
-    auto result = vma_backend_->AllocateMemoryForImage(
-        allocator_, image, &create_info, &mem_info.allocation, &mem_info.allocation_info);
-
-    if (result >= 0)
+    for (const auto& allocation_request : allocation_requests)
     {
-        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
-        memory_alloc_info.bound_ranges.push_back(
-            { VK_HANDLE_TO_UINT64(image), memory_offset, footprint, *vma_mem_info, replay_req.size });
+        if (FindVmaMemoryInfo(memory_alloc_info,
+                              memory_offset,
+                              capture_req,
+                              replay_req,
+                              requires_dedicated_allocation,
+                              prefers_dedicated_allocation,
+                              allocation_request,
+                              vma_mem_info))
+        {
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(image), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            return VK_SUCCESS;
+        }
+
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = &memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_req;
+        mem_info.replay_mem_req                     = replay_req;
+        mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+        mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+        mem_info.alc_create_info                    = allocation_request;
+        mem_info.offset_from_original_device_memory = memory_offset;
+
+        result = vma_backend_->AllocateMemoryForImage(
+            allocator_, image, &allocation_request, &mem_info.allocation, &mem_info.allocation_info);
+
+        if (result >= 0)
+        {
+            memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+            *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(image), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            break;
+        }
     }
     return result;
 }
@@ -2751,6 +2797,27 @@ VmaMemoryUsage VulkanRebindAllocator::AdjustMemoryUsage(VmaMemoryUsage          
     return memory_usage;
 }
 
+std::vector<VmaAllocationCreateInfo>
+VulkanRebindAllocator::BuildAllocationRequests(const VmaAllocationCreateInfo& base_request,
+                                               VkMemoryPropertyFlags          capture_properties) const
+{
+    std::vector<VmaAllocationCreateInfo> requests;
+
+    // Treat captured memory properties as ordered preferences. Requiring a preference in an earlier request gives it
+    // precedence over VMA's usage-derived preferences, while retaining the unmodified request as a replay-compatible
+    // fallback. Add future captured-memory preferences here in their desired relaxation order.
+    if (((capture_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) &&
+        ((base_request.requiredFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0))
+    {
+        auto coherent_request = base_request;
+        coherent_request.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        requests.push_back(coherent_request);
+    }
+
+    requests.push_back(base_request);
+    return requests;
+}
+
 VmaMemoryUsage VulkanRebindAllocator::GetAliasedGroupMemoryUsage(uint8_t                     aliasing_group,
                                                                  const MemoryAllocInfo&      memory_alloc_info,
                                                                  const VkMemoryRequirements& replay_requirements)
@@ -3117,17 +3184,31 @@ VkResult VulkanRebindAllocator::AllocateMemoryForAliasedObjects(const ResourceAl
     create_info.pool           = VK_NULL_HANDLE;
     create_info.pUserData      = nullptr;
 
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_req;
-    mem_info.replay_mem_req                     = replay_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = original_offset;
+    const auto capture_properties =
+        capture_memory_properties_.memoryTypes[memory_alloc_info.original_index].propertyFlags;
+    const auto    allocation_requests = BuildAllocationRequests(create_info, capture_properties);
+    VkResult      result              = VK_ERROR_FEATURE_NOT_PRESENT;
+    VmaMemoryInfo successful_mem_info{};
 
-    auto result =
-        vmaAllocateMemory(allocator_, &replay_req, &create_info, &mem_info.allocation, &mem_info.allocation_info);
+    for (const auto& allocation_request : allocation_requests)
+    {
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = &memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_req;
+        mem_info.replay_mem_req                     = replay_req;
+        mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+        mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+        mem_info.alc_create_info                    = allocation_request;
+        mem_info.offset_from_original_device_memory = original_offset;
+
+        result = vmaAllocateMemory(
+            allocator_, &replay_req, &allocation_request, &mem_info.allocation, &mem_info.allocation_info);
+        if (result >= 0)
+        {
+            successful_mem_info = mem_info;
+            break;
+        }
+    }
 
     if (result < 0)
     {
@@ -3140,7 +3221,7 @@ VkResult VulkanRebindAllocator::AllocateMemoryForAliasedObjects(const ResourceAl
         return result;
     }
 
-    memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+    memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(successful_mem_info));
     *vma_mem_info                                                 = memory_alloc_info.vma_mem_infos.back().get();
     memory_alloc_info.aliasing_group_vma_memories[aliasing_group] = *vma_mem_info;
 
@@ -3176,27 +3257,6 @@ VkResult VulkanRebindAllocator::VmaAllocateMemory(MemoryAllocInfo&            me
     create_info.pool           = VK_NULL_HANDLE;
     create_info.pUserData      = nullptr;
 
-    if (FindVmaMemoryInfo(memory_alloc_info,
-                          original_offset,
-                          capture_mem_req,
-                          replay_mem_req,
-                          requires_dedicated_allocation,
-                          prefers_dedicated_allocation,
-                          create_info,
-                          vma_mem_info))
-    {
-        return VK_SUCCESS;
-    }
-
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_mem_req;
-    mem_info.replay_mem_req                     = replay_mem_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = original_offset;
-
     VmaSuballocationType suballoc_type = VmaSuballocationType::VMA_SUBALLOCATION_TYPE_FREE;
 
     if (dedicated_buffer != VK_NULL_HANDLE)
@@ -3208,23 +3268,53 @@ VkResult VulkanRebindAllocator::VmaAllocateMemory(MemoryAllocInfo&            me
         suballoc_type = VmaSuballocationType::VMA_SUBALLOCATION_TYPE_IMAGE_UNKNOWN;
     }
 
-    auto result = allocator_->AllocateMemory(replay_mem_req,
-                                             requires_dedicated_allocation,
-                                             prefers_dedicated_allocation,
-                                             dedicated_buffer,
-                                             dedicated_image,
-                                             VmaBufferImageUsage::UNKNOWN,
-                                             nullptr,
-                                             create_info,
-                                             suballoc_type,
-                                             1,
-                                             &mem_info.allocation);
-    if (result >= 0)
-    {
-        allocator_->GetAllocationInfo(mem_info.allocation, &mem_info.allocation_info);
+    const auto capture_properties =
+        capture_memory_properties_.memoryTypes[memory_alloc_info.original_index].propertyFlags;
+    const auto allocation_requests = BuildAllocationRequests(create_info, capture_properties);
+    VkResult   result              = VK_ERROR_FEATURE_NOT_PRESENT;
 
-        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+    for (const auto& allocation_request : allocation_requests)
+    {
+        if (FindVmaMemoryInfo(memory_alloc_info,
+                              original_offset,
+                              capture_mem_req,
+                              replay_mem_req,
+                              requires_dedicated_allocation,
+                              prefers_dedicated_allocation,
+                              allocation_request,
+                              vma_mem_info))
+        {
+            return VK_SUCCESS;
+        }
+
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = &memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_mem_req;
+        mem_info.replay_mem_req                     = replay_mem_req;
+        mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+        mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+        mem_info.alc_create_info                    = allocation_request;
+        mem_info.offset_from_original_device_memory = original_offset;
+
+        result = allocator_->AllocateMemory(replay_mem_req,
+                                            requires_dedicated_allocation,
+                                            prefers_dedicated_allocation,
+                                            dedicated_buffer,
+                                            dedicated_image,
+                                            VmaBufferImageUsage::UNKNOWN,
+                                            nullptr,
+                                            allocation_request,
+                                            suballoc_type,
+                                            1,
+                                            &mem_info.allocation);
+        if (result >= 0)
+        {
+            allocator_->GetAllocationInfo(mem_info.allocation, &mem_info.allocation_info);
+
+            memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+            *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+            break;
+        }
     }
     return result;
 }
@@ -4490,24 +4580,47 @@ VulkanRebindAllocator::AllocateMemoryForTensor(VkTensorARM                      
         return VK_SUCCESS;
     }
 
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_req;
-    mem_info.replay_mem_req                     = replay_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = memory_offset;
+    const auto capture_properties =
+        device_memory_properties.memoryTypes[memory_alloc_info.original_index].propertyFlags;
+    const auto allocation_requests = BuildAllocationRequests(create_info, capture_properties);
+    VkResult   result              = VK_ERROR_FEATURE_NOT_PRESENT;
 
-    auto result =
-        vmaAllocateMemory(allocator_, &replay_req, &create_info, &mem_info.allocation, &mem_info.allocation_info);
-
-    if (result >= 0)
+    for (const auto& allocation_request : allocation_requests)
     {
-        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
-        memory_alloc_info.bound_ranges.push_back(
-            { VK_HANDLE_TO_UINT64(tensor), memory_offset, footprint, *vma_mem_info, replay_req.size });
+        if (FindVmaMemoryInfo(memory_alloc_info,
+                              memory_offset,
+                              capture_req,
+                              replay_req,
+                              requires_dedicated_allocation,
+                              prefers_dedicated_allocation,
+                              allocation_request,
+                              vma_mem_info))
+        {
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(tensor), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            return VK_SUCCESS;
+        }
+
+        VmaMemoryInfo mem_info                      = {};
+        mem_info.memory_info                        = &memory_alloc_info;
+        mem_info.capture_mem_req                    = capture_req;
+        mem_info.replay_mem_req                     = replay_req;
+        mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+        mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+        mem_info.alc_create_info                    = allocation_request;
+        mem_info.offset_from_original_device_memory = memory_offset;
+
+        result = vmaAllocateMemory(
+            allocator_, &replay_req, &allocation_request, &mem_info.allocation, &mem_info.allocation_info);
+
+        if (result >= 0)
+        {
+            memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+            *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+            memory_alloc_info.bound_ranges.push_back(
+                { VK_HANDLE_TO_UINT64(tensor), memory_offset, footprint, *vma_mem_info, replay_req.size });
+            break;
+        }
     }
     return result;
 }

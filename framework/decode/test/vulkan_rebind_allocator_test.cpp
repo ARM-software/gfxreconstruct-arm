@@ -112,6 +112,13 @@ class VulkanRebindAllocatorTestAccess
         return allocator.AdjustMemoryUsage(desired_usage, replay_requirements);
     }
 
+    static std::vector<VmaAllocationCreateInfo> BuildAllocationRequests(VulkanRebindAllocator&         allocator,
+                                                                        const VmaAllocationCreateInfo& base_request,
+                                                                        VkMemoryPropertyFlags capture_properties)
+    {
+        return allocator.BuildAllocationRequests(base_request, capture_properties);
+    }
+
     static VkResult AllocateMemoryForImage(VulkanRebindAllocator&                  allocator,
                                            VkImage                                 image,
                                            VkDeviceSize                            memory_offset,
@@ -999,6 +1006,58 @@ TEST_CASE("AdjustMemoryUsage falls back when replay memory types cannot satisfy 
     }
 }
 
+TEST_CASE("BuildAllocationRequests prefers captured host-coherent memory with a compatibility fallback",
+          "[decode][rebind]")
+{
+    ImageMemorySelectionFixture fixture;
+
+    VmaAllocationCreateInfo base_request{};
+    base_request.flags          = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    base_request.usage          = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    base_request.requiredFlags  = VK_MEMORY_PROPERTY_PROTECTED_BIT;
+    base_request.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    base_request.memoryTypeBits = MakeMemoryTypeBits({ kHostVisibleTypeIndex });
+
+    SECTION("coherent capture memory adds a strict first request and preserves the original fallback")
+    {
+        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
+            fixture.allocator,
+            base_request,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        REQUIRE(requests.size() == 2);
+        REQUIRE(requests[0].flags == base_request.flags);
+        REQUIRE(requests[0].usage == base_request.usage);
+        REQUIRE(requests[0].requiredFlags == (base_request.requiredFlags | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+        REQUIRE(requests[0].preferredFlags == base_request.preferredFlags);
+        REQUIRE(requests[0].memoryTypeBits == base_request.memoryTypeBits);
+        REQUIRE(requests[1].requiredFlags == base_request.requiredFlags);
+        REQUIRE(requests[1].preferredFlags == base_request.preferredFlags);
+    }
+
+    SECTION("non-coherent capture memory leaves the allocation request unchanged")
+    {
+        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
+            fixture.allocator, base_request, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+        REQUIRE(requests.size() == 1);
+        REQUIRE(requests[0].requiredFlags == base_request.requiredFlags);
+        REQUIRE(requests[0].preferredFlags == base_request.preferredFlags);
+    }
+
+    SECTION("an already coherent request is not duplicated")
+    {
+        base_request.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
+            fixture.allocator,
+            base_request,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        REQUIRE(requests.size() == 1);
+        REQUIRE(requests[0].requiredFlags == base_request.requiredFlags);
+    }
+}
+
 TEST_CASE("AllocateMemoryForImage forwards the selected VMA usage and tracks the resulting allocation",
           "[decode][rebind]")
 {
@@ -1067,6 +1126,69 @@ TEST_CASE("AllocateMemoryForImage forwards the selected VMA usage and tracks the
     REQUIRE(vma_mem_info->requires_dedicated_allocation);
     REQUIRE_FALSE(vma_mem_info->prefers_dedicated_allocation);
     REQUIRE(vma_mem_info->allocation == allocation);
+}
+
+TEST_CASE("AllocateMemoryForImage falls back when captured host-coherent memory is unavailable", "[decode][rebind]")
+{
+    ImageMemorySelectionFixture                    fixture;
+    ImageMemorySelectionFixture::ResourceAllocInfo resource_alloc_info =
+        gfxrecon::decode::VulkanRebindAllocatorTestAccess::MakeResourceAllocInfo(VK_OBJECT_TYPE_IMAGE);
+    ImageMemorySelectionFixture::MemoryAllocInfo memory_alloc_info{};
+    ImageMemorySelectionFixture::VmaMemoryInfo*  vma_mem_info = nullptr;
+    const auto                                   image        = MakeHandle<VkImage>(0x2104);
+    const auto                         allocation = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x5004));
+    const auto                         replay_req = MakeMemoryRequirements({ kHostVisibleTypeIndex }, 128, 32);
+    std::vector<VkMemoryPropertyFlags> required_flags;
+
+    fixture.capture_memory_properties =
+        MakeMemoryProperties({ VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT });
+    resource_alloc_info.usage            = VK_IMAGE_USAGE_SAMPLED_BIT;
+    resource_alloc_info.tiling           = VK_IMAGE_TILING_OPTIMAL;
+    resource_alloc_info.capture_mem_reqs = { MakeMemoryRequirements({ kHostVisibleTypeIndex }, 96, 32) };
+    memory_alloc_info.original_index     = 0;
+
+    EXPECT_CALL(fixture.mock_vma_backend, GetImageMemoryRequirements(_, image, _, _, _))
+        .WillOnce(Invoke([&](VmaAllocator,
+                             VkImage,
+                             VkMemoryRequirements& out_requirements,
+                             bool&                 requires_dedicated,
+                             bool&                 prefers_dedicated) {
+            out_requirements   = replay_req;
+            requires_dedicated = false;
+            prefers_dedicated  = false;
+        }));
+    EXPECT_CALL(fixture.mock_vma_backend, AllocateMemoryForImage(_, image, _, _, _))
+        .WillOnce(Invoke(
+            [&](VmaAllocator, VkImage, const VmaAllocationCreateInfo* create_info, VmaAllocation*, VmaAllocationInfo*) {
+                required_flags.push_back(create_info->requiredFlags);
+                return VK_ERROR_FEATURE_NOT_PRESENT;
+            }))
+        .WillOnce(Invoke([&](VmaAllocator,
+                             VkImage,
+                             const VmaAllocationCreateInfo* create_info,
+                             VmaAllocation*                 out_allocation,
+                             VmaAllocationInfo*             out_allocation_info) {
+            required_flags.push_back(create_info->requiredFlags);
+            *out_allocation                   = allocation;
+            out_allocation_info->memoryType   = 0;
+            out_allocation_info->size         = replay_req.size;
+            out_allocation_info->deviceMemory = MakeHandle<VkDeviceMemory>(0x4104);
+            return VK_SUCCESS;
+        }));
+
+    const auto result =
+        gfxrecon::decode::VulkanRebindAllocatorTestAccess::AllocateMemoryForImage(fixture.allocator,
+                                                                                  image,
+                                                                                  0,
+                                                                                  fixture.capture_memory_properties,
+                                                                                  resource_alloc_info,
+                                                                                  memory_alloc_info,
+                                                                                  &vma_mem_info);
+
+    REQUIRE(result == VK_SUCCESS);
+    REQUIRE(vma_mem_info != nullptr);
+    REQUIRE(required_flags == std::vector<VkMemoryPropertyFlags>{ VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0 });
+    REQUIRE(vma_mem_info->alc_create_info.requiredFlags == 0);
 }
 
 TEST_CASE("AllocateMemoryForImage reuses a compatible cached VMA allocation before asking the backend",
@@ -1196,6 +1318,7 @@ TEST_CASE("AllocateMemoryForImage keeps trace-like device-local host-visible opt
     REQUIRE(result == VK_SUCCESS);
     REQUIRE(vma_mem_info != nullptr);
     REQUIRE(captured_create_info.usage == VMA_MEMORY_USAGE_GPU_ONLY);
+    REQUIRE(captured_create_info.requiredFlags == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
 TEST_CASE("Data graph rebind synthesizes the replay session binding set", "[decode][rebind][data-graph]")
