@@ -62,6 +62,8 @@ class Dx12RayTracingModifier : public util::Dx12ModifierBase
   public:
     Dx12RayTracingModifier() = default;
 
+    explicit Dx12RayTracingModifier(int32_t override_gpu_index) : override_gpu_index_(override_gpu_index) {}
+
     virtual bool CanOptimize() override;
 
     virtual void Process_ID3D12Resource_GetGPUVirtualAddress(const ApiCallInfo&        call_info,
@@ -518,6 +520,9 @@ class Dx12RayTracingModifier : public util::Dx12ModifierBase
 
     // Minimum GPU descriptor increment size for D3D12_DESCRIPTOR_HEAP_TYPE
     const uint64_t min_gpu_descriptor_increment_ = 16;
+
+    // GPU index to override for replay. If set to -1, the GPU index will not be overridden.
+    int32_t override_gpu_index_ = -1;
 
     // -----state object-----state object properties-----
     std::unordered_map<format::HandleId, format::HandleId> state_object_properties_;

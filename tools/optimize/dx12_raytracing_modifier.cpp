@@ -2488,48 +2488,146 @@ void Dx12RayTracingModifier::CreateDeviceAndCheckRayTracingSupport()
     HRESULT                             result  = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
     if (FAILED(result))
     {
+        GFXRECON_LOG_WARNING("Failed to create DXGI factory for DXR offline device selection, HRESULT 0x%08x.",
+                             static_cast<unsigned int>(result));
         return;
     }
 
-    const UINT                          kMaxEnumAdapters = 3;
-    graphics::dx12::IDXGIAdapter1ComPtr adapter          = nullptr;
-    for (UINT index = 0; index < kMaxEnumAdapters; ++index)
-    {
-        adapter = nullptr;
-        if (factory->EnumAdapters1(index, &adapter.GetInterfacePtr()) == DXGI_ERROR_NOT_FOUND)
+    bool selected_device = false;
+
+    auto inspect_adapter = [this, &factory, &selected_device](UINT index, bool should_select) -> bool {
+        graphics::dx12::IDXGIAdapter1ComPtr adapter     = nullptr;
+        HRESULT                             enum_result = factory->EnumAdapters1(index, &adapter.GetInterfacePtr());
+
+        if (enum_result == DXGI_ERROR_NOT_FOUND)
         {
-            continue;
+            return false;
         }
 
-        DXGI_ADAPTER_DESC1 desc;
-        adapter->GetDesc1(&desc);
-        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        if (FAILED(enum_result) || adapter == nullptr)
         {
-            continue;
+            GFXRECON_LOG_WARNING("Failed to enumerate DXGI adapter index %u for DXR offline, HRESULT 0x%08x.",
+                                 index,
+                                 static_cast<unsigned int>(enum_result));
+            return true;
+        }
+
+        DXGI_ADAPTER_DESC1 desc        = {};
+        HRESULT            desc_result = adapter->GetDesc1(&desc);
+        if (FAILED(desc_result))
+        {
+            GFXRECON_LOG_WARNING("Failed to query DXGI adapter desc for DXR offline GPU index %u, HRESULT 0x%08x.",
+                                 index,
+                                 static_cast<unsigned int>(desc_result));
+            return true;
+        }
+
+        const bool is_software = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
+
+        GFXRECON_LOG_INFO("DXR offline adapter: [Adapter %u] [%ls] [DeviceID 0x%04x] [VendorId 0x%04x] [Software %s]",
+                          index,
+                          desc.Description,
+                          desc.DeviceId,
+                          desc.VendorId,
+                          is_software ? "true" : "false");
+
+        if (is_software)
+        {
+            GFXRECON_LOG_INFO("DXR offline adapter %u skipped because it is a software adapter.", index);
+            return true;
         }
 
         graphics::dx12::ID3D12Device5ComPtr device = nullptr;
-        result = D3D12CreateDevice(adapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&device));
-        if (SUCCEEDED(result))
+        HRESULT                             create_result =
+            D3D12CreateDevice(adapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&device));
+
+        if (FAILED(create_result) || device == nullptr)
         {
-            D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_data = {};
-            result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_data, sizeof(feature_data));
-            if (SUCCEEDED(result))
+            GFXRECON_LOG_INFO("DXR offline adapter %u cannot create an ID3D12Device5, HRESULT 0x%08x.",
+                              index,
+                              static_cast<unsigned int>(create_result));
+            return true;
+        }
+
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_data = {};
+        HRESULT                           feature_result =
+            device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_data, sizeof(feature_data));
+
+        if (FAILED(feature_result))
+        {
+            GFXRECON_LOG_INFO("DXR offline adapter %u failed D3D12_OPTIONS5 query, HRESULT 0x%08x.",
+                              index,
+                              static_cast<unsigned int>(feature_result));
+            return true;
+        }
+
+        GFXRECON_LOG_INFO(
+            "DXR offline adapter %u raytracing tier: %d.", index, static_cast<int>(feature_data.RaytracingTier));
+
+        if (feature_data.RaytracingTier < D3D12_RAYTRACING_TIER_1_0)
+        {
+            GFXRECON_LOG_INFO("DXR offline adapter %u skipped because raytracing is not supported.", index);
+            return true;
+        }
+
+        if (should_select)
+        {
+            HRESULT query_result = device->QueryInterface(IID_PPV_ARGS(&real_device5_));
+            if (SUCCEEDED(query_result) && real_device5_ != nullptr)
             {
-                if (feature_data.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0)
-                {
-                    device->QueryInterface(IID_PPV_ARGS(&real_device5_));
-                    if (real_device5_ != nullptr)
-                    {
-                        GFXRECON_LOG_INFO("Ray tracing is supported on this device.");
-                    }
-                    break;
-                }
+                selected_device = true;
+                GFXRECON_LOG_INFO(
+                    "DXR offline selected raytracing adapter: [Adapter %u] [%ls] [DeviceID 0x%04x] [VendorId 0x%04x]",
+                    index,
+                    desc.Description,
+                    desc.DeviceId,
+                    desc.VendorId);
+            }
+            else
+            {
+                GFXRECON_LOG_WARNING("Failed to query ID3D12Device5 for DXR offline adapter %u, HRESULT 0x%08x.",
+                                     index,
+                                     static_cast<unsigned int>(query_result));
             }
         }
+
+        return true;
+    };
+
+    if (override_gpu_index_ >= 0)
+    {
+        GFXRECON_LOG_INFO("DXR offline using user-specified GPU index %d for raytracing prebuild info query.",
+                          override_gpu_index_);
+    }
+    else
+    {
+        GFXRECON_LOG_INFO("DXR offline GPU index was not specified. Searching for the first hardware adapter with ray "
+                          "tracing support.");
+    }
+
+    for (UINT index = 0;; ++index)
+    {
+        const bool should_select =
+            (override_gpu_index_ >= 0) ? (index == static_cast<UINT>(override_gpu_index_)) : !selected_device;
+
+        if (!inspect_adapter(index, should_select))
+        {
+            break;
+        }
+    }
+
+    if (override_gpu_index_ >= 0 && !selected_device)
+    {
+        GFXRECON_LOG_WARNING(
+            "The specified GPU index %d could not be used for DXR offline raytracing prebuild info query.",
+            override_gpu_index_);
+    }
+    else if (override_gpu_index_ < 0 && !selected_device)
+    {
+        GFXRECON_LOG_WARNING(
+            "DXR offline could not find a hardware adapter with raytracing support for prebuild info query.");
     }
 }
-
 bool Dx12RayTracingModifier::CanOptimize()
 {
     if (opt_fillmem_ && (fill_cmd_resource_addresses_.size() > 0))

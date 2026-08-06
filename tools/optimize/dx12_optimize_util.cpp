@@ -480,7 +480,8 @@ GetDx12OptimizationData(const std::string& input_filename, const decode::Dx12Opt
         gfxrecon::decode::Dx12ReferencedResourceConsumer resource_consumer;
 
         auto redundancy_modifier_consumer = std::make_unique<gfxrecon::decode::Dx12RedundancyModifier>();
-        auto raytracing_modifier_consumer = std::make_unique<gfxrecon::decode::Dx12RayTracingModifier>();
+        auto raytracing_modifier_consumer =
+            std::make_unique<gfxrecon::decode::Dx12RayTracingModifier>(options.override_gpu_index);
         auto resource_aliasing_modifier_consumer = std::make_unique<gfxrecon::decode::Dx12ResourceAliasingModifier>();
 
         if (!options.no_default)
