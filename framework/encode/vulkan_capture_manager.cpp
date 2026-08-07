@@ -1537,6 +1537,18 @@ VkResult VulkanCaptureManager::OverrideAssertBufferARM(VkDevice                 
         }
     });
     GFXRECON_ASSERT(memory_wrapper != nullptr);
+    GFXRECON_ASSERT(memory_wrapper->parent_device != nullptr);
+    GFXRECON_ASSERT(memory_wrapper->parent_device->physical_device != nullptr);
+
+    if ((memory_wrapper->parent_device->physical_device->memory_properties
+             .memoryTypes[memory_wrapper->memory_type_index]
+             .propertyFlags &
+         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
+    {
+        GFXRECON_LOG_WARNING_ONCE(
+            "vkAssertBufferARM input buffer is not host visible and cannot be mapped. Returning VK_INCOMPLETE");
+        return VK_INCOMPLETE;
+    }
 
     void*        pData{};
     VkDeviceSize size   = pInfo->dataSize;
@@ -1547,8 +1559,7 @@ VkResult VulkanCaptureManager::OverrideAssertBufferARM(VkDevice                 
 
     if (result != VK_SUCCESS)
     {
-        GFXRECON_LOG_WARNING_ONCE("vkAssertBufferARM input buffer is not mappable. Returning VK_INCOMPLETE");
-        return VK_INCOMPLETE;
+        return result;
     }
 
     if (size == VK_WHOLE_SIZE)
@@ -1945,6 +1956,8 @@ VkResult VulkanCaptureManager::OverrideAllocateMemory(VkDevice                  
 
         GFXRECON_ASSERT(pMemory != nullptr);
         auto* memory_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceMemoryWrapper>(*pMemory);
+
+        memory_wrapper->memory_type_index = pAllocateInfo_unwrapped->memoryTypeIndex;
 
         mapped_memory_lock_.lock();
         memories[memory_wrapper->handle_id] = memory_wrapper;

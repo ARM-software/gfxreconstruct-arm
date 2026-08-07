@@ -15656,9 +15656,16 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
     VkDeviceSize      size                  = pInfo->GetPointer()->dataSize;
     VkDeviceSize      offset                = pInfo->GetPointer()->dstOffset;
     VulkanBufferInfo* buffer_info = GetObjectInfoTable().GetVkBufferInfo(pInfo->GetMetaStructPointer()->dstBuffer);
+    GFXRECON_ASSERT(buffer_info != nullptr);
 
     if (!is_trace_helpers_supported_)
     {
+        if ((buffer_info->memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
+        {
+            GFXRECON_LOG_WARNING(
+                "vkAssertBufferARM buffer is not mappable at replay time. Skipping checksum verification.");
+            return original_result;
+        }
 
         auto allocator = device_info->allocator.get();
         GFXRECON_ASSERT(allocator != nullptr);
@@ -15671,9 +15678,7 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
 
         if (mapping_result != VK_SUCCESS)
         {
-            GFXRECON_LOG_WARNING(
-                "vkAssertBufferARM buffer is not mappable at replay time. Skipping checksum verification");
-            return original_result;
+            return mapping_result;
         }
 
         if (auto address_offset_arm =
