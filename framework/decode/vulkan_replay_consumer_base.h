@@ -1757,9 +1757,20 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      PointerDecoder<uint32_t>*                                  checksum,
                                      StringDecoder*                                             comment);
 
+    VkResult OverrideAssertMemoryARM(PFN_vkAssertMemoryARM                                      func,
+                                     VkResult                                                   original_result,
+                                     const VulkanDeviceInfo*                                    device_info,
+                                     const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* pInfo,
+                                     PointerDecoder<uint32_t>*                                  checksum,
+                                     StringDecoder*                                             comment);
+
     void OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer2ARM                            func,
                                      const VulkanCommandBufferInfo*                       command_buffer_info,
                                      StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* p_info);
+
+    void OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory2ARM                            func,
+                                     const VulkanCommandBufferInfo*                       command_buffer_info,
+                                     StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info);
 
     void OverrideGetAccelerationStructureMemoryRequirementsNV(
         PFN_vkGetAccelerationStructureMemoryRequirementsNV                             func,

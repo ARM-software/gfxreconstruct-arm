@@ -218,6 +218,8 @@
     "vkCmdExecuteGeneratedCommandsEXT": "OverrideCmdExecuteGeneratedCommandsEXT",
     "vkAssertBufferARM": "OverrideAssertBufferARM",
     "vkCmdUpdateBuffer2ARM": "OverrideCmdUpdateBuffer2ARM",
+    "vkAssertMemoryARM": "OverrideAssertMemoryARM",
+    "vkCmdUpdateMemory2ARM": "OverrideCmdUpdateMemory2ARM",
     "vkCmdDispatch": "OverrideCmdDispatch",
     "vkCmdDispatchIndirect": "OverrideCmdDispatchIndirect",
     "vkCmdDispatchBase": "OverrideCmdDispatchBase",

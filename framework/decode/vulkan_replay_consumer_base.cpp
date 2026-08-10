@@ -16232,6 +16232,20 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
     return result;
 }
 
+VkResult
+VulkanReplayConsumerBase::OverrideAssertMemoryARM(PFN_vkAssertMemoryARM   func,
+                                                  VkResult                original_result,
+                                                  const VulkanDeviceInfo* device_info,
+                                                  const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* pInfo,
+                                                  PointerDecoder<uint32_t>*                                  checksum,
+                                                  StringDecoder*                                             comment)
+
+{
+    // TODO: add support for this once rebind handling for VkDeviceAddressRangeKHR gets added
+    GFXRECON_LOG_WARNING_ONCE("Ignoring unsupported vkAssertMemoryARM");
+    return VK_SUCCESS;
+}
+
 void VulkanReplayConsumerBase::OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer2ARM      func,
                                                            const VulkanCommandBufferInfo* command_buffer_info,
                                                            StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* p_info)
@@ -16255,6 +16269,32 @@ void VulkanReplayConsumerBase::OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer
     {
         device_table->CmdUpdateBuffer(
             command_buffer_info->handle, pInfo->dstBuffer, pInfo->dstOffset, pInfo->dataSize, pInfo->pData);
+        return;
+    }
+
+    func(command_buffer_info->handle, pInfo);
+}
+
+void VulkanReplayConsumerBase::OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory2ARM      func,
+                                                           const VulkanCommandBufferInfo* command_buffer_info,
+                                                           StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info)
+{
+    const VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
+
+    if (UseAddressReplacement(device_info))
+    {
+        // TODO: add support for this once rebind handling for VkDeviceAddressRangeKHR gets added
+        GFXRECON_LOG_FATAL("Unsupported function vkCmdUpdateMemory2ARM called");
+    }
+
+    VkUpdateMemoryInfoARM* pInfo = p_info->GetPointer();
+
+    auto device_table = GetDeviceTable(device_info->handle);
+
+    if (!is_trace_helpers_supported_)
+    {
+        device_table->CmdUpdateMemoryKHR(
+            command_buffer_info->handle, pInfo->pDstRange, pInfo->dstFlags, pInfo->dataSize, pInfo->pData);
         return;
     }
 

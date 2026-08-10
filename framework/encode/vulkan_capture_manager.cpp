@@ -1513,9 +1513,16 @@ void VulkanCaptureManager::OverrideCmdUpdateBuffer2ARM(VkCommandBuffer          
 void VulkanCaptureManager::OverrideCmdUpdateMemory2ARM(VkCommandBuffer              commandBuffer,
                                                        const VkUpdateMemoryInfoARM* pInfo)
 {
-    // Not supported yet as the vulkan headers don't contain VK_KHR_device_address_commands (vkCmdUpdateMemoryKHR)
-    GFXRECON_LOG_FATAL("Unsupported function called vkCmdUpdateMemory2ARM");
-    GFXRECON_ASSERT(0);
+    auto                         handle_unwrap_memory = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
+    const VkUpdateMemoryInfoARM* pInfo_unwrapped = vulkan_wrappers::UnwrapStructPtrHandles(pInfo, handle_unwrap_memory);
+
+    const graphics::VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(commandBuffer);
+    // Execute actual workload
+    device_table->CmdUpdateMemoryKHR(commandBuffer,
+                                     pInfo_unwrapped->pDstRange,
+                                     pInfo_unwrapped->dstFlags,
+                                     pInfo_unwrapped->dataSize,
+                                     pInfo_unwrapped->pData);
 }
 
 VkResult VulkanCaptureManager::OverrideAssertBufferARM(VkDevice                     device,
@@ -1577,9 +1584,72 @@ VkResult VulkanCaptureManager::OverrideAssertMemoryARM(VkDevice                 
                                                        uint32_t*                    checksum,
                                                        const char*                  comment)
 {
-    GFXRECON_LOG_FATAL("Unsupported function called OverrideAssertMemoryARM");
-    GFXRECON_ASSERT(0);
-    return VK_ERROR_UNKNOWN;
+    const VkDeviceAddressRangeKHR* pDstRange = pInfo->pDstRange;
+    VkDeviceSize                   dataSize  = pInfo->dataSize;
+
+    BufferWrapper* buffer_wrapper = nullptr;
+
+    VisitWrappers<BufferWrapper>([&](BufferWrapper* wrapper) {
+        if (wrapper->address != 0 && wrapper->address <= pDstRange->address &&
+            ((pDstRange->address - wrapper->address) < wrapper->size))
+        {
+            buffer_wrapper = wrapper;
+            return;
+        }
+    });
+    if (buffer_wrapper == nullptr || buffer_wrapper->bind_memory_id == format::kNullHandleId)
+    {
+        GFXRECON_LOG_ERROR("Failed to find address %lu in OverrideAssertMemoryARM", pDstRange->address);
+        return VK_ERROR_UNKNOWN;
+    }
+
+    vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper = nullptr;
+    vulkan_wrappers::VisitWrappers<vulkan_wrappers::DeviceMemoryWrapper>(
+        [&](vulkan_wrappers::DeviceMemoryWrapper* wrapper) {
+            if (wrapper->handle_id == buffer_wrapper->bind_memory_id)
+            {
+                memory_wrapper = wrapper;
+                return;
+            }
+        });
+    if (memory_wrapper == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to find address %lu in OverrideAssertMemoryARM", pDstRange->address);
+        return VK_ERROR_UNKNOWN;
+    }
+    GFXRECON_ASSERT(memory_wrapper->parent_device != nullptr);
+    GFXRECON_ASSERT(memory_wrapper->parent_device->physical_device != nullptr);
+    if ((memory_wrapper->parent_device->physical_device->memory_properties
+             .memoryTypes[memory_wrapper->memory_type_index]
+             .propertyFlags &
+         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
+    {
+        GFXRECON_LOG_WARNING_ONCE(
+            "vkAssertMemoryARM input is not host visible and cannot be mapped. Returning VK_INCOMPLETE");
+        return VK_INCOMPLETE;
+    }
+
+    const graphics::VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(device);
+
+    void*        pData;
+    VkDeviceSize offset_in_buffer = pDstRange->address - buffer_wrapper->address;
+    VkDeviceSize offset           = buffer_wrapper->bind_offset + offset_in_buffer;
+
+    if (dataSize == VK_WHOLE_SIZE)
+    {
+        dataSize = pDstRange->size;
+    }
+
+    VkResult result = device_table->MapMemory(device, memory_wrapper->handle, offset, dataSize, 0, &pData);
+
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    *checksum = util::hash::GenerateAdler32Checksum((uint8_t*)pData, dataSize);
+
+    return VK_SUCCESS;
 }
 
 VkResult

@@ -11383,15 +11383,15 @@ void VulkanReplayConsumer::Process_vkCmdUpdateMemory2ARM(
     const ApiCallInfo&                          call_info,
     args::CmdUpdateMemory2ARM&                  args)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(args.commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
-    const VkUpdateMemoryInfoARM* in_pInfo = args.pInfo.GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(args.commandBuffer);
+
     MapStructHandles(args.pInfo.GetMetaStructPointer(), GetObjectInfoTable());
 
-    GetDeviceTable(in_commandBuffer)->CmdUpdateMemory2ARM(in_commandBuffer, in_pInfo);
+    OverrideCmdUpdateMemory2ARM(GetDeviceTable(in_commandBuffer->handle)->CmdUpdateMemory2ARM, in_commandBuffer, &args.pInfo);
 
     if (options_.dumping_resources)
     {
-        resource_dumper_->Process_vkCmdUpdateMemory2ARM(call_info, GetDeviceTable(in_commandBuffer)->CmdUpdateMemory2ARM, in_commandBuffer, in_pInfo);
+        resource_dumper_->Process_vkCmdUpdateMemory2ARM(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdUpdateMemory2ARM, in_commandBuffer->handle, args.pInfo.GetPointer());
     }
 }
 
@@ -11414,16 +11414,15 @@ void VulkanReplayConsumer::Process_vkAssertMemoryARM(
     const ApiCallInfo&                          call_info,
     args::AssertMemoryARM&                      args)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(args.device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkUpdateMemoryInfoARM* in_pInfo = args.pInfo.GetPointer();
-    MapStructHandles(args.pInfo.GetMetaStructPointer(), GetObjectInfoTable());
-    uint32_t* out_checksum = args.checksum.IsNull() ? nullptr : args.checksum.AllocateOutputData(1, static_cast<uint32_t>(0));
-    const char* in_comment = args.comment.GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(args.device);
 
-    VkResult replay_result = GetDeviceTable(in_device)->AssertMemoryARM(in_device, in_pInfo, out_checksum, in_comment);
+    MapStructHandles(args.pInfo.GetMetaStructPointer(), GetObjectInfoTable());
+    args.checksum.IsNull() ? nullptr : args.checksum.AllocateOutputData(1, static_cast<uint32_t>(0));
+
+    VkResult replay_result = OverrideAssertMemoryARM(GetDeviceTable(in_device->handle)->AssertMemoryARM, args.result, in_device, &args.pInfo, &args.checksum, &args.comment);
     CheckResult("vkAssertMemoryARM", args.result, replay_result, call_info);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkCreateAccelerationStructureKHR(

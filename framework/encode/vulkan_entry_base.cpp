@@ -104,7 +104,9 @@ const std::vector<VulkanEntryBase::VulkanLayerExtensionProps> VulkanEntryBase::k
     { VkExtensionProperties{ "VK_ANDROID_frame_boundary", 1 }, {}, { "vkFrameBoundaryANDROID" } },
     { VkExtensionProperties{ "VK_EXT_frame_boundary", 1 }, {}, {} },
     { VkExtensionProperties{ "VK_ARM_explicit_host_updates", 1 }, {}, {} },
-    { VkExtensionProperties{ "VK_ARM_trace_helpers", 1 }, {}, { "vkAssertBufferARM", "vkCmdUpdateBuffer2ARM" } },
+    { VkExtensionProperties{ "VK_ARM_trace_helpers", 1 },
+      {},
+      { "vkAssertBufferARM", "vkCmdUpdateBuffer2ARM", "vkAssertMemoryARM", "vkCmdUpdateMemory2ARM" } },
 };
 
 /// An alphabetical list of device extensions which we do not report upstream if
