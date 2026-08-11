@@ -78,22 +78,9 @@ class VulkanStructDecodersForwardGenerator(VulkanBaseGenerator, KhronosStructDec
 
     def endFile(self):
         """Method override."""
-        for struct in self.get_all_filtered_struct_names():
-            write('struct Decoded_{};'.format(struct), file=self.outFile)
+        KhronosStructDecodersForwardGenerator.write_struct_decoder_forward_prototypes(self)
         write('struct Decoded_VkBaseOutStructure;', file=self.outFile)
-
-        self.newline()
-
-        for struct in self.get_all_filtered_struct_names():
-            write(
-                'size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_{}* wrapper);'
-                .format(struct),
-                file=self.outFile
-            )
-        write(
-            'size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBaseOutStructure* wrapper);',
-            file=self.outFile
-        )
+        write('size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBaseOutStructure* wrapper);', file=self.outFile)
 
         self.newline()
 

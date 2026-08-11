@@ -23,6 +23,7 @@
 
 #include "encode/custom_vulkan_struct_encoders.h"
 #include "encode/struct_pointer_encoder.h"
+#include "generated/generated_vulkan_enum_to_string.h"
 #include "graphics/vulkan_resources_util.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
@@ -160,8 +161,8 @@ void EncodeStruct(ParameterEncoder* encoder, const VkWriteDescriptorSet& value)
             // Handles are encoded in the VkWriteDescriptorSetInlineUniformBlock structure in the pNext chain
         case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
             // Handles are encoded in the VkWriteDescriptorSetAccelerationStructureKHR structure in the pNext chain
-            break;
         case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+            // Handles are encoded in the VkWriteDescriptorSetTensorARM structure in the pNext chain
             break;
         default:
             GFXRECON_LOG_WARNING("Attempting to track descriptor state for unrecognized descriptor type");
@@ -218,39 +219,6 @@ void EncodeStruct(ParameterEncoder* encoder, const VkAccelerationStructureGeomet
             break;
     }
     encoder->EncodeFlagsValue(value.flags);
-}
-
-void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantARM& value)
-{
-    encoder->EncodeEnumValue(value.sType);
-    EncodePNextStruct(encoder, value.pNext);
-    encoder->EncodeUInt32Value(value.id);
-
-    if (value.pNext)
-    {
-        const VkTensorDescriptionARM* description =
-            gfxrecon::graphics::vulkan_struct_get_pnext<VkTensorDescriptionARM>(&value);
-        if (description != nullptr)
-        {
-            uint64_t element_size = 0;
-            uint64_t size         = vkuGetFormatInfo(description->format).texel_block_size;
-            if (description->format == VK_FORMAT_R8_BOOL_ARM)
-            {
-                size = 1;
-            }
-            for (int i = 0; i < description->dimensionCount; i++)
-            {
-                size *= description->pDimensions[i];
-            }
-            encoder->EncodeUInt8Array(value.pConstantData, size, false, true);
-        }
-        else
-        {
-            GFXRECON_LOG_WARNING(
-                "Couldn't find VkTensorDescriptionARM pNext structure in VkDataGraphPipelineConstantARM; found: %s",
-                util::ToString((reinterpret_cast<const VkBaseInStructure*>(value.pNext))->sType).c_str());
-        }
-    }
 }
 
 void EncodeStruct(ParameterEncoder* encoder, const VkPushDescriptorSetWithTemplateInfoKHR& value)
@@ -498,6 +466,38 @@ void EncodeStruct(ParameterEncoder* encoder, const VkDescriptorGetInfoEXT& value
             break;
         default:
             break;
+    }
+}
+
+void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantARM& value)
+{
+    encoder->EncodeEnumValue(value.sType);
+    EncodePNextStruct(encoder, value.pNext);
+    encoder->EncodeUInt32Value(value.id);
+
+    if (value.pNext != nullptr)
+    {
+        const VkTensorDescriptionARM* description =
+            gfxrecon::graphics::vulkan_struct_get_pnext<VkTensorDescriptionARM>(&value);
+        if (description != nullptr)
+        {
+            uint64_t size = vkuGetFormatInfo(description->format).texel_block_size;
+            if (description->format == VK_FORMAT_R8_BOOL_ARM)
+            {
+                size = 1;
+            }
+            for (int i = 0; i < description->dimensionCount; i++)
+            {
+                size *= description->pDimensions[i];
+            }
+            encoder->EncodeUInt8Array(value.pConstantData, size, false, true);
+        }
+        else
+        {
+            GFXRECON_LOG_WARNING(
+                "Couldn't find VkTensorDescriptionARM pNext structure in VkDataGraphPipelineConstantARM; found: %s",
+                util::ToString((reinterpret_cast<const VkBaseInStructure*>(value.pNext))->sType).c_str());
+        }
     }
 }
 

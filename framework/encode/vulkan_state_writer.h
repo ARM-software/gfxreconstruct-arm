@@ -184,8 +184,6 @@ class VulkanStateWriter
 
     void WriteMicromapEXTState(const VulkanStateTable& state_table);
 
-    void WriteDataGraphPipelineSessionMemoryState(const VulkanStateTable& state_table);
-
     struct MicromapsCallInjectionUtilitiesHandles
     {
         format::HandleId                 command_pool_id;
@@ -223,10 +221,6 @@ class VulkanStateWriter
                             const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
                             graphics::VulkanResourcesUtil&        resource_util);
 
-    void ProcessImageMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper* device_wrapper,
-                                         const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
-                                         graphics::VulkanResourcesUtil&        resource_util);
-
     void ProcessTensorMemory(const vulkan_wrappers::DeviceWrapper*  device_wrapper,
                              const std::vector<TensorSnapshotInfo>& tensor_snapshot_info,
                              graphics::VulkanResourcesUtil&         resource_util);
@@ -235,6 +229,10 @@ class VulkanStateWriter
                                   DeviceResourceTables*   resources,
                                   VkDeviceSize*           total_staging_copy_size,
                                   VkDeviceSize*           max_staging_copy_size);
+
+    void ProcessImageMemoryWithAssetFile(const vulkan_wrappers::DeviceWrapper* device_wrapper,
+                                         const std::vector<ImageSnapshotInfo>& image_snapshot_infos,
+                                         graphics::VulkanResourcesUtil&        resource_util);
 
     void WriteBufferMemoryState(const VulkanStateTable& state_table,
                                 DeviceResourceTables*   resources,
@@ -491,6 +489,7 @@ class VulkanStateWriter
     void WriteExecuteFromFile(const std::string& filename, uint32_t n_blocks, int64_t offset);
 
     void WriteDebugUtilsState(const VulkanStateTable& state_table);
+    void WriteDataGraphPipelineSessionMemoryState(const VulkanStateTable& state_table);
     void WriteTensorMemoryState(const VulkanStateTable& state_table);
 
   private:

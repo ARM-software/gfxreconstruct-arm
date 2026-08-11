@@ -58,8 +58,6 @@ class VulkanResourcesUtil
     // resource and the size of the biggest staging buffer necessary is known in advance.
     VkResult CreateStagingBuffer(VkDeviceSize size);
 
-    VkResult CreateStagingTensor(const VkTensorDescriptionARM* desc);
-
     // Will return the size requirements and offsets for each subresource contained for an image with the specified
     // attributes. Offsets are Vulkan-valid copy offsets for VkBufferImageCopy regions.
     //
@@ -148,6 +146,11 @@ class VulkanResourcesUtil
     VkResult ReadFromBufferResource(
         VkBuffer buffer, uint64_t size, uint64_t offset, uint32_t queue_family_index, std::vector<uint8_t>& data);
 
+    VkResult ReadFromTensorResource(VkTensorARM                   tensor,
+                                    const VkTensorDescriptionARM* desc,
+                                    uint32_t                      queue_family_index,
+                                    std::vector<uint8_t>&         data);
+
     struct BufferResource
     {
         format::HandleId handle_id          = format::kNullHandleId;
@@ -172,11 +175,6 @@ class VulkanResourcesUtil
     void ReadBufferResources(const std::vector<BufferResource>&   buffer_resources,
                              const ReadBufferResourcesCallbackFn& callback,
                              size_t                               staging_buffer_size);
-
-    VkResult ReadFromTensorResource(VkTensorARM                   tensor,
-                                    const VkTensorDescriptionARM* desc,
-                                    uint32_t                      queue_family_index,
-                                    std::vector<uint8_t>&         data);
 
     bool IsBlitSupported(VkFormat       src_format,
                          VkImageTiling  src_image_tiling,
@@ -257,29 +255,29 @@ class VulkanResourcesUtil
                         const graphics::VulkanDevicePropertyFeatureInfo& physical_device_features_info);
 
   private:
+    struct StagingMemoryContext
+    {
+        VkDeviceMemory        memory                = VK_NULL_HANDLE;
+        VkDeviceSize          size                  = 0;
+        VkMemoryPropertyFlags memory_property_flags = VkMemoryPropertyFlags(0);
+        void*                 mapped_ptr            = nullptr;
+    };
+
     VkCommandBuffer CreateCommandBufferAndBegin(uint32_t queue_family_index);
 
     void ResetCommandBuffer(VkCommandBuffer command_buffer);
 
     VkResult BeginCommandBuffer(VkCommandBuffer command_buffer);
 
-    VkResult MapStagingBuffer();
-
-    void UnmapStagingBuffer();
-
-    void InvalidateStagingBuffer();
+    VkResult AllocateStagingMemory(const VkMemoryRequirements& requirements, StagingMemoryContext& ctx);
+    VkResult MapStagingMemory(StagingMemoryContext& ctx);
+    void     UnmapStagingMemory(StagingMemoryContext& ctx);
+    void     InvalidateStagingMemory(const StagingMemoryContext& ctx);
 
     void DestroyStagingBuffer();
 
-    VkResult MapStagingTensor();
-
-    void UnmapStagingTensor();
-
-    void InvalidateStagingTensor();
-
-    void DestroyStagingTensor();
-
-    void DestroyStagingTensorMemory();
+    VkResult CreateStagingTensor(const VkTensorDescriptionARM* desc);
+    void     DestroyStagingTensor();
 
     void TransitionImageToTransferOptimal(VkCommandBuffer    command_buffer,
                                           VkImage            image,
@@ -364,25 +362,14 @@ class VulkanResourcesUtil
 
     struct StagingBufferContext
     {
-        StagingBufferContext() = default;
-
-        VkBuffer              buffer                = VK_NULL_HANDLE;
-        VkDeviceMemory        memory                = VK_NULL_HANDLE;
-        VkDeviceSize          size                  = 0;
-        VkMemoryPropertyFlags memory_property_flags = VkMemoryPropertyFlags(0);
-        void*                 mapped_ptr            = nullptr;
+        VkBuffer             buffer = VK_NULL_HANDLE;
+        StagingMemoryContext mem;
     };
 
     struct StagingTensorContext
     {
-        StagingTensorContext() = default;
-
-        VkTensorARM           tensor                = VK_NULL_HANDLE;
-        VkDeviceMemory        memory                = VK_NULL_HANDLE;
-        VkDeviceSize          size                  = 0;
-        uint32_t              memory_type_index     = std::numeric_limits<uint32_t>::max();
-        VkMemoryPropertyFlags memory_property_flags = VkMemoryPropertyFlags(0);
-        void*                 mapped_ptr            = nullptr;
+        VkTensorARM          tensor = VK_NULL_HANDLE;
+        StagingMemoryContext mem;
     };
 
     VkDevice                   device_;

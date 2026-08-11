@@ -41,6 +41,7 @@
 #include "format/platform_types.h"
 #include "generated/generated_vulkan_struct_decoders_forward.h"
 #include "util/defines.h"
+#include "util/logging.h"
 
 #include "vulkan/vulkan.h"
 #include "vk_video/vulkan_video_codec_h264std.h"
@@ -13440,6 +13441,7 @@ struct Decoded_VkBaseOutStructure
         switch (vk_type)
         {
             default:
+                GFXRECON_LOG_WARNING_ONCE("Decoded_VkBaseOutStructure::AllocateAppropriate: unrecognized sType 0x%x", peek_structure_type);
                 return_type = DecodeAllocator::Allocate<Decoded_VkBaseOutStructure>(len, initialize);
                 break;
             case VK_STRUCTURE_TYPE_QUEUE_FAMILY_DATA_GRAPH_OPTICAL_FLOW_PROPERTIES_ARM:
@@ -13463,6 +13465,7 @@ struct Decoded_VkBaseOutStructure
         switch (vk_type)
         {
             default:
+                GFXRECON_LOG_WARNING_ONCE("Decoded_VkBaseOutStructure::DecodeAppropriate: unrecognized sType 0x%x", peek_structure_type);
                 bytes_read += DecodeStruct((buffer + bytes_read), (buffer_size - bytes_read), dest);
                 break;
             case VK_STRUCTURE_TYPE_QUEUE_FAMILY_DATA_GRAPH_OPTICAL_FLOW_PROPERTIES_ARM:

@@ -2732,8 +2732,12 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DescriptorSetWrapper* wra
 
 void VulkanStateTracker::DestroyState(vulkan_wrappers::TensorARMWrapper* wrapper) {}
 
+void VulkanStateTracker::DestroyState(vulkan_wrappers::DataGraphPipelineSessionARMWrapper* wrapper) {}
+
 void VulkanStateTracker::DestroyState(vulkan_wrappers::TensorViewARMWrapper* wrapper)
 {
+    GFXRECON_ASSERT(wrapper != nullptr);
+
     if (wrapper->tensor != nullptr)
     {
         wrapper->tensor->tensor_views.erase(wrapper);
@@ -2748,8 +2752,6 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::TensorViewARMWrapper* wra
     }
     wrapper->descriptor_sets_bound_to.clear();
 }
-
-void VulkanStateTracker::DestroyState(vulkan_wrappers::DataGraphPipelineSessionARMWrapper* wrapper) {}
 
 void VulkanStateTracker::TrackCommandBuffersSubmision(uint32_t               command_buffer_count,
                                                       const VkCommandBuffer* command_buffers)

@@ -2372,64 +2372,6 @@ VmaMemoryUsage VulkanRebindAllocator::GetBufferMemoryUsage(VkBufferUsageFlags   
     return AdjustMemoryUsage(memory_usage, replay_requirements);
 }
 
-VmaMemoryUsage VulkanRebindAllocator::GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
-                                                           VkMemoryPropertyFlags       capture_properties,
-                                                           const VkMemoryRequirements& replay_requirements)
-{
-    // Start with CPU_TO_GPU usage.
-    VmaMemoryUsage memory_usage        = VMA_MEMORY_USAGE_CPU_TO_GPU;
-    bool           prefer_device_local = false;
-
-    // Adjust memory usage based on buffer usage flags.
-    if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)
-    {
-        // For exclusive TRANSFER_SRC usage, assume CPU_ONLY for staging copies.
-        memory_usage = VMA_MEMORY_USAGE_CPU_ONLY;
-    }
-    else if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM)
-    {
-        // For exclusive TRANSFER_DST usage, assume GPU_TO_CPU for read back.
-        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-    }
-    else if ((capture_device_type_ == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) &&
-             ((tensor_usage & VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) &&
-             (((tensor_usage & VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM) != VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)))
-    {
-        prefer_device_local = true;
-    }
-
-    // Adjust memory usage based on capture memory properties.
-    // If present, remove AMD device extension property flags and perform checks using only the core property flags.
-    capture_properties &= ~(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD | VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD);
-
-    if ((memory_usage != VMA_MEMORY_USAGE_GPU_TO_CPU) &&
-        (capture_properties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
-    {
-        // If the resource was bound to HOST_CACHED memory, make it GPU_TO_CPU usage to continue using HOST_CACHED.
-        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-    }
-    else if (memory_usage != VMA_MEMORY_USAGE_GPU_ONLY)
-    {
-        if (capture_properties == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        {
-            // If the resource was bound to memory that was exclusively DEVICE_LOCAL, make it GPU_ONLY.
-            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
-        }
-        else if (((capture_properties & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) ==
-                  (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) &&
-                 prefer_device_local)
-        {
-            // If the resource was bound to memory the was a combination of DEVICE_LOCAL and HOST_VISIBLE, make it
-            // GPU_ONLY if the usage flags indicated a preference for DEVICE_LOCAL memory (eg. resource was created
-            // with TRANSFER_DST usage on an integrated GPU).
-            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
-        }
-    }
-
-    // Adjust memory usage based on replay memory requirements.
-    return AdjustMemoryUsage(memory_usage, replay_requirements);
-}
-
 VmaMemoryUsage VulkanRebindAllocator::GetImageMemoryUsage(VkImageUsageFlags           image_usage,
                                                           VkImageTiling               tiling,
                                                           VkMemoryPropertyFlags       capture_properties,
@@ -2752,6 +2694,10 @@ VkResult VulkanRebindAllocator::MapResourceMemoryDirect(VkDeviceSize     size,
                     GFXRECON_LOG_WARNING(
                         "VulkanRebindAllocator::MapResourceMemoryDirect map only the first memory of VideoSession.");
                     break;
+                case MemoryInfoType::kDataGraphSession:
+                    GFXRECON_LOG_WARNING("VulkanRebindAllocator::MapResourceMemoryDirect map only the first memory of "
+                                         "DataGraphPipelineSession.");
+                    break;
                 default:
                     break;
             }
@@ -2844,214 +2790,6 @@ bool VulkanRebindAllocator::GetAliasingGroupWithRequirements(format::HandleId re
 
     *aliasing_group = group;
     return true;
-}
-
-VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                             const VkAllocationCallbacks* allocation_callbacks,
-                                             format::HandleId             capture_id,
-                                             VkTensorARM*                 tensor,
-                                             ResourceData*                allocator_data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
-    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
-
-    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
-
-    if ((create_info != nullptr) && (tensor != nullptr) && (allocator_data != nullptr))
-    {
-        result = functions_.create_tensor(device_, create_info, allocator_->GetAllocationCallbacks(), tensor);
-
-        if (result >= 0)
-        {
-            auto resource_alloc_info         = new ResourceAllocInfo;
-            resource_alloc_info->usage       = create_info->pDescription->usage;
-            resource_alloc_info->object_type = VK_OBJECT_TYPE_TENSOR_ARM;
-            resource_alloc_info->capture_id  = capture_id;
-            (*allocator_data)                = reinterpret_cast<uintptr_t>(resource_alloc_info);
-
-            if (create_info->pNext != nullptr)
-            {
-                resource_alloc_info->uses_extensions = true;
-            }
-        }
-    }
-
-    return result;
-}
-VkResult
-VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                      const VkAllocationCallbacks*   allocation_callbacks,
-                                                      format::HandleId               capture_id,
-                                                      VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
-                                                      ResourceData*                  allocator_data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
-    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
-
-    if (!create_info || !data_graph_pipeline_session || !allocator_data)
-    {
-        GFXRECON_LOG_DEBUG(
-            "CreateDataGraphPipelineSession: invalid input (create_info=%p, session=%p, allocator_data=%p)",
-            (void*)create_info,
-            (void*)data_graph_pipeline_session,
-            (void*)allocator_data);
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    *allocator_data = 0;
-
-    VkResult result = functions_.create_data_graph_pipeline_session(
-        device_, create_info, allocator_->GetAllocationCallbacks(), data_graph_pipeline_session);
-
-    if (result != VK_SUCCESS)
-    {
-        GFXRECON_LOG_ERROR("CreateDataGraphPipelineSession: vkCreateDataGraphPipelineSessionARM failed: %d", result);
-        return result;
-    }
-
-    ResourceAllocInfo* resource_alloc_info = new ResourceAllocInfo();
-
-    resource_alloc_info->object_type     = VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM;
-    resource_alloc_info->uses_extensions = (create_info->pNext != nullptr);
-    resource_alloc_info->usage           = create_info->flags;
-
-    ResourceData session_allocator_data = reinterpret_cast<ResourceData>(resource_alloc_info);
-
-    // Replay may require session memory even when capture required none and therefore emitted no bind command.
-    // Initialize directly from replay requirements as part of creating the replay session.
-    result = InitializeDataGraphPipelineSessionMemory(*data_graph_pipeline_session, resource_alloc_info);
-    if (result != VK_SUCCESS)
-    {
-        functions_.destroy_data_graph_pipeline_session(
-            device_, *data_graph_pipeline_session, allocator_->GetAllocationCallbacks());
-        delete resource_alloc_info;
-        *data_graph_pipeline_session = VK_NULL_HANDLE;
-        return result;
-    }
-
-    *allocator_data = session_allocator_data;
-    return VK_SUCCESS;
-}
-
-void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
-                                                            const VkAllocationCallbacks*  allocation_callbacks,
-                                                            ResourceData                  allocator_data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
-
-    if (allocator_data != 0)
-    {
-        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
-        RemoveVmaMemoryInfo(*resource_alloc_info, VK_HANDLE_TO_UINT64(data_graph_pipeline_session));
-        delete resource_alloc_info;
-    }
-
-    functions_.destroy_data_graph_pipeline_session(
-        device_, data_graph_pipeline_session, allocator_->GetAllocationCallbacks());
-}
-
-void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
-                                          const VkAllocationCallbacks* allocation_callbacks,
-                                          ResourceData                 allocator_data)
-{
-    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
-
-    if (allocator_data != 0)
-    {
-        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
-        RemoveVmaMemoryInfo(*resource_alloc_info, VK_HANDLE_TO_UINT64(tensor));
-        delete resource_alloc_info;
-    }
-
-    functions_.destroy_tensor(device_, tensor, allocator_->GetAllocationCallbacks());
-}
-
-VkResult
-VulkanRebindAllocator::AllocateMemoryForTensor(VkTensorARM                             tensor,
-                                               VkDeviceSize                            memory_offset,
-                                               const VkPhysicalDeviceMemoryProperties& device_memory_properties,
-                                               ResourceAllocInfo&                      resource_alloc_info,
-                                               MemoryAllocInfo&                        memory_alloc_info,
-                                               VmaMemoryInfo**                         vma_mem_info)
-{
-    VkMemoryRequirements capture_req = {};
-    if (resource_alloc_info.capture_mem_reqs.size() > 0)
-    {
-        capture_req = resource_alloc_info.capture_mem_reqs[0];
-    }
-
-    VkTensorMemoryRequirementsInfoARM tensor_mem_req{};
-    tensor_mem_req.sType  = VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM;
-    tensor_mem_req.tensor = tensor;
-
-    VkMemoryRequirements2 replay_req_2{};
-    replay_req_2.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-
-    functions_.get_tensor_memory_requirements(device_, &tensor_mem_req, &replay_req_2);
-
-    VkMemoryRequirements& replay_req                    = replay_req_2.memoryRequirements;
-    bool                  requires_dedicated_allocation = false;
-    bool                  prefers_dedicated_allocation  = false;
-
-    VmaAllocationCreateInfo create_info{};
-    create_info.flags = 0;
-    create_info.usage =
-        GetTensorMemoryUsage(resource_alloc_info.usage,
-                             device_memory_properties.memoryTypes[memory_alloc_info.original_index].propertyFlags,
-                             replay_req);
-    create_info.requiredFlags  = 0;
-    create_info.preferredFlags = 0;
-    create_info.memoryTypeBits = 0;
-    create_info.pool           = VK_NULL_HANDLE;
-    create_info.pUserData      = nullptr;
-
-    if (FindVmaMemoryInfo(memory_alloc_info,
-                          memory_offset,
-                          capture_req,
-                          replay_req,
-                          requires_dedicated_allocation,
-                          prefers_dedicated_allocation,
-                          create_info,
-                          vma_mem_info))
-    {
-        return VK_SUCCESS;
-    }
-
-    VmaMemoryInfo mem_info                      = {};
-    mem_info.memory_info                        = &memory_alloc_info;
-    mem_info.capture_mem_req                    = capture_req;
-    mem_info.replay_mem_req                     = replay_req;
-    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
-    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
-    mem_info.alc_create_info                    = create_info;
-    mem_info.offset_from_original_device_memory = memory_offset;
-
-    auto result =
-        vmaAllocateMemory(allocator_, &replay_req, &create_info, &mem_info.allocation, &mem_info.allocation_info);
-
-    if (result >= 0)
-    {
-        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
-        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
-    }
-    return result;
-}
-
-VkResult
-VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
-                                                          const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
-                                                          const ResourceData*    allocator_session_datas,
-                                                          const MemoryData*      allocator_memory_datas,
-                                                          VkMemoryPropertyFlags* bind_memory_properties)
-{
-    // Data graph session memory is created entirely from replay-device requirements when the replay session is
-    // created. Captured bind commands describe capture-device requirements, so consuming them must have no effect.
-    GFXRECON_UNREFERENCED_PARAMETER(bind_info_count);
-    GFXRECON_UNREFERENCED_PARAMETER(bind_infos);
-    GFXRECON_UNREFERENCED_PARAMETER(allocator_session_datas);
-    GFXRECON_UNREFERENCED_PARAMETER(allocator_memory_datas);
-    GFXRECON_UNREFERENCED_PARAMETER(bind_memory_properties);
-    return VK_SUCCESS;
 }
 
 VkResult VulkanRebindAllocator::InitializeDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
@@ -3261,130 +2999,6 @@ VkResult VulkanRebindAllocator::InitializeDataGraphPipelineSessionMemory(VkDataG
     }
 
     return VK_SUCCESS;
-}
-
-VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                         bind_info_count,
-                                                 const VkBindTensorMemoryInfoARM* bind_infos,
-                                                 const ResourceData*              allocator_tensor_datas,
-                                                 const MemoryData*                allocator_memory_datas,
-                                                 VkMemoryPropertyFlags*           bind_memory_properties)
-{
-    // TODO: BindTensorMemory accepts an array of bind infos, but process them one at a time - should be done in a
-    // batch. Also, specs are not clear, but I assume this follows BindBufferMemory2 requirements - if one binding
-    // fails, the entire command fails and buffers should be destroyed. currently the end result is the result of the
-    // last binding operation which can be confusing.
-
-    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
-
-    if ((bind_infos != nullptr) && (allocator_tensor_datas != nullptr) && (allocator_memory_datas != nullptr) &&
-        (bind_memory_properties != nullptr))
-    {
-        result = VK_SUCCESS;
-
-        for (uint32_t i = 0; i < bind_info_count; ++i)
-        {
-            VkTensorARM tensor                = bind_infos[i].tensor;
-            uintptr_t   allocator_tensor_data = allocator_tensor_datas[i];
-            uintptr_t   allocator_memory_data = allocator_memory_datas[i];
-
-            if ((tensor != VK_NULL_HANDLE) && (allocator_tensor_data != 0) && (allocator_memory_data != 0))
-            {
-                auto           resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_tensor_data);
-                auto           memory_alloc_info   = reinterpret_cast<MemoryAllocInfo*>(allocator_memory_data);
-                VkDeviceSize   memory_offset       = bind_infos[i].memoryOffset;
-                VmaMemoryInfo* vma_mem_info        = nullptr;
-
-                const size_t vma_count_before = memory_alloc_info->vma_mem_infos.size();
-
-                uint8_t aliasing_group = 0;
-                if (GetAliasingGroupWithRequirements(resource_alloc_info->capture_id, &aliasing_group))
-                {
-                    result = AllocateMemoryForAliasedObjects(
-                        *resource_alloc_info, memory_offset, aliasing_group, *memory_alloc_info, &vma_mem_info);
-
-                    if (result >= 0)
-                    {
-                        auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
-
-                        VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
-                        bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
-                        bind_tensor_memory_info.tensor       = tensor;
-                        bind_tensor_memory_info.memory       = vma_mem_info->allocation_info.deviceMemory;
-                        bind_tensor_memory_info.memoryOffset = offset;
-                        result = functions_.bind_tensor_memory(device_, 1, &bind_tensor_memory_info);
-
-                        if (result >= 0)
-                        {
-                            UpdateAllocInfo(*resource_alloc_info,
-                                            VK_HANDLE_TO_UINT64(tensor),
-                                            MemoryInfoType::kBasic,
-                                            *memory_alloc_info,
-                                            *vma_mem_info,
-                                            bind_memory_properties[i]);
-                        }
-                        else if (memory_alloc_info->vma_mem_infos.size() > vma_count_before)
-                        {
-                            // The bind failed: remove and free the new shared allocation. A cached allocation may
-                            // already be bound to other resources and must remain alive.
-                            memory_alloc_info->aliasing_group_vma_memories.erase(aliasing_group);
-                            vmaFreeMemory(allocator_, vma_mem_info->allocation);
-                            memory_alloc_info->vma_mem_infos.pop_back();
-                        }
-                    }
-                    else
-                    {
-                        GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindTensorMemory (alias group %u).",
-                                             util::ToString<VkResult>(result).c_str(),
-                                             aliasing_group);
-                    }
-
-                    continue;
-                }
-
-                result = AllocateMemoryForTensor(tensor,
-                                                 memory_offset,
-                                                 capture_memory_properties_,
-                                                 *resource_alloc_info,
-                                                 *memory_alloc_info,
-                                                 &vma_mem_info);
-
-                if (result >= 0)
-                {
-
-                    auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
-
-                    VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
-                    bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
-                    bind_tensor_memory_info.tensor       = tensor;
-                    bind_tensor_memory_info.memory       = vma_mem_info->allocation_info.deviceMemory;
-                    bind_tensor_memory_info.memoryOffset = offset;
-                    result = functions_.bind_tensor_memory(device_, 1, &bind_tensor_memory_info);
-
-                    if (result >= 0)
-                    {
-                        UpdateAllocInfo(*resource_alloc_info,
-                                        VK_HANDLE_TO_UINT64(tensor),
-                                        MemoryInfoType::kBasic,
-                                        *memory_alloc_info,
-                                        *vma_mem_info,
-                                        bind_memory_properties[i]);
-                    }
-                    else
-                    {
-                        // The bind failed: free a new per-resource VMA allocation that was never successfully bound
-                        // to avoid a leak.
-                        if (memory_alloc_info->vma_mem_infos.size() > vma_count_before)
-                        {
-                            vmaFreeMemory(allocator_, vma_mem_info->allocation);
-                            memory_alloc_info->vma_mem_infos.pop_back();
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return result;
 }
 
 VkResult VulkanRebindAllocator::AllocateMemoryForAliasedObjects(const ResourceAllocInfo& resource_alloc_info,
@@ -3827,20 +3441,6 @@ VulkanRebindAllocator::GetMemoryFd(const VkMemoryGetFdInfoKHR* get_fd_info, int*
         }
     }
     return result;
-}
-
-void VulkanRebindAllocator::GetTensorMemoryRequirementsARM(
-    VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
-    VkMemoryRequirements2*             memory_requirements,
-    ResourceData                       allocator_data)
-{
-    if (allocator_data != 0)
-    {
-        auto resource_alloc_info              = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
-        resource_alloc_info->capture_mem_reqs = { memory_requirements->memoryRequirements };
-    }
-
-    functions_.get_tensor_memory_requirements(device_, tensor_memory_requirements, memory_requirements);
 }
 
 bool VulkanRebindAllocator::FindVmaMemoryInfo(MemoryAllocInfo&               memory_alloc_info,
@@ -4623,6 +4223,411 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
             merge_group_requirements(*aliasing_group, requirements2.memoryRequirements);
         }
     }
+}
+
+VmaMemoryUsage VulkanRebindAllocator::GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
+                                                           VkMemoryPropertyFlags       capture_properties,
+                                                           const VkMemoryRequirements& replay_requirements)
+{
+    // Start with CPU_TO_GPU usage.
+    VmaMemoryUsage memory_usage        = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    bool           prefer_device_local = false;
+
+    // Adjust memory usage based on buffer usage flags.
+    if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)
+    {
+        // For exclusive TRANSFER_SRC usage, assume CPU_ONLY for staging copies.
+        memory_usage = VMA_MEMORY_USAGE_CPU_ONLY;
+    }
+    else if (tensor_usage == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM)
+    {
+        // For exclusive TRANSFER_DST usage, assume GPU_TO_CPU for read back.
+        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    }
+    else if ((capture_device_type_ == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) &&
+             ((tensor_usage & VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) == VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM) &&
+             (((tensor_usage & VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM) != VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM)))
+    {
+        prefer_device_local = true;
+    }
+
+    // Adjust memory usage based on capture memory properties.
+    // If present, remove AMD device extension property flags and perform checks using only the core property flags.
+    capture_properties &= ~(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD | VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD);
+
+    if ((memory_usage != VMA_MEMORY_USAGE_GPU_TO_CPU) &&
+        (capture_properties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+    {
+        // If the resource was bound to HOST_CACHED memory, make it GPU_TO_CPU usage to continue using HOST_CACHED.
+        memory_usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    }
+    else if (memory_usage != VMA_MEMORY_USAGE_GPU_ONLY)
+    {
+        if (capture_properties == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+        {
+            // If the resource was bound to memory that was exclusively DEVICE_LOCAL, make it GPU_ONLY.
+            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        }
+        else if (((capture_properties & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) ==
+                  (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) &&
+                 prefer_device_local)
+        {
+            // If the resource was bound to memory the was a combination of DEVICE_LOCAL and HOST_VISIBLE, make it
+            // GPU_ONLY if the usage flags indicated a preference for DEVICE_LOCAL memory (eg. resource was created
+            // with TRANSFER_DST usage on an integrated GPU).
+            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        }
+    }
+
+    // Adjust memory usage based on replay memory requirements.
+    return AdjustMemoryUsage(memory_usage, replay_requirements);
+}
+
+VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create_info,
+                                             const VkAllocationCallbacks* allocation_callbacks,
+                                             format::HandleId             capture_id,
+                                             VkTensorARM*                 tensor,
+                                             ResourceData*                allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+
+    if ((create_info != nullptr) && (tensor != nullptr) && (allocator_data != nullptr))
+    {
+        result = functions_.create_tensor(device_, create_info, allocator_->GetAllocationCallbacks(), tensor);
+
+        if (result >= 0)
+        {
+            auto resource_alloc_info         = new ResourceAllocInfo;
+            resource_alloc_info->usage       = create_info->pDescription->usage;
+            resource_alloc_info->object_type = VK_OBJECT_TYPE_TENSOR_ARM;
+            resource_alloc_info->capture_id  = capture_id;
+            (*allocator_data)                = reinterpret_cast<uintptr_t>(resource_alloc_info);
+
+            if (create_info->pNext != nullptr)
+            {
+                resource_alloc_info->uses_extensions = true;
+            }
+        }
+    }
+
+    return result;
+}
+
+VkResult
+VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                                      const VkAllocationCallbacks*   allocation_callbacks,
+                                                      format::HandleId               capture_id,
+                                                      VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
+                                                      ResourceData*                  allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+    GFXRECON_UNREFERENCED_PARAMETER(capture_id);
+
+    if (!create_info || !data_graph_pipeline_session || !allocator_data)
+    {
+        GFXRECON_LOG_DEBUG(
+            "CreateDataGraphPipelineSession: invalid input (create_info=%p, session=%p, allocator_data=%p)",
+            (void*)create_info,
+            (void*)data_graph_pipeline_session,
+            (void*)allocator_data);
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    *allocator_data = 0;
+
+    VkResult result = functions_.create_data_graph_pipeline_session(
+        device_, create_info, allocator_->GetAllocationCallbacks(), data_graph_pipeline_session);
+
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("CreateDataGraphPipelineSession: vkCreateDataGraphPipelineSessionARM failed: %d", result);
+        return result;
+    }
+
+    ResourceAllocInfo* resource_alloc_info = new ResourceAllocInfo();
+
+    resource_alloc_info->object_type     = VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM;
+    resource_alloc_info->uses_extensions = (create_info->pNext != nullptr);
+    resource_alloc_info->usage           = create_info->flags;
+
+    ResourceData session_allocator_data = reinterpret_cast<ResourceData>(resource_alloc_info);
+
+    // Replay may require session memory even when capture required none and therefore emitted no bind command.
+    // Initialize directly from replay requirements as part of creating the replay session.
+    result = InitializeDataGraphPipelineSessionMemory(*data_graph_pipeline_session, resource_alloc_info);
+    if (result != VK_SUCCESS)
+    {
+        functions_.destroy_data_graph_pipeline_session(
+            device_, *data_graph_pipeline_session, allocator_->GetAllocationCallbacks());
+        delete resource_alloc_info;
+        *data_graph_pipeline_session = VK_NULL_HANDLE;
+        return result;
+    }
+
+    *allocator_data = session_allocator_data;
+    return VK_SUCCESS;
+}
+
+void VulkanRebindAllocator::DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
+                                                            const VkAllocationCallbacks*  allocation_callbacks,
+                                                            ResourceData                  allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        RemoveVmaMemoryInfo(*resource_alloc_info, VK_HANDLE_TO_UINT64(data_graph_pipeline_session));
+        delete resource_alloc_info;
+    }
+
+    functions_.destroy_data_graph_pipeline_session(
+        device_, data_graph_pipeline_session, allocator_->GetAllocationCallbacks());
+}
+
+void VulkanRebindAllocator::DestroyTensor(VkTensorARM                  tensor,
+                                          const VkAllocationCallbacks* allocation_callbacks,
+                                          ResourceData                 allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocation_callbacks);
+
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        RemoveVmaMemoryInfo(*resource_alloc_info, VK_HANDLE_TO_UINT64(tensor));
+        delete resource_alloc_info;
+    }
+
+    functions_.destroy_tensor(device_, tensor, allocator_->GetAllocationCallbacks());
+}
+
+VkResult
+VulkanRebindAllocator::AllocateMemoryForTensor(VkTensorARM                             tensor,
+                                               VkDeviceSize                            memory_offset,
+                                               const VkPhysicalDeviceMemoryProperties& device_memory_properties,
+                                               ResourceAllocInfo&                      resource_alloc_info,
+                                               MemoryAllocInfo&                        memory_alloc_info,
+                                               VmaMemoryInfo**                         vma_mem_info)
+{
+    VkMemoryRequirements capture_req = {};
+    if (resource_alloc_info.capture_mem_reqs.size() > 0)
+    {
+        capture_req = resource_alloc_info.capture_mem_reqs[0];
+    }
+
+    VkTensorMemoryRequirementsInfoARM tensor_mem_req{};
+    tensor_mem_req.sType  = VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM;
+    tensor_mem_req.tensor = tensor;
+
+    VkMemoryRequirements2 replay_req_2{};
+    replay_req_2.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+
+    functions_.get_tensor_memory_requirements(device_, &tensor_mem_req, &replay_req_2);
+
+    VkMemoryRequirements& replay_req                    = replay_req_2.memoryRequirements;
+    bool                  requires_dedicated_allocation = false;
+    bool                  prefers_dedicated_allocation  = false;
+
+    VmaAllocationCreateInfo create_info{};
+    create_info.flags = 0;
+    create_info.usage =
+        GetTensorMemoryUsage(resource_alloc_info.usage,
+                             device_memory_properties.memoryTypes[memory_alloc_info.original_index].propertyFlags,
+                             replay_req);
+    create_info.requiredFlags  = 0;
+    create_info.preferredFlags = 0;
+    create_info.memoryTypeBits = 0;
+    create_info.pool           = VK_NULL_HANDLE;
+    create_info.pUserData      = nullptr;
+
+    if (FindVmaMemoryInfo(memory_alloc_info,
+                          memory_offset,
+                          capture_req,
+                          replay_req,
+                          requires_dedicated_allocation,
+                          prefers_dedicated_allocation,
+                          create_info,
+                          vma_mem_info))
+    {
+        return VK_SUCCESS;
+    }
+
+    VmaMemoryInfo mem_info                      = {};
+    mem_info.memory_info                        = &memory_alloc_info;
+    mem_info.capture_mem_req                    = capture_req;
+    mem_info.replay_mem_req                     = replay_req;
+    mem_info.requires_dedicated_allocation      = requires_dedicated_allocation;
+    mem_info.prefers_dedicated_allocation       = prefers_dedicated_allocation;
+    mem_info.alc_create_info                    = create_info;
+    mem_info.offset_from_original_device_memory = memory_offset;
+
+    auto result =
+        vmaAllocateMemory(allocator_, &replay_req, &create_info, &mem_info.allocation, &mem_info.allocation_info);
+
+    if (result >= 0)
+    {
+        memory_alloc_info.vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(mem_info));
+        *vma_mem_info = memory_alloc_info.vma_mem_infos.back().get();
+    }
+    return result;
+}
+
+VkResult
+VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
+                                                          const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
+                                                          const ResourceData*    allocator_session_datas,
+                                                          const MemoryData*      allocator_memory_datas,
+                                                          VkMemoryPropertyFlags* bind_memory_properties)
+{
+    // Data graph session memory is created entirely from replay-device requirements when the replay session is
+    // created. Captured bind commands describe capture-device requirements, so consuming them must have no effect.
+    GFXRECON_UNREFERENCED_PARAMETER(bind_info_count);
+    GFXRECON_UNREFERENCED_PARAMETER(bind_infos);
+    GFXRECON_UNREFERENCED_PARAMETER(allocator_session_datas);
+    GFXRECON_UNREFERENCED_PARAMETER(allocator_memory_datas);
+    GFXRECON_UNREFERENCED_PARAMETER(bind_memory_properties);
+    return VK_SUCCESS;
+}
+
+VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                         bind_info_count,
+                                                 const VkBindTensorMemoryInfoARM* bind_infos,
+                                                 const ResourceData*              allocator_tensor_datas,
+                                                 const MemoryData*                allocator_memory_datas,
+                                                 VkMemoryPropertyFlags*           bind_memory_properties)
+{
+    // TODO: BindTensorMemory accepts an array of bind infos, but process them one at a time - should be done in a
+    // batch. Also, specs are not clear, but I assume this follows BindBufferMemory2 requirements - if one binding
+    // fails, the entire command fails and buffers should be destroyed. currently the end result is the result of the
+    // last binding operation which can be confusing.
+
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+
+    if ((bind_infos != nullptr) && (allocator_tensor_datas != nullptr) && (allocator_memory_datas != nullptr) &&
+        (bind_memory_properties != nullptr))
+    {
+        result = VK_SUCCESS;
+
+        for (uint32_t i = 0; i < bind_info_count; ++i)
+        {
+            VkTensorARM tensor                = bind_infos[i].tensor;
+            uintptr_t   allocator_tensor_data = allocator_tensor_datas[i];
+            uintptr_t   allocator_memory_data = allocator_memory_datas[i];
+
+            if ((tensor != VK_NULL_HANDLE) && (allocator_tensor_data != 0) && (allocator_memory_data != 0))
+            {
+                auto           resource_alloc_info = reinterpret_cast<ResourceAllocInfo*>(allocator_tensor_data);
+                auto           memory_alloc_info   = reinterpret_cast<MemoryAllocInfo*>(allocator_memory_data);
+                VkDeviceSize   memory_offset       = bind_infos[i].memoryOffset;
+                VmaMemoryInfo* vma_mem_info        = nullptr;
+
+                const size_t vma_count_before = memory_alloc_info->vma_mem_infos.size();
+
+                uint8_t aliasing_group = 0;
+                if (GetAliasingGroupWithRequirements(resource_alloc_info->capture_id, &aliasing_group))
+                {
+                    result = AllocateMemoryForAliasedObjects(
+                        *resource_alloc_info, memory_offset, aliasing_group, *memory_alloc_info, &vma_mem_info);
+
+                    if (result >= 0)
+                    {
+                        auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
+
+                        VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
+                        bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
+                        bind_tensor_memory_info.tensor       = tensor;
+                        bind_tensor_memory_info.memory       = vma_mem_info->allocation_info.deviceMemory;
+                        bind_tensor_memory_info.memoryOffset = offset;
+                        result = functions_.bind_tensor_memory(device_, 1, &bind_tensor_memory_info);
+
+                        if (result >= 0)
+                        {
+                            UpdateAllocInfo(*resource_alloc_info,
+                                            VK_HANDLE_TO_UINT64(tensor),
+                                            MemoryInfoType::kBasic,
+                                            *memory_alloc_info,
+                                            *vma_mem_info,
+                                            bind_memory_properties[i]);
+                        }
+                        else if (memory_alloc_info->vma_mem_infos.size() > vma_count_before)
+                        {
+                            // The bind failed: remove and free the new shared allocation. A cached allocation may
+                            // already be bound to other resources and must remain alive.
+                            memory_alloc_info->aliasing_group_vma_memories.erase(aliasing_group);
+                            vmaFreeMemory(allocator_, vma_mem_info->allocation);
+                            memory_alloc_info->vma_mem_infos.pop_back();
+                        }
+                    }
+                    else
+                    {
+                        GFXRECON_LOG_WARNING("AllocateMemory failed: %s in Rebind BindTensorMemory (alias group %u).",
+                                             util::ToString<VkResult>(result).c_str(),
+                                             aliasing_group);
+                    }
+
+                    continue;
+                }
+
+                result = AllocateMemoryForTensor(tensor,
+                                                 memory_offset,
+                                                 capture_memory_properties_,
+                                                 *resource_alloc_info,
+                                                 *memory_alloc_info,
+                                                 &vma_mem_info);
+
+                if (result >= 0)
+                {
+
+                    auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
+
+                    VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
+                    bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
+                    bind_tensor_memory_info.tensor       = tensor;
+                    bind_tensor_memory_info.memory       = vma_mem_info->allocation_info.deviceMemory;
+                    bind_tensor_memory_info.memoryOffset = offset;
+                    result = functions_.bind_tensor_memory(device_, 1, &bind_tensor_memory_info);
+
+                    if (result >= 0)
+                    {
+                        UpdateAllocInfo(*resource_alloc_info,
+                                        VK_HANDLE_TO_UINT64(tensor),
+                                        MemoryInfoType::kBasic,
+                                        *memory_alloc_info,
+                                        *vma_mem_info,
+                                        bind_memory_properties[i]);
+                    }
+                    else
+                    {
+                        // The bind failed: free a new per-resource VMA allocation that was never successfully bound
+                        // to avoid a leak.
+                        if (memory_alloc_info->vma_mem_infos.size() > vma_count_before)
+                        {
+                            vmaFreeMemory(allocator_, vma_mem_info->allocation);
+                            memory_alloc_info->vma_mem_infos.pop_back();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+void VulkanRebindAllocator::GetTensorMemoryRequirementsARM(
+    VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+    VkMemoryRequirements2*             memory_requirements,
+    ResourceData                       allocator_data)
+{
+    if (allocator_data != 0)
+    {
+        auto resource_alloc_info              = reinterpret_cast<ResourceAllocInfo*>(allocator_data);
+        resource_alloc_info->capture_mem_reqs = { memory_requirements->memoryRequirements };
+    }
+
+    functions_.get_tensor_memory_requirements(device_, tensor_memory_requirements, memory_requirements);
 }
 
 GFXRECON_END_NAMESPACE(decode)

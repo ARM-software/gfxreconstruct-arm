@@ -205,6 +205,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                           uint64_t         data_size,
                                           const uint8_t*   data) override;
 
+    void ProcessInitTensorCommand(format::HandleId device_id,
+                                  format::HandleId tensor_id,
+                                  uint64_t         data_size,
+                                  const uint8_t*   data) override;
+
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                          format::HandleId             image_id,
                                          uint64_t                     data_size,
@@ -882,13 +887,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                             VulkanDeviceMemoryInfo*                                    memory_info,
                             const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
-    VkResult OverrideBindDataGraphPipelineSessionMemoryARM(
-        PFN_vkBindDataGraphPipelineSessionMemoryARM                                func,
-        VkResult                                                                   returnValue,
-        const VulkanDeviceInfo*                                                    device_info,
-        uint32_t                                                                   bindInfoCount,
-        StructPointerDecoder<Decoded_VkBindDataGraphPipelineSessionMemoryInfoARM>* pBindInfos);
-
     VkResult OverrideBindBufferMemory(PFN_vkBindBufferMemory  func,
                                       VkResult                original_result,
                                       const VulkanDeviceInfo* device_info,
@@ -922,6 +920,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         VulkanVideoSessionKHRInfo*                                     video_session_info,
         uint32_t                                                       bindSessionMemoryInfoCount,
         StructPointerDecoder<Decoded_VkBindVideoSessionMemoryInfoKHR>* pBindSessionMemoryInfos);
+
+    VkResult OverrideBindDataGraphPipelineSessionMemoryARM(
+        PFN_vkBindDataGraphPipelineSessionMemoryARM                                func,
+        VkResult                                                                   returnValue,
+        const VulkanDeviceInfo*                                                    device_info,
+        uint32_t                                                                   bindInfoCount,
+        StructPointerDecoder<Decoded_VkBindDataGraphPipelineSessionMemoryInfoARM>* pBindInfos);
 
     VkResult OverrideCreateBuffer(PFN_vkCreateBuffer                                         func,
                                   VkResult                                                   original_result,
@@ -1780,6 +1785,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      StructPointerDecoder<Decoded_VkTensorCreateInfoARM>* pCreateInfo,
                                      StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                      HandlePointerDecoder<VkTensorARM>*                   tensor);
+
     void
     OverrideDestroyDataGraphPipelineSessionARM(PFN_vkDestroyDataGraphPipelineSessionARM func,
                                                VulkanDeviceInfo*                        device_info,
@@ -1787,8 +1793,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideDestroyTensorARM(PFN_vkDestroyTensorARM                               func,
-                                  VulkanDeviceInfo*                                    device,
-                                  VulkanTensorARMInfo*                                 tensor,
+                                  VulkanDeviceInfo*                                    device_info,
+                                  VulkanTensorARMInfo*                                 tensor_info,
                                   StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     VkResult OverrideBindTensorMemoryARM(PFN_vkBindTensorMemoryARM                                func,
@@ -2048,11 +2054,6 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void SetSwapchainWindowSize(const Decoded_VkSwapchainCreateInfoKHR* swapchain_info);
 
     void InitializeScreenshotHandler();
-
-    virtual void ProcessInitTensorCommand(format::HandleId device_id,
-                                          format::HandleId tensor_id,
-                                          uint64_t         data_size,
-                                          const uint8_t*   data) override;
 
     void WriteScreenshots(const Decoded_VkPresentInfoKHR* meta_info) const;
 

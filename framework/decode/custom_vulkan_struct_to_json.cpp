@@ -244,8 +244,7 @@ void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkWriteDescriptorS
             case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
             case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
             case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
-                // Nothing to do here for acceleration-structures and inline-uniform-blocks,
-                // as the rest of the data is stored in the pNext chain
+                // Nothing to do here — the rest of the data is stored in the pNext chain
                 break;
             case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
             case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
@@ -447,19 +446,6 @@ void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryType& 
 {
     jdata["property_flags"] = decode::VkMemoryPropertyFlags_t{ data.property_flags };
     jdata["heap_index"]     = data.heap_index;
-}
-
-void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantARM* data)
-{
-    if (data && data->decoded_value)
-    {
-        const VkDataGraphPipelineConstantARM&         decoded_value = *data->decoded_value;
-        const Decoded_VkDataGraphPipelineConstantARM& meta_struct   = *data;
-
-        jdata["sType"] = decoded_value.sType;
-        jdata["id"]    = decoded_value.id;
-        FieldToJson(jdata["pNext"], meta_struct.pNext);
-    }
 }
 
 void FieldToJson(nlohmann::ordered_json& jdata, const format::DeviceMemoryHeap& data)
@@ -673,6 +659,19 @@ void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorGetInf
         jdata["sType"]            = decoded_value.sType;
         jdata["type"]             = decoded_value.type;
         FieldToJson(jdata["data"], decoded_value.type, meta_struct.data);
+        FieldToJson(jdata["pNext"], meta_struct.pNext);
+    }
+}
+
+void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantARM* data)
+{
+    if (data && data->decoded_value)
+    {
+        const VkDataGraphPipelineConstantARM&         decoded_value = *data->decoded_value;
+        const Decoded_VkDataGraphPipelineConstantARM& meta_struct   = *data;
+
+        jdata["sType"] = decoded_value.sType;
+        jdata["id"]    = decoded_value.id;
         FieldToJson(jdata["pNext"], meta_struct.pNext);
     }
 }

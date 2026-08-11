@@ -211,7 +211,8 @@ struct VulkanReplayDeviceInfo
 
     bool                                  data_graph_optical_flow_initialized{ false };
     std::vector<DataGraphOpticalFlowInfo> data_graph_optical_flow_infos;
-    bool                                  IsPropertiesNull() const
+
+    bool IsPropertiesNull() const
     {
         // Not include memory properties.
         return properties == std::nullopt || driver_properties == std::nullopt ||
@@ -834,6 +835,15 @@ struct VulkanAccelerationStructureKHRInfo : public VulkanObjectInfo<VkAccelerati
     VkDeviceSize size   = 0;
 };
 
+struct VulkanAccelerationStructureNVInfo : public VulkanObjectInfo<VkAccelerationStructureNV>
+{
+    // The following values are only used for memory portability.
+    VulkanResourceAllocator::ResourceData allocator_data{ 0 };
+
+    // This is only used when loading the initial state for trimmed files.
+    VkMemoryPropertyFlags memory_property_flags{ 0 };
+};
+
 struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>
 {
     // The following values are only used for memory portability.
@@ -854,15 +864,6 @@ struct VulkanTensorARMInfo : public VulkanObjectInfo<VkTensorARM>
 
 struct VulkanTensorViewARMInfo : public VulkanObjectInfo<VkTensorViewARM>
 {};
-
-struct VulkanAccelerationStructureNVInfo : public VulkanObjectInfo<VkAccelerationStructureNV>
-{
-    // The following values are only used for memory portability.
-    VulkanResourceAllocator::ResourceData allocator_data{ 0 };
-
-    // This is only used when loading the initial state for trimmed files.
-    VkMemoryPropertyFlags memory_property_flags{ 0 };
-};
 
 struct VulkanDataGraphPipelineSessionARMInfo : public VulkanObjectInfo<VkDataGraphPipelineSessionARM>
 {

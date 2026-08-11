@@ -48,6 +48,7 @@
 #include <cassert>
 #include <memory>
 #include <mutex>
+#include <algorithm>
 #include <set>
 #include <unordered_map>
 
@@ -1936,33 +1937,6 @@ class VulkanCaptureManager : public ApiCaptureManager
                                              uint32_t                               transitionCount,
                                              const VkHostImageLayoutTransitionInfo* pTransitions);
 
-  protected:
-    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
-
-    virtual ~VulkanCaptureManager() {}
-
-    virtual void CreateStateTracker() override
-    {
-        state_tracker_ = std::make_unique<VulkanStateTracker>();
-    }
-
-    virtual void DestroyStateTracker() override
-    {
-        state_tracker_ = nullptr;
-    }
-
-    virtual void WriteTrackedState(util::FileOutputStream* file_stream, util::ThreadData* thread_data) override;
-
-    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
-                                                util::ThreadData*       thread_data,
-                                                util::FileOutputStream* asset_file_stream,
-                                                const std::string*      asset_file_name) override;
-
-    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
-                             const std::string*      asset_file_name,
-                             util::ThreadData*       thread_data) override;
-
-  public:
     void
     PostProcess_vkBindDataGraphPipelineSessionMemoryARM(VkResult result,
                                                         VkDevice device,
@@ -2015,9 +1989,11 @@ class VulkanCaptureManager : public ApiCaptureManager
                                            const VkBindTensorMemoryInfoARM* pBindInfos)
     {
         if (!IsCaptureModeTrack())
+        {
             return;
+        }
 
-        for (int i = 0; i < bindInfoCount; i++)
+        for (uint32_t i = 0; i < bindInfoCount; i++)
         {
             state_tracker_->TrackTensorMemoryBinding(
                 device, pBindInfos[i].tensor, pBindInfos[i].memory, pBindInfos[i].memoryOffset);
@@ -2048,6 +2024,32 @@ class VulkanCaptureManager : public ApiCaptureManager
     {
         return layer_settings_;
     }
+
+  protected:
+    VulkanCaptureManager() : ApiCaptureManager(format::ApiFamilyId::ApiFamily_Vulkan) {}
+
+    virtual ~VulkanCaptureManager() {}
+
+    virtual void CreateStateTracker() override
+    {
+        state_tracker_ = std::make_unique<VulkanStateTracker>();
+    }
+
+    virtual void DestroyStateTracker() override
+    {
+        state_tracker_ = nullptr;
+    }
+
+    virtual void WriteTrackedState(util::FileOutputStream* file_stream, util::ThreadData* thread_data) override;
+
+    virtual void WriteTrackedStateWithAssetFile(util::FileOutputStream* file_stream,
+                                                util::ThreadData*       thread_data,
+                                                util::FileOutputStream* asset_file_stream,
+                                                const std::string*      asset_file_name) override;
+
+    virtual void WriteAssets(util::FileOutputStream* asset_file_stream,
+                             const std::string*      asset_file_name,
+                             util::ThreadData*       thread_data) override;
 
   private:
     struct HardwareBufferInfo

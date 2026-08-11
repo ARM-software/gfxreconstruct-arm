@@ -750,7 +750,6 @@ struct DataGraphPipelineSessionARMWrapper : public HandleWrapper<VkDataGraphPipe
         format::HandleId                       bind_memory_id{ format::kNullHandleId };
         VkDeviceSize                           bind_offset{ 0 };
     };
-
     std::vector<MemoryBinding>                                     memory_bindings;
     vulkan_state_info::CreateDependencyInfo                        pipeline_dependency;
     std::vector<vulkan_state_info::CreateDependencyInfo>           pipeline_shader_module_dependencies;

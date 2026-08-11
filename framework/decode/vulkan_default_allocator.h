@@ -40,302 +40,301 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
 
     VulkanDefaultAllocator(std::string&& custom_error_string);
 
-    virtual VkResult Initialize(uint32_t                                api_version,
-                                VkInstance                              instance,
-                                VkPhysicalDevice                        physical_device,
-                                VkDevice                                device,
-                                const VkDeviceCreateInfo&               device_create_info,
-                                const std::vector<std::string>&         enabled_device_extensions,
-                                VkPhysicalDeviceType                    capture_device_type,
-                                const VkPhysicalDeviceMemoryProperties& capture_memory_properties,
-                                const VkPhysicalDeviceMemoryProperties& replay_memory_properties,
-                                const Functions&                        functions) override;
+    VkResult Initialize(uint32_t                                api_version,
+                        VkInstance                              instance,
+                        VkPhysicalDevice                        physical_device,
+                        VkDevice                                device,
+                        const VkDeviceCreateInfo&               device_create_info,
+                        const std::vector<std::string>&         enabled_device_extensions,
+                        VkPhysicalDeviceType                    capture_device_type,
+                        const VkPhysicalDeviceMemoryProperties& capture_memory_properties,
+                        const VkPhysicalDeviceMemoryProperties& replay_memory_properties,
+                        const Functions&                        functions) override;
 
-    virtual void Destroy() override;
+    void Destroy() override;
 
-    virtual VkResult CreateBuffer(const VkBufferCreateInfo*    create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkBuffer*                    buffer,
-                                  ResourceData*                allocator_data) override;
+    VkResult CreateBuffer(const VkBufferCreateInfo*    create_info,
+                          const VkAllocationCallbacks* allocation_callbacks,
+                          format::HandleId             capture_id,
+                          VkBuffer*                    buffer,
+                          ResourceData*                allocator_data) override;
 
-    virtual void DestroyBuffer(VkBuffer                     buffer,
-                               const VkAllocationCallbacks* allocation_callbacks,
-                               ResourceData                 allocator_data) override;
+    void DestroyBuffer(VkBuffer                     buffer,
+                       const VkAllocationCallbacks* allocation_callbacks,
+                       ResourceData                 allocator_data) override;
 
-    virtual VkResult CreateImage(const VkImageCreateInfo*     create_info,
-                                 const VkAllocationCallbacks* allocation_callbacks,
-                                 format::HandleId             capture_id,
-                                 VkImage*                     image,
-                                 ResourceData*                allocator_data) override;
+    VkResult CreateImage(const VkImageCreateInfo*     create_info,
+                         const VkAllocationCallbacks* allocation_callbacks,
+                         format::HandleId             capture_id,
+                         VkImage*                     image,
+                         ResourceData*                allocator_data) override;
 
-    virtual void DestroyImage(VkImage                      image,
-                              const VkAllocationCallbacks* allocation_callbacks,
-                              ResourceData                 allocator_data) override;
+    void DestroyImage(VkImage                      image,
+                      const VkAllocationCallbacks* allocation_callbacks,
+                      ResourceData                 allocator_data) override;
 
-    virtual VkResult CreateVideoSession(const VkVideoSessionCreateInfoKHR* create_info,
-                                        const VkAllocationCallbacks*       allocation_callbacks,
-                                        format::HandleId                   capture_id,
-                                        VkVideoSessionKHR*                 session,
-                                        ResourceData*                      allocator_data) override;
+    VkResult CreateVideoSession(const VkVideoSessionCreateInfoKHR* create_info,
+                                const VkAllocationCallbacks*       allocation_callbacks,
+                                format::HandleId                   capture_id,
+                                VkVideoSessionKHR*                 session,
+                                ResourceData*                      allocator_data) override;
 
-    virtual void DestroyVideoSession(VkVideoSessionKHR            session,
-                                     const VkAllocationCallbacks* allocation_callbacks,
-                                     ResourceData                 allocator_data) override;
+    void DestroyVideoSession(VkVideoSessionKHR            session,
+                             const VkAllocationCallbacks* allocation_callbacks,
+                             ResourceData                 allocator_data) override;
 
-    virtual void GetBufferMemoryRequirements(VkBuffer              buffer,
-                                             VkMemoryRequirements* memory_requirements,
-                                             ResourceData          allocator_data) override;
+    void GetBufferMemoryRequirements(VkBuffer              buffer,
+                                     VkMemoryRequirements* memory_requirements,
+                                     ResourceData          allocator_data) override;
 
-    virtual void GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
-                                              VkMemoryRequirements2*                 memory_requirements,
-                                              ResourceData                           allocator_data) override;
+    void GetBufferMemoryRequirements2(const VkBufferMemoryRequirementsInfo2* info,
+                                      VkMemoryRequirements2*                 memory_requirements,
+                                      ResourceData                           allocator_data) override;
 
-    virtual void GetImageSubresourceLayout(VkImage                    image,
-                                           const VkImageSubresource*  subresource,
-                                           VkSubresourceLayout*       layout,
-                                           const VkSubresourceLayout* original_layout,
-                                           ResourceData               allocator_data) override;
+    void GetImageSubresourceLayout(VkImage                    image,
+                                   const VkImageSubresource*  subresource,
+                                   VkSubresourceLayout*       layout,
+                                   const VkSubresourceLayout* original_layout,
+                                   ResourceData               allocator_data) override;
 
-    virtual void GetImageMemoryRequirements(VkImage               image,
-                                            VkMemoryRequirements* memory_requirements,
-                                            ResourceData          allocator_data) override;
+    void GetImageMemoryRequirements(VkImage               image,
+                                    VkMemoryRequirements* memory_requirements,
+                                    ResourceData          allocator_data) override;
 
-    virtual void GetImageMemoryRequirements2(const VkImageMemoryRequirementsInfo2* info,
-                                             VkMemoryRequirements2*                memory_requirements,
-                                             ResourceData                          allocator_data) override;
+    void GetImageMemoryRequirements2(const VkImageMemoryRequirementsInfo2* info,
+                                     VkMemoryRequirements2*                memory_requirements,
+                                     ResourceData                          allocator_data) override;
 
-    virtual VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR video_session,
-                                                          uint32_t*         memory_requirements_count,
-                                                          VkVideoSessionMemoryRequirementsKHR* memory_requirements,
-                                                          ResourceData allocator_datas) override;
+    VkResult GetVideoSessionMemoryRequirementsKHR(VkVideoSessionKHR                    video_session,
+                                                  uint32_t*                            memory_requirements_count,
+                                                  VkVideoSessionMemoryRequirementsKHR* memory_requirements,
+                                                  ResourceData                         allocator_datas) override;
 
-    virtual VkResult AllocateMemory(const VkMemoryAllocateInfo*  allocate_info,
-                                    const VkAllocationCallbacks* allocation_callbacks,
-                                    format::HandleId             capture_id,
-                                    VkDeviceMemory*              memory,
-                                    MemoryData*                  allocator_data) override;
-
-    virtual void FreeMemory(VkDeviceMemory               memory,
+    VkResult AllocateMemory(const VkMemoryAllocateInfo*  allocate_info,
                             const VkAllocationCallbacks* allocation_callbacks,
-                            MemoryData                   allocator_data) override;
+                            format::HandleId             capture_id,
+                            VkDeviceMemory*              memory,
+                            MemoryData*                  allocator_data) override;
 
-    virtual void GetDeviceMemoryCommitment(VkDeviceMemory memory,
-                                           VkDeviceSize*  committed_memory_in_bytes,
-                                           MemoryData     allocator_data) override;
+    void FreeMemory(VkDeviceMemory               memory,
+                    const VkAllocationCallbacks* allocation_callbacks,
+                    MemoryData                   allocator_data) override;
 
-    virtual VkResult BindBufferMemory(VkBuffer               buffer,
-                                      VkDeviceMemory         memory,
-                                      VkDeviceSize           memory_offset,
-                                      ResourceData           allocator_buffer_data,
-                                      MemoryData             allocator_memory_data,
-                                      VkMemoryPropertyFlags* bind_memory_properties) override;
+    void GetDeviceMemoryCommitment(VkDeviceMemory memory,
+                                   VkDeviceSize*  committed_memory_in_bytes,
+                                   MemoryData     allocator_data) override;
 
-    virtual VkResult BindBufferMemory2(uint32_t                      bind_info_count,
-                                       const VkBindBufferMemoryInfo* bind_infos,
-                                       const ResourceData*           allocator_buffer_datas,
-                                       const MemoryData*             allocator_memory_datas,
-                                       VkMemoryPropertyFlags*        bind_memory_properties) override;
+    VkResult BindBufferMemory(VkBuffer               buffer,
+                              VkDeviceMemory         memory,
+                              VkDeviceSize           memory_offset,
+                              ResourceData           allocator_buffer_data,
+                              MemoryData             allocator_memory_data,
+                              VkMemoryPropertyFlags* bind_memory_properties) override;
 
-    virtual VkResult BindImageMemory(VkImage                image,
-                                     VkDeviceMemory         memory,
-                                     VkDeviceSize           memory_offset,
-                                     ResourceData           allocator_image_data,
-                                     MemoryData             allocator_memory_data,
-                                     VkMemoryPropertyFlags* bind_memory_properties) override;
+    VkResult BindBufferMemory2(uint32_t                      bind_info_count,
+                               const VkBindBufferMemoryInfo* bind_infos,
+                               const ResourceData*           allocator_buffer_datas,
+                               const MemoryData*             allocator_memory_datas,
+                               VkMemoryPropertyFlags*        bind_memory_properties) override;
 
-    virtual VkResult BindImageMemory2(uint32_t                     bind_info_count,
-                                      const VkBindImageMemoryInfo* bind_infos,
-                                      const ResourceData*          allocator_image_datas,
-                                      const MemoryData*            allocator_memory_datas,
-                                      VkMemoryPropertyFlags*       bind_memory_properties) override;
+    VkResult BindImageMemory(VkImage                image,
+                             VkDeviceMemory         memory,
+                             VkDeviceSize           memory_offset,
+                             ResourceData           allocator_image_data,
+                             MemoryData             allocator_memory_data,
+                             VkMemoryPropertyFlags* bind_memory_properties) override;
 
-    virtual VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
-                                            uint32_t                               bind_info_count,
-                                            const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                            const ResourceData                     allocator_session_data,
-                                            const MemoryData*                      allocator_memory_datas,
-                                            VkMemoryPropertyFlags*                 bind_memory_properties) override;
+    VkResult BindImageMemory2(uint32_t                     bind_info_count,
+                              const VkBindImageMemoryInfo* bind_infos,
+                              const ResourceData*          allocator_image_datas,
+                              const MemoryData*            allocator_memory_datas,
+                              VkMemoryPropertyFlags*       bind_memory_properties) override;
 
-    virtual VkResult MapMemory(VkDeviceMemory   memory,
-                               VkDeviceSize     offset,
-                               VkDeviceSize     size,
-                               VkMemoryMapFlags flags,
-                               void**           data,
-                               MemoryData       allocator_data) override;
+    VkResult BindVideoSessionMemory(VkVideoSessionKHR                      video_session,
+                                    uint32_t                               bind_info_count,
+                                    const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                    const ResourceData                     allocator_session_data,
+                                    const MemoryData*                      allocator_memory_datas,
+                                    VkMemoryPropertyFlags*                 bind_memory_properties) override;
 
-    virtual VkResult
-    MapMemory2(const VkMemoryMapInfo* memory_map_info, void** data, MemoryData allocator_data) override;
+    VkResult MapMemory(VkDeviceMemory   memory,
+                       VkDeviceSize     offset,
+                       VkDeviceSize     size,
+                       VkMemoryMapFlags flags,
+                       void**           data,
+                       MemoryData       allocator_data) override;
 
-    virtual void UnmapMemory(VkDeviceMemory memory, MemoryData allocator_data) override;
+    VkResult MapMemory2(const VkMemoryMapInfo* memory_map_info, void** data, MemoryData allocator_data) override;
 
-    virtual VkResult UnmapMemory2(const VkMemoryUnmapInfo* memory_unmap_info, MemoryData allocator_data) override;
+    void UnmapMemory(VkDeviceMemory memory, MemoryData allocator_data) override;
 
-    virtual VkResult FlushMappedMemoryRanges(uint32_t                   memory_range_count,
-                                             const VkMappedMemoryRange* memory_ranges,
-                                             const MemoryData*          allocator_datas) override;
+    VkResult UnmapMemory2(const VkMemoryUnmapInfo* memory_unmap_info, MemoryData allocator_data) override;
 
-    virtual VkResult InvalidateMappedMemoryRanges(uint32_t                   memory_range_count,
-                                                  const VkMappedMemoryRange* memory_ranges,
-                                                  const MemoryData*          allocator_datas) override;
+    VkResult FlushMappedMemoryRanges(uint32_t                   memory_range_count,
+                                     const VkMappedMemoryRange* memory_ranges,
+                                     const MemoryData*          allocator_datas) override;
 
-    virtual VkResult SetDebugUtilsObjectNameEXT(VkDevice                       device,
-                                                VkDebugUtilsObjectNameInfoEXT* name_info,
-                                                uintptr_t                      allocator_data) override;
+    VkResult InvalidateMappedMemoryRanges(uint32_t                   memory_range_count,
+                                          const VkMappedMemoryRange* memory_ranges,
+                                          const MemoryData*          allocator_datas) override;
 
-    virtual VkResult SetDebugUtilsObjectTagEXT(VkDevice                      device,
-                                               VkDebugUtilsObjectTagInfoEXT* tag_info,
-                                               uintptr_t                     allocator_data) override;
+    VkResult SetDebugUtilsObjectNameEXT(VkDevice                       device,
+                                        VkDebugUtilsObjectNameInfoEXT* name_info,
+                                        uintptr_t                      allocator_data) override;
 
-    virtual VkResult
+    VkResult SetDebugUtilsObjectTagEXT(VkDevice                      device,
+                                       VkDebugUtilsObjectTagInfoEXT* tag_info,
+                                       uintptr_t                     allocator_data) override;
+
+    VkResult
     WriteMappedMemoryRange(MemoryData allocator_data, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
-    virtual void ReportAllocateMemoryIncompatibility(const VkMemoryAllocateInfo* allocate_info) override;
+    void ReportAllocateMemoryIncompatibility(const VkMemoryAllocateInfo* allocate_info) override;
 
-    virtual void ReportBindBufferIncompatibility(VkBuffer     buffer,
-                                                 ResourceData allocator_resource_data,
-                                                 MemoryData   allocator_memory_data) override;
+    void ReportBindBufferIncompatibility(VkBuffer     buffer,
+                                         ResourceData allocator_resource_data,
+                                         MemoryData   allocator_memory_data) override;
 
-    virtual void ReportBindBuffer2Incompatibility(uint32_t                      bind_info_count,
-                                                  const VkBindBufferMemoryInfo* bind_infos,
-                                                  const ResourceData*           allocator_resource_datas,
-                                                  const MemoryData*             allocator_memory_datas) override;
+    void ReportBindBuffer2Incompatibility(uint32_t                      bind_info_count,
+                                          const VkBindBufferMemoryInfo* bind_infos,
+                                          const ResourceData*           allocator_resource_datas,
+                                          const MemoryData*             allocator_memory_datas) override;
 
-    virtual void ReportBindImageIncompatibility(VkImage      image,
-                                                ResourceData allocator_resource_data,
-                                                MemoryData   allocator_memory_data) override;
+    void ReportBindImageIncompatibility(VkImage      image,
+                                        ResourceData allocator_resource_data,
+                                        MemoryData   allocator_memory_data) override;
 
-    virtual void ReportBindImage2Incompatibility(uint32_t                     bind_info_count,
-                                                 const VkBindImageMemoryInfo* bind_infos,
-                                                 const ResourceData*          allocator_resource_datas,
-                                                 const MemoryData*            allocator_memory_datas) override;
+    void ReportBindImage2Incompatibility(uint32_t                     bind_info_count,
+                                         const VkBindImageMemoryInfo* bind_infos,
+                                         const ResourceData*          allocator_resource_datas,
+                                         const MemoryData*            allocator_memory_datas) override;
 
-    virtual void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
-                                                       uint32_t                               bind_info_count,
-                                                       const VkBindVideoSessionMemoryInfoKHR* bind_infos,
-                                                       const ResourceData                     allocator_resource_data,
-                                                       const MemoryData* allocator_memory_datas) override;
+    void ReportBindVideoSessionIncompatibility(VkVideoSessionKHR                      video_session,
+                                               uint32_t                               bind_info_count,
+                                               const VkBindVideoSessionMemoryInfoKHR* bind_infos,
+                                               const ResourceData                     allocator_resource_data,
+                                               const MemoryData*                      allocator_memory_datas) override;
 
-    virtual void
+    void
     ReportBindAccelerationStructureMemoryNVIncompatibility(uint32_t bind_info_count,
                                                            const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
                                                            const ResourceData* allocator_acc_datas,
                                                            const MemoryData*   allocator_memory_datas) override;
 
-    virtual void ReportQueueBindSparseIncompatibility(VkQueue                 queue,
-                                                      uint32_t                bind_info_count,
-                                                      const VkBindSparseInfo* bind_infos,
-                                                      VkFence                 fence,
-                                                      const ResourceData*     allocator_buf_datas,
-                                                      const MemoryData*       allocator_buf_mem_datas,
-                                                      const ResourceData*     allocator_img_op_datas,
-                                                      const MemoryData*       allocator_img_op_mem_datas,
-                                                      const ResourceData*     allocator_img_datas,
-                                                      const MemoryData*       allocator_img_mem_datas) override;
+    void ReportQueueBindSparseIncompatibility(VkQueue                 queue,
+                                              uint32_t                bind_info_count,
+                                              const VkBindSparseInfo* bind_infos,
+                                              VkFence                 fence,
+                                              const ResourceData*     allocator_buf_datas,
+                                              const MemoryData*       allocator_buf_mem_datas,
+                                              const ResourceData*     allocator_img_op_datas,
+                                              const MemoryData*       allocator_img_op_mem_datas,
+                                              const ResourceData*     allocator_img_datas,
+                                              const MemoryData*       allocator_img_mem_datas) override;
 
     // Direct allocation methods that perform memory allocation and resource creation without performing memory
     // translation.  These methods allow the replay tool to allocate staging resources through the resource allocator so
     // that the allocator is aware of all allocations performed at replay.
-    virtual VkResult CreateBufferDirect(const VkBufferCreateInfo*    create_info,
-                                        const VkAllocationCallbacks* allocation_callbacks,
-                                        VkBuffer*                    buffer,
-                                        ResourceData*                allocator_data) override
+    VkResult CreateBufferDirect(const VkBufferCreateInfo*    create_info,
+                                const VkAllocationCallbacks* allocation_callbacks,
+                                VkBuffer*                    buffer,
+                                ResourceData*                allocator_data) override
     {
         return CreateBuffer(create_info, allocation_callbacks, format::kNullHandleId, buffer, allocator_data);
     }
 
-    virtual void DestroyBufferDirect(VkBuffer                     buffer,
-                                     const VkAllocationCallbacks* allocation_callbacks,
-                                     ResourceData                 allocator_data) override
+    void DestroyBufferDirect(VkBuffer                     buffer,
+                             const VkAllocationCallbacks* allocation_callbacks,
+                             ResourceData                 allocator_data) override
     {
         DestroyBuffer(buffer, allocation_callbacks, allocator_data);
     }
 
-    virtual VkResult CreateImageDirect(const VkImageCreateInfo*     create_info,
-                                       const VkAllocationCallbacks* allocation_callbacks,
-                                       VkImage*                     image,
-                                       ResourceData*                allocator_data) override
+    VkResult CreateImageDirect(const VkImageCreateInfo*     create_info,
+                               const VkAllocationCallbacks* allocation_callbacks,
+                               VkImage*                     image,
+                               ResourceData*                allocator_data) override
     {
         return CreateImage(create_info, allocation_callbacks, format::kNullHandleId, image, allocator_data);
     }
 
-    virtual void DestroyImageDirect(VkImage                      image,
-                                    const VkAllocationCallbacks* allocation_callbacks,
-                                    ResourceData                 allocator_data) override
+    void DestroyImageDirect(VkImage                      image,
+                            const VkAllocationCallbacks* allocation_callbacks,
+                            ResourceData                 allocator_data) override
     {
         DestroyImage(image, allocation_callbacks, allocator_data);
     }
 
-    virtual VkResult AllocateMemoryDirect(const VkMemoryAllocateInfo*  allocate_info,
-                                          const VkAllocationCallbacks* allocation_callbacks,
-                                          VkDeviceMemory*              memory,
-                                          MemoryData*                  allocator_data) override
+    VkResult AllocateMemoryDirect(const VkMemoryAllocateInfo*  allocate_info,
+                                  const VkAllocationCallbacks* allocation_callbacks,
+                                  VkDeviceMemory*              memory,
+                                  MemoryData*                  allocator_data) override
     {
         return Allocate(allocate_info, allocation_callbacks, format::kNullHandleId, memory, allocator_data);
     }
 
-    virtual void FreeMemoryDirect(VkDeviceMemory               memory,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  MemoryData                   allocator_data) override
+    void FreeMemoryDirect(VkDeviceMemory               memory,
+                          const VkAllocationCallbacks* allocation_callbacks,
+                          MemoryData                   allocator_data) override
     {
         FreeMemory(memory, allocation_callbacks, allocator_data);
     }
 
-    virtual VkResult BindBufferMemoryDirect(VkBuffer               buffer,
-                                            VkDeviceMemory         memory,
-                                            VkDeviceSize           memory_offset,
-                                            ResourceData           allocator_buffer_data,
-                                            MemoryData             allocator_memory_data,
-                                            VkMemoryPropertyFlags* bind_memory_properties) override
+    VkResult BindBufferMemoryDirect(VkBuffer               buffer,
+                                    VkDeviceMemory         memory,
+                                    VkDeviceSize           memory_offset,
+                                    ResourceData           allocator_buffer_data,
+                                    MemoryData             allocator_memory_data,
+                                    VkMemoryPropertyFlags* bind_memory_properties) override
     {
         return BindBufferMemory(
             buffer, memory, memory_offset, allocator_buffer_data, allocator_memory_data, bind_memory_properties);
     }
 
-    virtual VkResult BindImageMemoryDirect(VkImage                image,
-                                           VkDeviceMemory         memory,
-                                           VkDeviceSize           memory_offset,
-                                           ResourceData           allocator_image_data,
-                                           MemoryData             allocator_memory_data,
-                                           VkMemoryPropertyFlags* bind_memory_properties) override
+    VkResult BindImageMemoryDirect(VkImage                image,
+                                   VkDeviceMemory         memory,
+                                   VkDeviceSize           memory_offset,
+                                   ResourceData           allocator_image_data,
+                                   MemoryData             allocator_memory_data,
+                                   VkMemoryPropertyFlags* bind_memory_properties) override
     {
         return BindImageMemory(
             image, memory, memory_offset, allocator_image_data, allocator_memory_data, bind_memory_properties);
     }
 
-    virtual void BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
-                                                VkImage     image,
-                                                void*       ahardwahardwarebuffer_infoarebuffer_id) override
+    void BindMemoryImageAHardwareBuffer(MemoryData* allocator_memory_data,
+                                        VkImage     image,
+                                        void*       ahardwahardwarebuffer_infoarebuffer_id) override
     {
         return;
     }
 
-    virtual VkResult MapResourceMemoryDirect(VkDeviceSize     size,
-                                             VkMemoryMapFlags flags,
-                                             void**           data,
-                                             ResourceData     allocator_data) override;
+    VkResult MapResourceMemoryDirect(VkDeviceSize     size,
+                                     VkMemoryMapFlags flags,
+                                     void**           data,
+                                     ResourceData     allocator_data) override;
 
-    virtual void UnmapResourceMemoryDirect(ResourceData allocator_data) override;
+    void UnmapResourceMemoryDirect(ResourceData allocator_data) override;
 
-    virtual VkResult FlushMappedMemoryRangesDirect(uint32_t                   memory_range_count,
-                                                   const VkMappedMemoryRange* memory_ranges,
-                                                   const MemoryData*          allocator_datas) override
+    VkResult FlushMappedMemoryRangesDirect(uint32_t                   memory_range_count,
+                                           const VkMappedMemoryRange* memory_ranges,
+                                           const MemoryData*          allocator_datas) override
     {
         return FlushMappedMemoryRanges(memory_range_count, memory_ranges, allocator_datas);
     }
 
-    virtual VkResult InvalidateMappedMemoryRangesDirect(uint32_t                   memory_range_count,
-                                                        const VkMappedMemoryRange* memory_ranges,
-                                                        const MemoryData*          allocator_datas) override
+    VkResult InvalidateMappedMemoryRangesDirect(uint32_t                   memory_range_count,
+                                                const VkMappedMemoryRange* memory_ranges,
+                                                const MemoryData*          allocator_datas) override
     {
         return InvalidateMappedMemoryRanges(memory_range_count, memory_ranges, allocator_datas);
     }
 
-    virtual bool SupportsOpaqueDeviceAddresses() override { return true; }
+    bool SupportsOpaqueDeviceAddresses() override { return true; }
 
-    virtual bool SupportsExternalMemory() override { return true; }
+    bool SupportsExternalMemory() override { return true; }
 
-    virtual size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) const override
+    size_t GetBufferSize(VulkanResourceAllocator::ResourceData alloc_data) const override
     {
         ResourceAllocInfo* alloc_info = reinterpret_cast<ResourceAllocInfo*>(alloc_data);
         GFXRECON_ASSERT(alloc_info != nullptr);
@@ -343,111 +342,113 @@ class VulkanDefaultAllocator : public VulkanResourceAllocator
         return alloc_info->buffer_size;
     }
 
-    virtual bool SupportBindVideoSessionMemory() override { return false; }
+    bool SupportBindVideoSessionMemory() override { return false; }
 
-    virtual VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
-                                                    const VkAllocationCallbacks*                   allocation_callbacks,
-                                                    format::HandleId                               capture_id,
-                                                    VkDataGraphPipelineSessionARM* data_graph_pipeline_session,
-                                                    ResourceData*                  allocator_data) override;
+    VkResult CreateDataGraphPipelineSession(const VkDataGraphPipelineSessionCreateInfoARM* create_info,
+                                            const VkAllocationCallbacks*                   allocation_callbacks,
+                                            format::HandleId                               capture_id,
+                                            VkDataGraphPipelineSessionARM*                 data_graph_pipeline_session,
+                                            ResourceData*                                  allocator_data) override;
 
-    virtual void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
-                                                 const VkAllocationCallbacks*  allocation_callbacks,
-                                                 ResourceData                  allocator_data) override;
+    void DestroyDataGraphPipelineSession(VkDataGraphPipelineSessionARM data_graph_pipeline_session,
+                                         const VkAllocationCallbacks*  allocation_callbacks,
+                                         ResourceData                  allocator_data) override;
 
-    virtual VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
-                                  const VkAllocationCallbacks* allocation_callbacks,
-                                  format::HandleId             capture_id,
-                                  VkTensorARM*                 tensor,
-                                  ResourceData*                allocator_data) override;
-    virtual void     DestroyTensor(VkTensorARM                  tensor,
-                                   const VkAllocationCallbacks* allocation_callbacks,
-                                   ResourceData                 allocator_data) override;
+    VkResult CreateTensor(const VkTensorCreateInfoARM* create_info,
+                          const VkAllocationCallbacks* allocation_callbacks,
+                          format::HandleId             capture_id,
+                          VkTensorARM*                 tensor,
+                          ResourceData*                allocator_data) override;
 
-    virtual VkResult BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
-                                                        const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
-                                                        const ResourceData*    allocator_session_datas,
-                                                        const MemoryData*      allocator_memory_datas,
-                                                        VkMemoryPropertyFlags* bind_memory_properties) override;
+    void DestroyTensor(VkTensorARM                  tensor,
+                       const VkAllocationCallbacks* allocation_callbacks,
+                       ResourceData                 allocator_data) override;
 
-    virtual VkResult BindTensorMemory(uint32_t                         bind_info_count,
-                                      const VkBindTensorMemoryInfoARM* bind_infos,
-                                      const ResourceData*              allocator_tensor_datas,
-                                      const MemoryData*                allocator_memory_datas,
-                                      VkMemoryPropertyFlags*           bind_memory_properties) override;
+    void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                        VkMemoryRequirements2*             memory_requirements,
+                                        ResourceData                       allocator_data) override;
 
-    virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
-                                        const VkAllocationCallbacks* allocation_callbacks,
-                                        VkTensorARM*                 tensor,
-                                        ResourceData*                allocator_data) override
+    VkResult BindDataGraphPipelineSessionMemory(uint32_t                                           bind_info_count,
+                                                const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
+                                                const ResourceData*    allocator_session_datas,
+                                                const MemoryData*      allocator_memory_datas,
+                                                VkMemoryPropertyFlags* bind_memory_properties) override;
+
+    VkResult BindTensorMemory(uint32_t                         bind_info_count,
+                              const VkBindTensorMemoryInfoARM* bind_infos,
+                              const ResourceData*              allocator_tensor_datas,
+                              const MemoryData*                allocator_memory_datas,
+                              VkMemoryPropertyFlags*           bind_memory_properties) override;
+
+    VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
+                                const VkAllocationCallbacks* allocation_callbacks,
+                                VkTensorARM*                 tensor,
+                                ResourceData*                allocator_data) override
     {
         return CreateTensor(create_info, allocation_callbacks, format::kNullHandleId, tensor, allocator_data);
     }
 
-    virtual void DestroyTensorDirect(VkTensorARM                  tensor,
-                                     const VkAllocationCallbacks* allocation_callbacks,
-                                     ResourceData                 allocator_data) override
+    void DestroyTensorDirect(VkTensorARM                  tensor,
+                             const VkAllocationCallbacks* allocation_callbacks,
+                             ResourceData                 allocator_data) override
     {
         DestroyTensor(tensor, allocation_callbacks, allocator_data);
     }
-    virtual void     GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
-                                                    VkMemoryRequirements2*             memory_requirements,
-                                                    ResourceData                       allocator_data) override;
-    virtual VkResult BindTensorMemoryDirect(uint32_t                         bind_info_count,
-                                            const VkBindTensorMemoryInfoARM* bind_infos,
-                                            const ResourceData*              allocator_tensor_datas,
-                                            const MemoryData*                allocator_memory_datas,
-                                            VkMemoryPropertyFlags*           bind_memory_properties) override
+
+    VkResult BindTensorMemoryDirect(uint32_t                         bind_info_count,
+                                    const VkBindTensorMemoryInfoARM* bind_infos,
+                                    const ResourceData*              allocator_tensor_datas,
+                                    const MemoryData*                allocator_memory_datas,
+                                    VkMemoryPropertyFlags*           bind_memory_properties) override
     {
         return BindTensorMemory(
             bind_info_count, bind_infos, allocator_tensor_datas, allocator_memory_datas, bind_memory_properties);
     }
 
-    virtual void SetDeviceMemoryPriority(VkDeviceMemory memory, float priority, MemoryData allocator_data) override;
+    void SetDeviceMemoryPriority(VkDeviceMemory memory, float priority, MemoryData allocator_data) override;
 
-    virtual VkResult GetMemoryRemoteAddressNV(const VkMemoryGetRemoteAddressInfoNV* memory_get_remote_address_info,
-                                              VkRemoteAddressNV*                    address,
-                                              MemoryData                            allocator_data) override;
+    VkResult GetMemoryRemoteAddressNV(const VkMemoryGetRemoteAddressInfoNV* memory_get_remote_address_info,
+                                      VkRemoteAddressNV*                    address,
+                                      MemoryData                            allocator_data) override;
 
-    virtual VkResult CreateAccelerationStructureNV(const VkAccelerationStructureCreateInfoNV* create_info,
-                                                   const VkAllocationCallbacks*               allocation_callbacks,
-                                                   format::HandleId                           capture_id,
-                                                   VkAccelerationStructureNV*                 acc_str,
-                                                   ResourceData*                              allocator_data) override;
+    VkResult CreateAccelerationStructureNV(const VkAccelerationStructureCreateInfoNV* create_info,
+                                           const VkAllocationCallbacks*               allocation_callbacks,
+                                           format::HandleId                           capture_id,
+                                           VkAccelerationStructureNV*                 acc_str,
+                                           ResourceData*                              allocator_data) override;
 
-    virtual void DestroyAccelerationStructureNV(VkAccelerationStructureNV    acc_str,
-                                                const VkAllocationCallbacks* allocation_callbacks,
-                                                ResourceData                 allocator_data) override;
+    void DestroyAccelerationStructureNV(VkAccelerationStructureNV    acc_str,
+                                        const VkAllocationCallbacks* allocation_callbacks,
+                                        ResourceData                 allocator_data) override;
 
-    virtual void
-    GetAccelerationStructureMemoryRequirementsNV(const VkAccelerationStructureMemoryRequirementsInfoNV* info,
-                                                 VkMemoryRequirements2KHR* memory_requirements,
-                                                 ResourceData              allocator_data) override;
+    void GetAccelerationStructureMemoryRequirementsNV(const VkAccelerationStructureMemoryRequirementsInfoNV* info,
+                                                      VkMemoryRequirements2KHR* memory_requirements,
+                                                      ResourceData              allocator_data) override;
 
-    virtual VkResult BindAccelerationStructureMemoryNV(uint32_t                                       bind_info_count,
-                                                       const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
-                                                       const ResourceData*    allocator_acc_datas,
-                                                       const MemoryData*      allocator_memory_datas,
-                                                       VkMemoryPropertyFlags* bind_memory_properties) override;
+    VkResult BindAccelerationStructureMemoryNV(uint32_t                                       bind_info_count,
+                                               const VkBindAccelerationStructureMemoryInfoNV* bind_infos,
+                                               const ResourceData*                            allocator_acc_datas,
+                                               const MemoryData*                              allocator_memory_datas,
+                                               VkMemoryPropertyFlags* bind_memory_properties) override;
 
-    virtual VkResult GetMemoryFd(const VkMemoryGetFdInfoKHR* get_fd_info, int* pFd, MemoryData allocator_data) override;
+    VkResult GetMemoryFd(const VkMemoryGetFdInfoKHR* get_fd_info, int* pFd, MemoryData allocator_data) override;
 
-    virtual VkResult QueueBindSparse(VkQueue                 queue,
-                                     uint32_t                bind_info_count,
-                                     const VkBindSparseInfo* bind_infos,
-                                     VkFence                 fence,
-                                     ResourceData*           allocator_buf_datas,
-                                     const MemoryData*       allocator_buf_mem_datas,
-                                     VkMemoryPropertyFlags*  bind_buf_mem_properties,
-                                     ResourceData*           allocator_img_op_datas,
-                                     const MemoryData*       allocator_img_op_mem_datas,
-                                     VkMemoryPropertyFlags*  bind_img_op_mem_properties,
-                                     ResourceData*           allocator_img_datas,
-                                     const MemoryData*       allocator_img_mem_datas,
-                                     VkMemoryPropertyFlags*  bind_img_mem_properties) override;
+    VkResult QueueBindSparse(VkQueue                 queue,
+                             uint32_t                bind_info_count,
+                             const VkBindSparseInfo* bind_infos,
+                             VkFence                 fence,
+                             ResourceData*           allocator_buf_datas,
+                             const MemoryData*       allocator_buf_mem_datas,
+                             VkMemoryPropertyFlags*  bind_buf_mem_properties,
+                             ResourceData*           allocator_img_op_datas,
+                             const MemoryData*       allocator_img_op_mem_datas,
+                             VkMemoryPropertyFlags*  bind_img_op_mem_properties,
+                             ResourceData*           allocator_img_datas,
+                             const MemoryData*       allocator_img_mem_datas,
+                             VkMemoryPropertyFlags*  bind_img_mem_properties) override;
 
-    virtual uint64_t GetDeviceMemoryOpaqueCaptureAddress(const VkDeviceMemoryOpaqueCaptureAddressInfo* info,
-                                                         MemoryData allocator_data) override;
+    uint64_t GetDeviceMemoryOpaqueCaptureAddress(const VkDeviceMemoryOpaqueCaptureAddressInfo* info,
+                                                 MemoryData                                    allocator_data) override;
 
   protected:
     enum MemoryInfoType

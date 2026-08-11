@@ -2166,6 +2166,26 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBeginCommandBuffer>
 #endif // ENABLE_OPENXR_SUPPORT
 
 template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkTransitionImageLayout>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkTransitionImageLayout(result, args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkTransitionImageLayoutEXT>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkTransitionImageLayout(result, args...);
+    }
+};
+
+template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindTensorMemoryARM>
 {
     template <typename... Args>
@@ -2192,26 +2212,6 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBindDataGraphPipelineS
     static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
     {
         manager->PostProcess_vkBindDataGraphPipelineSessionMemoryARM(result, args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkTransitionImageLayout>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
-    {
-        manager->PostProcess_vkTransitionImageLayout(result, args...);
-    }
-};
-
-template <>
-struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkTransitionImageLayoutEXT>
-{
-    template <typename... Args>
-    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
-    {
-        manager->PostProcess_vkTransitionImageLayout(result, args...);
     }
 };
 
