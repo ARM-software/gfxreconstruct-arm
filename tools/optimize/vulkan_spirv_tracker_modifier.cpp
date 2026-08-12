@@ -2734,10 +2734,9 @@ void VulkanSpirvTrackModifier::executeDispatchDraw(format::HandleId commandBuffe
     {
         str = "CmdDraw";
     }
-    GFXRECON_LOG_INFO(" ---------------------------- %llu: Pipeline %llu Execute %s ----------------------------",
-                      global_draw_index++,
-                      bind_point_state.pipeline,
-                      str.c_str());
+    if (m_verbose)
+        GFXRECON_LOG_INFO(
+            " ---- %llu: Pipeline %llu Execute %s ----", global_draw_index++, bind_point_state.pipeline, str.c_str());
 
     const auto& pipeline_info        = pipeline_entries_.at(bind_point_state.pipeline);
     const auto  pipeline_layout_iter = pipeline_layout_entries_.find(bind_point_state.pipeline_layout);
@@ -2944,9 +2943,12 @@ void VulkanSpirvTrackModifier::executeDispatchDraw(format::HandleId commandBuffe
 
         const ShaderModuleInfo& module_info = shader_module_entries_.at(stage.module);
 
-        GFXRECON_LOG_INFO("     --------- run simulator for shader %llu: %s -------------",
-                          stage.module,
-                          util::ToString<VkShaderStageFlagBits>(stage.stageFlagBit).c_str());
+        if (m_verbose)
+        {
+            GFXRECON_LOG_INFO("------ run simulator for shader %llu: %s ------",
+                              stage.module,
+                              util::ToString<VkShaderStageFlagBits>(stage.stageFlagBit).c_str());
+        }
         SPIRVSimulator::SimulationResults sim_results;
         SPIRVSimulator::SPIRVSimulator    simulator(
             module_info.pCode, &mem_flag_tracker, &sim_data, &sim_results, nullptr, m_verbose, m_flags);
@@ -3040,6 +3042,9 @@ void VulkanSpirvTrackModifier::ApplyDispatchPhysicalAddressResults(
 void VulkanSpirvTrackModifier::outputSimulator(const SPIRVSimulator::SimulationResults& results)
 {
     auto physical_address_data = results.physical_address_data;
+
+    if (physical_address_data.size() == 0)
+        return;
 
     GFXRECON_LOG_INFO("     >>>>>>>>>>>>> Pointers to pbuffers: >>>>>>>>>>>>>");
     for (const auto& pointer_t : physical_address_data)
