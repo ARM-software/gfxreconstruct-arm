@@ -84,7 +84,10 @@ void Dx12ReplayConsumerArmFeatures::CheckReplayResult(const char* call_name,
 
             HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
             GFXRECON_ASSERT(SUCCEEDED(result) && (factory != nullptr));
-            result = factory->EnumAdapters1(0, &adapter1.GetInterfacePtr());
+
+            int32_t adapter_index =
+                consumer_->options_.override_gpu_index >= 0 ? consumer_->options_.override_gpu_index : 0;
+            result = factory->EnumAdapters1(adapter_index, &adapter1.GetInterfacePtr());
             GFXRECON_ASSERT(SUCCEEDED(result) && (adapter1 != nullptr));
             adapter1->QueryInterface(IID_PPV_ARGS(&adapter3));
             if (adapter3 != nullptr)
