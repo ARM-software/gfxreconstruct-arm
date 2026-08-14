@@ -131,7 +131,11 @@ class VulkanAddressReplacerBase
                                                     const VulkanDeviceAddressTracker& address_tracker)
     {}
 
-    virtual void DestroyShadowResources(VkAccelerationStructureKHR handle) {}
+    virtual void DestroyShadowResources(const VulkanAccelerationStructureKHRInfo* acceleration_structure_info) {}
+
+    virtual void DestroyShadowResources(const VulkanBufferInfo*           buffer_info,
+                                        const VulkanDeviceAddressTracker& address_tracker)
+    {}
 
     virtual void DestroyShadowResources(VkCommandBuffer handle) {}
 
@@ -149,10 +153,6 @@ class VulkanAddressReplacerBase
                                                        VkQueryPool                 pool,
                                                        uint32_t                    first_query,
                                                        const decode::VulkanDeviceAddressTracker& address_tracker)
-    {}
-
-    virtual void DestroyShadowResources(const VulkanBufferInfo*           buffer_info,
-                                        const VulkanDeviceAddressTracker& address_tracker)
     {}
 
     virtual void ProcessGeneratedCommandsInfoEXT(VkGeneratedCommandsInfoEXT*               pGeneratedCommandsInfo,

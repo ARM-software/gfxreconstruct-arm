@@ -370,12 +370,12 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
         const decode::VulkanDeviceAddressTracker& address_tracker);
 
     /**
-     * @brief   DestroyShadowResources should be called upon destruction of provided VkAccelerationStructureKHR handle,
+     * @brief   DestroyShadowResources should be called upon destruction of a VkAccelerationStructureKHR-handle,
      *          allowing this class to free potential resources associated with it.
      *
-     * @param   handle  a provided VkAccelerationStructureKHR handle
+     * @param   acceleration_structure_info  a provided VulkanAccelerationStructureKHRInfo struct
      */
-    void DestroyShadowResources(VkAccelerationStructureKHR handle);
+    void DestroyShadowResources(const VulkanAccelerationStructureKHRInfo* acceleration_structure_info);
 
     /**
      * @brief   DestroyShadowResources should be called upon destruction of a VkBuffer-handle,
@@ -429,6 +429,9 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
         VkDeviceAddress            address = 0;
         buffer_context_t           storage = {};
         buffer_context_t           scratch = {};
+
+        //! the acceleration-structure this asset was created for, used to detect stale entries after address-reuse
+        VkAccelerationStructureKHR origin_handle = VK_NULL_HANDLE;
 
         VkDevice                              device     = VK_NULL_HANDLE;
         PFN_vkDestroyAccelerationStructureKHR destroy_fn = nullptr;
@@ -548,6 +551,9 @@ class VulkanAddressReplacer : public VulkanAddressReplacerBase
 
     // resources related to acceleration-structures
     std::unordered_map<VkDeviceAddress, acceleration_structure_asset_t> shadow_as_map_;
+
+    // replacement scratch-buffers for builds only lacking a usable scratch-buffer
+    std::unordered_map<VkAccelerationStructureKHR, buffer_context_t> shadow_scratch_map_;
 
     // currently running compaction queries. pool -> AS -> query-pool-index
     std::unordered_map<VkQueryPool, std::unordered_map<VkAccelerationStructureKHR, uint32_t>> as_compact_queries_;
