@@ -582,9 +582,9 @@ InitializeGroupObjectState<VkDevice,
                                                              format::ApiCallId                       create_call_id,
                                                              vulkan_state_info::CreateParameters     create_parameters)
 {
-    assert(wrapper != nullptr);
-    assert(create_info != nullptr);
-    assert(create_parameters != nullptr);
+    GFXRECON_ASSERT(wrapper != nullptr);
+    GFXRECON_ASSERT(create_info != nullptr);
+    GFXRECON_ASSERT(create_parameters != nullptr);
 
     GFXRECON_UNREFERENCED_PARAMETER(parent_handle);
     GFXRECON_UNREFERENCED_PARAMETER(secondary_handle);
@@ -619,8 +619,8 @@ InitializeGroupObjectState<VkDevice,
 
     if (create_info->layout != VK_NULL_HANDLE)
     {
-        auto layout_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineLayoutWrapper>(create_info->layout);
-        assert(layout_wrapper != nullptr);
+        auto* layout_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineLayoutWrapper>(create_info->layout);
+        GFXRECON_ASSERT(layout_wrapper != nullptr);
 
         wrapper->layout_dependency.handle_id         = layout_wrapper->handle_id;
         wrapper->layout_dependency.create_call_id    = layout_wrapper->create_call_id;
@@ -638,15 +638,15 @@ InitializeState<VkDevice, vulkan_wrappers::DataGraphPipelineSessionARMWrapper, V
     format::ApiCallId                                    create_call_id,
     vulkan_state_info::CreateParameters                  create_parameters)
 {
-    assert(wrapper != nullptr);
-    assert(create_parameters != nullptr);
+    GFXRECON_ASSERT(wrapper != nullptr);
+    GFXRECON_ASSERT(create_parameters != nullptr);
 
     wrapper->device            = GetWrapper<DeviceWrapper>(parent_handle);
     wrapper->create_call_id    = create_call_id;
     wrapper->create_parameters = std::move(create_parameters);
 
     // Track pipeline dependencies so we can recreate destroyed pipelines during trimming.
-    auto pipeline_wrapper =
+    auto* pipeline_wrapper =
         vulkan_wrappers::GetWrapper<vulkan_wrappers::PipelineWrapper>(create_info->dataGraphPipeline);
     if (pipeline_wrapper != nullptr)
     {
@@ -719,13 +719,14 @@ inline void InitializeState<VkDevice, vulkan_wrappers::TensorARMWrapper, VkTenso
     format::ApiCallId                   create_call_id,
     vulkan_state_info::CreateParameters create_parameters)
 {
-    assert(wrapper != nullptr);
-    assert(create_info != nullptr);
-    assert(create_parameters != nullptr);
+    GFXRECON_ASSERT(wrapper != nullptr);
+    GFXRECON_ASSERT(create_info != nullptr);
+    GFXRECON_ASSERT(create_parameters != nullptr);
 
-    wrapper->device                    = GetWrapper<DeviceWrapper>(parent_handle);
-    wrapper->create_call_id            = create_call_id;
-    wrapper->create_parameters         = std::move(create_parameters);
+    wrapper->device            = GetWrapper<DeviceWrapper>(parent_handle);
+    wrapper->create_call_id    = create_call_id;
+    wrapper->create_parameters = std::move(create_parameters);
+
     const VkTensorDescriptionARM* desc = create_info->pDescription;
     wrapper->tiling                    = desc->tiling;
     wrapper->format                    = desc->format;
@@ -736,7 +737,7 @@ inline void InitializeState<VkDevice, vulkan_wrappers::TensorARMWrapper, VkTenso
     {
         wrapper->pStrides.reserve(desc->dimensionCount);
     }
-    for (int i = 0; i < desc->dimensionCount; i++)
+    for (uint32_t i = 0; i < desc->dimensionCount; i++)
     {
         wrapper->pDimensions.push_back(desc->pDimensions[i]);
         if (desc->pStrides)
@@ -756,11 +757,11 @@ inline void InitializeState<VkDevice, vulkan_wrappers::TensorARMWrapper, VkTenso
     tensor_mem_req.sType  = VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM;
     tensor_mem_req.tensor = wrapper->handle;
 
-    VkMemoryRequirements2 replay_req_2{};
-    replay_req_2.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+    VkMemoryRequirements2 mem_req_2{};
+    mem_req_2.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
 
-    device_table->GetTensorMemoryRequirementsARM(parent_handle, &tensor_mem_req, &replay_req_2);
-    wrapper->size = replay_req_2.memoryRequirements.size;
+    device_table->GetTensorMemoryRequirementsARM(parent_handle, &tensor_mem_req, &mem_req_2);
+    wrapper->size = mem_req_2.memoryRequirements.size;
 }
 
 // Images created with vkCreateImage.

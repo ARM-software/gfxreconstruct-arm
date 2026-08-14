@@ -198,6 +198,12 @@ class VulkanDecoderBase : public ApiDecoder
                                            uint64_t         data_size,
                                            const uint8_t*   data) override;
 
+    void DispatchInitTensorCommand(format::ThreadId thread_id,
+                                   format::HandleId device_id,
+                                   format::HandleId tensor_id,
+                                   uint64_t         data_size,
+                                   const uint8_t*   data) override;
+
     virtual void DispatchInitImageCommand(format::ThreadId             thread_id,
                                           format::HandleId             device_id,
                                           format::HandleId             image_id,
@@ -206,12 +212,6 @@ class VulkanDecoderBase : public ApiDecoder
                                           uint32_t                     layout,
                                           const std::vector<uint64_t>& level_sizes,
                                           const uint8_t*               data) override;
-
-    virtual void DispatchInitTensorCommand(format::ThreadId thread_id,
-                                           format::HandleId device_id,
-                                           format::HandleId tensor_id,
-                                           uint64_t         data_size,
-                                           const uint8_t*   data) override;
 
     virtual void DispatchInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                 const uint8_t*                              data) override;

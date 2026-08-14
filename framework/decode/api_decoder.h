@@ -201,7 +201,7 @@ class ApiDecoder
                                            format::HandleId device_id,
                                            format::HandleId tensor_id,
                                            uint64_t         data_size,
-                                           const uint8_t*   data){};
+                                           const uint8_t*   data) = 0;
 
     virtual void DispatchInitImageCommand(format::ThreadId             thread_id,
                                           format::HandleId             device_id,

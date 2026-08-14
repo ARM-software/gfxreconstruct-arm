@@ -85,7 +85,6 @@ class VulkanStructToJsonHeaderGenerator(
         write('void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkBaseOutStructure* data);',
               file=self.outFile)
 
-
     # Method override
     def endFile(self):
         KhronosStructToJsonHeaderGenerator.write_header_contents(self)

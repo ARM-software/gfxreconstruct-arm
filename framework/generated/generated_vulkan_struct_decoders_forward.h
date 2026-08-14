@@ -1388,7 +1388,6 @@ struct Decoded_VkPhysicalDeviceRayQueryFeaturesKHR;
 struct Decoded_VkPhysicalDeviceMeshShaderFeaturesEXT;
 struct Decoded_VkPhysicalDeviceMeshShaderPropertiesEXT;
 struct Decoded_VkDrawMeshTasksIndirectCommandEXT;
-struct Decoded_VkBaseOutStructure;
 
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoH264SpsVuiFlags* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_StdVideoH264HrdParameters* wrapper);
@@ -2733,6 +2732,7 @@ size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceMeshShaderFeaturesEXT* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkPhysicalDeviceMeshShaderPropertiesEXT* wrapper);
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkDrawMeshTasksIndirectCommandEXT* wrapper);
+struct Decoded_VkBaseOutStructure;
 size_t DecodeStruct(const uint8_t* parameter_buffer, size_t buffer_size, Decoded_VkBaseOutStructure* wrapper);
 
 GFXRECON_END_NAMESPACE(decode)

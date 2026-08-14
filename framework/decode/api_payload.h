@@ -444,6 +444,18 @@ struct InitBufferArgs
 
     auto GetTuple() const { return std::tie(thread_id, device_id, buffer_id, data_size, data); }
 };
+struct InitTensorArgs
+{
+    format::MetaDataId meta_data_id; // Needed by DispatchVisitor, but not ApiDecoder
+
+    format::ThreadId thread_id;
+    format::HandleId device_id;
+    format::HandleId tensor_id;
+    uint64_t         data_size;
+    const uint8_t*   data;
+
+    auto GetTuple() const { return std::tie(thread_id, device_id, tensor_id, data_size, data); }
+};
 struct InitImageArgs
 {
     format::MetaDataId meta_data_id; // Needed by DispatchVisitor, but not ApiDecoder
@@ -461,18 +473,6 @@ struct InitImageArgs
     {
         return std::tie(thread_id, device_id, image_id, data_size, aspect, layout, level_sizes, data);
     }
-};
-struct InitTensorArgs
-{
-    format::MetaDataId meta_data_id; // Needed by DispatchVisitor, but not ApiDecoder
-
-    format::ThreadId thread_id;
-    format::HandleId device_id;
-    format::HandleId tensor_id;
-    uint64_t         data_size;
-    const uint8_t*   data;
-
-    auto GetTuple() const { return std::tie(thread_id, device_id, tensor_id, data_size, data); }
 };
 struct InitSubresourceArgs
 {
@@ -865,15 +865,15 @@ struct DispatchTraits<InitBufferArgs> : DispatchFlagTraits<InitBufferArgs>
 };
 
 template <>
-struct DispatchTraits<InitImageArgs> : DispatchFlagTraits<InitImageArgs>
-{
-    static constexpr auto kDecoderMethod = &ApiDecoder::DispatchInitImageCommand;
-};
-
-template <>
 struct DispatchTraits<InitTensorArgs> : DispatchFlagTraits<InitTensorArgs>
 {
     static constexpr auto kDecoderMethod = &ApiDecoder::DispatchInitTensorCommand;
+};
+
+template <>
+struct DispatchTraits<InitImageArgs> : DispatchFlagTraits<InitImageArgs>
+{
+    static constexpr auto kDecoderMethod = &ApiDecoder::DispatchInitImageCommand;
 };
 
 template <>
@@ -1049,8 +1049,8 @@ using DispatchArgs = std::variant<std::monostate,
                                   BeginResourceInitArgs*,
                                   EndResourceInitArgs*,
                                   InitBufferArgs*,
-                                  InitImageArgs*,
                                   InitTensorArgs*,
+                                  InitImageArgs*,
                                   InitSubresourceArgs*,
                                   InitDx12AccelerationStructureArgs*,
                                   GetDx12AccelerationStructureSizeArgs*,

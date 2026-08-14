@@ -933,6 +933,7 @@ VulkanResourcesUtil::VulkanResourcesUtil(VkDevice                               
 VulkanResourcesUtil::~VulkanResourcesUtil()
 {
     DestroyStagingBuffer();
+    DestroyStagingTensor();
 
     for (const auto& [queue_family_index, command_asset] : command_asset_map_)
     {
@@ -947,9 +948,6 @@ VulkanResourcesUtil::~VulkanResourcesUtil()
             device_table_.DestroyCommandPool(device_, command_asset.command_pool, nullptr);
         }
     }
-
-    DestroyStagingTensor();
-    DestroyStagingTensorMemory();
 }
 
 uint64_t VulkanResourcesUtil::GetImageResourceSizesOptimal(VkFormat               format,
@@ -1098,14 +1096,86 @@ uint64_t VulkanResourcesUtil::GetImageSubresourceSizesDumpResources(VkFormat    
     return resource_size;
 }
 
-VkResult VulkanResourcesUtil::CreateStagingBuffer(VkDeviceSize size)
+VkResult VulkanResourcesUtil::AllocateStagingMemory(const VkMemoryRequirements& requirements, StagingMemoryContext& ctx)
 {
     GFXRECON_ASSERT(memory_properties_);
+
+    uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
+    bool     found             = FindMemoryTypeIndex(*memory_properties_,
+                                     requirements.memoryTypeBits,
+                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                                     &memory_type_index,
+                                     &ctx.memory_property_flags);
+    if (!found)
+    {
+        // HOST_CACHED not available, fall back to COHERENT
+        found = FindMemoryTypeIndex(*memory_properties_,
+                                    requirements.memoryTypeBits,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                    &memory_type_index,
+                                    &ctx.memory_property_flags);
+    }
+
+    if (!found)
+    {
+        GFXRECON_LOG_ERROR("Failed to find a memory type with host-visible and host-cached or coherent "
+                           "properties for resource memory snapshot");
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    alloc_info.allocationSize       = requirements.size;
+    alloc_info.memoryTypeIndex      = memory_type_index;
+
+    VkResult result = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &ctx.memory);
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("Failed to allocate staging memory for resource memory snapshot");
+    }
+    return result;
+}
+
+VkResult VulkanResourcesUtil::MapStagingMemory(StagingMemoryContext& ctx)
+{
+    if (ctx.mapped_ptr != nullptr)
+    {
+        return VK_SUCCESS;
+    }
+
+    VkResult result = device_table_.MapMemory(device_, ctx.memory, 0, VK_WHOLE_SIZE, 0, &ctx.mapped_ptr);
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("Failed to map staging memory");
+    }
+    return result;
+}
+
+void VulkanResourcesUtil::UnmapStagingMemory(StagingMemoryContext& ctx)
+{
+    if (ctx.mapped_ptr != nullptr)
+    {
+        device_table_.UnmapMemory(device_, ctx.memory);
+        ctx.mapped_ptr = nullptr;
+    }
+}
+
+void VulkanResourcesUtil::InvalidateStagingMemory(const StagingMemoryContext& ctx)
+{
+    if (!IsMemoryCoherent(ctx.memory_property_flags))
+    {
+        GFXRECON_ASSERT(ctx.mapped_ptr != nullptr);
+        const VkMappedMemoryRange range{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, ctx.memory, 0, ctx.size };
+        device_table_.InvalidateMappedMemoryRanges(device_, 1, &range);
+    }
+}
+
+VkResult VulkanResourcesUtil::CreateStagingBuffer(VkDeviceSize size)
+{
     GFXRECON_ASSERT(size > 0);
 
     if (staging_buffer_.buffer != VK_NULL_HANDLE)
     {
-        if (staging_buffer_.size < size)
+        if (staging_buffer_.mem.size < size)
         {
             DestroyStagingBuffer();
         }
@@ -1115,11 +1185,9 @@ VkResult VulkanResourcesUtil::CreateStagingBuffer(VkDeviceSize size)
         }
     }
 
-    GFXRECON_ASSERT(staging_buffer_.buffer == VK_NULL_HANDLE && staging_buffer_.size == 0);
+    GFXRECON_ASSERT(staging_buffer_.buffer == VK_NULL_HANDLE && staging_buffer_.mem.size == 0);
 
     VkBufferCreateInfo create_info    = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    create_info.pNext                 = nullptr;
-    create_info.flags                 = 0;
     create_info.size                  = size;
     create_info.usage                 = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     create_info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
@@ -1127,136 +1195,42 @@ VkResult VulkanResourcesUtil::CreateStagingBuffer(VkDeviceSize size)
     create_info.pQueueFamilyIndices   = nullptr;
 
     VkResult result = device_table_.CreateBuffer(device_, &create_info, nullptr, &staging_buffer_.buffer);
-    if (result == VK_SUCCESS)
-    {
-        uint32_t             memory_type_index = std::numeric_limits<uint32_t>::max();
-        VkMemoryRequirements memory_requirements;
-
-        device_table_.GetBufferMemoryRequirements(device_, staging_buffer_.buffer, &memory_requirements);
-
-        bool found = FindMemoryTypeIndex(*memory_properties_,
-                                         memory_requirements.memoryTypeBits,
-                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-                                         &memory_type_index,
-                                         &staging_buffer_.memory_property_flags);
-        if (!found)
-        {
-            // If we are here it is likely that we lack support for HOST_CACHED, fallback to COHERENT
-            found = FindMemoryTypeIndex(*memory_properties_,
-                                        memory_requirements.memoryTypeBits,
-                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                        &memory_type_index,
-                                        &staging_buffer_.memory_property_flags);
-        }
-
-        if (found)
-        {
-            VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-            alloc_info.pNext                = nullptr;
-            alloc_info.allocationSize       = memory_requirements.size;
-            alloc_info.memoryTypeIndex      = memory_type_index;
-
-            result = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &staging_buffer_.memory);
-            if (result == VK_SUCCESS)
-            {
-                device_table_.BindBufferMemory(device_, staging_buffer_.buffer, staging_buffer_.memory, 0);
-            }
-            else
-            {
-                GFXRECON_LOG_ERROR("Failed to allocate staging buffer memory for resource memory snapshot");
-
-                device_table_.DestroyBuffer(device_, staging_buffer_.buffer, nullptr);
-                staging_buffer_.buffer = VK_NULL_HANDLE;
-            }
-        }
-        else
-        {
-            GFXRECON_LOG_ERROR("Failed to find a memory type with host visible and host cached or coherent "
-                               "properties for resource memory snapshot staging buffer creation");
-
-            result = VK_ERROR_INITIALIZATION_FAILED;
-        }
-
-        if (result == VK_SUCCESS)
-        {
-            staging_buffer_.size       = size;
-            staging_buffer_.mapped_ptr = nullptr;
-
-            if (set_debug_utils_object_name_fn_ != nullptr)
-            {
-                VkDebugUtilsObjectNameInfoEXT object_name_info = {};
-                object_name_info.sType                         = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-                object_name_info.objectType                    = VK_OBJECT_TYPE_BUFFER;
-                object_name_info.objectHandle                  = VK_HANDLE_TO_UINT64(staging_buffer_.buffer);
-                object_name_info.pObjectName                   = "VulkanResourcesUtil internal staging-buffer";
-                set_debug_utils_object_name_fn_(device_, &object_name_info);
-            }
-        }
-    }
-    else
+    if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to create staging buffer for resource memory snapshot");
+        return result;
     }
 
-    return result;
-}
+    VkMemoryRequirements memory_requirements;
+    device_table_.GetBufferMemoryRequirements(device_, staging_buffer_.buffer, &memory_requirements);
 
-VkResult VulkanResourcesUtil::MapStagingBuffer()
-{
-    GFXRECON_ASSERT(staging_buffer_.buffer != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_buffer_.memory != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_buffer_.size);
-
-    VkResult result = VK_SUCCESS;
-
-    if (staging_buffer_.mapped_ptr == nullptr)
+    result = AllocateStagingMemory(memory_requirements, staging_buffer_.mem);
+    if (result != VK_SUCCESS)
     {
-        result =
-            device_table_.MapMemory(device_, staging_buffer_.memory, 0, VK_WHOLE_SIZE, 0, &staging_buffer_.mapped_ptr);
-
-        if (result != VK_SUCCESS)
-        {
-            GFXRECON_LOG_ERROR("Failed mapping staging buffer");
-        }
+        device_table_.DestroyBuffer(device_, staging_buffer_.buffer, nullptr);
+        staging_buffer_.buffer = VK_NULL_HANDLE;
+        return result;
     }
 
-    return result;
-}
+    device_table_.BindBufferMemory(device_, staging_buffer_.buffer, staging_buffer_.mem.memory, 0);
+    staging_buffer_.mem.size = size;
 
-void VulkanResourcesUtil::UnmapStagingBuffer()
-{
-    if (staging_buffer_.mapped_ptr != nullptr)
+    if (set_debug_utils_object_name_fn_ != nullptr)
     {
-        GFXRECON_ASSERT(staging_buffer_.buffer != VK_NULL_HANDLE);
-        GFXRECON_ASSERT(staging_buffer_.memory != VK_NULL_HANDLE);
-        GFXRECON_ASSERT(staging_buffer_.size);
-
-        device_table_.UnmapMemory(device_, staging_buffer_.memory);
-        staging_buffer_.mapped_ptr = nullptr;
+        VkDebugUtilsObjectNameInfoEXT object_name_info = {};
+        object_name_info.sType                         = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+        object_name_info.objectType                    = VK_OBJECT_TYPE_BUFFER;
+        object_name_info.objectHandle                  = VK_HANDLE_TO_UINT64(staging_buffer_.buffer);
+        object_name_info.pObjectName                   = "VulkanResourcesUtil internal staging-buffer";
+        set_debug_utils_object_name_fn_(device_, &object_name_info);
     }
-}
 
-void VulkanResourcesUtil::InvalidateStagingBuffer()
-{
-    GFXRECON_ASSERT(staging_buffer_.buffer != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_buffer_.memory != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_buffer_.size);
-
-    if (!IsMemoryCoherent(staging_buffer_.memory_property_flags))
-    {
-        GFXRECON_ASSERT(staging_buffer_.mapped_ptr != nullptr);
-
-        const VkMappedMemoryRange range{
-            VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, staging_buffer_.memory, 0, staging_buffer_.size
-        };
-
-        device_table_.InvalidateMappedMemoryRanges(device_, 1, &range);
-    }
+    return VK_SUCCESS;
 }
 
 void VulkanResourcesUtil::DestroyStagingBuffer()
 {
-    UnmapStagingBuffer();
+    UnmapStagingMemory(staging_buffer_.mem);
 
     if (staging_buffer_.buffer != VK_NULL_HANDLE)
     {
@@ -1264,19 +1238,18 @@ void VulkanResourcesUtil::DestroyStagingBuffer()
         staging_buffer_.buffer = VK_NULL_HANDLE;
     }
 
-    if (staging_buffer_.memory != VK_NULL_HANDLE)
+    if (staging_buffer_.mem.memory != VK_NULL_HANDLE)
     {
-        device_table_.FreeMemory(device_, staging_buffer_.memory, nullptr);
-        staging_buffer_.memory = VK_NULL_HANDLE;
+        device_table_.FreeMemory(device_, staging_buffer_.mem.memory, nullptr);
     }
 
-    staging_buffer_.memory_property_flags = VkMemoryPropertyFlags(0);
-    staging_buffer_.size                  = 0;
+    staging_buffer_.mem = StagingMemoryContext{};
 }
 
 VkResult VulkanResourcesUtil::CreateStagingTensor(const VkTensorDescriptionARM* desc)
 {
     DestroyStagingTensor();
+
     VkTensorCreateInfoARM info = { VK_STRUCTURE_TYPE_TENSOR_CREATE_INFO_ARM };
     info.pDescription          = desc;
     info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
@@ -1284,238 +1257,55 @@ VkResult VulkanResourcesUtil::CreateStagingTensor(const VkTensorDescriptionARM* 
     info.pQueueFamilyIndices   = nullptr;
 
     VkResult result = device_table_.CreateTensorARM(device_, &info, nullptr, &staging_tensor_.tensor);
-
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to create staging tensor for resource memory snapshot");
         return result;
     }
 
-    VkTensorMemoryRequirementsInfoARM mem_req = { VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM };
-    mem_req.tensor                            = staging_tensor_.tensor;
-    VkMemoryRequirements2 mem_req2            = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
-    device_table_.GetTensorMemoryRequirementsARM(device_, &mem_req, &mem_req2);
-    VkMemoryRequirements* memory_requirements = &mem_req2.memoryRequirements;
+    VkTensorMemoryRequirementsInfoARM mem_req_info = { VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM };
+    mem_req_info.tensor                            = staging_tensor_.tensor;
+    VkMemoryRequirements2 mem_req2                 = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+    device_table_.GetTensorMemoryRequirementsARM(device_, &mem_req_info, &mem_req2);
 
-    const bool memory_type_is_compatible =
-        (staging_tensor_.memory_type_index < VK_MAX_MEMORY_TYPES) &&
-        ((memory_requirements->memoryTypeBits & (1U << staging_tensor_.memory_type_index)) != 0);
-
-    // A larger tensor or incompatible memory requirements need a new allocation.
-    if ((memory_requirements->size > staging_tensor_.size) || !memory_type_is_compatible)
-    {
-        DestroyStagingTensorMemory();
-        uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
-        bool     found             = FindTensorStagingMemoryTypeIndex(*memory_properties_,
-                                                      memory_requirements->memoryTypeBits,
-                                                      &memory_type_index,
-                                                      &staging_tensor_.memory_property_flags);
-        if (!found)
-        {
-            GFXRECON_LOG_ERROR("Failed to find host-visible memory for staging tensor");
-            DestroyStagingTensor();
-            return VK_ERROR_FEATURE_NOT_PRESENT;
-        }
-
-        VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-        alloc_info.pNext                = nullptr;
-        alloc_info.allocationSize       = memory_requirements->size;
-        alloc_info.memoryTypeIndex      = memory_type_index;
-
-        result = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &staging_tensor_.memory);
-        if (result == VK_SUCCESS)
-        {
-            staging_tensor_.size              = memory_requirements->size;
-            staging_tensor_.memory_type_index = memory_type_index;
-        }
-    }
-
-    if (result == VK_SUCCESS)
-    {
-        VkBindTensorMemoryInfoARM bind_info = { VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM };
-        bind_info.tensor                    = staging_tensor_.tensor;
-        bind_info.memory                    = staging_tensor_.memory;
-        bind_info.memoryOffset              = 0;
-        result                              = device_table_.BindTensorMemoryARM(device_, 1, &bind_info);
-    }
-
+    result = AllocateStagingMemory(mem_req2.memoryRequirements, staging_tensor_.mem);
     if (result != VK_SUCCESS)
     {
-        GFXRECON_LOG_ERROR("Failed to allocate or bind staging tensor memory for resource memory snapshot");
-
         DestroyStagingTensor();
-        DestroyStagingTensorMemory();
+        return result;
     }
 
-    return result;
-}
-
-VkResult VulkanResourcesUtil::MapStagingTensor()
-{
-    GFXRECON_ASSERT(staging_tensor_.tensor != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_tensor_.memory != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_tensor_.size);
-
-    VkResult result = VK_SUCCESS;
-
-    if (staging_tensor_.mapped_ptr == nullptr)
+    VkBindTensorMemoryInfoARM bind_info = { VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM };
+    bind_info.tensor                    = staging_tensor_.tensor;
+    bind_info.memory                    = staging_tensor_.mem.memory;
+    bind_info.memoryOffset              = 0;
+    result                              = device_table_.BindTensorMemoryARM(device_, 1, &bind_info);
+    if (result != VK_SUCCESS)
     {
-        result =
-            device_table_.MapMemory(device_, staging_tensor_.memory, 0, VK_WHOLE_SIZE, 0, &staging_tensor_.mapped_ptr);
-
-        if (result != VK_SUCCESS)
-        {
-            GFXRECON_LOG_ERROR("Failed mapping staging buffer");
-        }
+        DestroyStagingTensor();
+        return result;
     }
 
-    return result;
-}
-
-void VulkanResourcesUtil::UnmapStagingTensor()
-{
-    if (staging_tensor_.mapped_ptr != nullptr)
-    {
-        GFXRECON_ASSERT(staging_tensor_.tensor != VK_NULL_HANDLE);
-        GFXRECON_ASSERT(staging_tensor_.memory != VK_NULL_HANDLE);
-        GFXRECON_ASSERT(staging_tensor_.size);
-
-        device_table_.UnmapMemory(device_, staging_tensor_.memory);
-        staging_tensor_.mapped_ptr = nullptr;
-    }
-}
-
-void VulkanResourcesUtil::InvalidateStagingTensor()
-{
-    GFXRECON_ASSERT(staging_tensor_.tensor != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_tensor_.memory != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(staging_tensor_.size);
-
-    if (!IsMemoryCoherent(staging_tensor_.memory_property_flags))
-    {
-        GFXRECON_ASSERT(staging_tensor_.mapped_ptr != nullptr);
-
-        const VkMappedMemoryRange range{
-            VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, staging_tensor_.memory, 0, staging_tensor_.size
-        };
-
-        device_table_.InvalidateMappedMemoryRanges(device_, 1, &range);
-    }
+    staging_tensor_.mem.size = mem_req2.memoryRequirements.size;
+    return VK_SUCCESS;
 }
 
 void VulkanResourcesUtil::DestroyStagingTensor()
 {
-    UnmapStagingTensor();
+    UnmapStagingMemory(staging_tensor_.mem);
 
     if (staging_tensor_.tensor != VK_NULL_HANDLE)
     {
         device_table_.DestroyTensorARM(device_, staging_tensor_.tensor, nullptr);
         staging_tensor_.tensor = VK_NULL_HANDLE;
     }
-}
 
-void VulkanResourcesUtil::DestroyStagingTensorMemory()
-{
-    if (staging_tensor_.memory != VK_NULL_HANDLE)
+    if (staging_tensor_.mem.memory != VK_NULL_HANDLE)
     {
-        device_table_.FreeMemory(device_, staging_tensor_.memory, nullptr);
-        staging_tensor_.memory = VK_NULL_HANDLE;
+        device_table_.FreeMemory(device_, staging_tensor_.mem.memory, nullptr);
     }
 
-    staging_tensor_.memory_property_flags = VkMemoryPropertyFlags(0);
-    staging_tensor_.memory_type_index     = std::numeric_limits<uint32_t>::max();
-    staging_tensor_.size                  = 0;
-}
-
-VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                   tensor,
-                                                     const VkTensorDescriptionARM* desc,
-                                                     uint32_t                      queue_family_index,
-                                                     std::vector<uint8_t>&         data)
-{
-    GFXRECON_ASSERT(tensor != VK_NULL_HANDLE);
-    GFXRECON_ASSERT(desc != nullptr);
-
-    if (desc == nullptr)
-    {
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    constexpr VkFormatFeatureFlags2 required_features =
-        VK_FORMAT_FEATURE_2_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_2_TRANSFER_DST_BIT;
-    if (!TensorFormatSupportsFeatures(&instance_table_, physical_device_, desc, required_features))
-    {
-        GFXRECON_LOG_WARNING(
-            "Skipping tensor resource snapshot: format does not support tensor transfer source and destination "
-            "operations for the requested tiling");
-        return VK_ERROR_FEATURE_NOT_PRESENT;
-    }
-
-    const VkQueue queue = GetQueue(queue_family_index, 0);
-    if (queue == VK_NULL_HANDLE)
-    {
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    VkTensorDescriptionARM staging_description = *desc;
-    staging_description.usage                  = VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM;
-
-    VkResult result = CreateStagingTensor(&staging_description);
-    if (result != VK_SUCCESS)
-    {
-        return result;
-    }
-
-    VkCommandBuffer command_buffer = CreateCommandBufferAndBegin(queue_family_index);
-    GFXRECON_ASSERT(command_buffer != VK_NULL_HANDLE);
-    if (command_buffer == VK_NULL_HANDLE)
-    {
-        return VK_ERROR_UNKNOWN;
-    }
-
-    VkTensorCopyARM copy_region = { VK_STRUCTURE_TYPE_TENSOR_COPY_ARM };
-    copy_region.dimensionCount  = 0;
-    copy_region.pSrcOffset      = nullptr;
-    copy_region.pDstOffset      = nullptr;
-    copy_region.pExtent         = nullptr;
-
-    VkCopyTensorInfoARM copy_info = { VK_STRUCTURE_TYPE_COPY_TENSOR_INFO_ARM };
-    copy_info.srcTensor           = tensor;
-    copy_info.dstTensor           = staging_tensor_.tensor;
-    copy_info.regionCount         = 1;
-    copy_info.pRegions            = &copy_region;
-    device_table_.CmdCopyTensorARM(command_buffer, &copy_info);
-
-    VkMemoryBarrier memory_barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-    memory_barrier.srcAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
-    memory_barrier.dstAccessMask   = VK_ACCESS_HOST_READ_BIT;
-    device_table_.CmdPipelineBarrier(command_buffer,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                     VK_PIPELINE_STAGE_HOST_BIT,
-                                     0,
-                                     1,
-                                     &memory_barrier,
-                                     0,
-                                     nullptr,
-                                     0,
-                                     nullptr);
-
-    result = SubmitCommandBuffer(command_buffer, queue);
-    if (result != VK_SUCCESS)
-    {
-        return result;
-    }
-
-    result = MapStagingTensor();
-    if (result != VK_SUCCESS)
-    {
-        return result;
-    }
-
-    data.resize(static_cast<size_t>(staging_tensor_.size));
-
-    InvalidateStagingTensor();
-    util::platform::MemoryCopy(data.data(), staging_tensor_.size, staging_tensor_.mapped_ptr, staging_tensor_.size);
-    return VK_SUCCESS;
+    staging_tensor_.mem = StagingMemoryContext{};
 }
 
 VkCommandBuffer VulkanResourcesUtil::CreateCommandBufferAndBegin(uint32_t queue_family_index)
@@ -2851,14 +2641,14 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
             SubmitCommandBuffer(command_buffer, queue);
         }
 
-        result = MapStagingBuffer();
+        result = MapStagingMemory(staging_buffer_.mem);
         if (result != VK_SUCCESS)
         {
             return result;
         }
 
         // guarantees that all device writes are now visible to host
-        InvalidateStagingBuffer();
+        InvalidateStagingMemory(staging_buffer_.mem);
 
         gpu_micros += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() -
                                                                             start_time)
@@ -2870,7 +2660,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
             const auto& img = image_resources[i];
             auto*       out_ptr =
                 tmp_data[i].resource_size > 0
-                          ? reinterpret_cast<const uint8_t*>(staging_buffer_.mapped_ptr) + tmp_data[i].staging_offset
+                          ? reinterpret_cast<const uint8_t*>(staging_buffer_.mem.mapped_ptr) + tmp_data[i].staging_offset
                           : nullptr;
             if (call_back)
             {
@@ -2881,7 +2671,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
             tmp_data[i] = {};
         } // current batch, consume staging-buffer
 
-        UnmapStagingBuffer();
+        UnmapStagingMemory(staging_buffer_.mem);
 
         auto batch_micros = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::high_resolution_clock::now() - start_time)
@@ -2941,7 +2731,7 @@ VkResult VulkanResourcesUtil::ReadFromBufferResource(
         return result;
     }
 
-    result = MapStagingBuffer();
+    result = MapStagingMemory(staging_buffer_.mem);
     if (result != VK_SUCCESS)
     {
         return result;
@@ -2949,10 +2739,86 @@ VkResult VulkanResourcesUtil::ReadFromBufferResource(
 
     data.resize(static_cast<size_t>(size));
 
-    InvalidateStagingBuffer();
-    util::platform::MemoryCopy(data.data(), static_cast<size_t>(size), staging_buffer_.mapped_ptr, size);
+    InvalidateStagingMemory(staging_buffer_.mem);
+    util::platform::MemoryCopy(data.data(), static_cast<size_t>(size), staging_buffer_.mem.mapped_ptr, size);
 
     return result;
+}
+
+VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                   tensor,
+                                                     const VkTensorDescriptionARM* desc,
+                                                     uint32_t                      queue_family_index,
+                                                     std::vector<uint8_t>&         data)
+{
+    GFXRECON_ASSERT(tensor != VK_NULL_HANDLE);
+
+    const VkQueue queue = GetQueue(queue_family_index, 0);
+    if (queue == VK_NULL_HANDLE)
+    {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    // Create a host-visible staging tensor with the same shape but TRANSFER_DST usage.
+    VkTensorDescriptionARM staging_desc = *desc;
+    staging_desc.usage                  = VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM;
+
+    VkResult result = CreateStagingTensor(&staging_desc);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    VkCommandBuffer command_buffer = CreateCommandBufferAndBegin(queue_family_index);
+    if (command_buffer == VK_NULL_HANDLE)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
+
+    VkTensorCopyARM copy_region = { VK_STRUCTURE_TYPE_TENSOR_COPY_ARM };
+    copy_region.dimensionCount  = 0;
+    copy_region.pSrcOffset      = nullptr;
+    copy_region.pDstOffset      = nullptr;
+    copy_region.pExtent         = nullptr;
+
+    VkCopyTensorInfoARM copy_info = { VK_STRUCTURE_TYPE_COPY_TENSOR_INFO_ARM };
+    copy_info.srcTensor           = tensor;
+    copy_info.dstTensor           = staging_tensor_.tensor;
+    copy_info.regionCount         = 1;
+    copy_info.pRegions            = &copy_region;
+    device_table_.CmdCopyTensorARM(command_buffer, &copy_info);
+
+    // Make the TRANSFER_WRITE to the staging tensor visible to the host before readback.
+    VkMemoryBarrier memory_barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+    memory_barrier.srcAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
+    memory_barrier.dstAccessMask   = VK_ACCESS_HOST_READ_BIT;
+    device_table_.CmdPipelineBarrier(command_buffer,
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                     VK_PIPELINE_STAGE_HOST_BIT,
+                                     0,
+                                     1,
+                                     &memory_barrier,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     nullptr);
+
+    result = SubmitCommandBuffer(command_buffer, queue);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    result = MapStagingMemory(staging_tensor_.mem);
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    data.resize(static_cast<size_t>(staging_tensor_.mem.size));
+    InvalidateStagingMemory(staging_tensor_.mem);
+    util::platform::MemoryCopy(
+        data.data(), staging_tensor_.mem.size, staging_tensor_.mem.mapped_ptr, staging_tensor_.mem.size);
+    return VK_SUCCESS;
 }
 
 void VulkanResourcesUtil::ReadBufferResources(const std::vector<BufferResource>& buffer_resources,
@@ -3062,7 +2928,7 @@ void VulkanResourcesUtil::ReadBufferResources(const std::vector<BufferResource>&
             SubmitCommandBuffer(command_buffer, queue);
         }
 
-        result = MapStagingBuffer();
+        result = MapStagingMemory(staging_buffer_.mem);
         if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("%s: could not map staging-buffer", __func__);
@@ -3070,13 +2936,13 @@ void VulkanResourcesUtil::ReadBufferResources(const std::vector<BufferResource>&
         }
 
         // guarantees that all device writes are now visible to host
-        InvalidateStagingBuffer();
+        InvalidateStagingMemory(staging_buffer_.mem);
 
         // consume staging-buffer
         for (uint32_t i = start_idx; i < end_idx; ++i)
         {
             const auto& buf     = buffer_resources[i];
-            auto*       out_ptr = reinterpret_cast<const uint8_t*>(staging_buffer_.mapped_ptr) + staging_offsets[i];
+            auto*       out_ptr = reinterpret_cast<const uint8_t*>(staging_buffer_.mem.mapped_ptr) + staging_offsets[i];
             if (callback)
             {
                 callback(buf, out_ptr);

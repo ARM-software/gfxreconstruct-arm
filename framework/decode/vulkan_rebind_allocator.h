@@ -402,16 +402,20 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                const VkAllocationCallbacks* allocation_callbacks,
                                ResourceData                 allocator_data) override;
 
+    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
+                                                VkMemoryRequirements2*             memory_requirements,
+                                                ResourceData                       allocator_data) override;
+
     virtual VkResult BindDataGraphPipelineSessionMemory(uint32_t bind_info_count,
                                                         const VkBindDataGraphPipelineSessionMemoryInfoARM* bind_infos,
                                                         const ResourceData*    allocator_session_datas,
                                                         const MemoryData*      allocator_memory_datas,
                                                         VkMemoryPropertyFlags* bind_memory_properties) override;
 
-    virtual VkResult BindTensorMemory(uint32_t                         bindInfoCount,
-                                      const VkBindTensorMemoryInfoARM* pBindInfos,
-                                      const ResourceData*              allocator_buffer_data,
-                                      const MemoryData*                allocator_memory_data,
+    virtual VkResult BindTensorMemory(uint32_t                         bind_info_count,
+                                      const VkBindTensorMemoryInfoARM* bind_infos,
+                                      const ResourceData*              allocator_tensor_datas,
+                                      const MemoryData*                allocator_memory_datas,
                                       VkMemoryPropertyFlags*           bind_memory_properties) override;
 
     virtual VkResult CreateTensorDirect(const VkTensorCreateInfoARM* create_info,
@@ -429,18 +433,14 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         DestroyTensor(tensor, allocation_callbacks, allocator_data);
     }
 
-    virtual void GetTensorMemoryRequirementsARM(VkTensorMemoryRequirementsInfoARM* tensor_memory_requirements,
-                                                VkMemoryRequirements2*             memory_requirements,
-                                                ResourceData                       allocator_data) override;
-
-    virtual VkResult BindTensorMemoryDirect(uint32_t                         bindInfoCount,
-                                            const VkBindTensorMemoryInfoARM* pBindInfos,
-                                            const ResourceData*              allocator_buffer_data,
-                                            const MemoryData*                allocator_memory_data,
+    virtual VkResult BindTensorMemoryDirect(uint32_t                         bind_info_count,
+                                            const VkBindTensorMemoryInfoARM* bind_infos,
+                                            const ResourceData*              allocator_tensor_datas,
+                                            const MemoryData*                allocator_memory_datas,
                                             VkMemoryPropertyFlags*           bind_memory_properties) override
     {
         return BindTensorMemory(
-            bindInfoCount, pBindInfos, allocator_buffer_data, allocator_memory_data, bind_memory_properties);
+            bind_info_count, bind_infos, allocator_tensor_datas, allocator_memory_datas, bind_memory_properties);
     }
 
     virtual void SetDeviceMemoryPriority(VkDeviceMemory memory, float priority, MemoryData allocator_data) override;
@@ -552,10 +552,10 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     enum MemoryInfoType
     {
-        kBasic,            // single: buffer, image, tensor_arm
-        kSparse,           // array: buffer, image
-        kVideoSession,     // array: video_session
-        kDataGraphSession, // array: data_graph_pipeline_session_arm
+        kBasic,           // single: buffer, image
+        kSparse,          // array: buffer, image
+        kVideoSession,    // array: video_session
+        kDataGraphSession // array: data_graph_pipeline_session
     };
 
     // Create a new allocation for a binding memory case.

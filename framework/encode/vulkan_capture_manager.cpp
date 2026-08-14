@@ -1109,7 +1109,7 @@ VkResult VulkanCaptureManager::OverrideCreateTensorARM(VkDevice                 
 
     VkResult result = device_table->CreateTensorARM(device, &modified_create_info, pAllocator, pTensor);
 
-    if ((result >= 0) && (pTensor != nullptr))
+    if (result >= 0 && pTensor != nullptr)
     {
         vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper,
                                              vulkan_wrappers::NoParentWrapper,

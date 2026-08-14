@@ -124,6 +124,12 @@ class MetadataConsumerBase
                                           const uint8_t*   data)
     {}
 
+    virtual void ProcessInitTensorCommand(format::HandleId device_id,
+                                          format::HandleId tensor_id,
+                                          uint64_t         data_size,
+                                          const uint8_t*   data)
+    {}
+
     virtual void ProcessInitImageCommand(format::HandleId             device_id,
                                          format::HandleId             image_id,
                                          uint64_t                     data_size,
@@ -154,12 +160,6 @@ class MetadataConsumerBase
     virtual void ProcessVulkanWriteAccelerationStructuresPropertiesCommand(format::HandleId device_id,
                                                                            VkQueryType      query_type,
                                                                            format::HandleId acceleration_structure_id)
-    {}
-
-    virtual void ProcessInitTensorCommand(format::HandleId device_id,
-                                          format::HandleId tensor_id,
-                                          uint64_t         data_size,
-                                          const uint8_t*   data)
     {}
 
     virtual void
