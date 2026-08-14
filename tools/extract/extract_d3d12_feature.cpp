@@ -29,6 +29,7 @@
 #include "generated/generated_dx12_consumer.h"
 #include "generated/generated_dx12_decoder.h"
 #include "graphics/dx12_shader_tool.h"
+#include "util/api_version_info.h"
 #include "util/feature_module_registry.h"
 #include "util/file_path.h"
 #include "util/logging.h"
@@ -381,7 +382,9 @@ class Dx12ExtractFeature : public ExtractFeatureBase
         file_processor.AddDecoder(&decoder_);
     }
 
-    bool WasDetected() const override { return detect_consumer_.WasD3D12APIDetected(); }
+    bool        WasDetected() const override { return detect_consumer_.WasD3D12APIDetected(); }
+    std::string Label() const override { return "D3D12"; }
+    std::string CompiledHeaderVersionString() const override { return util::GetD3D12SdkVersionString(); }
 
   private:
     decode::Dx12DetectionConsumer        detect_consumer_;

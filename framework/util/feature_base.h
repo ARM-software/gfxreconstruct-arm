@@ -20,46 +20,36 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_INFO_FEATURE_H
-#define GFXRECON_INFO_FEATURE_H
+#ifndef GFXRECON_UTIL_FEATURE_BASE_H
+#define GFXRECON_UTIL_FEATURE_BASE_H
 
-#include "decode/info_consumer.h"
-#include "decode/file_processor.h"
-#include "format/format.h"
-#include "util/argument_parser.h"
 #include "util/defines.h"
-#include "util/feature_base.h"
 
-#include <nlohmann/json.hpp>
-
-#include <functional>
-#include <iomanip>
-#include <memory>
-#include <sstream>
-#include <vector>
+#include <string>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-GFXRECON_BEGIN_NAMESPACE(info)
+GFXRECON_BEGIN_NAMESPACE(util)
 
-class InfoFeature : public util::FeatureBase
+// Common interface required of every per-tool Feature base class (e.g. ReplayFeatureBase,
+// ConvertFeatureBase, ExtractFeatureBase, OptimizeFeature, InfoFeature) so that a Feature
+// registered with FeatureModuleRegistry<T> can always be identified and asked for its
+// compiled-header version string, regardless of which tool it belongs to.
+class FeatureBase
 {
   public:
-    // Simple "getter" style methods
-    virtual bool        WasDetected() = 0;
-    virtual uint32_t    GetBlankFrameCount() { return 0; }
-    virtual uint32_t    GetFrameStart() const { return 0; }
+    virtual ~FeatureBase() = default;
 
-    // Method to register this feature's decoder elements with the containers
-    // FileProcessor
-    virtual void RegisterDecodeComponents(decode::FileProcessor&      file_processor,
-                                          const decode::InfoConsumer& info_consumer) = 0;
+    // Short human-readable API name, e.g. "Vulkan", "D3D12", "OpenXR".
+    virtual std::string Label() const = 0;
 
-    // Output methods
-    virtual std::string    GenerateText() = 0;
-    virtual nlohmann::json GenerateJson() = 0;
+    // A single line describing the version of the API header this feature was compiled
+    // against (see util::GetVulkanHeaderVersionString() and friends in api_version_info.h),
+    // suitable for printing as part of a tool's "--version" output. Returns an empty string
+    // if this feature has no meaningful compiled-header version to report.
+    virtual std::string CompiledHeaderVersionString() const = 0;
 };
 
-GFXRECON_END_NAMESPACE(info)
+GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_INFO_FEATURE_H
+#endif // GFXRECON_UTIL_FEATURE_BASE_H

@@ -25,7 +25,7 @@
 #include <string>
 #include PROJECT_VERSION_HEADER_FILE
 #include "tool_settings.h"
-#include "tool_command_line.h"
+#include "tool_feature_version.h"
 
 #include "decode/json_writer.h" /// @todo move to util?
 #include "decode/decode_api_detection.h"
@@ -34,6 +34,8 @@
 #include "util/feature_module_registry.h"
 
 #include "convert_feature.h"
+
+#include <filesystem>
 
 using gfxrecon::util::JsonFormat;
 
@@ -48,7 +50,8 @@ const char kArguments[] = "--output,--format,--log-level,--frame-range,--checksu
 
 static void PrintUsage(const char* exe_name)
 {
-    std::string app_name = GetApplicationName(exe_name);
+    std::string app_name = std::filesystem::path(exe_name).stem().string();
+
     GFXRECON_WRITE_CONSOLE("\n%s - A tool to convert the contents of GFXReconstruct capture files to JSON.\n",
                            app_name.c_str());
     GFXRECON_WRITE_CONSOLE("Usage:");
@@ -205,7 +208,8 @@ int main(int argc, const char** argv)
 
     gfxrecon::util::ArgumentParser arg_parser(argc, argv, kOptions, kArguments);
 
-    if (CheckOptionPrintUsage(argv[0], arg_parser) || CheckOptionPrintVersion(argv[0], arg_parser))
+    if (CheckOptionPrintUsage(argv[0], arg_parser) ||
+        CheckOptionPrintFeatureVersions<gfxrecon::convert::ConvertFeatureBase>(argv[0], arg_parser))
     {
         gfxrecon::util::Log::Release();
         exit(0);

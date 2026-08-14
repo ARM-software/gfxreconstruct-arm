@@ -38,9 +38,11 @@
 
 #if defined(D3D12_SUPPORT)
 
+#include "d3d12.h"
+
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 618;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION;
 }
 extern "C"
 {
@@ -84,15 +86,14 @@ int main(int argc, const char** argv)
     gfxrecon::util::Log::Init(gfxrecon::decode::kDefaultLogLevel);
     gfxrecon::util::Log::SetFatalCallback([](const char* message) { throw std::runtime_error(message); });
 
-    PrintVersion(argv[0]);
-
     std::vector<std::unique_ptr<gfxrecon::replay::ReplayFeatureBase>> features;
     gfxrecon::replay::LoadFeatures(features);
 
     gfxrecon::util::ArgumentParser arg_parser(
         argc, argv, GetArmOptionString(kOptions), GetArmArgumentsString(kArguments));
 
-    if (arg_parser.IsOptionSet(kVersionOption) || CheckOptionPrintUsage(argv[0], arg_parser))
+    if (CheckOptionPrintFeatureVersions<gfxrecon::replay::ReplayFeatureBase>(argv[0], arg_parser) ||
+        CheckOptionPrintUsage(argv[0], arg_parser))
     {
         gfxrecon::util::Log::Release();
         exit(0);

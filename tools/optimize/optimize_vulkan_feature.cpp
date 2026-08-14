@@ -37,6 +37,7 @@
 #include "decode/vulkan_feature_tracker_consumer_base.h"
 #include "generated/generated_vulkan_referenced_block_consumer.h"
 #include "generated/generated_vulkan_referenced_resource_consumer.h"
+#include "util/api_version_info.h"
 #include "util/feature_module_registry.h"
 #include "util/logging.h"
 
@@ -55,6 +56,15 @@ constexpr char kVulkanRemoveDeviceInstanceArgument[] = "--remove-device-instance
 constexpr char kVulkanKeepDeviceInstanceArgument[]   = "--keep-device-instance";
 constexpr char kVulkanRemoveRtOption[]               = "--vk-remove-rt";
 constexpr char kVulkanReplaceShadersArgument[]       = "--replace-shaders";
+
+std::string OptimizeVulkanFeature::CompiledHeaderVersionString() const
+{
+#if defined(GFXRECON_ENABLE_VULKAN)
+    return util::GetVulkanHeaderVersionString();
+#else
+    return "";
+#endif
+}
 
 void OptimizeVulkanFeature::RegisterDetectionDecoder(decode::FileProcessor& file_processor, uint64_t block_limit)
 {

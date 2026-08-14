@@ -75,8 +75,6 @@ void android_main(struct android_app* app)
     gfxrecon::util::Log::SetFatalCallback([](const char* message) { throw std::runtime_error(message); });
     GFXRECON_WRITE_CONSOLE("====== Entering android_main");
 
-    PrintVersion(kApplicationName);
-
     // Keep screen on while window is active.
     ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
 
@@ -91,7 +89,8 @@ void android_main(struct android_app* app)
 
     bool run = true;
 
-    if (CheckOptionPrintUsage(kApplicationName, arg_parser) || arg_parser.IsOptionSet(kVersionOption))
+    if (CheckOptionPrintUsage(kApplicationName, arg_parser) ||
+        CheckOptionPrintFeatureVersions<gfxrecon::replay::ReplayFeatureBase>(kApplicationName, arg_parser))
     {
         run = false;
     }
