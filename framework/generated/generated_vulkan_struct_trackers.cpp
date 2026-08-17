@@ -12249,21 +12249,6 @@ VkDispatchTileInfoQCOM* TrackStruct(const VkDispatchTileInfoQCOM* value, HandleU
     return unwrapped_struct;
 }
 
-VkQueryLowLatencySupportNV* TrackStruct(const VkQueryLowLatencySupportNV* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkQueryLowLatencySupportNV* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
 VkPhysicalDeviceDescriptorBufferPropertiesEXT* TrackStruct(const VkPhysicalDeviceDescriptorBufferPropertiesEXT* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -19724,8 +19709,6 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkPerTileEndInfoQCOM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_DISPATCH_TILE_INFO_QCOM:
             return TrackStruct(reinterpret_cast<const VkDispatchTileInfoQCOM*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_QUERY_LOW_LATENCY_SUPPORT_NV:
-            return TrackStruct(reinterpret_cast<const VkQueryLowLatencySupportNV*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceDescriptorBufferPropertiesEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT:

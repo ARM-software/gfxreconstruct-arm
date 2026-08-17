@@ -815,7 +815,6 @@ VkRenderPassTileShadingCreateInfoQCOM* TrackStruct(const VkRenderPassTileShading
 VkPerTileBeginInfoQCOM* TrackStruct(const VkPerTileBeginInfoQCOM* value, HandleUnwrapMemory* unwrap_memory);
 VkPerTileEndInfoQCOM* TrackStruct(const VkPerTileEndInfoQCOM* value, HandleUnwrapMemory* unwrap_memory);
 VkDispatchTileInfoQCOM* TrackStruct(const VkDispatchTileInfoQCOM* value, HandleUnwrapMemory* unwrap_memory);
-VkQueryLowLatencySupportNV* TrackStruct(const VkQueryLowLatencySupportNV* value, HandleUnwrapMemory* unwrap_memory);
 VkPhysicalDeviceDescriptorBufferPropertiesEXT* TrackStruct(const VkPhysicalDeviceDescriptorBufferPropertiesEXT* value, HandleUnwrapMemory* unwrap_memory);
 VkPhysicalDeviceDescriptorBufferFeaturesEXT* TrackStruct(const VkPhysicalDeviceDescriptorBufferFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory);
 VkDescriptorAddressInfoEXT* TrackStruct(const VkDescriptorAddressInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
