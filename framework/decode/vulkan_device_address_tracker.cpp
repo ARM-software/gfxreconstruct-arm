@@ -179,6 +179,47 @@ decode::VulkanDeviceAddressTracker::GetBufferByReplayDeviceAddress(VkDeviceAddre
     return GetBufferInfo(replay_address, buffer_replay_addresses_, offset);
 }
 
+std::vector<VkDeviceAddressRangeKHR> VulkanDeviceAddressTracker::TranslateCaptureToReplayDeviceAddressRanges(
+    const VkDeviceAddressRangeKHR& capture_range) const
+{
+    std::vector<VkDeviceAddressRangeKHR> replay_ranges;
+    VkDeviceAddress                      current_capture_address = capture_range.address;
+    VkDeviceSize                         remaining_size          = capture_range.size;
+
+    while (remaining_size > 0)
+    {
+        size_t                  range_offset = 0;
+        const VulkanBufferInfo* buffer_info  = GetBufferByCaptureDeviceAddress(current_capture_address, &range_offset);
+        const VkDeviceSize      offset       = range_offset;
+
+        if ((buffer_info == nullptr) || (buffer_info->replay_address == 0))
+        {
+            return {};
+        }
+
+        if (buffer_info->capture_size != buffer_info->replay_size)
+        {
+            GFXRECON_LOG_WARNING("Potential corruption as of result of buffer capture and replay time size difference");
+        }
+        const VkDeviceSize remaining_capture_size = buffer_info->capture_size - offset;
+        const VkDeviceSize remaining_replay_size  = buffer_info->replay_size - offset;
+        const VkDeviceSize segment_size =
+            std::min(remaining_size, std::min(remaining_capture_size, remaining_replay_size));
+
+        if (segment_size == 0)
+        {
+            return {};
+        }
+
+        replay_ranges.push_back({ buffer_info->replay_address + offset, segment_size });
+
+        current_capture_address += segment_size;
+        remaining_size -= segment_size;
+    }
+
+    return replay_ranges;
+}
+
 VulkanBufferInfo* VulkanDeviceAddressTracker::GetBufferByHandle(VkBuffer handle)
 {
     auto handle_it = buffer_handles_.find(handle);
@@ -234,7 +275,7 @@ VulkanDeviceAddressTracker::GetBufferInfo(VkDeviceAddress                       
                 return nullptr;
             }
 
-            // decre`ment iterator, now pointing to the first VkDeviceAddress that is lower than device_address
+            // decrement iterator, now pointing to the first VkDeviceAddress that is lower than device_address
             address_it--;
         }
         // found_address is lower or equal to device_address

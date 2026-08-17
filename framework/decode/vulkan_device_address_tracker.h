@@ -30,6 +30,7 @@
 #include "vulkan_object_info_table.h"
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -97,6 +98,19 @@ class VulkanDeviceAddressTracker
      */
     [[nodiscard]] const VulkanBufferInfo* GetBufferByReplayDeviceAddress(VkDeviceAddress replay_address,
                                                                          size_t*         offset = nullptr) const;
+
+    /**
+     * @brief   Translate a capture-time device address range to replay-time range(s).
+     *
+     * @note    The current implementation splits the capture range across tracked buffers and returns replay ranges
+     *          only if the full capture range is covered. If any portion cannot be translated, an empty vector is
+     *          returned.
+     *
+     * @param   capture_range a capture-time VkDeviceAddressRangeKHR.
+     * @return  a vector containing the replay-time range(s).
+     */
+    [[nodiscard]] std::vector<VkDeviceAddressRangeKHR>
+    TranslateCaptureToReplayDeviceAddressRanges(const VkDeviceAddressRangeKHR& capture_range) const;
 
     /**
      * @brief   Retrieve a buffer info-struct by providing its vulkan-handle.

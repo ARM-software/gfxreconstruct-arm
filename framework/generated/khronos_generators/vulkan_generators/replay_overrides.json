@@ -220,6 +220,7 @@
     "vkCmdUpdateBuffer2ARM": "OverrideCmdUpdateBuffer2ARM",
     "vkAssertMemoryARM": "OverrideAssertMemoryARM",
     "vkCmdUpdateMemory2ARM": "OverrideCmdUpdateMemory2ARM",
+    "vkCmdUpdateMemoryKHR": "OverrideCmdUpdateMemoryKHR",
     "vkCmdDispatch": "OverrideCmdDispatch",
     "vkCmdDispatchIndirect": "OverrideCmdDispatchIndirect",
     "vkCmdDispatchBase": "OverrideCmdDispatchBase",

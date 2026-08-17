@@ -16275,21 +16275,116 @@ void VulkanReplayConsumerBase::OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer
     func(command_buffer_info->handle, pInfo);
 }
 
-void VulkanReplayConsumerBase::OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory2ARM      func,
-                                                           const VulkanCommandBufferInfo* command_buffer_info,
-                                                           StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info)
+void VulkanReplayConsumerBase::OverrideCmdUpdateMemoryKHR(
+    PFN_vkCmdUpdateMemoryKHR                               func,
+    const VulkanCommandBufferInfo*                         command_buffer_info,
+    StructPointerDecoder<Decoded_VkDeviceAddressRangeKHR>* p_dst_range,
+    VkAddressCommandFlagsKHR                               dst_flags,
+    VkDeviceSize                                           data_size,
+    PointerDecoder<uint8_t>*                               p_data)
 {
     const VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
 
     if (UseAddressReplacement(device_info))
     {
-        // TODO: add support for this once rebind handling for VkDeviceAddressRangeKHR gets added
-        GFXRECON_LOG_FATAL("Unsupported function vkCmdUpdateMemory2ARM called");
+        uint8_t* pData           = p_data->GetPointer();
+        auto&    address_tracker = GetDeviceAddressTracker(device_info);
+
+        VkDeviceAddressRangeKHR relevant_capture_device_address_range{ p_dst_range->GetPointer()->address, data_size };
+        const auto              replay_device_address_ranges =
+            address_tracker.TranslateCaptureToReplayDeviceAddressRanges(relevant_capture_device_address_range);
+        if (replay_device_address_ranges.empty())
+        {
+            GFXRECON_LOG_FATAL("FAILED to convert capture VkDeviceAddressRangeKHR to replay VkDeviceAddressRangeKHR");
+        }
+
+        uint64_t remaining = data_size;
+        for (auto& el : replay_device_address_ranges)
+        {
+            const VkDeviceSize current_data_size = std::min<VkDeviceSize>(remaining, el.size);
+            if (current_data_size == 0)
+            {
+                break;
+            }
+
+            VkDeviceAddressRangeKHR current_replay_range{ el.address, current_data_size };
+            func(command_buffer_info->handle, &current_replay_range, dst_flags, current_data_size, pData);
+
+            pData += current_data_size;
+            remaining -= current_data_size;
+        }
+        return;
     }
 
-    VkUpdateMemoryInfoARM* pInfo = p_info->GetPointer();
+    func(command_buffer_info->handle, p_dst_range->GetPointer(), dst_flags, data_size, p_data->GetPointer());
+}
 
-    auto device_table = GetDeviceTable(device_info->handle);
+void VulkanReplayConsumerBase::OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory2ARM      func,
+                                                           const VulkanCommandBufferInfo* command_buffer_info,
+                                                           StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info)
+{
+    const VulkanDeviceInfo*        device_info = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
+    auto&                          address_tracker              = GetDeviceAddressTracker(device_info);
+    VkUpdateMemoryInfoARM*         pInfo                        = p_info->GetPointer();
+    const VkDeviceAddressRangeKHR* capture_device_address_range = pInfo->pDstRange;
+    auto                           device_table                 = GetDeviceTable(device_info->handle);
+    uint8_t*                       pData                        = (uint8_t*)pInfo->pData;
+
+    if (UseAddressReplacement(device_info))
+    {
+        VkMarkedOffsetsARM* address_offset_arm = nullptr;
+        if (address_offset_arm = gfxrecon::graphics::vulkan_struct_get_pnext<VkMarkedOffsetsARM>(pInfo);
+            address_offset_arm != nullptr)
+        {
+            const VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
+
+            ProcessMarkedOffsetsARM(device_info, address_offset_arm, pData);
+        }
+
+        if (!is_trace_helpers_supported_)
+        {
+            OverrideCmdUpdateMemoryKHR(device_table->CmdUpdateMemoryKHR,
+                                       command_buffer_info,
+                                       p_info->GetMetaStructPointer()->pDstRange,
+                                       pInfo->dstFlags,
+                                       pInfo->dataSize,
+                                       &(p_info->GetMetaStructPointer()->pData));
+            return;
+        }
+
+        VkDeviceAddressRangeKHR relevant_capture_device_address_range{ capture_device_address_range->address,
+                                                                       pInfo->dataSize };
+        const auto              replay_device_address_ranges =
+            address_tracker.TranslateCaptureToReplayDeviceAddressRanges(relevant_capture_device_address_range);
+        if (replay_device_address_ranges.empty())
+        {
+            GFXRECON_LOG_FATAL("FAILED to convert capture VkDeviceAddressRangeKHR to replay VkDeviceAddressRangeKHR");
+        }
+
+        uint64_t remaining = pInfo->dataSize;
+        for (auto& el : replay_device_address_ranges)
+        {
+            const VkDeviceSize current_data_size = std::min<VkDeviceSize>(remaining, el.size);
+            if (current_data_size == 0)
+            {
+                break;
+            }
+            VkDeviceAddressRangeKHR current_replay_range{ el.address, current_data_size };
+            // TODO add address_offset_arm in pnext;
+            VkUpdateMemoryInfoARM update_mem_info{ VK_STRUCTURE_TYPE_UPDATE_MEMORY_INFO_ARM };
+            update_mem_info.pDstRange = &current_replay_range;
+            update_mem_info.dstFlags  = pInfo->dstFlags;
+            update_mem_info.dataSize  = current_data_size;
+            update_mem_info.pData     = pData;
+
+            func(command_buffer_info->handle, &update_mem_info);
+
+            pData += current_data_size;
+            remaining -= current_data_size;
+        }
+
+        return;
+    }
 
     if (!is_trace_helpers_supported_)
     {

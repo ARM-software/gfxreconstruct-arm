@@ -1768,6 +1768,13 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                      const VulkanCommandBufferInfo*                       command_buffer_info,
                                      StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* p_info);
 
+    void OverrideCmdUpdateMemoryKHR(PFN_vkCmdUpdateMemoryKHR                               func,
+                                    const VulkanCommandBufferInfo*                         command_buffer_info,
+                                    StructPointerDecoder<Decoded_VkDeviceAddressRangeKHR>* p_dst_range,
+                                    VkAddressCommandFlagsKHR                               dst_flags,
+                                    VkDeviceSize                                           data_size,
+                                    PointerDecoder<uint8_t>*                               p_data);
+
     void OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory2ARM                            func,
                                      const VulkanCommandBufferInfo*                       command_buffer_info,
                                      StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info);

@@ -5660,15 +5660,13 @@ void VulkanReplayConsumer::Process_vkCmdUpdateMemoryKHR(
     const ApiCallInfo&                          call_info,
     args::CmdUpdateMemoryKHR&                   args)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(args.commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
-    const VkDeviceAddressRangeKHR* in_pDstRange = args.pDstRange.GetPointer();
-    const void* in_pData = args.pData.GetPointer();
+    auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(args.commandBuffer);
 
-    GetDeviceTable(in_commandBuffer)->CmdUpdateMemoryKHR(in_commandBuffer, in_pDstRange, args.dstFlags, args.dataSize, in_pData);
+    OverrideCmdUpdateMemoryKHR(GetDeviceTable(in_commandBuffer->handle)->CmdUpdateMemoryKHR, in_commandBuffer, &args.pDstRange, args.dstFlags, args.dataSize, &args.pData);
 
     if (options_.dumping_resources)
     {
-        resource_dumper_->Process_vkCmdUpdateMemoryKHR(call_info, GetDeviceTable(in_commandBuffer)->CmdUpdateMemoryKHR, in_commandBuffer, in_pDstRange, args.dstFlags, args.dataSize, in_pData);
+        resource_dumper_->Process_vkCmdUpdateMemoryKHR(call_info, GetDeviceTable(in_commandBuffer->handle)->CmdUpdateMemoryKHR, in_commandBuffer->handle, args.pDstRange.GetPointer(), args.dstFlags, args.dataSize, args.pData.GetPointer());
     }
 }
 
