@@ -133,7 +133,8 @@ decode::FileTransformer::VisitResult FileOptimizer::FilterMetaData(const decode:
 
 decode::FileTransformer::VisitResult FileOptimizer::FilterMetaData(const decode::InitTensorArgs& args)
 {
-    GFXRECON_ASSERT(format::GetMetaDataType(args.meta_data_id) == format::arm::MetaDataType::kInitTensorCommand);
+    GFXRECON_ASSERT(format::GetMetaDataType(args.meta_data_id) == format::arm::MetaDataType::kInitTensorCommand ||
+                    format::GetMetaDataType(args.meta_data_id) == format::MetaDataType::kInitTensorCommand);
 
     // If the tensor is in the unused list, omit its initialization data from the file.
     if (unreferenced_ids_.find(args.tensor_id) != unreferenced_ids_.end() ||

@@ -53,7 +53,7 @@ format::MetaDataId BlockParser::ResolveLegacyAmbiguousMetaDataId(const BlockBuff
     {
         if (api_family != format::ApiFamily_D3D12)
         {
-            return format::MakeMetaDataId(api_family, format::arm::MetaDataType::kInitTensorCommand);
+            return format::MakeMetaDataId(api_family, format::MetaDataType::kInitTensorCommand);
         }
     }
     else if (current_type == conflicting_35)

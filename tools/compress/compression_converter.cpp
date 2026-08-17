@@ -471,7 +471,8 @@ decode::FileTransformer::VisitResult CompressionConverter::WriteMetaData(const d
 
 decode::FileTransformer::VisitResult CompressionConverter::WriteMetaData(const decode::InitTensorArgs& args)
 {
-    GFXRECON_ASSERT(format::GetMetaDataType(args.meta_data_id) == format::arm::MetaDataType::kInitTensorCommand);
+    GFXRECON_ASSERT(format::GetMetaDataType(args.meta_data_id) == format::arm::MetaDataType::kInitTensorCommand ||
+                    format::GetMetaDataType(args.meta_data_id) == format::MetaDataType::kInitTensorCommand);
 
     format::InitTensorCommandHeader init_cmd;
 
