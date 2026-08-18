@@ -1,30 +1,52 @@
+/*
+** Copyright (c) 2026 LunarG, Inc.
+**
+** Permission is hereby granted, free of charge, to any person obtaining a
+** copy of this software and associated documentation files (the "Software"),
+** to deal in the Software without restriction, including without limitation
+** the rights to use, copy, modify, merge, publish, distribute, sublicense,
+** and/or sell copies of the Software, and to permit persons to whom the
+** Software is furnished to do so, subject to the following conditions:
+**
+** The above copyright notice and this permission notice shall be included in
+** all copies or substantial portions of the Software.
+**
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+** IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+** FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+** AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+** DEALINGS IN THE SOFTWARE.
+*/
 
-#define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "format/format.h"
-#include "format/format_util.h"
+#include "decode/decode_allocator.h"
+#include "decode/struct_pointer_decoder.h"
+#include "decode/custom_vulkan_struct_decoders.h"
+#include "encode/custom_vulkan_struct_encoders.h"
 #include "encode/parameter_buffer.h"
 #include "encode/parameter_encoder.h"
-#include "encode/custom_vulkan_struct_encoders.h"
 #include "encode/struct_pointer_encoder.h"
-#include "decode/custom_vulkan_struct_decoders.h"
-#include "generated/generated_vulkan_struct_encoders.h"
 #include "generated/generated_vulkan_struct_decoders.h"
-#include "decode/decode_allocator.h"
+#include "generated/generated_vulkan_struct_encoders.h"
+#include "util/logging.h"
+
 #include "vulkan/vulkan.h"
 
-#include <vector>
+#include <iterator>
+#include <memory>
 
 TEST_CASE("VkDataGraphPipelineConstantARM can be encoded and decoded", "[enc/dec]")
 {
     using namespace gfxrecon;
     using namespace gfxrecon::decode;
     gfxrecon::util::Log::Init(gfxrecon::util::LoggingSeverity::kError);
-    auto parameter_buffer_  = std::make_unique<encode::ParameterBuffer>();
-    auto parameter_encoder_ = std::make_unique<encode::ParameterEncoder>(parameter_buffer_.get());
+    auto parameter_buffer  = std::make_unique<encode::ParameterBuffer>();
+    auto parameter_encoder = std::make_unique<encode::ParameterEncoder>(parameter_buffer.get());
 
-    auto* encoder = parameter_encoder_.get();
+    auto* encoder = parameter_encoder.get();
 
     // Dimensions and tensor description
     std::vector<int64_t> dimensions = { 32, 3, 3, 12 };
@@ -64,7 +86,7 @@ TEST_CASE("VkDataGraphPipelineConstantARM can be encoded and decoded", "[enc/dec
     VkDataGraphPipelineConstantARM         decoded_value;
     wrapper.decoded_value = &decoded_value;
 
-    DecodeStruct(parameter_buffer_->GetData(), parameter_buffer_->GetDataSize(), &wrapper);
+    DecodeStruct(parameter_buffer->GetData(), parameter_buffer->GetDataSize(), &wrapper);
 
     auto* decoded_tensor_desc = reinterpret_cast<const VkTensorDescriptionARM*>(decoded_value.pNext);
     REQUIRE(decoded_tensor_desc->sType == tensorDescription.sType);
@@ -102,8 +124,8 @@ TEST_CASE("VkBaseOutStructure decodes to the appropriate returned ARM type", "[e
     using namespace gfxrecon;
     using namespace gfxrecon::decode;
     gfxrecon::util::Log::Init(gfxrecon::util::LoggingSeverity::kError);
-    auto parameter_buffer_  = std::make_unique<encode::ParameterBuffer>();
-    auto parameter_encoder_ = std::make_unique<encode::ParameterEncoder>(parameter_buffer_.get());
+    auto parameter_buffer  = std::make_unique<encode::ParameterBuffer>();
+    auto parameter_encoder = std::make_unique<encode::ParameterEncoder>(parameter_buffer.get());
 
     VkQueueFamilyDataGraphOpticalFlowPropertiesARM optical_flow_properties{
         VK_STRUCTURE_TYPE_QUEUE_FAMILY_DATA_GRAPH_OPTICAL_FLOW_PROPERTIES_ARM,
@@ -118,13 +140,13 @@ TEST_CASE("VkBaseOutStructure decodes to the appropriate returned ARM type", "[e
         2160
     };
 
-    gfxrecon::encode::EncodeStructPtr(parameter_encoder_.get(),
+    gfxrecon::encode::EncodeStructPtr(parameter_encoder.get(),
                                       reinterpret_cast<const VkBaseOutStructure*>(&optical_flow_properties));
 
     DecodeAllocator::Begin();
 
     StructPointerDecoder<Decoded_VkBaseOutStructure> wrapper;
-    wrapper.DecodeBaseHeader(parameter_buffer_->GetData(), parameter_buffer_->GetDataSize());
+    wrapper.DecodeBaseHeader(parameter_buffer->GetData(), parameter_buffer->GetDataSize());
 
     auto* decoded_properties =
         reinterpret_cast<const VkQueueFamilyDataGraphOpticalFlowPropertiesARM*>(wrapper.GetPointer());
@@ -148,10 +170,10 @@ TEST_CASE("VkDataGraphPipelineCreateInfoARM with optical flow structs can be enc
     using namespace gfxrecon;
     using namespace gfxrecon::decode;
     gfxrecon::util::Log::Init(gfxrecon::util::LoggingSeverity::kError);
-    auto parameter_buffer_  = std::make_unique<encode::ParameterBuffer>();
-    auto parameter_encoder_ = std::make_unique<encode::ParameterEncoder>(parameter_buffer_.get());
+    auto parameter_buffer  = std::make_unique<encode::ParameterBuffer>();
+    auto parameter_encoder = std::make_unique<encode::ParameterEncoder>(parameter_buffer.get());
 
-    auto* encoder = parameter_encoder_.get();
+    auto* encoder = parameter_encoder.get();
 
     VkDataGraphPipelineResourceInfoImageLayoutARM image_layouts[] = {
         { VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_RESOURCE_INFO_IMAGE_LAYOUT_ARM,
@@ -240,7 +262,7 @@ TEST_CASE("VkDataGraphPipelineCreateInfoARM with optical flow structs can be enc
     VkDataGraphPipelineCreateInfoARM         decoded_value;
     wrapper.decoded_value = &decoded_value;
 
-    DecodeStruct(parameter_buffer_->GetData(), parameter_buffer_->GetDataSize(), &wrapper);
+    DecodeStruct(parameter_buffer->GetData(), parameter_buffer->GetDataSize(), &wrapper);
 
     REQUIRE(decoded_value.sType == pipeline_info.sType);
     REQUIRE(decoded_value.flags == pipeline_info.flags);
