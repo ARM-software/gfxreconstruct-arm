@@ -25,6 +25,8 @@
 #ifndef GFXRECON_DECODE_REPLAY_OPTIONS_H
 #define GFXRECON_DECODE_REPLAY_OPTIONS_H
 
+#include <unordered_set>
+
 #include "util/defines.h"
 #include "util/options.h"
 
@@ -70,7 +72,7 @@ struct ReplayOptions
     bool                         enable_print_block_info{ false };
     int64_t                      block_index_from{ -1 };
     int64_t                      block_index_to{ -1 };
-    std::vector<util::UintRange> skip_block_indices;
+    std::unordered_set<uint64_t> skip_block_indices;
     bool                         skip_failed_allocations{ false };
     bool                         remove_unsupported_features{ false };
     util::ScreenshotFormat       screenshot_format{ util::ScreenshotFormat::kBmp };

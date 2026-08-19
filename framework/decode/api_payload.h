@@ -27,6 +27,7 @@
 #include "util/type_traits_extras.h"
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -691,6 +692,12 @@ struct Dx12ResourceAliasingArgs
     auto GetTuple() const { return std::tie(command_header, data); }
 };
 
+// In-band callback: enqueued by the producer thread, executed on the dispatch thread.
+struct CallbackArgs
+{
+    std::function<void()> callback;
+};
+
 // --- DispatchTraits specializations  ---
 template <typename T>
 struct DispatchTraits;
@@ -1007,6 +1014,12 @@ struct DispatchTraits<file_processor::ProcessBlocksResult> : DispatchFlagTraits<
 };
 
 template <>
+struct DispatchTraits<CallbackArgs> : DispatchFlagTraits<void>
+{
+    // Not dispatched to decoders; DispatchVisitor invokes the callback directly.
+};
+
+template <>
 struct DispatchTraits<std::monostate> : DispatchFlagTraits<void>
 {
     // Is not dispatched to decoders, and thus requires a custom DispatchVisitor::VisitCommand overload
@@ -1022,6 +1035,7 @@ struct DispatchAlternativeTraits : DispatchTraits<DispatchAlternativeType<Altern
 // --- Variant of all payloads by reference, storage in allocator
 using DispatchArgs = std::variant<std::monostate,
                                   file_processor::ProcessBlocksResult*,
+                                  CallbackArgs*,
                                   FunctionCallArgs*,
                                   MethodCallArgs*,
                                   StateBeginMarkerArgs*,

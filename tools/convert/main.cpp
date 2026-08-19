@@ -373,6 +373,8 @@ int main(int argc, const char** argv)
                 }
             }
 
+            file_processor.InitializeFrameProcessing();
+
             while (success)
             {
                 // Note: GetCurrentFrameNumber() is potentially equal to 1 in 2 iterations of this loop because of

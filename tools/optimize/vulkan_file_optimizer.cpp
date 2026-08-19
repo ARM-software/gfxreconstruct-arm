@@ -42,7 +42,7 @@ bool VulkanFileOptimizer::ProcessFunctionCall(decode::ParsedBlock& parsed_block)
         return FileOptimizer::ProcessFunctionCall(parsed_block);
     }
 
-    if (!parsed_block.Decompress(GetBlockParser(), working_uncompressed_store_))
+    if (!parsed_block.Decompress(GetCompressor(), working_uncompressed_store_))
     {
         return false;
     }
@@ -84,7 +84,7 @@ bool VulkanFileOptimizer::ProcessMetaData(decode::ParsedBlock& parsed_block)
         return FileOptimizer::ProcessMetaData(parsed_block);
     }
 
-    if (!parsed_block.Decompress(GetBlockParser(), working_uncompressed_store_))
+    if (!parsed_block.Decompress(GetCompressor(), working_uncompressed_store_))
     {
         return false;
     }

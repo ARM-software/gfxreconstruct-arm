@@ -30,12 +30,20 @@ std::vector<std::string> GetTraceReplayOptions(const std::string& filename)
     trace_options_procesor.Initialize(filename);
     ReplayOptionsAnnotationHandler annotation_handler;
     trace_options_procesor.SetAnnotationProcessor(&annotation_handler);
-    trace_options_procesor.ProcessAnnotation();
-    std::stringstream                  ss(annotation_handler.GetReplayOptions());
-    std::istream_iterator<std::string> begin(ss);
-    std::istream_iterator<std::string> end;
-    std::vector<std::string>           command_line_args(begin, end);
-    return command_line_args;
+
+    bool success = trace_options_procesor.ProcessReplayOptionsAnnotation();
+    if (success)
+    {
+        std::stringstream                  ss(annotation_handler.GetReplayOptions());
+        std::istream_iterator<std::string> begin(ss);
+        std::istream_iterator<std::string> end;
+        std::vector<std::string>           command_line_args(begin, end);
+        return command_line_args;
+    }
+    else
+    {
+        return {};
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

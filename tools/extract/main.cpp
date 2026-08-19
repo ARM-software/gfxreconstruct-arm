@@ -159,6 +159,7 @@ int main(int argc, const char** argv)
             feature->Initialize(file_processor, extract_dir, arg_parser);
         }
 
+        file_processor.InitializeFrameProcessing();
         file_processor.ProcessAllFrames();
 
         bool any_detected = false;

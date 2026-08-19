@@ -63,8 +63,7 @@ class Dx12FileOptimizerARM : public FileOptimizer
         constexpr auto decode_method = decode::DispatchTraits<Args>::kDecoderMethod;
         if (decode::file_processor::DecoderSupportsDispatch(decoder_, args))
         {
-            [[maybe_unused]] decode::file_processor::DecoderAllocGuard<decode::DispatchTraits<Args>::kHasAllocGuard>
-                alloc_guard{};
+            [[maybe_unused]] decode::DecoderAllocGuard<decode::DispatchTraits<Args>::kHasAllocGuard> alloc_guard{};
             decode::file_processor::SetDecoderApiCallId(decoder_, args);
             auto dispatch_call = [this, decode_method](auto&&... expanded_args) {
                 (decoder_.*decode_method)(std::forward<decltype(expanded_args)>(expanded_args)...);
@@ -205,6 +204,14 @@ class Dx12FileOptimizerARM : public FileOptimizer
                           encode::ParameterBuffer&                           buffer)
     {
         return result.state == decode::file_processor::ProcessBlockState::kContinue;
+    }
+
+    bool ModifierDispatch(const decode::CallbackArgs& args,
+                          decode::ParsedBlock&        parsed_block,
+                          encode::ParameterBuffer&    buffer)
+    {
+        args.callback();
+        return true;
     }
 
     void WriteFunctionCall(format::ApiCallId               call_id,

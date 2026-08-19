@@ -314,6 +314,7 @@ InitRealignAllocatorCreateFunc(const std::string&                              f
     {
         decoder.AddConsumer(resource_tracking_consumer);
         file_processor_resource_tracking.AddDecoder(&decoder);
+        file_processor_resource_tracking.InitializeFrameProcessing();
         file_processor_resource_tracking.ProcessAllFrames();
         file_processor_resource_tracking.RemoveDecoder(&decoder);
         decoder.RemoveConsumer(resource_tracking_consumer);
@@ -1154,8 +1155,20 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
 
         if (!skip_index.empty())
         {
-            options.skip_block_indices =
-                gfxrecon::util::GetUintRanges(skip_index.c_str(), kSkipIndexArgument, false, true);
+            options.skip_block_indices.clear();
+            for (const gfxrecon::util::UintRange& range :
+                 gfxrecon::util::GetUintRanges(skip_index.c_str(), kSkipIndexArgument, false, true))
+            {
+                if (range.last == UINT32_MAX)
+                {
+                    GFXRECON_LOG_FATAL("Replaying while ignoring all block indices is not supported.");
+                }
+
+                for (uint64_t i = range.first; i <= range.last; ++i)
+                {
+                    options.skip_block_indices.emplace(i);
+                }
+            }
         }
         else
         {

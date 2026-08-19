@@ -38,7 +38,7 @@ bool Dx12FileOptimizerARM::ProcessFunctionCall(decode::ParsedBlock& parsed_block
         return true;
     }
 
-    if (!parsed_block.Decompress(GetBlockParser(), working_uncompressed_store_))
+    if (!parsed_block.Decompress(GetCompressor(), working_uncompressed_store_))
     {
         return false;
     }
@@ -72,7 +72,7 @@ bool Dx12FileOptimizerARM::ProcessMethodCall(decode::ParsedBlock& parsed_block)
         return true;
     }
 
-    if (!parsed_block.Decompress(GetBlockParser(), working_uncompressed_store_))
+    if (!parsed_block.Decompress(GetCompressor(), working_uncompressed_store_))
     {
         return false;
     }
@@ -115,7 +115,7 @@ bool Dx12FileOptimizerARM::ProcessMetaData(decode::ParsedBlock& parsed_block)
         return result == kSuccess;
     }
 
-    if (!parsed_block.Decompress(GetBlockParser(), working_uncompressed_store_))
+    if (!parsed_block.Decompress(GetCompressor(), working_uncompressed_store_))
     {
         return false;
     }
