@@ -25,6 +25,7 @@
 #include "decode/vulkan_object_info.h"
 #include "format/format.h"
 #include "util/logging.h"
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -180,11 +181,13 @@ decode::VulkanDeviceAddressTracker::GetBufferByReplayDeviceAddress(VkDeviceAddre
 }
 
 std::vector<VkDeviceAddressRangeKHR> VulkanDeviceAddressTracker::TranslateCaptureToReplayDeviceAddressRanges(
-    const VkDeviceAddressRangeKHR& capture_range) const
+    const VkDeviceAddressRangeKHR& capture_range, std::vector<const VulkanBufferInfo*>* optional_buffer_info) const
 {
     std::vector<VkDeviceAddressRangeKHR> replay_ranges;
     VkDeviceAddress                      current_capture_address = capture_range.address;
     VkDeviceSize                         remaining_size          = capture_range.size;
+
+    std::vector<const VulkanBufferInfo*> tmp_optional_buffer_info;
 
     while (remaining_size > 0)
     {
@@ -212,9 +215,15 @@ std::vector<VkDeviceAddressRangeKHR> VulkanDeviceAddressTracker::TranslateCaptur
         }
 
         replay_ranges.push_back({ buffer_info->replay_address + offset, segment_size });
+        tmp_optional_buffer_info.push_back(buffer_info);
 
         current_capture_address += segment_size;
         remaining_size -= segment_size;
+    }
+
+    if (optional_buffer_info != nullptr)
+    {
+        *optional_buffer_info = tmp_optional_buffer_info;
     }
 
     return replay_ranges;

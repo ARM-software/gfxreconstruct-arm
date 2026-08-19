@@ -109,8 +109,9 @@ class VulkanDeviceAddressTracker
      * @param   capture_range a capture-time VkDeviceAddressRangeKHR.
      * @return  a vector containing the replay-time range(s).
      */
-    [[nodiscard]] std::vector<VkDeviceAddressRangeKHR>
-    TranslateCaptureToReplayDeviceAddressRanges(const VkDeviceAddressRangeKHR& capture_range) const;
+    [[nodiscard]] std::vector<VkDeviceAddressRangeKHR> TranslateCaptureToReplayDeviceAddressRanges(
+        const VkDeviceAddressRangeKHR&        capture_range,
+        std::vector<const VulkanBufferInfo*>* optional_buffer_info = nullptr) const;
 
     /**
      * @brief   Retrieve a buffer info-struct by providing its vulkan-handle.

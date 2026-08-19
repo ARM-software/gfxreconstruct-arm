@@ -16119,7 +16119,7 @@ VkResult
 VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
                                                   VkResult                original_result,
                                                   const VulkanDeviceInfo* device_info,
-                                                  const StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* pInfo,
+                                                  const StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* p_info,
                                                   PointerDecoder<uint32_t>*                                  checksum,
                                                   StringDecoder*                                             comment)
 
@@ -16133,9 +16133,10 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
 
     uint32_t          capture_time_checksum = *checksum->GetPointer();
     uint32_t          replay_time_checksum  = 0;
-    VkDeviceSize      size                  = pInfo->GetPointer()->dataSize;
-    VkDeviceSize      offset                = pInfo->GetPointer()->dstOffset;
-    VulkanBufferInfo* buffer_info = GetObjectInfoTable().GetVkBufferInfo(pInfo->GetMetaStructPointer()->dstBuffer);
+    VkDeviceSize      size                  = p_info->GetPointer()->dataSize;
+    VkDeviceSize      offset                = p_info->GetPointer()->dstOffset;
+    VulkanBufferInfo* buffer_info =
+        GetDeviceAddressTracker(device_info).GetBufferByHandle(p_info->GetPointer()->dstBuffer);
     GFXRECON_ASSERT(buffer_info != nullptr);
 
     if (!is_trace_helpers_supported_)
@@ -16162,7 +16163,7 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
         }
 
         if (auto address_offset_arm =
-                gfxrecon::graphics::vulkan_struct_get_pnext<VkMarkedOffsetsARM>(pInfo->GetPointer());
+                gfxrecon::graphics::vulkan_struct_get_pnext<VkMarkedOffsetsARM>(p_info->GetPointer());
             address_offset_arm != nullptr)
         {
             std::vector<std::vector<uint8_t>> capture_data;
@@ -16215,7 +16216,7 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
         return VK_SUCCESS;
     }
 
-    VkResult result = func(device_info->handle, pInfo->GetPointer(), checksum->GetPointer(), comment->GetPointer());
+    VkResult result = func(device_info->handle, p_info->GetPointer(), checksum->GetPointer(), comment->GetPointer());
 
     replay_time_checksum = *checksum->GetPointer();
 
@@ -16236,14 +16237,69 @@ VkResult
 VulkanReplayConsumerBase::OverrideAssertMemoryARM(PFN_vkAssertMemoryARM   func,
                                                   VkResult                original_result,
                                                   const VulkanDeviceInfo* device_info,
-                                                  const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* pInfo,
+                                                  const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info,
                                                   PointerDecoder<uint32_t>*                                  checksum,
                                                   StringDecoder*                                             comment)
 
 {
-    // TODO: add support for this once rebind handling for VkDeviceAddressRangeKHR gets added
-    GFXRECON_LOG_WARNING_ONCE("Ignoring unsupported vkAssertMemoryARM");
-    return VK_SUCCESS;
+    if (original_result != VK_SUCCESS)
+    {
+        // Effectively remove this command from a future recapture
+        GFXRECON_LOG_WARNING("Ignoring vkAssertMemoryARM as capture time result is not VK_SUCCESS");
+        return VK_SUCCESS;
+    }
+
+    VkUpdateMemoryInfoARM* pInfo           = (VkUpdateMemoryInfoARM*)(p_info->GetPointer());
+    auto&                  address_tracker = GetDeviceAddressTracker(device_info);
+
+    uint32_t capture_time_checksum = *checksum->GetPointer();
+    uint32_t replay_time_checksum  = 0;
+    auto     allocator             = device_info->allocator.get();
+    GFXRECON_ASSERT(allocator != nullptr);
+
+    VkDeviceAddressRangeKHR relevant_capture_device_address_range{ *pInfo->pDstRange };
+
+    std::vector<const VulkanBufferInfo*> buffer_infos;
+    const auto replay_device_address_ranges = address_tracker.TranslateCaptureToReplayDeviceAddressRanges(
+        relevant_capture_device_address_range, &buffer_infos);
+
+    GFXRECON_ASSERT(replay_device_address_ranges.size() == buffer_infos.size());
+
+    if (replay_device_address_ranges.empty() || buffer_infos.empty())
+    {
+        GFXRECON_LOG_FATAL("FAILED to convert capture VkDeviceAddressRangeKHR to replay VkDeviceAddressRangeKHR");
+    }
+
+    // TODO implement support for multiple replay time VkDeviceAddressRangeKHR without polluting recapturing
+    if (replay_device_address_ranges.size() != 1 || buffer_infos.size() != 1)
+    {
+        GFXRECON_LOG_WARNING("Input capture time VkDeviceAddressRangeKHR translates to multiple replay time "
+                             "VkDeviceAddressRangeKHR. Skipping vkAssertMemoryARM");
+        return VK_SUCCESS;
+    }
+
+    if (is_trace_helpers_supported_)
+    {
+        pInfo->pDstRange = &replay_device_address_ranges[0];
+        return func(device_info->handle, pInfo, checksum->GetPointer(), comment->GetPointer());
+    }
+
+    StructPointerDecoder<Decoded_VkUpdateBufferInfoARM> update_buffer_info_decoder;
+    VkUpdateBufferInfoARM                               update_buffer_info{ VK_STRUCTURE_TYPE_UPDATE_BUFFER_INFO_ARM };
+    update_buffer_info.pNext     = pInfo->pNext;
+    update_buffer_info.dstBuffer = buffer_infos[0]->handle;
+    update_buffer_info.dstOffset = replay_device_address_ranges[0].address - buffer_infos[0]->replay_address;
+    update_buffer_info.dataSize  = replay_device_address_ranges[0].size;
+    update_buffer_info.pData     = nullptr;
+
+    update_buffer_info_decoder.SetExternalMemory(&update_buffer_info, 1);
+
+    return OverrideAssertBufferARM(GetDeviceTable(device_info->handle)->AssertBufferARM,
+                                   original_result,
+                                   device_info,
+                                   &update_buffer_info_decoder,
+                                   checksum,
+                                   comment);
 }
 
 void VulkanReplayConsumerBase::OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer2ARM      func,

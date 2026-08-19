@@ -1753,14 +1753,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VkResult OverrideAssertBufferARM(PFN_vkAssertBufferARM                                      func,
                                      VkResult                                                   original_result,
                                      const VulkanDeviceInfo*                                    device_info,
-                                     const StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* pInfo,
+                                     const StructPointerDecoder<Decoded_VkUpdateBufferInfoARM>* p_info,
                                      PointerDecoder<uint32_t>*                                  checksum,
                                      StringDecoder*                                             comment);
 
     VkResult OverrideAssertMemoryARM(PFN_vkAssertMemoryARM                                      func,
                                      VkResult                                                   original_result,
                                      const VulkanDeviceInfo*                                    device_info,
-                                     const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* pInfo,
+                                     const StructPointerDecoder<Decoded_VkUpdateMemoryInfoARM>* p_info,
                                      PointerDecoder<uint32_t>*                                  checksum,
                                      StringDecoder*                                             comment);
 
