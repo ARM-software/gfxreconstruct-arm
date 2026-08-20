@@ -168,6 +168,7 @@ const char kWaitBeforeFrame[]                     = "--wait-before-frame";
 const char kAsyncProcessingOption[]               = "--async-processing";
 
 const char kScreenshotIgnoreFrameBoundaryArgument[] = "--screenshot-ignore-FrameBoundaryANDROID";
+const char kScreenshotApplyPrerotationArgument[]    = "--screenshot-apply-prerotation";
 
 #if defined(_WIN32)
 const char kDxTwoPassReplay[]                  = "--dx12-two-pass-replay";
@@ -1548,6 +1549,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
             exit(EXIT_FAILURE);
         }
     }
+
+    replay_options.screenshot_apply_prerotation = arg_parser.IsOptionSet(kScreenshotApplyPrerotationArgument);
 
     return replay_options;
 }
