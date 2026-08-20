@@ -224,9 +224,10 @@ struct BufferViewWrapper;
 struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
 {
     // State tracking info for buffers with device addresses.
-    VkDeviceAddress    address{ 0 };
-    VkDeviceAddress    opaque_address{ 0 };
-    VkBufferUsageFlags usage{ 0 };
+    VkDeviceAddress     address{ 0 };
+    VkDeviceAddress     opaque_address{ 0 };
+    VkBufferUsageFlags  usage{ 0 };
+    VkBufferCreateFlags modified_flags{ 0 };
 
     std::set<BufferViewWrapper*> buffer_views;
 
