@@ -104,6 +104,7 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/scoped_destroy_lock.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/struct_pointer_encoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/unordered_state_map.h
+
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_encoder_commands.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_api_call_encoders.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_api_call_encoders.cpp>
@@ -127,7 +128,6 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_entry_base.cpp>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrappers.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrapper_util.h>
-                    $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrapper_util.cpp>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_state_info.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_state_table_base.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${CMAKE_CURRENT_LIST_DIR}/vulkan_state_tracker.h>
@@ -149,6 +149,9 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_struct_trackers.h>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_struct_trackers.cpp>
                     $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_state_table.h>
+                    $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_handle_wrapper_util.cpp>
+                    $<$<BOOL:${GFXRECON_ENABLE_VULKAN}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_vulkan_state_tracker_debug_util.cpp>
+
                     $<$<BOOL:${D3D12_SUPPORT}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_dx12_struct_unwrappers.h>
