@@ -129,6 +129,35 @@ class Dx12ExtractConsumer : public decode::Dx12Consumer
         }
     }
 
+    virtual void Process_ID3D12Device2_CreatePipelineState(
+        const decode::ApiCallInfo&                                                      call_info,
+        format::HandleId                                                                object_id,
+        HRESULT                                                                         return_value,
+        decode::StructPointerDecoder<decode::Decoded_D3D12_PIPELINE_STATE_STREAM_DESC>* pDesc,
+        decode::Decoded_GUID                                                            riid,
+        decode::HandlePointerDecoder<void*>*                                            ppPipelineState) override
+    {
+        if ((return_value == S_OK) && (pDesc != nullptr) && !pDesc->IsNull() && (ppPipelineState != nullptr) &&
+            !ppPipelineState->IsNull())
+        {
+            auto*    pipeline_desc = pDesc->GetPointer();
+            uint64_t handle_id     = *ppPipelineState->GetPointer();
+
+            const bool parsed = graphics::Dx12ShaderTool::ForEachPipelineStateStreamShader(
+                *pipeline_desc, [this, handle_id](const graphics::Dx12ShaderTool::PipelineStateShader& shader) {
+                    if ((shader.bytecode != nullptr) && (shader.extension != nullptr))
+                    {
+                        WriteShaderBytecode(*shader.bytecode, handle_id, shader.extension);
+                    }
+                });
+
+            if (!parsed)
+            {
+                GFXRECON_LOG_WARNING("Failed to fully parse the CreatePipelineState pipeline state stream.");
+            }
+        }
+    }
+
     virtual void Process_ID3D12Device5_CreateStateObject(
         const decode::ApiCallInfo&                                             call_info,
         format::HandleId                                                       object_id,

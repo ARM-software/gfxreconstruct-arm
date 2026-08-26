@@ -27,8 +27,11 @@
 #include "util/defines.h"
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+
+#include <d3d12.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(graphics)
@@ -44,14 +47,16 @@ class Dx12ShaderTool
         kGeometry,
         kPixel,
         kCompute,
+        kAmplification,
+        kMesh,
         // StateObject subobject type D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY
         kStateObjectDxilLibrary,
         kUnknown
     };
 
     // File naming convention matches tools/extract and replay --replace-shaders logic.
-    // Graphics/compute pipeline stage shaders:
-    //   sh<handle_id>.{v/p/d/h/g/c}so
+    // Pipeline stage shaders:
+    //   sh<handle_id>.{v/p/d/h/g/c/a/m}so
     // StateObject DXIL libraries:
     //   sh<handle_id>_<subobject_index>.dxil
     // Root signatures:
@@ -59,6 +64,21 @@ class Dx12ShaderTool
     //   rs<handle_id>_reserialized.rootsig (deserialize + serialize result)
     //   rs<handle_id>.rootsig.txt          (human-readable description)
     static std::string MakePipelineShaderFileName(uint64_t handle_id, ShaderType type);
+
+    struct PipelineStateShader
+    {
+        ShaderType             type;
+        const char*            extension;
+        D3D12_SHADER_BYTECODE* bytecode;
+    };
+
+    using PipelineStateShaderCallback    = std::function<void(const PipelineStateShader&)>;
+    using PipelineStateCachedPsoCallback = std::function<void(D3D12_CACHED_PIPELINE_STATE&)>;
+
+    static bool ForEachPipelineStateStreamShader(D3D12_PIPELINE_STATE_STREAM_DESC&     desc,
+                                                 const PipelineStateShaderCallback&    shader_callback,
+                                                 const PipelineStateCachedPsoCallback& cached_pso_callback = {});
+
     static std::string MakeStateObjectDxilLibraryFileName(uint64_t handle_id, uint32_t subobject_index);
     static std::string MakeRootSignatureFileName(uint64_t handle_id);
     static std::string MakeRootSignatureReserializedFileName(uint64_t handle_id);

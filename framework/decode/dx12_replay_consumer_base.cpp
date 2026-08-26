@@ -5420,14 +5420,13 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePipelineState(
     Decoded_GUID                                                    riid,
     HandlePointerDecoder<void*>*                                    ppPipelineState)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
-
     GFXRECON_ASSERT(device_object_info != nullptr);
     GFXRECON_ASSERT(device_object_info->object != nullptr);
 
     auto device = static_cast<ID3D12Device2*>(device_object_info->object);
 
     auto pDesc2 = pDesc->GetPointer();
+
     if (!options_.use_cached_psos)
     {
         auto desc = pDesc->GetMetaStructPointer();
@@ -5440,10 +5439,93 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreatePipelineState(
         }
     }
 
-    HRESULT replay_result =
-        device->CreatePipelineState(pDesc2, *riid.decoded_value, ppPipelineState->GetHandlePointer());
+    const bool replace_shaders = (original_result == S_OK) && !options_.replace_shader_dir.empty();
 
-    return replay_result;
+    if (!replace_shaders)
+    {
+        return device->CreatePipelineState(pDesc2, *riid.decoded_value, ppPipelineState->GetHandlePointer());
+    }
+
+    D3D12_PIPELINE_STATE_STREAM_DESC override_desc = *pDesc2;
+    std::vector<uint8_t>             stream_copy;
+
+    if ((pDesc2->SizeInBytes > 0) && (pDesc2->pPipelineStateSubobjectStream != nullptr))
+    {
+        stream_copy.resize(pDesc2->SizeInBytes);
+
+        util::platform::MemoryCopy(
+            stream_copy.data(), stream_copy.size(), pDesc2->pPipelineStateSubobjectStream, pDesc2->SizeInBytes);
+
+        override_desc.pPipelineStateSubobjectStream = stream_copy.data();
+    }
+
+    std::vector<D3D12_CACHED_PIPELINE_STATE*>                  cached_psos;
+    std::vector<graphics::Dx12ShaderTool::PipelineStateShader> pipeline_shaders;
+    std::vector<std::unique_ptr<char[]>>                       replacement_codes;
+
+    const uint64_t handle_id = *ppPipelineState->GetPointer();
+
+    bool shader_replaced = false;
+
+    const bool parsed = graphics::Dx12ShaderTool::ForEachPipelineStateStreamShader(
+        override_desc,
+        [&](const graphics::Dx12ShaderTool::PipelineStateShader& shader) { pipeline_shaders.push_back(shader); },
+        [&](D3D12_CACHED_PIPELINE_STATE& cached_pso) { cached_psos.push_back(&cached_pso); });
+
+    if (!parsed)
+    {
+        GFXRECON_LOG_WARNING("Failed to fully parse the CreatePipelineState pipeline state stream; "
+                             "shader replacement was skipped.");
+
+        return device->CreatePipelineState(&override_desc, *riid.decoded_value, ppPipelineState->GetHandlePointer());
+    }
+
+    for (const auto& shader : pipeline_shaders)
+    {
+        if ((shader.bytecode == nullptr) || (shader.bytecode->BytecodeLength == 0) ||
+            (shader.bytecode->pShaderBytecode == nullptr))
+        {
+            continue;
+        }
+
+        std::unique_ptr<char[]> replacement_code;
+        size_t                  replacement_size = 0;
+
+        if (graphics::Dx12ShaderTool::LoadReplacementPipelineShaderFromDir(
+                options_.replace_shader_dir, handle_id, shader.type, replacement_code, replacement_size))
+        {
+            shader.bytecode->pShaderBytecode = replacement_code.get();
+            shader.bytecode->BytecodeLength  = replacement_size;
+
+            replacement_codes.push_back(std::move(replacement_code));
+
+            shader_replaced = true;
+
+            std::string file_path =
+                util::filepath::Join(options_.replace_shader_dir,
+                                     graphics::Dx12ShaderTool::MakePipelineShaderFileName(handle_id, shader.type));
+
+            GFXRECON_LOG_INFO("Replacement pipeline shader found: %s", file_path.c_str());
+        }
+    }
+
+    //
+    // If shader replacement and cached PSOs are both enabled,
+    // the cached PSO blob becomes invalid after shader replacement.
+    //
+    if (shader_replaced && options_.use_cached_psos)
+    {
+        GFXRECON_LOG_WARNING("Using cached PSOs and shader replacement enabled during replay "
+                             "may cause replay failures, disabling cached PSOs.");
+
+        for (auto* cached_pso : cached_psos)
+        {
+            cached_pso->pCachedBlob           = nullptr;
+            cached_pso->CachedBlobSizeInBytes = 0;
+        }
+    }
+
+    return device->CreatePipelineState(&override_desc, *riid.decoded_value, ppPipelineState->GetHandlePointer());
 }
 
 HRESULT
