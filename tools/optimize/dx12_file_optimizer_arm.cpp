@@ -26,6 +26,9 @@
 #include "format/format_util.h"
 #include "format/format_arm.h"
 
+#include <cstring>
+#include <vector>
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 
 bool Dx12FileOptimizerARM::ProcessFunctionCall(decode::ParsedBlock& parsed_block)
@@ -301,12 +304,53 @@ void Dx12FileOptimizerARM::WriteFunctionCall(format::ApiCallId               cal
 
 void Dx12FileOptimizerARM::WriteMetaCommand(const util::MemoryOutputStream* parameter_buffer)
 {
-    // Since Metacommands use Custom Structs and are not compressed we do the whole encoding on the modifier side
-
     assert(parameter_buffer != nullptr);
 
-    const void* data_pointer = reinterpret_cast<const void*>(parameter_buffer->GetData());
-    size_t      data_size    = parameter_buffer->GetDataSize();
+    const uint8_t* data_pointer = parameter_buffer->GetData();
+    const size_t   data_size    = parameter_buffer->GetDataSize();
+
+    if ((data_size >= sizeof(format::MetaDataHeader)) && (GetCompressor() != nullptr))
+    {
+        format::MetaDataHeader meta_header{};
+        std::memcpy(&meta_header, data_pointer, sizeof(meta_header));
+
+        const auto meta_data_type = format::GetMetaDataType(meta_header.meta_data_id);
+        size_t     header_size    = 0;
+        switch (meta_data_type)
+        {
+            case format::arm::MetaDataType::kFillMemoryResourceAddressCommand:
+                header_size = sizeof(format::arm::FillMemoryResourceAddressCommandHeader);
+                break;
+            case format::arm::MetaDataType::kGetDx12AccelerationStructureSizeCommand:
+                header_size = sizeof(format::arm::GetDx12AccelerationStructureSizeCommandHeader);
+                break;
+            case format::arm::MetaDataType::kDx12ResourceAliasingCommand:
+                header_size = sizeof(format::arm::Dx12ResourceAliasingCommandHeader);
+                break;
+            default:
+                break;
+        }
+
+        if ((header_size > 0) && (data_size >= header_size))
+        {
+            const size_t         payload_size = data_size - header_size;
+            std::vector<uint8_t> compressed_payload;
+            const size_t         compressed_size =
+                GetCompressor()->Compress(payload_size, data_pointer + header_size, &compressed_payload, 0);
+
+            if ((compressed_size > 0) && (compressed_size < payload_size))
+            {
+                std::vector<uint8_t> compressed_header(data_pointer, data_pointer + header_size);
+                meta_header.block_header.type = format::BlockType::kCompressedMetaDataBlock;
+                meta_header.block_header.size = header_size - sizeof(format::BlockHeader) + compressed_size;
+                std::memcpy(compressed_header.data(), &meta_header, sizeof(meta_header));
+
+                WriteBytes(compressed_header.data(), compressed_header.size());
+                WriteBytes(compressed_payload.data(), compressed_size);
+                return;
+            }
+        }
+    }
 
     // Write Custom Metacommand Struct + Extra data the metacommand may use.
     WriteBytes(data_pointer, data_size);
