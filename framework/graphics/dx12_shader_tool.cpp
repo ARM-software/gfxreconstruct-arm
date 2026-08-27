@@ -29,6 +29,7 @@
 
 #include <cinttypes>
 #include <cstring>
+#include <set>
 
 #include <d3d12.h>
 #include <d3d12shader.h>
@@ -48,6 +49,137 @@ GFXRECON_BEGIN_NAMESPACE(graphics)
 
 namespace
 {
+std::string GetDxilExportName(const char* function_name)
+{
+    if (function_name == nullptr)
+    {
+        return {};
+    }
+
+    const std::string name(function_name);
+    const auto        start = name.find('?');
+    const auto        end   = name.find('@', start);
+    if ((start != std::string::npos) && (end != std::string::npos) && (end > (start + 1)))
+    {
+        return name.substr(start + 1, end - start - 1);
+    }
+
+    return name;
+}
+
+std::string GetUtf8String(const wchar_t* value)
+{
+    if (value == nullptr)
+    {
+        return {};
+    }
+
+    const int size = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 1)
+    {
+        return {};
+    }
+
+    std::string result(static_cast<size_t>(size), '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, value, -1, result.data(), size, nullptr, nullptr) == 0)
+    {
+        return {};
+    }
+    result.pop_back();
+    return result;
+}
+
+bool GetDxilLibraryExports(const void* code, size_t code_size, std::set<std::string>& exports)
+{
+    exports.clear();
+
+#if defined(GFXRECON_DXC_SUPPORT)
+    using Microsoft::WRL::ComPtr;
+
+    if ((code == nullptr) || (code_size == 0) || (code_size > UINT32_MAX))
+    {
+        return false;
+    }
+
+    ComPtr<IDxcUtils> dxc_utils;
+    HRESULT           hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxc_utils));
+    if (FAILED(hr) || !dxc_utils)
+    {
+        return false;
+    }
+
+    ComPtr<IDxcBlobEncoding> blob;
+    hr = dxc_utils->CreateBlobFromPinned(code, static_cast<UINT32>(code_size), DXC_CP_ACP, &blob);
+    if (FAILED(hr) || !blob)
+    {
+        return false;
+    }
+
+    ComPtr<IDxcContainerReflection> container_reflection;
+    hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&container_reflection));
+    if (FAILED(hr) || !container_reflection)
+    {
+        return false;
+    }
+
+    hr = container_reflection->Load(blob.Get());
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    UINT32 dxil_part = 0;
+    hr               = container_reflection->FindFirstPartKind(DXC_PART_DXIL, &dxil_part);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    ComPtr<ID3D12LibraryReflection> library_reflection;
+    hr = container_reflection->GetPartReflection(dxil_part, IID_PPV_ARGS(&library_reflection));
+    if (FAILED(hr) || !library_reflection)
+    {
+        return false;
+    }
+
+    D3D12_LIBRARY_DESC library_desc{};
+    hr = library_reflection->GetDesc(&library_desc);
+    if (FAILED(hr) || (library_desc.FunctionCount == 0))
+    {
+        return false;
+    }
+
+    for (UINT i = 0; i < library_desc.FunctionCount; ++i)
+    {
+        auto* function_reflection = library_reflection->GetFunctionByIndex(i);
+        if (function_reflection == nullptr)
+        {
+            return false;
+        }
+
+        D3D12_FUNCTION_DESC function_desc{};
+        hr = function_reflection->GetDesc(&function_desc);
+        if (FAILED(hr))
+        {
+            return false;
+        }
+
+        const auto function_name = GetDxilExportName(function_desc.Name);
+        if (function_name.empty())
+        {
+            return false;
+        }
+        exports.insert(function_name);
+    }
+
+    return true;
+#else
+    GFXRECON_UNREFERENCED_PARAMETER(code);
+    GFXRECON_UNREFERENCED_PARAMETER(code_size);
+    return false;
+#endif
+}
+
 struct PipelineShaderInfo
 {
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE subobject_type;
@@ -722,6 +854,10 @@ bool Dx12ShaderTool::LoadReplacementShaderFromDir(const std::string&       repla
     int32_t     result    = util::platform::FileOpen(&fp, file_path.c_str(), "rb");
     if ((result != 0) || (fp == nullptr))
     {
+        if (util::filepath::Exists(file_path))
+        {
+            GFXRECON_LOG_WARNING("Failed to open replacement shader: %s", file_path.c_str());
+        }
         return false;
     }
 
@@ -731,12 +867,25 @@ bool Dx12ShaderTool::LoadReplacementShaderFromDir(const std::string&       repla
     if (file_size == 0)
     {
         util::platform::FileClose(fp);
+        GFXRECON_LOG_WARNING("Skipping empty replacement shader: %s", file_path.c_str());
         return false;
     }
 
     auto buffer = std::make_unique<char[]>(file_size);
-    util::platform::FileRead(buffer.get(), file_size, fp);
+    if (!util::platform::FileRead(buffer.get(), file_size, fp))
+    {
+        util::platform::FileClose(fp);
+        GFXRECON_LOG_WARNING("Failed to read replacement shader: %s", file_path.c_str());
+        return false;
+    }
     util::platform::FileClose(fp);
+
+    std::string disassembly;
+    if (!DisassembleShaderBytecode(buffer.get(), file_size, disassembly))
+    {
+        GFXRECON_LOG_WARNING("Skipping invalid replacement shader: %s", file_path.c_str());
+        return false;
+    }
 
     out_code = std::move(buffer);
     out_size = file_size;
@@ -761,6 +910,68 @@ bool Dx12ShaderTool::LoadReplacementStateObjectDxilLibraryFromDir(const std::str
 {
     return LoadReplacementShaderFromDir(
         replace_shader_dir, MakeStateObjectDxilLibraryFileName(handle_id, subobject_index), out_code, out_size);
+}
+
+bool Dx12ShaderTool::ValidateStateObjectDxilLibrary(const D3D12_DXIL_LIBRARY_DESC& original_library,
+                                                    const void*                    replacement_code,
+                                                    size_t                         replacement_size)
+{
+    if ((original_library.DXILLibrary.pShaderBytecode == nullptr) ||
+        (original_library.DXILLibrary.BytecodeLength == 0) || (replacement_code == nullptr) || (replacement_size == 0))
+    {
+        return false;
+    }
+
+    std::set<std::string> replacement_exports;
+    if (!GetDxilLibraryExports(replacement_code, replacement_size, replacement_exports))
+    {
+        GFXRECON_LOG_WARNING("Failed to reflect replacement DXIL library exports.");
+        return false;
+    }
+
+    std::set<std::string> required_exports;
+    if (original_library.NumExports == 0)
+    {
+        if (!GetDxilLibraryExports(original_library.DXILLibrary.pShaderBytecode,
+                                   original_library.DXILLibrary.BytecodeLength,
+                                   required_exports))
+        {
+            GFXRECON_LOG_WARNING("Failed to reflect original DXIL library exports.");
+            return false;
+        }
+    }
+    else
+    {
+        if (original_library.pExports == nullptr)
+        {
+            GFXRECON_LOG_WARNING("DXIL library has exports but no export descriptor array.");
+            return false;
+        }
+
+        for (UINT i = 0; i < original_library.NumExports; ++i)
+        {
+            const auto& export_desc = original_library.pExports[i];
+            const auto  export_name =
+                GetUtf8String(export_desc.ExportToRename != nullptr ? export_desc.ExportToRename : export_desc.Name);
+            if (export_name.empty())
+            {
+                GFXRECON_LOG_WARNING("DXIL library export name is empty.");
+                return false;
+            }
+            required_exports.insert(export_name);
+        }
+    }
+
+    for (const auto& export_name : required_exports)
+    {
+        if (replacement_exports.find(export_name) == replacement_exports.end())
+        {
+            GFXRECON_LOG_WARNING("Replacement DXIL library is missing required export '%s'.", export_name.c_str());
+            return false;
+        }
+    }
+
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(graphics)

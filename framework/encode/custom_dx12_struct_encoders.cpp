@@ -528,7 +528,72 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_RAYTRACING_OPACITY_MICR
     encoder->EncodeEnumValue(value.Format);
 }
 
-void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_DESC& value)
+void EncodeStruct(ParameterEncoder*                         encoder,
+                  const D3D12_GRAPHICS_PIPELINE_STATE_DESC& value,
+                  format::HandleId                          root_signature)
+{
+    encoder->EncodeHandleIdValue(root_signature);
+    EncodeStruct(encoder, value.VS);
+    EncodeStruct(encoder, value.PS);
+    EncodeStruct(encoder, value.DS);
+    EncodeStruct(encoder, value.HS);
+    EncodeStruct(encoder, value.GS);
+    EncodeStruct(encoder, value.StreamOutput);
+    EncodeStruct(encoder, value.BlendState);
+    encoder->EncodeUInt32Value(value.SampleMask);
+    EncodeStruct(encoder, value.RasterizerState);
+    EncodeStruct(encoder, value.DepthStencilState);
+    EncodeStruct(encoder, value.InputLayout);
+    encoder->EncodeEnumValue(value.IBStripCutValue);
+    encoder->EncodeEnumValue(value.PrimitiveTopologyType);
+    encoder->EncodeUInt32Value(value.NumRenderTargets);
+    encoder->EncodeEnumArray(value.RTVFormats, 8);
+    encoder->EncodeEnumValue(value.DSVFormat);
+    EncodeStruct(encoder, value.SampleDesc);
+    encoder->EncodeUInt32Value(value.NodeMask);
+    EncodeStruct(encoder, value.CachedPSO);
+    encoder->EncodeEnumValue(value.Flags);
+}
+
+void EncodeStruct(ParameterEncoder*                        encoder,
+                  const D3D12_COMPUTE_PIPELINE_STATE_DESC& value,
+                  format::HandleId                         root_signature)
+{
+    encoder->EncodeHandleIdValue(root_signature);
+    EncodeStruct(encoder, value.CS);
+    encoder->EncodeUInt32Value(value.NodeMask);
+    EncodeStruct(encoder, value.CachedPSO);
+    encoder->EncodeEnumValue(value.Flags);
+}
+
+void EncodeStructPtr(ParameterEncoder*                         encoder,
+                     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* value,
+                     format::HandleId                          root_signature)
+{
+    encoder->EncodeStructPtrPreamble(value);
+    if (value != nullptr)
+    {
+        EncodeStruct(encoder, *value, root_signature);
+    }
+}
+
+void EncodeStructPtr(ParameterEncoder*                        encoder,
+                     const D3D12_COMPUTE_PIPELINE_STATE_DESC* value,
+                     format::HandleId                         root_signature)
+{
+    encoder->EncodeStructPtrPreamble(value);
+    if (value != nullptr)
+    {
+        EncodeStruct(encoder, *value, root_signature);
+    }
+}
+
+namespace
+{
+
+void EncodePipelineStateStream(ParameterEncoder*                       encoder,
+                               const D3D12_PIPELINE_STATE_STREAM_DESC& value,
+                               const format::HandleId*                 root_signature)
 {
     encoder->EncodeSizeTValue(value.SizeInBytes);
 
@@ -548,7 +613,14 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_D
                 {
                     auto subobject = reinterpret_cast<format::Dx12SignatureSubobject*>(current);
                     encoder->EncodeEnumValue(type);
-                    encoder->EncodeObjectValue(subobject->value);
+                    if (root_signature != nullptr)
+                    {
+                        encoder->EncodeHandleIdValue(*root_signature);
+                    }
+                    else
+                    {
+                        encoder->EncodeObjectValue(subobject->value);
+                    }
                     offset += sizeof(*subobject);
                     break;
                 }
@@ -745,6 +817,31 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_D
     }
 }
 
+} // namespace
+
+void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_DESC& value)
+{
+    EncodePipelineStateStream(encoder, value, nullptr);
+}
+
+void EncodeStruct(ParameterEncoder*                       encoder,
+                  const D3D12_PIPELINE_STATE_STREAM_DESC& value,
+                  format::HandleId                        root_signature)
+{
+    EncodePipelineStateStream(encoder, value, &root_signature);
+}
+
+void EncodeStructPtr(ParameterEncoder*                       encoder,
+                     const D3D12_PIPELINE_STATE_STREAM_DESC* value,
+                     format::HandleId                        root_signature)
+{
+    encoder->EncodeStructPtrPreamble(value);
+    if (value != nullptr)
+    {
+        EncodeStruct(encoder, *value, root_signature);
+    }
+}
+
 void EncodeD3D12FeatureStruct(ParameterEncoder* encoder, void* feature_data, D3D12_FEATURE feature)
 {
     switch (feature)
@@ -936,6 +1033,12 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_OBJECT_DESC& valu
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value)
 {
     encoder->EncodeEnumValue(value.Type);
+
+    EncodeStateSubobjectDescription(encoder, value);
+}
+
+bool EncodeStateSubobjectDescription(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value)
+{
     if (value.pDesc)
     {
         switch (value.Type)
@@ -1034,9 +1137,11 @@ void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value)
                 GFXRECON_LOG_WARNING("Pipeline state subobject encoding encountered unrecognized subobject type "
                                      "D3D12_STATE_SUBOBJECT_TYPE = %d, which may cause capture to fail.",
                                      value.Type);
-                break;
+                return false;
         }
     }
+
+    return true;
 }
 
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION& value)

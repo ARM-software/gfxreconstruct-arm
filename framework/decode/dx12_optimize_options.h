@@ -26,6 +26,8 @@
 
 #include "decode/optimize_options.h"
 
+#include <string>
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -37,6 +39,7 @@ struct Dx12OptimizationOptions : public OptimizationOptions
     bool optimize_resource_values_experimental{ false };
     bool optimize_resource_values_offline{ false };
     bool no_default{ false };
+    std::string replace_shader_dir{};
 
     int32_t                      override_gpu_index{ -1 };
     std::unordered_set<uint64_t> remove_device_ids{};

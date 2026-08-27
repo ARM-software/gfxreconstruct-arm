@@ -30,6 +30,7 @@
 #include "dx12_raytracing_modifier.h"
 #include "dx12_redundancy_modifier.h"
 #include "dx12_resource_aliasing_modifier.h"
+#include "dx12_shader_replacement_modifier.h"
 #include "decode/dx12_object_info.h"
 #include "generated/generated_dx12_replay_consumer.h"
 #include "decode/dx12_resource_value_tracker.h"
@@ -489,6 +490,8 @@ GetDx12OptimizationData(const std::string& input_filename, const decode::Dx12Opt
         auto raytracing_modifier_consumer =
             std::make_unique<gfxrecon::decode::Dx12RayTracingModifier>(options.override_gpu_index);
         auto resource_aliasing_modifier_consumer = std::make_unique<gfxrecon::decode::Dx12ResourceAliasingModifier>();
+        auto shader_replacement_modifier_consumer =
+            std::make_unique<gfxrecon::decode::Dx12ShaderReplacementModifier>(options.replace_shader_dir);
 
         if (!options.no_default)
         {
@@ -508,6 +511,10 @@ GetDx12OptimizationData(const std::string& input_filename, const decode::Dx12Opt
         else
         {
             GFXRECON_WRITE_CONSOLE("Skipping default DX12 optimizations.");
+        }
+        if (!options.replace_shader_dir.empty())
+        {
+            decoder.AddConsumer(shader_replacement_modifier_consumer.get());
         }
 
         file_processor.AddDecoder(&decoder);
@@ -536,6 +543,10 @@ GetDx12OptimizationData(const std::string& input_filename, const decode::Dx12Opt
         if (resource_aliasing_modifier_consumer->CanOptimize() && !options.no_default)
         {
             result->modifiers.push_back(std::move(resource_aliasing_modifier_consumer));
+        }
+        if (shader_replacement_modifier_consumer->CanOptimize())
+        {
+            result->modifiers.push_back(std::move(shader_replacement_modifier_consumer));
         }
     }
     return result;
@@ -593,7 +604,7 @@ bool Dx12OptimizeFile(std::string input_filename, std::string output_filename, d
 {
     // Return early if no DX12 optimizations were enabled.
     if (!(options.remove_redundant_psos || options.remove_redundant_resources || options.optimize_resource_values ||
-          options.optimize_resource_values_offline))
+          options.optimize_resource_values_offline || !options.replace_shader_dir.empty()))
     {
         return true;
     }

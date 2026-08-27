@@ -56,6 +56,7 @@ constexpr char kDx12OptimizeDxr[]             = "--dxr";
 constexpr char kDx12OptimizeDxrExperimental[] = "--dxr-experimental";
 constexpr char kDx12OptimizeDxrOffline[]      = "--dxr-offline";
 constexpr char kDx12RemoveDeviceIds[]         = "--remove-device-ids";
+constexpr char kDx12ReplaceShadersArgument[]  = "--replace-shaders-dx12";
 
 void OptimizeDx12Feature::RegisterDetectionDecoder(decode::FileProcessor& file_processor, uint64_t block_limit)
 {
@@ -77,7 +78,8 @@ bool OptimizeDx12Feature::ShouldRun(const util::ArgumentParser& args) const
     bool manual_mode = args.IsOptionSet(kDx12OptimizeDxr) || args.IsOptionSet(kDx12OptimizeDxrExperimental) ||
                        args.IsOptionSet(kD3d12PsoRemoval) || args.IsOptionSet(kD3d12ResourceRemoval) ||
                        args.IsOptionSet(kD3d12NoDefault) || args.IsOptionSet(kDx12OptimizeDxrOffline) ||
-                       args.IsArgumentSet(kDx12RemoveDeviceIds) || args.IsArgumentSet(kRemoveThreadArgument);
+                       args.IsArgumentSet(kDx12RemoveDeviceIds) || args.IsArgumentSet(kDx12ReplaceShadersArgument) ||
+                       args.IsArgumentSet(kRemoveThreadArgument);
     return manual_mode || WasDetected();
 }
 
@@ -107,7 +109,12 @@ std::vector<util::FeatureOptionDesc> OptimizeDx12Feature::GetOptionDescs() const
                  "capture devices." },
                true,
                kOverrideGpuArgument },
-             { "<ids>", { "Remove the specified devices from the D3D12 trace." }, true, kDx12RemoveDeviceIds } };
+             { "<ids>", { "Remove the specified devices from the D3D12 trace." }, true, kDx12RemoveDeviceIds },
+             { "<dir>",
+               { "Replace D3D12 pipeline shader bytecode with matching files in <dir>",
+                 "if found. See gfxrecon-extract." },
+               true,
+               kDx12ReplaceShadersArgument } };
 }
 
 decode::Dx12OptimizationOptions OptimizeDx12Feature::BuildOptions(const util::ArgumentParser& args) const
@@ -119,6 +126,7 @@ decode::Dx12OptimizationOptions OptimizeDx12Feature::BuildOptions(const util::Ar
     options.remove_redundant_psos                 = args.IsOptionSet(kD3d12PsoRemoval);
     options.remove_redundant_resources            = args.IsOptionSet(kD3d12ResourceRemoval);
     options.no_default                            = args.IsOptionSet(kD3d12NoDefault);
+    options.replace_shader_dir                    = args.GetArgumentValue(kDx12ReplaceShadersArgument);
 
     if (!options.optimize_resource_values)
     {

@@ -119,6 +119,11 @@ class Dx12ShaderTool
                                                              uint32_t                 subobject_index,
                                                              std::unique_ptr<char[]>& out_code,
                                                              size_t&                  out_size);
+
+    // Verifies that a replacement DXIL library retains the original library's exported functions.
+    static bool ValidateStateObjectDxilLibrary(const D3D12_DXIL_LIBRARY_DESC& original_library,
+                                               const void*                    replacement_code,
+                                               size_t                         replacement_size);
 };
 
 GFXRECON_END_NAMESPACE(graphics)

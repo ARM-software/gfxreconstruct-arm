@@ -65,9 +65,28 @@ void EncodeStruct(ParameterEncoder* encoder, const LARGE_INTEGER& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_RAYTRACING_OPACITY_MICROMAP_DESC& value);
 
 // Types requiring special processing.
+void EncodeStruct(ParameterEncoder*                         encoder,
+                  const D3D12_GRAPHICS_PIPELINE_STATE_DESC& value,
+                  format::HandleId                          root_signature);
+void EncodeStruct(ParameterEncoder*                        encoder,
+                  const D3D12_COMPUTE_PIPELINE_STATE_DESC& value,
+                  format::HandleId                         root_signature);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_PIPELINE_STATE_STREAM_DESC& value);
+void EncodeStruct(ParameterEncoder*                       encoder,
+                  const D3D12_PIPELINE_STATE_STREAM_DESC& value,
+                  format::HandleId                        root_signature);
+void EncodeStructPtr(ParameterEncoder*                         encoder,
+                     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* value,
+                     format::HandleId                          root_signature);
+void EncodeStructPtr(ParameterEncoder*                        encoder,
+                     const D3D12_COMPUTE_PIPELINE_STATE_DESC* value,
+                     format::HandleId                         root_signature);
+void EncodeStructPtr(ParameterEncoder*                       encoder,
+                     const D3D12_PIPELINE_STATE_STREAM_DESC* value,
+                     format::HandleId                        root_signature);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_OBJECT_DESC& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value);
+bool EncodeStateSubobjectDescription(ParameterEncoder* encoder, const D3D12_STATE_SUBOBJECT& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION& value);
 void EncodeStruct(ParameterEncoder* encoder, const D3D12_GENERIC_PROGRAM_DESC& value);
 void EncodeD3D12FeatureStruct(ParameterEncoder* encoder, void* feature_data, D3D12_FEATURE feature);
