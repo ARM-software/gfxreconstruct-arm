@@ -104,6 +104,15 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
     std::vector<format::DescriptorDataLocationInfo>
     GetDescriptorsInFillMemory(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
 
+    void                        RecordDescriptor(uint64_t descriptor_addr, size_t data_size, const uint8_t* data);
+    const std::vector<uint8_t>& GetDescriptorPayload(const format::DescriptorDataLocationInfo& location) const;
+
+    void FindCopiedDescriptors(uint64_t                                         memory_id,
+                               uint64_t                                         offset,
+                               uint64_t                                         size,
+                               const uint8_t*                                   data,
+                               std::vector<format::DescriptorDataLocationInfo>* locations);
+
     void WriteFixDescriptorDataCmd(format::HandleId                    memory_id,
                                    uint64_t                            num_of_locations,
                                    format::DescriptorDataLocationInfo* desc_locations);
@@ -174,17 +183,24 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
     // All command buffer entries
     std::unordered_map<format::HandleId, CommandBufferInfo> command_buffer_entries_;
 
-    // -----address of memory saved descriptor ----- pair <desc location info,descriptor data>
-    typedef std::unordered_map<uint64_t, std::pair<format::DescriptorDataLocationInfo, std::vector<uint8_t>>>
-        DescriptorLocationMap;
+    // -----address of memory saved descriptor ----- descriptor location history
+    using DescriptorHistory     = std::vector<format::DescriptorDataLocationInfo>;
+    using DescriptorLocationMap = std::unordered_map<uint64_t, DescriptorHistory>;
 
-    // -----memory handle id ----- address of memory saved descriptor ----- pair <desc location info, descriptor data>
+    // -----memory handle id ----- address of memory saved descriptor ----- descriptor location history
     std::unordered_map<format::HandleId, DescriptorLocationMap> device_memory_descriptor_locations;
 
-    // address of memory saved descriptor ----- desc location info
-    DescriptorLocationMap descriptor_locations;
+    struct DescriptorVersion
+    {
+        uint64_t descriptor_addr;
+        uint64_t version;
+    };
 
     VulkanOptimizationOptions options_;
+    // vkGetDescriptorEXT payload generations recorded during the first pass. Version numbers are one-based.
+    std::unordered_map<uint64_t, std::vector<std::vector<uint8_t>>> descriptor_histories_;
+    std::unordered_map<uint64_t, uint64_t>                          descriptor_versions_seen_;
+    std::unordered_map<uint64_t, std::vector<DescriptorVersion>>    descriptor_versions_by_prefix_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

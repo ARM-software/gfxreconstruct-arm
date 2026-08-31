@@ -2355,11 +2355,18 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         size_t               dataSize;
         std::vector<uint8_t> descriptor;
     };
-    // captured descriptor addr ---> replayed descriptor data
-    std::unordered_map<uint64_t, DescriptorData> descriptor_data_map;
+    // captured descriptor addr ---> replayed descriptor generations
+    std::unordered_map<uint64_t, std::vector<DescriptorData>> descriptor_data_map;
 
-    typedef std::unordered_map<uint64_t, std::pair<format::DescriptorDataLocationInfo, std::vector<uint8_t>>>
-                          DescriptorLocationMap;
+    // descriptor offset in the pending FillMemory command ---> replayed descriptor data
+    // The same captured descriptor can be copied to multiple destination offsets.
+
+    struct DescriptorReplacement
+    {
+        format::DescriptorDataLocationInfo location;
+        std::vector<uint8_t>               replay_data;
+    };
+    using DescriptorLocationMap = std::unordered_map<uint64_t, DescriptorReplacement>;
     DescriptorLocationMap descriptor_locations;
 
     application::Application& GetApplication() { return *application_; }

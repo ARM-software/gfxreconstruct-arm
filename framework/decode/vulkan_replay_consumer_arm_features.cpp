@@ -124,13 +124,6 @@ void VulkanReplayConsumerArmFeatures::DisableSubpassFusion(
 
 void VulkanReplayConsumerArmFeatures::ProcessFillMemoryCommandDeviceAddresses(const uint8_t* data)
 {
-    for (auto& entry : consumer_->descriptor_locations)
-    {
-        format::DescriptorDataLocationInfo loc_info = entry.second.first;
-        uint8_t*                           dest     = (uint8_t*)(data + loc_info.descriptor_offset_in_memory);
-        util::platform::MemoryCopy(dest, loc_info.new_size, entry.second.second.data(), loc_info.new_size);
-    }
-    consumer_->descriptor_locations.clear();
 
     for (format::AddressLocationInfo& location : consumer_->device_memory_address_locations)
     {
@@ -148,6 +141,15 @@ void VulkanReplayConsumerArmFeatures::ProcessFillMemoryCommandDeviceAddresses(co
         std::memcpy(old_value_ptr, location.new_handles, location.group_size);
     }
     consumer_->shader_group_handle_locations.clear();
+
+    for (auto& entry : consumer_->descriptor_locations)
+    {
+        const auto& replacement = entry.second;
+        uint8_t*    dest        = (uint8_t*)(data + replacement.location.descriptor_offset_in_memory);
+        util::platform::MemoryCopy(
+            dest, replacement.replay_data.size(), replacement.replay_data.data(), replacement.replay_data.size());
+    }
+    consumer_->descriptor_locations.clear();
 }
 
 void VulkanReplayConsumerArmFeatures::ProcessDeviceFaultData(VkResult                    replay,

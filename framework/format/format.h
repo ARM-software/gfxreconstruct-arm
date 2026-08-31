@@ -371,7 +371,8 @@ struct DescriptorDataLocationInfo
     uint64_t descriptor_offset_in_memory;        // offset from the start of one block of filled-memory
     uint64_t descriptor_addr;                    // captured memory pointer to store descriptor
     uint64_t orig_size;
-    uint64_t new_size;
+    // One-based generation of the descriptor payload at descriptor_addr. Zero selects the latest generation.
+    uint64_t descriptor_generation;
     bool     is_descriptor_buffer;
 };
 

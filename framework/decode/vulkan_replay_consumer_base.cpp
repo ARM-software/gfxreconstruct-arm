@@ -1146,15 +1146,20 @@ void VulkanReplayConsumerBase::ProcessFixDescriptorDataCommand(
 {
     for (uint64_t i = 0; i < header.num_of_locations; i++)
     {
-        DescriptorData replayed_data = descriptor_data_map[infos[i].descriptor_addr];
+        auto history = descriptor_data_map.find(infos[i].descriptor_addr);
+        GFXRECON_ASSERT(history != descriptor_data_map.end() && !history->second.empty());
+
+        uint64_t              version       = infos[i].descriptor_generation;
+        const DescriptorData& replayed_data = (version == 0) ? history->second.back() : history->second.at(version - 1);
 
         auto it = descriptor_locations
-                      .emplace(infos[i].descriptor_addr,
-                               std::make_pair(infos[i], std::vector<uint8_t>(replayed_data.dataSize)))
+                      .emplace(infos[i].descriptor_offset_in_memory,
+                               DescriptorReplacement{ infos[i], std::vector<uint8_t>(replayed_data.dataSize) })
                       .first;
-        it->second.first.new_size = replayed_data.dataSize;
-        util::platform::MemoryCopy(
-            it->second.second.data(), replayed_data.dataSize, replayed_data.descriptor.data(), replayed_data.dataSize);
+        util::platform::MemoryCopy(it->second.replay_data.data(),
+                                   it->second.replay_data.size(),
+                                   replayed_data.descriptor.data(),
+                                   replayed_data.dataSize);
     }
 }
 
@@ -15315,7 +15320,7 @@ void VulkanReplayConsumerBase::OverrideGetDescriptorEXT(
     data.dataSize = dataSize;
     data.descriptor.resize(dataSize);
     util::platform::MemoryCopy(data.descriptor.data(), dataSize, pDescriptor->GetOutputPointer(), dataSize);
-    descriptor_data_map[pDescriptor->GetAddress()] = data;
+    descriptor_data_map[pDescriptor->GetAddress()].emplace_back(std::move(data));
 }
 
 void VulkanReplayConsumerBase::OverrideCmdBindDescriptorBuffersEXT(
