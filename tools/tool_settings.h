@@ -149,6 +149,7 @@ const char kSkipGetFenceRanges[]                  = "--skip-get-fence-ranges";
 const char kDisableSubpassFusionOption[]          = "--dsf";
 const char kMarkingLayersArgument[]               = "--marking-layers";
 const char kWaitBeforePresent[]                   = "--wait-before-present";
+const char kAnnotateInjectedCommands[]            = "--annotate-injected-commands";
 const char kPrintBlockInfoAllOption[]             = "--pbi-all";
 const char kPrintBlockInfosArgument[]             = "--pbis";
 const char kSkipIndexArgument[]                   = "--skip-index";
@@ -1479,6 +1480,10 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     if (arg_parser.IsOptionSet(kWaitBeforePresent))
     {
         replay_options.wait_before_present = true;
+    }
+    if (arg_parser.IsOptionSet(kAnnotateInjectedCommands))
+    {
+        replay_options.annotate_injected_commands = true;
     }
     if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
     {

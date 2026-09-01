@@ -46,14 +46,13 @@ class VulkanAddressReplacerARM : public VulkanAddressReplacerBase
     ~VulkanAddressReplacerARM() = default;
 
     VulkanAddressReplacerARM(const VulkanDeviceInfo*              device_info,
-                             const graphics::VulkanDeviceTable*   device_table,
                              const decode::CommonObjectInfoTable& object_table);
 
     //! prevent copying
     VulkanAddressReplacerARM(const VulkanAddressReplacerARM&) = delete;
 
-    //! allow moving
-    VulkanAddressReplacerARM(VulkanAddressReplacerARM&& other) noexcept;
+    //! prevent moving
+    VulkanAddressReplacerARM(VulkanAddressReplacerARM&&) = delete;
 
     /**
      * @brief   ProcessCmdTraceRays will check and potentially correct input-parameters to 'VkCmdTraceRays',
@@ -123,10 +122,7 @@ class VulkanAddressReplacerARM : public VulkanAddressReplacerBase
     void ProcessSpecializationInfo(VkSpecializationInfo*             info,
                                    const VulkanDeviceAddressTracker& address_tracker) override;
 
-    friend void swap(VulkanAddressReplacerARM& lhs, VulkanAddressReplacerARM& rhs) noexcept;
-
   private:
-    const graphics::VulkanDeviceTable*   device_table_      = nullptr;
     const VulkanDeviceInfo*              device_info_       = nullptr;
     const decode::CommonObjectInfoTable* object_table_      = nullptr;
     VkPhysicalDeviceMemoryProperties     memory_properties_ = {};
@@ -134,9 +130,6 @@ class VulkanAddressReplacerARM : public VulkanAddressReplacerBase
     const decode::VulkanPhysicalDeviceInfo* physical_device_info_ = nullptr;
     VkDevice                                device_               = VK_NULL_HANDLE;
     decode::VulkanResourceAllocator*        resource_allocator_   = nullptr;
-
-    PFN_vkGetBufferDeviceAddress       get_device_address_fn_             = nullptr;
-    PFN_vkGetPhysicalDeviceProperties2 get_physical_device_properties_fn_ = nullptr;
 
   private:
     bool address_remap(VkDeviceAddress& capture_address, const VulkanDeviceAddressTracker& address_tracker);

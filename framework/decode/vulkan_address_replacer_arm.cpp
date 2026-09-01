@@ -29,18 +29,13 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanAddressReplacerARM::VulkanAddressReplacerARM(const VulkanDeviceInfo*              device_info,
-                                                   const graphics::VulkanDeviceTable*   device_table,
                                                    const decode::CommonObjectInfoTable& object_table) :
-    device_table_(device_table),
     device_info_(device_info), object_table_(&object_table)
 {
-    GFXRECON_ASSERT(device_info != nullptr && device_table != nullptr)
+    GFXRECON_ASSERT(device_info != nullptr)
 
     const VulkanPhysicalDeviceInfo* physical_device_info =
         object_table.GetVkPhysicalDeviceInfo(device_info_->parent_id);
-    get_device_address_fn_ = physical_device_info->capture_api_version >= VK_API_VERSION_1_2
-                                 ? device_table->GetBufferDeviceAddress
-                                 : device_table->GetBufferDeviceAddressKHR;
 
     if (physical_device_info != nullptr)
     {
@@ -48,12 +43,6 @@ VulkanAddressReplacerARM::VulkanAddressReplacerARM(const VulkanDeviceInfo*      
         GFXRECON_ASSERT(physical_device_info->replay_device_info->memory_properties.has_value());
         memory_properties_ = *physical_device_info->replay_device_info->memory_properties;
     }
-}
-
-VulkanAddressReplacerARM::VulkanAddressReplacerARM(VulkanAddressReplacerARM&& other) noexcept :
-    VulkanAddressReplacerARM()
-{
-    swap(*this, other);
 }
 
 void VulkanAddressReplacerARM::ProcessCmdTraceRays(
@@ -65,8 +54,6 @@ void VulkanAddressReplacerARM::ProcessCmdTraceRays(
     const decode::VulkanDeviceAddressTracker&                                                   address_tracker,
     const std::unordered_map<graphics::shader_group_handle_t, graphics::shader_group_handle_t>& group_handle_map)
 {
-    GFXRECON_ASSERT(device_table_ != nullptr);
-
     // NOTE: we expect this map to be populated here, but not for older captures (before #1844) using trimming.
     if (group_handle_map.empty())
     {
@@ -110,8 +97,6 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
     const VulkanDeviceAddressTracker&            address_tracker,
     bool                                         process_scratch_buffers)
 {
-    GFXRECON_ASSERT(device_table_ != nullptr);
-
     // TODO: testing only -> remove when closing issue #1526
     constexpr bool force_replace = false;
 
@@ -310,14 +295,6 @@ void VulkanAddressReplacerARM::ProcessSpecializationInfo(VkSpecializationInfo*  
     {
         address_remap(*reinterpret_cast<VkDeviceAddress*>(data + offset), address_tracker);
     }
-}
-
-void swap(VulkanAddressReplacerARM& lhs, VulkanAddressReplacerARM& rhs) noexcept
-{
-    std::swap(lhs.device_table_, rhs.device_table_);
-    std::swap(lhs.memory_properties_, rhs.memory_properties_);
-    std::swap(lhs.device_info_, rhs.device_info_);
-    std::swap(lhs.get_device_address_fn_, rhs.get_device_address_fn_);
 }
 
 bool VulkanAddressReplacerARM::address_remap(VkDeviceAddress&                  capture_address,

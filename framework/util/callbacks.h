@@ -24,8 +24,6 @@
 #ifndef GFXRECON_UTIL_CALLBACKS_H
 #define GFXRECON_UTIL_CALLBACKS_H
 
-#include <atomic>
-
 #include "util/defines.h"
 #include "util/marking_layers.h"
 
@@ -48,7 +46,7 @@ void EndInjectedCommands();
 struct MarkInjectedCommandsHelper
 {
     // allow nested usage without hitting an assertion
-    static thread_local std::atomic<uint32_t> semaphore;
+    static thread_local uint32_t semaphore;
 
     MarkInjectedCommandsHelper();
     ~MarkInjectedCommandsHelper();

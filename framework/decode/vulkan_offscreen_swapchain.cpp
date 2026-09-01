@@ -24,12 +24,12 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "decode/decoder_util.h"
 #include "generated/generated_vulkan_enum_to_string.h"
-#include "util/callbacks.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-void VulkanOffscreenSwapchain::CleanDeviceResources(VkDevice device, const graphics::VulkanDeviceTable* device_table)
+void VulkanOffscreenSwapchain::CleanDeviceResources(VkDevice                                   device,
+                                                    const graphics::VulkanInjectedDeviceCalls* device_table)
 {
     VulkanVirtualSwapchain::CleanDeviceResources(device, device_table);
 
@@ -88,16 +88,16 @@ void VulkanOffscreenSwapchain::DestroySurface(PFN_vkDestroySurfaceKHR      func,
                                               const VkAllocationCallbacks* allocator)
 {}
 
-VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                              original_result,
-                                                      PFN_vkCreateSwapchainKHR              func,
-                                                      const VulkanDeviceInfo*               device_info,
-                                                      const VkSwapchainCreateInfoKHR*       create_info,
-                                                      const VkAllocationCallbacks*          allocator,
-                                                      HandlePointerDecoder<VkSwapchainKHR>* swapchain,
-                                                      const graphics::VulkanDeviceTable*    device_table)
+VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                                   original_result,
+                                                      PFN_vkCreateSwapchainKHR                   func,
+                                                      const VulkanDeviceInfo*                    device_info,
+                                                      const VkSwapchainCreateInfoKHR*            create_info,
+                                                      const VkAllocationCallbacks*               allocator,
+                                                      HandlePointerDecoder<VkSwapchainKHR>*      swapchain,
+                                                      const graphics::VulkanInjectedDeviceCalls& injected_calls)
 {
     GFXRECON_ASSERT(device_info);
-    device_table_ = device_table;
+    injected_calls_ = injected_calls;
 
     const format::HandleId* id               = swapchain->GetPointer();
     VkSwapchainKHR*         replay_swapchain = swapchain->GetHandlePointer();
@@ -111,9 +111,9 @@ VkResult VulkanOffscreenSwapchain::CreateSwapchainKHR(VkResult                  
     }
     swapchain_resources_[*replay_swapchain]->forced_offscreen = true;
 
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
-    default_queue_ = GetDeviceQueue(device_table_, device_info, default_queue_family_index_, 0);
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
+    // The device-queue query has no corresponding block in the capture file.
+    auto injected  = injected_calls_->Open();
+    default_queue_ = GetDeviceQueue(injected.GetTable(), device_info, default_queue_family_index_, 0);
 
     return original_result;
 }
@@ -239,9 +239,8 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
 
     if (swapchain_options_.use_ext_frame_boundary || present_info->waitSemaphoreCount > 0)
     {
-        util::MarkingLayersUtil::instance().BeginInjected(queue_info);
-        result = device_table_->QueueSubmit(queue_info->handle, 1, &submit_info, VK_NULL_HANDLE);
-        util::MarkingLayersUtil::instance().EndInjected(queue_info);
+        auto injected = injected_calls_->Open();
+        result        = injected->QueueSubmit(queue_info->handle, 1, &submit_info, VK_NULL_HANDLE);
 
         if (result != VK_SUCCESS)
         {
@@ -258,7 +257,7 @@ void VulkanOffscreenSwapchain::PresentImageAdHoc(const VulkanDeviceInfo*        
                                                  const VulkanImageInfo*                     image_info,
                                                  VulkanInstanceInfo*                        instance_info,
                                                  const graphics::VulkanInstanceTable*       instance_table,
-                                                 const graphics::VulkanDeviceTable*         device_table,
+                                                 const graphics::VulkanInjectedDeviceCalls& injected_calls,
                                                  application::Application*                  application,
                                                  const std::optional<std::array<float, 2>>& scale)
 {
@@ -285,10 +284,11 @@ void VulkanOffscreenSwapchain::PresentImageAdHoc(const VulkanDeviceInfo*        
     submitInfo.signalSemaphoreCount = 0;
     submitInfo.pSignalSemaphores    = nullptr;
 
-    VkQueue queue;
+    auto injected = injected_calls.Open();
 
-    device_table->GetDeviceQueue(device_info->handle, 0, 0, &queue);
-    device_table->QueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkQueue queue;
+    injected->GetDeviceQueue(device_info->handle, 0, 0, &queue);
+    injected->QueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const VulkanDeviceInfo* device_info,
@@ -300,6 +300,8 @@ VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const Vu
     GFXRECON_ASSERT(semaphore != VK_NULL_HANDLE || fence != VK_NULL_HANDLE);
 
     VkResult result = VK_ERROR_UNKNOWN;
+
+    auto injected = injected_calls_->Open();
 
     switch (external_sync_type)
     {
@@ -316,9 +318,7 @@ VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const Vu
             submit_info.signalSemaphoreCount = (semaphore == VK_NULL_HANDLE ? 0 : 1);
             submit_info.pSignalSemaphores    = (semaphore == VK_NULL_HANDLE ? nullptr : &semaphore);
 
-            util::MarkingLayersUtil::instance().BeginInjected(device_info);
-            result = device_table_->QueueSubmit(default_queue_, 1, &submit_info, fence);
-            util::MarkingLayersUtil::instance().EndInjected(device_info);
+            result = injected->QueueSubmit(default_queue_, 1, &submit_info, fence);
 
             if (result != VK_SUCCESS)
             {
@@ -341,9 +341,7 @@ VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const Vu
                 import_info.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
                 import_info.fd         = -1;
 
-                util::MarkingLayersUtil::instance().BeginInjected(device_info);
-                result = device_table_->ImportSemaphoreFdKHR(device_info->handle, &import_info);
-                util::MarkingLayersUtil::instance().EndInjected(device_info);
+                result = injected->ImportSemaphoreFdKHR(device_info->handle, &import_info);
 
                 if (result != VK_SUCCESS)
                 {
@@ -365,9 +363,7 @@ VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const Vu
                 import_info.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT;
                 import_info.fd         = -1;
 
-                util::MarkingLayersUtil::instance().BeginInjected(device_info);
-                result = device_table_->ImportFenceFdKHR(device_info->handle, &import_info);
-                util::MarkingLayersUtil::instance().EndInjected(device_info);
+                result = injected->ImportFenceFdKHR(device_info->handle, &import_info);
 
                 if (result != VK_SUCCESS)
                 {

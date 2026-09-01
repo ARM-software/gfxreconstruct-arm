@@ -25,7 +25,6 @@
 #define GFXRECON_DECODE_VULKAN_OBJECT_INFO_H
 
 #include "decode/vulkan_resource_allocator.h"
-#include "decode/vulkan_resource_initializer.h"
 #include "decode/window.h"
 #include "format/format.h"
 #include "generated/generated_vulkan_dispatch_table.h"
@@ -359,6 +358,8 @@ struct VulkanPhysicalDeviceInfo : public VulkanObjectInfo<VkPhysicalDevice>
     // available whenever the application queried them, which trimmed captures replay from their state-block.
     std::vector<VkQueueFamilyProperties> capture_queue_family_properties;
 };
+
+class VulkanResourceInitializer;
 
 struct VulkanDeviceInfo : public VulkanObjectInfo<VkDevice>
 {
