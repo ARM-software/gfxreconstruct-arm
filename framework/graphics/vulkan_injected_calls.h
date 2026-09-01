@@ -23,6 +23,7 @@
 #ifndef GFXRECON_GRAPHICS_VULKAN_INJECTED_CALLS_H
 #define GFXRECON_GRAPHICS_VULKAN_INJECTED_CALLS_H
 
+#include "decode/vulkan_object_info.h"
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "util/callbacks.h"
 #include "util/defines.h"
@@ -82,7 +83,9 @@ class VulkanInjectedDeviceCalls
       private:
         friend class VulkanInjectedDeviceCalls;
 
-        explicit Scope(const VulkanDeviceTable* table) : table_(table) {}
+        explicit Scope(const VulkanDeviceTable* table, const decode::VulkanDeviceInfo* device_info) :
+            mark_helper_(device_info), table_(table)
+        {}
 
         util::MarkInjectedCommandsHelper mark_helper_;
         const VulkanDeviceTable*         table_;
@@ -113,13 +116,13 @@ class VulkanInjectedDeviceCalls
 
     VulkanInjectedDeviceCalls() = delete;
 
-    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table);
+    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, const decode::VulkanDeviceInfo* device_info);
 
     bool IsValid() const { return table_ != nullptr; }
 
     // Opens the injected-commands window for the calling thread and grants
     // access to the dispatch table for its duration.
-    [[nodiscard]] Scope Open() const { return Scope(table_); }
+    [[nodiscard]] Scope Open() const { return Scope(table_, device_info_); }
 
     // Brackets injected commands recorded into command_buffer with a
     // Begin/EndDebugUtilsLabelEXT pair. Requires an open Scope; the parameter
@@ -128,6 +131,8 @@ class VulkanInjectedDeviceCalls
 
   private:
     const VulkanDeviceTable* table_;
+
+    const decode::VulkanDeviceInfo* device_info_;
 };
 
 GFXRECON_END_NAMESPACE(graphics)

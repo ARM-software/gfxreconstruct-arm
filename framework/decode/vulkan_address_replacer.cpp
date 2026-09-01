@@ -174,7 +174,7 @@ decode::VulkanAddressReplacer::buffer_context_t::~buffer_context_t()
     {
         // allocator-internal Vulkan calls below are replay-injected; destruction can run outside
         // any caller-provided scope (e.g. from member-destruction), so mark it here
-        util::MarkInjectedCommandsHelper mark_injected_commands_helper;
+        // util::MarkInjectedCommandsHelper mark_injected_commands_helper;
 
         if (buffer != VK_NULL_HANDLE)
         {

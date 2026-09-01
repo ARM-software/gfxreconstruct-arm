@@ -84,7 +84,7 @@ VkResult TemporaryCommandBuffer::SubmitAndDestroy()
     GFXRECON_ASSERT(command_pool != VK_NULL_HANDLE);
 
     auto           injected = device_table.Open();
-    TemporaryFence fence(device_info.handle, device_table);
+    TemporaryFence fence(&device_info, device_table);
 
     VkResult res = injected->EndCommandBuffer(command_buffer);
     if (res != VK_SUCCESS)

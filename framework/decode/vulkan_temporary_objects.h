@@ -37,8 +37,11 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 // Wrapper class for VkFence. Either holds an existing VkFence or creates and handles destruction of one
 struct TemporaryFence
 {
-    TemporaryFence(VkFence other, VkDevice device, const graphics::VulkanInjectedDeviceCalls& injected_calls) :
-        handle(other), parent_device(device), device_table(injected_calls)
+    TemporaryFence(VkFence                                    other,
+                   const VulkanDeviceInfo*                    device_info,
+                   const graphics::VulkanInjectedDeviceCalls& injected_calls) :
+        handle(other),
+        parent_device(device_info->handle), device_table(injected_calls)
     {
         if (other == VK_NULL_HANDLE)
         {
@@ -58,15 +61,16 @@ struct TemporaryFence
         }
     }
 
-    TemporaryFence(VkFence other, VkDevice device, const graphics::VulkanDeviceTable& dt) :
-        TemporaryFence(other, device, graphics::VulkanInjectedDeviceCalls(&dt))
+    TemporaryFence(VkFence other, const VulkanDeviceInfo* device_info, const graphics::VulkanDeviceTable& dt) :
+        TemporaryFence(other, device_info, graphics::VulkanInjectedDeviceCalls(&dt, device_info))
     {}
 
-    TemporaryFence(VkDevice device, const graphics::VulkanInjectedDeviceCalls& injected_calls) :
-        TemporaryFence(VK_NULL_HANDLE, device, injected_calls)
+    TemporaryFence(const VulkanDeviceInfo* device_info, const graphics::VulkanInjectedDeviceCalls& injected_calls) :
+        TemporaryFence(VK_NULL_HANDLE, device_info, injected_calls)
     {}
 
-    TemporaryFence(VkDevice device, const graphics::VulkanDeviceTable& dt) : TemporaryFence(VK_NULL_HANDLE, device, dt)
+    TemporaryFence(const VulkanDeviceInfo* device_info, const graphics::VulkanDeviceTable& dt) :
+        TemporaryFence(VK_NULL_HANDLE, device_info, dt)
     {}
 
     VkResult Wait()
@@ -127,7 +131,7 @@ struct TemporaryCommandBuffer
     {}
 
     TemporaryCommandBuffer(const VulkanDeviceInfo& dev_info, const graphics::VulkanDeviceTable& dev_table) :
-        TemporaryCommandBuffer(dev_info, graphics::VulkanInjectedDeviceCalls(&dev_table))
+        TemporaryCommandBuffer(dev_info, graphics::VulkanInjectedDeviceCalls(&dev_table, &device_info))
     {}
 
     ~TemporaryCommandBuffer()

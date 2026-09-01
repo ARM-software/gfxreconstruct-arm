@@ -94,12 +94,12 @@ class MarkInjectedCommands : public CallbackBase
 
 thread_local uint32_t MarkInjectedCommandsHelper::semaphore = 0;
 
-MarkInjectedCommandsHelper::MarkInjectedCommandsHelper()
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(const decode::VulkanDeviceInfo* info) : device_info(info)
 {
     // mark injected commands
     if (semaphore++ == 0)
     {
-        // BeginInjectedCommands(); !!!!! DISABLED IN ARM REPOSITORY !!!!!
+        MarkingLayersUtil::instance().BeginInjected(device_info);
     }
 }
 
@@ -108,7 +108,7 @@ MarkInjectedCommandsHelper::~MarkInjectedCommandsHelper()
     // mark end of injected commands
     if (--semaphore == 0)
     {
-        // EndInjectedCommands(); !!!!! DISABLED IN ARM REPOSITORY !!!!!
+        MarkingLayersUtil::instance().EndInjected(device_info);
     }
 }
 

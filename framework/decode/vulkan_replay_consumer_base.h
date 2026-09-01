@@ -1997,7 +1997,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     void AddInstanceTable(VkInstance instance);
 
-    void AddDeviceTable(VkDevice device, PFN_vkGetDeviceProcAddr gpa);
+    void AddDeviceTable(const VulkanDeviceInfo* device_info, PFN_vkGetDeviceProcAddr gpa);
 
     PFN_vkGetDeviceProcAddr GetDeviceAddrProc(VkPhysicalDevice physical_device);
 
@@ -2239,6 +2239,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     std::unordered_map<graphics::VulkanDispatchKey, PFN_vkCreateDevice>      create_device_procs_;
     graphics::InstanceDispatchTablesMap                                      instance_tables_;
     graphics::DeviceDispatchTablesMap                                        device_tables_;
+    std::unordered_map<graphics::VulkanDispatchKey, const VulkanDeviceInfo*> device_infos_;
     std::unordered_map<format::HandleId, format::HandleId>                   device_phy_id_map_;
     std::shared_ptr<application::Application>                                application_;
     CommonObjectInfoTable*                                                   object_info_table_;

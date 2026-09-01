@@ -1516,7 +1516,7 @@ static VkResult SerializeAccelerationStructure(AccelerationStructureDumpResource
         return VK_ERROR_UNKNOWN;
     }
 
-    TemporaryFence fence(device, device_table);
+    TemporaryFence fence(device_info, device_table);
 
     const VkSubmitInfo si = { VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr, 0, nullptr, nullptr, 1, &cmd_buffer, 0, nullptr };
     res                   = device_table.QueueSubmit(compute_queue, 1, &si, fence.handle);

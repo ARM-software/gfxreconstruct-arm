@@ -2157,10 +2157,14 @@ void VulkanReplayConsumerBase::AddInstanceTable(VkInstance instance)
     graphics::LoadVulkanInstanceTable(get_instance_proc_addr_, instance, &table);
 }
 
-void VulkanReplayConsumerBase::AddDeviceTable(VkDevice device, PFN_vkGetDeviceProcAddr gpa)
+void VulkanReplayConsumerBase::AddDeviceTable(const VulkanDeviceInfo* device_info, PFN_vkGetDeviceProcAddr gpa)
 {
-    graphics::VulkanDeviceTable& table = device_tables_[graphics::GetVulkanDispatchKey(device)];
-    graphics::LoadVulkanDeviceTable(gpa, device, &table);
+    graphics::VulkanDispatchKey dispatch_key = graphics::GetVulkanDispatchKey(device_info->handle);
+
+    device_infos_[dispatch_key] = device_info;
+
+    graphics::VulkanDeviceTable& table = device_tables_[dispatch_key];
+    graphics::LoadVulkanDeviceTable(gpa, device_info->handle, &table);
 }
 
 PFN_vkGetDeviceProcAddr VulkanReplayConsumerBase::GetDeviceAddrProc(VkPhysicalDevice physical_device)
@@ -2189,7 +2193,9 @@ const graphics::VulkanDeviceTable* VulkanReplayConsumerBase::GetDeviceTable(cons
 
 graphics::VulkanInjectedDeviceCalls VulkanReplayConsumerBase::GetInjectedDeviceCalls(const void* handle) const
 {
-    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle));
+    auto it = device_infos_.find(graphics::GetVulkanDispatchKey(handle));
+    assert(it != device_infos_.end());
+    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle), it->second);
 }
 
 void* VulkanReplayConsumerBase::PreProcessExternalObject(uint64_t          object_id,
@@ -3420,7 +3426,7 @@ bool VulkanReplayConsumerBase::CheckCommandBufferInfoForFrameBoundary(
 
             VkPhysicalDeviceMemoryProperties memory_properties;
             {
-                util::MarkInjectedCommandsHelper mark_injected_commands_helper;
+                util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info);
                 auto                             instance_table = GetInstanceTable(device_info->parent);
                 GFXRECON_ASSERT(instance_table != nullptr);
 
@@ -3506,7 +3512,7 @@ bool VulkanReplayConsumerBase::CheckPNextChainForFrameBoundary(const VulkanDevic
 
     VkPhysicalDeviceMemoryProperties memory_properties;
     {
-        util::MarkInjectedCommandsHelper mark_injected_commands_helper;
+        util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info);
         auto                             instance_table = GetInstanceTable(device_info->parent);
         GFXRECON_ASSERT(instance_table != nullptr);
 
@@ -4486,7 +4492,9 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
     {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
-    AddDeviceTable(replay_device, get_device_proc_addr);
+
+    device_info->handle = replay_device;
+    AddDeviceTable(device_info, get_device_proc_addr);
 
     auto instance_table = GetInstanceTable(physical_device);
 
