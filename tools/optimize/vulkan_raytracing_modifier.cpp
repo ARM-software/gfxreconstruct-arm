@@ -24,6 +24,7 @@
 #include "vulkan_raytracing_modifier.h"
 
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <unordered_map>
 #include <unordered_set>
@@ -36,6 +37,7 @@
 #include "generated/generated_vulkan_struct_decoders.h"
 #include "decode/vulkan_optimize_options.h"
 #include "util/defines.h"
+#include "util/hash.h"
 #include "util/logging.h"
 #include "util/memory_output_stream.h"
 #include "encode/parameter_buffer.h"
@@ -155,15 +157,16 @@ void VulkanRayTracingModifier::Process_vkGetRayTracingShaderGroupHandlesKHR(
     {
         uint8_t* ptr = (uint8_t*)args.pData.GetPointer() + group * single_entry_size;
 
-        std::vector<uint8_t> data_zero_handle(single_entry_size, 0);
-        if (0 != memcmp(ptr, data_zero_handle.data(), single_entry_size))
+        if (!std::all_of(ptr, ptr + single_entry_size, [](uint8_t v) { return v == 0; }))
         {
             format::ShaderHandleLocationInfo loc{};
             loc.id         = args.pipeline;
             loc.group      = args.firstGroup + group;
             loc.group_size = single_entry_size;
             memcpy(loc.original_handles, ptr, single_entry_size);
-            shader_group_handle_entries_[args.pipeline][args.firstGroup + group] = loc;
+            shader_group_handle_entries_[gfxrecon::util::hash::GenerateCheckSum<uint64_t>(
+                                             loc.original_handles, format::kMaxShaderGroupHandleSize)]
+                .push_back(loc);
         }
     }
 }
@@ -338,31 +341,37 @@ VulkanRayTracingModifier::GetShaderGroupHandlesInFillMemory(const void* data, si
         return {};
     }
 
-    std::vector<format::ShaderHandleLocationInfo> locations;
-    std::vector<uint8_t>                          data_zero_handle(single_shader_group_size, 0);
+    std::vector<format::ShaderHandleLocationInfo> locations_in_fill_memory;
     uint8_t*                                      start = (uint8_t*)data;
     for (int i = 0; i < size / single_shader_group_size; i++)
     {
         uint8_t* ptr = start + i * single_shader_group_size;
-        if (0 == memcmp(ptr, data_zero_handle.data(), single_shader_group_size))
+        if (std::all_of(ptr, ptr + single_shader_group_size, [](uint8_t v) { return v == 0; }))
         {
             continue;
         }
+        auto locations = shader_group_handle_entries_.find(
+            gfxrecon::util::hash::GenerateCheckSum<uint64_t>(ptr, single_shader_group_size));
 
-        for (auto& object : shader_group_handle_entries_)
+        if (locations != shader_group_handle_entries_.end())
         {
-            for (auto& location : object.second)
+            for (auto& location : locations->second)
             {
-                if (0 == memcmp(ptr, location.second.original_handles, single_shader_group_size))
+                const auto& pipeline_info = pipelines_[location.id];
+                if (pipeline_info.destruction_index < block_index_)
                 {
-                    location.second.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
-                    locations.push_back(location.second);
+                    continue;
+                }
+                if (0 == memcmp(ptr, location.original_handles, single_shader_group_size))
+                {
+                    location.offset_in_memory = (uint64_t)ptr - (uint64_t)start;
+                    locations_in_fill_memory.push_back(location);
                     break;
                 }
             }
         }
     }
-    return locations;
+    return locations_in_fill_memory;
 }
 
 void VulkanRayTracingModifier::WriteFixShaderGroupHandleCmd(format::HandleId                  relation_id,
@@ -1265,6 +1274,7 @@ void VulkanRayTracingModifier::Process_vkCreateComputePipelines(const ApiCallInf
     for (uint32_t i = 0; i < args.createInfoCount; i++)
     {
         format::HandleId handle = args.pPipelines.GetPointer()[i];
+        pipelines_[handle]      = PipelineInfo{ handle, call_info.index, std::numeric_limits<uint64_t>::max() };
     }
 }
 
@@ -1876,6 +1886,8 @@ void VulkanRayTracingModifier::Process_vkCreateRayTracingPipelinesNV(const ApiCa
                 skip_address_replacement = true;
             }
         }
+        format::HandleId handle = args.pPipelines.GetPointer()[i];
+        pipelines_[handle]      = PipelineInfo{ handle, call_info.index, std::numeric_limits<uint64_t>::max() };
     }
 }
 
@@ -1900,6 +1912,8 @@ void VulkanRayTracingModifier::Process_vkCreateRayTracingPipelinesKHR(const ApiC
                 skip_address_replacement = true;
             }
         }
+        format::HandleId handle = args.pPipelines.GetPointer()[i];
+        pipelines_[handle]      = PipelineInfo{ handle, call_info.index, std::numeric_limits<uint64_t>::max() };
     }
 }
 
@@ -1924,6 +1938,9 @@ void VulkanRayTracingModifier::Process_vkCreateGraphicsPipelines(const ApiCallIn
                 skip_address_replacement = true;
             }
         }
+
+        format::HandleId handle = args.pPipelines.GetPointer()[i];
+        pipelines_[handle]      = PipelineInfo{ handle, call_info.index, std::numeric_limits<uint64_t>::max() };
     }
 }
 
@@ -1961,6 +1978,16 @@ void VulkanRayTracingModifier::Process_vkFlushMappedMemoryRanges(const ApiCallIn
         }
     }
 }
+
+void VulkanRayTracingModifier::Process_vkDestroyPipeline(const ApiCallInfo& call_info, args::DestroyPipeline& args)
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    pipelines_[args.pipeline].destruction_index = call_info.index;
+};
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

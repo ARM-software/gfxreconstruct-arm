@@ -25,6 +25,7 @@
 #define GFXRECON_TOOLS_OPTIMIZE_VULKAN_RAYTRACING_MODIFIER_H
 
 #include <cstdint>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
@@ -191,6 +192,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     void Process_vkFlushMappedMemoryRanges(const ApiCallInfo& call_info, args::FlushMappedMemoryRanges& args) override;
 
+    void Process_vkDestroyPipeline(const ApiCallInfo& call_info, args::DestroyPipeline& args) override;
+
   private:
     void ProcessCmdPushConstants(format::HandleId         commandBuffer,
                                  format::HandleId         layout,
@@ -287,10 +290,9 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     struct PipelineInfo
     {
-        format::HandleId handle;
-        VkStructureType  sType;
-        uint64_t         creation_index;
-        uint64_t         destruction_index;
+        format::HandleId handle{ format::kNullHandleId };
+        uint64_t         creation_index{ 0 };
+        uint64_t         destruction_index{ std::numeric_limits<uint64_t>::max() };
     };
 
     struct CommandBufferInfo
@@ -339,9 +341,10 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // -----acceleration structure device address-----set of unique handle ids
     std::unordered_map<uint64_t, std::unordered_set<format::HandleId>> acceleration_structure_device_addresses_;
 
+    std::unordered_map<format::HandleId, PipelineInfo> pipelines_;
+
     // -----pipeline handle-----group index-----SGH location info
-    std::unordered_map<format::HandleId, std::unordered_map<uint64_t, format::ShaderHandleLocationInfo>>
-        shader_group_handle_entries_;
+    std::unordered_map<uint64_t, std::vector<format::ShaderHandleLocationInfo>> shader_group_handle_entries_;
 
     // All command buffer entries
     std::unordered_map<format::HandleId, CommandBufferInfo> command_buffer_entries_;
