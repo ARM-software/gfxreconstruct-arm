@@ -327,7 +327,7 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     }
 
     // Idle all devices before destroying other resources.
-    WaitDevicesIdle();
+    VulkanReplayConsumerBase::WaitDevicesIdle();
 
     acceleration_structure_builders_.clear();
     micromap_builders_.clear();
@@ -1605,11 +1605,15 @@ void VulkanReplayConsumerBase::ProcessSetRayTracingShaderGroupHandlesCommand(for
     VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(device_id);
     if (device_info != nullptr)
     {
-        // There should only be one dataset per pipeline.
-        assert(device_info->shader_group_handles.find(pipeline_id) == device_info->shader_group_handles.end());
-
-        // Store the ray tracing shader group handle data to use at ray tracing pipeline creation.
-        device_info->shader_group_handles.emplace(pipeline_id, std::vector<uint8_t>(data, data + data_size));
+        // There should only be one dataset per pipeline. But if we are doing frame looping,
+        // pipeline_id may already have a dataset associated with it from a prior frame
+        // iteration. We check to see if pipeline_id has a dataset and skip adding the
+        // dataset if that is the case.
+        if (device_info->shader_group_handles.find(pipeline_id) == device_info->shader_group_handles.end())
+        {
+            // Store the ray tracing shader group handle data to use at ray tracing pipeline creation.
+            device_info->shader_group_handles.emplace(pipeline_id, std::vector<uint8_t>(data, data + data_size));
+        }
     }
 }
 
@@ -5829,7 +5833,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit        
             if (submit_info_data != nullptr)
             {
                 if (CheckPNextChainForFrameBoundary(object_info_table_->GetVkDeviceInfo(queue_info->parent_id),
-                                                    submit_info_data->pNext))
+                                                    submit_info_data[i].pNext))
                 {
                     break;
                 }
@@ -6117,7 +6121,7 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2      
             if (submit_info_data != nullptr)
             {
                 if (CheckPNextChainForFrameBoundary(object_info_table_->GetVkDeviceInfo(queue_info->parent_id),
-                                                    submit_info_data->pNext))
+                                                    submit_info_data[i].pNext))
                 {
                     break;
                 }
@@ -10923,6 +10927,32 @@ VulkanReplayConsumerBase::OverrideQueuePresentKHR(PFN_vkQueuePresentKHR         
     arm_features_->LogFrameDebugInfo();
 
     return result;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideCreateSemaphore(
+    PFN_vkCreateSemaphore                                      func,
+    VkResult                                                   original_result,
+    const VulkanDeviceInfo*                                    device_info,
+    const StructPointerDecoder<Decoded_VkSemaphoreCreateInfo>* pCreateInfo,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkSemaphore>*                         pSemaphore)
+{
+    auto* semaphore_info = reinterpret_cast<VulkanSemaphoreInfo*>(pSemaphore->GetConsumerData(0));
+
+    const auto* type_info =
+        GetPNextMetaStruct<Decoded_VkSemaphoreTypeCreateInfo>(pCreateInfo->GetMetaStructPointer()->pNext);
+
+    if (type_info != nullptr && type_info->decoded_value != nullptr &&
+        type_info->decoded_value->semaphoreType == VK_SEMAPHORE_TYPE_TIMELINE)
+    {
+        semaphore_info->is_timeline   = true;
+        semaphore_info->initial_value = type_info->decoded_value->initialValue;
+    }
+
+    return func(device_info->handle,
+                pCreateInfo->GetPointer(),
+                GetAllocationCallbacks(pAllocator),
+                pSemaphore->GetHandlePointer());
 }
 
 VkResult VulkanReplayConsumerBase::OverrideImportSemaphoreFdKHR(
