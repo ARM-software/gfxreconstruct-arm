@@ -3016,215 +3016,6 @@ bool VulkanRebindAllocator::GetAliasingGroupWithRequirements(format::HandleId re
     return true;
 }
 
-VkResult VulkanRebindAllocator::InitializeDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
-                                                                         ResourceAllocInfo* resource_alloc_info)
-{
-    // Own an allocation until the complete Vulkan bind call succeeds. Returning early destroys these objects and
-    // frees every allocation, leaving the replay session and permanent allocator bookkeeping unchanged.
-    struct PendingBinding
-    {
-        VmaAllocator                     allocator           = VK_NULL_HANDLE;
-        VmaBackend*                      vma_backend         = nullptr;
-        ResourceAllocInfo*               resource_alloc_info = nullptr;
-        std::unique_ptr<MemoryAllocInfo> memory_alloc_info;
-        VmaMemoryInfo                    memory_info{};
-
-        ~PendingBinding()
-        {
-            if (memory_info.allocation != VK_NULL_HANDLE)
-            {
-                vma_backend->FreeMemory(allocator, memory_info.allocation);
-            }
-        }
-    };
-
-    if ((session == VK_NULL_HANDLE) || (resource_alloc_info == nullptr) ||
-        (resource_alloc_info->object_type != VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM))
-    {
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    // Bind points and numObjects come from the replay session and may be completely different from capture.
-    VkDataGraphPipelineSessionBindPointRequirementsInfoARM requirements_info{
-        VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENTS_INFO_ARM
-    };
-    requirements_info.session = session;
-
-    uint32_t requirement_count = 0;
-    VkResult result            = functions_.get_data_graph_pipeline_session_bind_point_requirements(
-        device_, &requirements_info, &requirement_count, nullptr);
-    if (result != VK_SUCCESS)
-    {
-        GFXRECON_LOG_ERROR("vkGetDataGraphPipelineSessionBindPointRequirementsARM failed for session 0x%llx: %d",
-                           static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
-                           result);
-        return result;
-    }
-
-    std::vector<VkDataGraphPipelineSessionBindPointRequirementARM> requirements(
-        requirement_count,
-        VkDataGraphPipelineSessionBindPointRequirementARM{
-            VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENT_ARM, nullptr });
-
-    if (requirement_count != 0)
-    {
-        result = functions_.get_data_graph_pipeline_session_bind_point_requirements(
-            device_, &requirements_info, &requirement_count, requirements.data());
-        if (result != VK_SUCCESS)
-        {
-            GFXRECON_LOG_ERROR("vkGetDataGraphPipelineSessionBindPointRequirementsARM failed while enumerating session "
-                               "0x%llx: %d",
-                               static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
-                               result);
-            return result;
-        }
-        requirements.resize(requirement_count);
-    }
-
-    // Protected sessions must use protected memory; unprotected sessions must not accidentally use it. Filter
-    // memoryTypeBits explicitly because zero requiredFlags does not forbid protected memory.
-    const bool protected_session =
-        (resource_alloc_info->usage & VK_DATA_GRAPH_PIPELINE_SESSION_CREATE_PROTECTED_BIT_ARM) != 0;
-
-    std::vector<VkBindDataGraphPipelineSessionMemoryInfoARM> replay_bind_infos;
-    std::vector<std::unique_ptr<PendingBinding>>             pending_bindings;
-
-    for (const auto& requirement : requirements)
-    {
-        if (requirement.bindPointType != VK_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_TYPE_MEMORY_ARM)
-        {
-            continue;
-        }
-
-        for (uint32_t object_index = 0; object_index < requirement.numObjects; ++object_index)
-        {
-            VkDataGraphPipelineSessionMemoryRequirementsInfoARM memory_requirements_info{
-                VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_MEMORY_REQUIREMENTS_INFO_ARM
-            };
-            memory_requirements_info.session     = session;
-            memory_requirements_info.bindPoint   = requirement.bindPoint;
-            memory_requirements_info.objectIndex = object_index;
-
-            VkMemoryRequirements2 memory_requirements{ VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
-            functions_.get_data_graph_pipeline_session_memory_requirements(
-                device_, &memory_requirements_info, &memory_requirements);
-
-            uint32_t compatible_memory_type_bits = memory_requirements.memoryRequirements.memoryTypeBits;
-            for (uint32_t memory_type_index = 0; memory_type_index < replay_memory_properties_.memoryTypeCount;
-                 ++memory_type_index)
-            {
-                const bool protected_memory = (replay_memory_properties_.memoryTypes[memory_type_index].propertyFlags &
-                                               VK_MEMORY_PROPERTY_PROTECTED_BIT) != 0;
-                if (protected_memory != protected_session)
-                {
-                    compatible_memory_type_bits &= ~(1u << memory_type_index);
-                }
-            }
-
-            if (compatible_memory_type_bits == 0)
-            {
-                GFXRECON_LOG_ERROR(
-                    "No compatible %s memory type for data graph session 0x%llx bindPoint=%u objectIndex=%u.",
-                    protected_session ? "protected" : "unprotected",
-                    static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
-                    static_cast<unsigned>(requirement.bindPoint),
-                    object_index);
-                return VK_ERROR_FEATURE_NOT_PRESENT;
-            }
-
-            VmaAllocationCreateInfo allocation_create_info{};
-            allocation_create_info.usage          = VMA_MEMORY_USAGE_UNKNOWN;
-            allocation_create_info.memoryTypeBits = compatible_memory_type_bits;
-            allocation_create_info.requiredFlags  = protected_session ? VK_MEMORY_PROPERTY_PROTECTED_BIT : 0;
-
-            // Replay-generated memory has no capture-side VkDeviceMemory owner. Give it an internal owner whose
-            // lifetime is tied to the replay session and which is deleted when that session is destroyed.
-            auto pending_binding                                = std::make_unique<PendingBinding>();
-            pending_binding->allocator                          = allocator_;
-            pending_binding->vma_backend                        = vma_backend_;
-            pending_binding->resource_alloc_info                = resource_alloc_info;
-            pending_binding->memory_alloc_info                  = std::make_unique<MemoryAllocInfo>();
-            pending_binding->memory_alloc_info->allocation_size = memory_requirements.memoryRequirements.size;
-            pending_binding->memory_alloc_info->is_free         = true;
-
-            auto& memory_info                              = pending_binding->memory_info;
-            memory_info.memory_info                        = pending_binding->memory_alloc_info.get();
-            memory_info.replay_mem_req                     = memory_requirements.memoryRequirements;
-            memory_info.alc_create_info                    = allocation_create_info;
-            memory_info.offset_from_original_device_memory = 0;
-
-            result = vma_backend_->AllocateMemory(allocator_,
-                                                  &memory_requirements.memoryRequirements,
-                                                  &allocation_create_info,
-                                                  &memory_info.allocation,
-                                                  &memory_info.allocation_info);
-            if (result != VK_SUCCESS)
-            {
-                GFXRECON_LOG_ERROR(
-                    "vmaAllocateMemory failed for data graph session 0x%llx bindPoint=%u objectIndex=%u: %d",
-                    static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
-                    static_cast<unsigned>(requirement.bindPoint),
-                    object_index,
-                    result);
-                return result;
-            }
-
-            VkBindDataGraphPipelineSessionMemoryInfoARM replay_bind_info{
-                VK_STRUCTURE_TYPE_BIND_DATA_GRAPH_PIPELINE_SESSION_MEMORY_INFO_ARM
-            };
-            replay_bind_info.session      = session;
-            replay_bind_info.bindPoint    = requirement.bindPoint;
-            replay_bind_info.objectIndex  = object_index;
-            replay_bind_info.memory       = memory_info.allocation_info.deviceMemory;
-            replay_bind_info.memoryOffset = memory_info.allocation_info.offset;
-
-            replay_bind_infos.push_back(replay_bind_info);
-            pending_bindings.emplace_back(std::move(pending_binding));
-        }
-    }
-
-    // Submit one atomic bind. Nothing is added to permanent allocator state until this succeeds, so failure rolls
-    // back automatically through PendingBinding destructors.
-    if (!replay_bind_infos.empty())
-    {
-        GFXRECON_CHECK_CONVERSION_DATA_LOSS(uint32_t, replay_bind_infos.size());
-        result = functions_.bind_data_graph_pipeline_session_memory(
-            device_, static_cast<uint32_t>(replay_bind_infos.size()), replay_bind_infos.data());
-        if (result != VK_SUCCESS)
-        {
-            GFXRECON_LOG_ERROR(
-                "vkBindDataGraphPipelineSessionMemoryARM failed for replay-generated batch of %zu bindings: %d",
-                replay_bind_infos.size(),
-                result);
-            return result;
-        }
-    }
-
-    // Vulkan accepted the full batch. Transfer allocations from rollback ownership into session bookkeeping.
-    for (auto& pending_binding_ptr : pending_bindings)
-    {
-        auto& pending_binding       = *pending_binding_ptr;
-        auto  memory_alloc_info     = std::move(pending_binding.memory_alloc_info);
-        auto* memory_alloc_info_ptr = memory_alloc_info.get();
-        memory_alloc_info_ptr->vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(pending_binding.memory_info));
-
-        auto* committed_memory_info            = memory_alloc_info_ptr->vma_mem_infos.back().get();
-        pending_binding.memory_info.allocation = VK_NULL_HANDLE;
-
-        VkMemoryPropertyFlags unused_memory_properties = 0;
-        UpdateAllocInfo(*resource_alloc_info,
-                        VK_HANDLE_TO_UINT64(session),
-                        MemoryInfoType::kDataGraphSession,
-                        *memory_alloc_info_ptr,
-                        *committed_memory_info,
-                        unused_memory_properties);
-
-        memory_alloc_info.release();
-    }
-
-    return VK_SUCCESS;
-}
-
 VkResult VulkanRebindAllocator::AllocateMemoryForAliasedObjects(const ResourceAllocInfo& resource_alloc_info,
                                                                 VkDeviceSize             original_offset,
                                                                 uint8_t                  aliasing_group,
@@ -4576,10 +4367,9 @@ VulkanRebindAllocator::CreateDataGraphPipelineSession(const VkDataGraphPipelineS
     }
 
     ResourceAllocInfo* resource_alloc_info = new ResourceAllocInfo();
-
-    resource_alloc_info->object_type     = VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM;
-    resource_alloc_info->uses_extensions = (create_info->pNext != nullptr);
-    resource_alloc_info->usage           = create_info->flags;
+    resource_alloc_info->object_type       = VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM;
+    resource_alloc_info->uses_extensions   = (create_info->pNext != nullptr);
+    resource_alloc_info->usage             = create_info->flags;
 
     ResourceData session_allocator_data = reinterpret_cast<ResourceData>(resource_alloc_info);
 
@@ -4736,6 +4526,215 @@ VulkanRebindAllocator::BindDataGraphPipelineSessionMemory(uint32_t bind_info_cou
     GFXRECON_UNREFERENCED_PARAMETER(allocator_session_datas);
     GFXRECON_UNREFERENCED_PARAMETER(allocator_memory_datas);
     GFXRECON_UNREFERENCED_PARAMETER(bind_memory_properties);
+    return VK_SUCCESS;
+}
+
+VkResult VulkanRebindAllocator::InitializeDataGraphPipelineSessionMemory(VkDataGraphPipelineSessionARM session,
+                                                                         ResourceAllocInfo* resource_alloc_info)
+{
+    // Own an allocation until the complete Vulkan bind call succeeds. Returning early destroys these objects and
+    // frees every allocation, leaving the replay session and permanent allocator bookkeeping unchanged.
+    struct PendingBinding
+    {
+        VmaAllocator                     allocator           = VK_NULL_HANDLE;
+        VmaBackend*                      vma_backend         = nullptr;
+        ResourceAllocInfo*               resource_alloc_info = nullptr;
+        std::unique_ptr<MemoryAllocInfo> memory_alloc_info;
+        VmaMemoryInfo                    memory_info{};
+
+        ~PendingBinding()
+        {
+            if (memory_info.allocation != VK_NULL_HANDLE)
+            {
+                vma_backend->FreeMemory(allocator, memory_info.allocation);
+            }
+        }
+    };
+
+    if ((session == VK_NULL_HANDLE) || (resource_alloc_info == nullptr) ||
+        (resource_alloc_info->object_type != VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM))
+    {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    // Bind points and numObjects come from the replay session and may be completely different from capture.
+    VkDataGraphPipelineSessionBindPointRequirementsInfoARM requirements_info{
+        VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENTS_INFO_ARM
+    };
+    requirements_info.session = session;
+
+    uint32_t requirement_count = 0;
+    VkResult result            = functions_.get_data_graph_pipeline_session_bind_point_requirements(
+        device_, &requirements_info, &requirement_count, nullptr);
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("vkGetDataGraphPipelineSessionBindPointRequirementsARM failed for session 0x%llx: %d",
+                           static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                           result);
+        return result;
+    }
+
+    std::vector<VkDataGraphPipelineSessionBindPointRequirementARM> requirements(
+        requirement_count,
+        VkDataGraphPipelineSessionBindPointRequirementARM{
+            VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_REQUIREMENT_ARM, nullptr });
+
+    if (requirement_count != 0)
+    {
+        result = functions_.get_data_graph_pipeline_session_bind_point_requirements(
+            device_, &requirements_info, &requirement_count, requirements.data());
+        if (result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_ERROR("vkGetDataGraphPipelineSessionBindPointRequirementsARM failed while enumerating session "
+                               "0x%llx: %d",
+                               static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                               result);
+            return result;
+        }
+        requirements.resize(requirement_count);
+    }
+
+    // Protected sessions must use protected memory; unprotected sessions must not accidentally use it. Filter
+    // memoryTypeBits explicitly because zero requiredFlags does not forbid protected memory.
+    const bool protected_session =
+        (resource_alloc_info->usage & VK_DATA_GRAPH_PIPELINE_SESSION_CREATE_PROTECTED_BIT_ARM) != 0;
+
+    std::vector<VkBindDataGraphPipelineSessionMemoryInfoARM> replay_bind_infos;
+    std::vector<std::unique_ptr<PendingBinding>>             pending_bindings;
+
+    for (const auto& requirement : requirements)
+    {
+        if (requirement.bindPointType != VK_DATA_GRAPH_PIPELINE_SESSION_BIND_POINT_TYPE_MEMORY_ARM)
+        {
+            continue;
+        }
+
+        for (uint32_t object_index = 0; object_index < requirement.numObjects; ++object_index)
+        {
+            VkDataGraphPipelineSessionMemoryRequirementsInfoARM memory_requirements_info{
+                VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_SESSION_MEMORY_REQUIREMENTS_INFO_ARM
+            };
+            memory_requirements_info.session     = session;
+            memory_requirements_info.bindPoint   = requirement.bindPoint;
+            memory_requirements_info.objectIndex = object_index;
+
+            VkMemoryRequirements2 memory_requirements{ VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+            functions_.get_data_graph_pipeline_session_memory_requirements(
+                device_, &memory_requirements_info, &memory_requirements);
+
+            uint32_t compatible_memory_type_bits = memory_requirements.memoryRequirements.memoryTypeBits;
+            for (uint32_t memory_type_index = 0; memory_type_index < replay_memory_properties_.memoryTypeCount;
+                 ++memory_type_index)
+            {
+                const bool protected_memory = (replay_memory_properties_.memoryTypes[memory_type_index].propertyFlags &
+                                               VK_MEMORY_PROPERTY_PROTECTED_BIT) != 0;
+                if (protected_memory != protected_session)
+                {
+                    compatible_memory_type_bits &= ~(1u << memory_type_index);
+                }
+            }
+
+            if (compatible_memory_type_bits == 0)
+            {
+                GFXRECON_LOG_ERROR(
+                    "No compatible %s memory type for data graph session 0x%llx bindPoint=%u objectIndex=%u.",
+                    protected_session ? "protected" : "unprotected",
+                    static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                    static_cast<unsigned>(requirement.bindPoint),
+                    object_index);
+                return VK_ERROR_FEATURE_NOT_PRESENT;
+            }
+
+            VmaAllocationCreateInfo allocation_create_info{};
+            allocation_create_info.usage          = VMA_MEMORY_USAGE_UNKNOWN;
+            allocation_create_info.memoryTypeBits = compatible_memory_type_bits;
+            allocation_create_info.requiredFlags  = protected_session ? VK_MEMORY_PROPERTY_PROTECTED_BIT : 0;
+
+            // Replay-generated memory has no capture-side VkDeviceMemory owner. Give it an internal owner whose
+            // lifetime is tied to the replay session and which is deleted when that session is destroyed.
+            auto pending_binding                                = std::make_unique<PendingBinding>();
+            pending_binding->allocator                          = allocator_;
+            pending_binding->vma_backend                        = vma_backend_;
+            pending_binding->resource_alloc_info                = resource_alloc_info;
+            pending_binding->memory_alloc_info                  = std::make_unique<MemoryAllocInfo>();
+            pending_binding->memory_alloc_info->allocation_size = memory_requirements.memoryRequirements.size;
+            pending_binding->memory_alloc_info->is_free         = true;
+
+            auto& memory_info                              = pending_binding->memory_info;
+            memory_info.memory_info                        = pending_binding->memory_alloc_info.get();
+            memory_info.replay_mem_req                     = memory_requirements.memoryRequirements;
+            memory_info.alc_create_info                    = allocation_create_info;
+            memory_info.offset_from_original_device_memory = 0;
+
+            result = vma_backend_->AllocateMemory(allocator_,
+                                                  &memory_requirements.memoryRequirements,
+                                                  &allocation_create_info,
+                                                  &memory_info.allocation,
+                                                  &memory_info.allocation_info);
+            if (result != VK_SUCCESS)
+            {
+                GFXRECON_LOG_ERROR(
+                    "vmaAllocateMemory failed for data graph session 0x%llx bindPoint=%u objectIndex=%u: %d",
+                    static_cast<unsigned long long>(VK_HANDLE_TO_UINT64(session)),
+                    static_cast<unsigned>(requirement.bindPoint),
+                    object_index,
+                    result);
+                return result;
+            }
+
+            VkBindDataGraphPipelineSessionMemoryInfoARM replay_bind_info{
+                VK_STRUCTURE_TYPE_BIND_DATA_GRAPH_PIPELINE_SESSION_MEMORY_INFO_ARM
+            };
+            replay_bind_info.session      = session;
+            replay_bind_info.bindPoint    = requirement.bindPoint;
+            replay_bind_info.objectIndex  = object_index;
+            replay_bind_info.memory       = memory_info.allocation_info.deviceMemory;
+            replay_bind_info.memoryOffset = memory_info.allocation_info.offset;
+
+            replay_bind_infos.push_back(replay_bind_info);
+            pending_bindings.emplace_back(std::move(pending_binding));
+        }
+    }
+
+    // Submit one atomic bind. Nothing is added to permanent allocator state until this succeeds, so failure rolls
+    // back automatically through PendingBinding destructors.
+    if (!replay_bind_infos.empty())
+    {
+        GFXRECON_CHECK_CONVERSION_DATA_LOSS(uint32_t, replay_bind_infos.size());
+        result = functions_.bind_data_graph_pipeline_session_memory(
+            device_, static_cast<uint32_t>(replay_bind_infos.size()), replay_bind_infos.data());
+        if (result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_ERROR(
+                "vkBindDataGraphPipelineSessionMemoryARM failed for replay-generated batch of %zu bindings: %d",
+                replay_bind_infos.size(),
+                result);
+            return result;
+        }
+    }
+
+    // Vulkan accepted the full batch. Transfer allocations from rollback ownership into session bookkeeping.
+    for (auto& pending_binding_ptr : pending_bindings)
+    {
+        auto& pending_binding       = *pending_binding_ptr;
+        auto  memory_alloc_info     = std::move(pending_binding.memory_alloc_info);
+        auto* memory_alloc_info_ptr = memory_alloc_info.get();
+        memory_alloc_info_ptr->vma_mem_infos.emplace_back(std::make_unique<VmaMemoryInfo>(pending_binding.memory_info));
+
+        auto* committed_memory_info            = memory_alloc_info_ptr->vma_mem_infos.back().get();
+        pending_binding.memory_info.allocation = VK_NULL_HANDLE;
+
+        VkMemoryPropertyFlags unused_memory_properties = 0;
+        UpdateAllocInfo(*resource_alloc_info,
+                        VK_HANDLE_TO_UINT64(session),
+                        MemoryInfoType::kDataGraphSession,
+                        *memory_alloc_info_ptr,
+                        *committed_memory_info,
+                        unused_memory_properties);
+
+        memory_alloc_info.release();
+    }
+
     return VK_SUCCESS;
 }
 

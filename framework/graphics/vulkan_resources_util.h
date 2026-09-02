@@ -259,6 +259,7 @@ class VulkanResourcesUtil
     {
         VkDeviceMemory        memory                = VK_NULL_HANDLE;
         VkDeviceSize          size                  = 0;
+        uint32_t              memory_type_index     = std::numeric_limits<uint32_t>::max();
         VkMemoryPropertyFlags memory_property_flags = VkMemoryPropertyFlags(0);
         void*                 mapped_ptr            = nullptr;
     };
@@ -278,6 +279,7 @@ class VulkanResourcesUtil
 
     VkResult CreateStagingTensor(const VkTensorDescriptionARM* desc);
     void     DestroyStagingTensor();
+    void     DestroyStagingTensorMemory();
 
     void TransitionImageToTransferOptimal(VkCommandBuffer    command_buffer,
                                           VkImage            image,

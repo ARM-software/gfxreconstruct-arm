@@ -4478,6 +4478,13 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
             }
         }
     }
+
+    if (options_.remove_unsupported_features)
+    {
+        // Remove feature structures from pNext for extensions that are not enabled,
+        // to prevent drivers or layers (like RenderDoc) from failing device creation.
+        graphics::feature_util::FilterPNextFeatures(&modified_create_info, modified_extensions);
+    }
 }
 
 VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDeviceInfo* physical_device_info,
@@ -13347,6 +13354,8 @@ void VulkanReplayConsumerBase::OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryA
         screenshot_handler_->EndFrame();
     }
 
+    bool presented_ad_hoc = false;
+
     if (options_.swapchain_option == util::SwapchainOption::kVirtual || options_.use_ext_frame_boundary)
     {
         CommonObjectInfoTable& object_info_table = GetObjectInfoTable();
@@ -13360,16 +13369,17 @@ void VulkanReplayConsumerBase::OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryA
 
         const graphics::VulkanInstanceTable* instance_table = GetInstanceTable(instance_info->handle);
 
-        swapchain_->PresentImageAdHoc(device_info,
-                                      semaphore_info,
-                                      image_info,
-                                      instance_info,
-                                      instance_table,
-                                      GetInjectedDeviceCalls(device_info->handle),
-                                      application_.get(),
-                                      {});
+        presented_ad_hoc = swapchain_->PresentImageAdHoc(device_info,
+                                                         semaphore_info,
+                                                         image_info,
+                                                         instance_info,
+                                                         instance_table,
+                                                         GetInjectedDeviceCalls(device_info->handle),
+                                                         application_.get(),
+                                                         {});
     }
-    else
+
+    if (!presented_ad_hoc)
     {
         VkDevice    device    = device_info->handle;
         VkSemaphore semaphore = semaphore_info ? semaphore_info->handle : VK_NULL_HANDLE;

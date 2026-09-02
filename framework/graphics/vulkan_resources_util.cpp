@@ -934,6 +934,7 @@ VulkanResourcesUtil::~VulkanResourcesUtil()
 {
     DestroyStagingBuffer();
     DestroyStagingTensor();
+    DestroyStagingTensorMemory();
 
     for (const auto& [queue_family_index, command_asset] : command_asset_map_)
     {
@@ -1127,7 +1128,8 @@ VkResult VulkanResourcesUtil::AllocateStagingMemory(const VkMemoryRequirements& 
     alloc_info.allocationSize       = requirements.size;
     alloc_info.memoryTypeIndex      = memory_type_index;
 
-    VkResult result = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &ctx.memory);
+    VkResult result       = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &ctx.memory);
+    ctx.memory_type_index = memory_type_index;
     if (result != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("Failed to allocate staging memory for resource memory snapshot");
@@ -1268,26 +1270,56 @@ VkResult VulkanResourcesUtil::CreateStagingTensor(const VkTensorDescriptionARM* 
     VkMemoryRequirements2 mem_req2                 = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
     device_table_.GetTensorMemoryRequirementsARM(device_, &mem_req_info, &mem_req2);
 
-    result = AllocateStagingMemory(mem_req2.memoryRequirements, staging_tensor_.mem);
-    if (result != VK_SUCCESS)
+    const bool memory_type_is_compatible =
+        (staging_tensor_.mem.memory_type_index < VK_MAX_MEMORY_TYPES) &&
+        ((mem_req2.memoryRequirements.memoryTypeBits & (1U << staging_tensor_.mem.memory_type_index)) != 0);
+
+    if ((mem_req2.memoryRequirements.size > staging_tensor_.mem.size) || !memory_type_is_compatible)
     {
-        DestroyStagingTensor();
-        return result;
+        DestroyStagingTensorMemory();
+
+        uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
+        bool     found             = FindTensorStagingMemoryTypeIndex(*memory_properties_,
+                                                      mem_req2.memoryRequirements.memoryTypeBits,
+                                                      &memory_type_index,
+                                                      &staging_tensor_.mem.memory_property_flags);
+        if (!found)
+        {
+            GFXRECON_LOG_ERROR("Failed to find host-visible memory for staging tensor");
+            DestroyStagingTensor();
+            return VK_ERROR_FEATURE_NOT_PRESENT;
+        }
+
+        VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        alloc_info.pNext                = nullptr;
+        alloc_info.allocationSize       = mem_req2.memoryRequirements.size;
+        alloc_info.memoryTypeIndex      = memory_type_index;
+
+        result = device_table_.AllocateMemory(device_, &alloc_info, nullptr, &staging_tensor_.mem.memory);
+        if (result == VK_SUCCESS)
+        {
+            staging_tensor_.mem.size              = mem_req2.memoryRequirements.size;
+            staging_tensor_.mem.memory_type_index = memory_type_index;
+        }
     }
 
-    VkBindTensorMemoryInfoARM bind_info = { VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM };
-    bind_info.tensor                    = staging_tensor_.tensor;
-    bind_info.memory                    = staging_tensor_.mem.memory;
-    bind_info.memoryOffset              = 0;
-    result                              = device_table_.BindTensorMemoryARM(device_, 1, &bind_info);
-    if (result != VK_SUCCESS)
+    if (result == VK_SUCCESS)
     {
-        DestroyStagingTensor();
-        return result;
+        VkBindTensorMemoryInfoARM bind_info = { VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM };
+        bind_info.tensor                    = staging_tensor_.tensor;
+        bind_info.memory                    = staging_tensor_.mem.memory;
+        bind_info.memoryOffset              = 0;
+        result                              = device_table_.BindTensorMemoryARM(device_, 1, &bind_info);
     }
 
-    staging_tensor_.mem.size = mem_req2.memoryRequirements.size;
-    return VK_SUCCESS;
+    if (result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_ERROR("Failed to allocate or bind staging tensor memory for resource memory snapshot");
+        DestroyStagingTensor();
+        DestroyStagingTensorMemory();
+    }
+
+    return result;
 }
 
 void VulkanResourcesUtil::DestroyStagingTensor()
@@ -1299,13 +1331,19 @@ void VulkanResourcesUtil::DestroyStagingTensor()
         device_table_.DestroyTensorARM(device_, staging_tensor_.tensor, nullptr);
         staging_tensor_.tensor = VK_NULL_HANDLE;
     }
+}
 
+void VulkanResourcesUtil::DestroyStagingTensorMemory()
+{
     if (staging_tensor_.mem.memory != VK_NULL_HANDLE)
     {
         device_table_.FreeMemory(device_, staging_tensor_.mem.memory, nullptr);
+        staging_tensor_.mem.memory = VK_NULL_HANDLE;
     }
 
-    staging_tensor_.mem = StagingMemoryContext{};
+    staging_tensor_.mem.memory_property_flags = VkMemoryPropertyFlags(0);
+    staging_tensor_.mem.memory_type_index     = std::numeric_limits<uint32_t>::max();
+    staging_tensor_.mem.size                  = 0;
 }
 
 VkCommandBuffer VulkanResourcesUtil::CreateCommandBufferAndBegin(uint32_t queue_family_index)
@@ -2811,6 +2849,22 @@ VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                
                                                      std::vector<uint8_t>&         data)
 {
     GFXRECON_ASSERT(tensor != VK_NULL_HANDLE);
+    GFXRECON_ASSERT(desc != nullptr);
+
+    if (desc == nullptr)
+    {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    constexpr VkFormatFeatureFlags2 required_features =
+        VK_FORMAT_FEATURE_2_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_2_TRANSFER_DST_BIT;
+    if (!TensorFormatSupportsFeatures(&instance_table_, physical_device_, desc, required_features))
+    {
+        GFXRECON_LOG_WARNING(
+            "Skipping tensor resource snapshot: format does not support tensor transfer source and destination "
+            "operations for the requested tiling");
+        return VK_ERROR_FEATURE_NOT_PRESENT;
+    }
 
     const VkQueue queue = GetQueue(queue_family_index, 0);
     if (queue == VK_NULL_HANDLE)
@@ -2818,7 +2872,6 @@ VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
-    // Create a host-visible staging tensor with the same shape but TRANSFER_DST usage.
     VkTensorDescriptionARM staging_desc = *desc;
     staging_desc.usage                  = VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM;
 
@@ -2829,6 +2882,7 @@ VkResult VulkanResourcesUtil::ReadFromTensorResource(VkTensorARM                
     }
 
     VkCommandBuffer command_buffer = CreateCommandBufferAndBegin(queue_family_index);
+    GFXRECON_ASSERT(command_buffer != VK_NULL_HANDLE);
     if (command_buffer == VK_NULL_HANDLE)
     {
         return VK_ERROR_UNKNOWN;

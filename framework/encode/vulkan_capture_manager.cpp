@@ -1094,7 +1094,7 @@ VkResult VulkanCaptureManager::OverrideCreateTensorARM(VkDevice                 
 
     VkTensorCreateInfoARM modified_create_info = *pCreateInfo_unwrapped;
 
-    VkTensorDescriptionARM modified_description;
+    VkTensorDescriptionARM modified_desc;
     if (IsTrimEnabled() && (device_wrapper != nullptr) && (device_wrapper->physical_device != nullptr) &&
         (pCreateInfo_unwrapped->pDescription != nullptr) &&
         graphics::TensorFormatSupportsFeatures(device_wrapper->physical_device->layer_table_ref,
@@ -1103,14 +1103,14 @@ VkResult VulkanCaptureManager::OverrideCreateTensorARM(VkDevice                 
                                                VK_FORMAT_FEATURE_2_TRANSFER_SRC_BIT |
                                                    VK_FORMAT_FEATURE_2_TRANSFER_DST_BIT))
     {
-        modified_description = *pCreateInfo_unwrapped->pDescription;
-        modified_description.usage |= VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM;
-        modified_create_info.pDescription = &modified_description;
+        modified_desc = *pCreateInfo_unwrapped->pDescription;
+        modified_desc.usage |= VK_TENSOR_USAGE_TRANSFER_SRC_BIT_ARM;
+        modified_create_info.pDescription = &modified_desc;
     }
 
     VkResult result = device_table->CreateTensorARM(device, &modified_create_info, pAllocator, pTensor);
 
-    if (result >= 0 && pTensor != nullptr)
+    if ((result >= 0) && (pTensor != nullptr))
     {
         vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper,
                                              vulkan_wrappers::NoParentWrapper,

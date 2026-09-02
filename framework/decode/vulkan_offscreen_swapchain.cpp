@@ -252,7 +252,7 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
     return result;
 }
 
-void VulkanOffscreenSwapchain::PresentImageAdHoc(const VulkanDeviceInfo*                    device_info,
+bool VulkanOffscreenSwapchain::PresentImageAdHoc(const VulkanDeviceInfo*                    device_info,
                                                  const VulkanSemaphoreInfo*                 semaphore_info,
                                                  const VulkanImageInfo*                     image_info,
                                                  VulkanInstanceInfo*                        instance_info,
@@ -288,7 +288,9 @@ void VulkanOffscreenSwapchain::PresentImageAdHoc(const VulkanDeviceInfo*        
 
     VkQueue queue;
     injected->GetDeviceQueue(device_info->handle, 0, 0, &queue);
-    injected->QueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkResult result = injected->QueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+    return (result == VK_SUCCESS);
 }
 
 VkResult VulkanOffscreenSwapchain::SignalAcquireNextImageSemaphoreFence(const VulkanDeviceInfo* device_info,
