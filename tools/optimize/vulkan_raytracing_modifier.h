@@ -35,6 +35,7 @@
 #include "format/format.h"
 #include "util/defines.h"
 #include "encode/parameter_buffer.h"
+#include "util/interval_tree.h"
 #include "util/vulkan_modifier_base.h"
 #include "decode/vulkan_optimize_options.h"
 
@@ -357,7 +358,7 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     std::list<uint64_t> fill_memory_indices_to_inspect_;
 
     std::set<std::pair<VkDeviceAddress, VkDeviceAddress>> instance_buffer_ranges_;
-    std::set<std::pair<VkDeviceAddress, VkDeviceAddress>> transfer_ranges_;
+    util::interval_tree<VkDeviceAddress>                  transfer_ranges_;
 
     // -----init buffer handle-----InitBufferObject
     std::unordered_map<format::HandleId, InitBufferInfo> init_buffer_entries_;

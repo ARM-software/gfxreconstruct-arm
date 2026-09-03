@@ -154,6 +154,7 @@ target_sources(gfxrecon_util
                     $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/wayland_loader.h>
                     $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/wayland_loader.cpp>
                     $<$<BOOL:${WAYLAND_FOUND}>:${GFXRECON_SOURCE_DIR}/framework/generated/generated_wayland_xdg_shell.h>
+                    ${CMAKE_CURRENT_LIST_DIR}/interval_tree.h
 )
 
 
@@ -284,6 +285,7 @@ if (${RUN_TESTS})
     add_executable(gfxrecon_util_test "")
     target_sources(gfxrecon_util_test PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/test/main.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/test/test_interval_tree.cpp
             ${CMAKE_CURRENT_LIST_DIR}/test/test_linear_hashmap.cpp
             ${CMAKE_CURRENT_LIST_DIR}/test/test_spirv_parsing_util.cpp
             ${CMAKE_CURRENT_LIST_DIR}/test/test_image_writer.cpp

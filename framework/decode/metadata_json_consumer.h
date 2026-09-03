@@ -153,7 +153,6 @@ class MetadataJsonConsumer : public Base
                 jdata["location"][i]["descriptor_address"]      = infos[i].descriptor_addr;
                 jdata["location"][i]["orig_size"]               = infos[i].orig_size;
                 jdata["location"][i]["generation"]              = infos[i].descriptor_generation;
-                jdata["location"][i]["is_descriptor_buffer"]    = infos[i].is_descriptor_buffer;
             }
         }
         WriteBlockEnd();

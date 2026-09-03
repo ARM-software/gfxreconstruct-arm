@@ -1364,15 +1364,15 @@ void VulkanRayTracingModifier::Process_vkUpdateDescriptorSets(const ApiCallInfo&
                 {
                     if (write.pBufferInfo->range == VK_WHOLE_SIZE)
                     {
-                        transfer_ranges_.emplace(dst_entry.device_address + write.pBufferInfo->offset,
-                                                 dst_entry.device_address + write.pBufferInfo->offset + dst_entry.size -
-                                                     write.pBufferInfo->offset);
+                        transfer_ranges_.insert({ dst_entry.device_address + write.pBufferInfo->offset,
+                                                  dst_entry.device_address + write.pBufferInfo->offset +
+                                                      dst_entry.size - write.pBufferInfo->offset });
                     }
                     else
                     {
-                        transfer_ranges_.emplace(dst_entry.device_address + write.pBufferInfo->offset,
-                                                 dst_entry.device_address + write.pBufferInfo->offset +
-                                                     write.pBufferInfo->range);
+                        transfer_ranges_.insert(
+                            { dst_entry.device_address + write.pBufferInfo->offset,
+                              dst_entry.device_address + write.pBufferInfo->offset + write.pBufferInfo->range });
                     }
                 }
             }
@@ -1413,8 +1413,8 @@ void VulkanRayTracingModifier::Process_vkCmdCopyBuffer(const ApiCallInfo& call_i
             for (uint32_t i = 0; i < args.regionCount; ++i)
             {
                 const VkBufferCopy& r = args.pRegions.GetPointer()[i];
-                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
-                                         dst_entry.device_address + r.dstOffset + r.size);
+                transfer_ranges_.insert(
+                    { dst_entry.device_address + r.dstOffset, dst_entry.device_address + r.dstOffset + r.size });
             }
         }
     }
@@ -1437,8 +1437,8 @@ void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2(const ApiCallInfo& call_
             for (uint32_t i = 0; i < copy_info->regionCount; ++i)
             {
                 const VkBufferCopy2& r = copy_info->pRegions[i];
-                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
-                                         dst_entry.device_address + r.dstOffset + r.size);
+                transfer_ranges_.insert(
+                    { dst_entry.device_address + r.dstOffset, dst_entry.device_address + r.dstOffset + r.size });
             }
         }
     }
@@ -1461,8 +1461,8 @@ void VulkanRayTracingModifier::Process_vkCmdCopyBuffer2KHR(const ApiCallInfo& ca
             for (uint32_t i = 0; i < copy_info->regionCount; ++i)
             {
                 const VkBufferCopy2KHR& r = copy_info->pRegions[i];
-                transfer_ranges_.emplace(dst_entry.device_address + r.dstOffset,
-                                         dst_entry.device_address + r.dstOffset + r.size);
+                transfer_ranges_.insert(
+                    { dst_entry.device_address + r.dstOffset, dst_entry.device_address + r.dstOffset + r.size });
             }
         }
     }
@@ -1751,12 +1751,9 @@ bool VulkanRayTracingModifier::HeuristicCheck(format::HandleId command_buffer)
 
     for (const auto& a : instance_buffer_ranges_)
     {
-        for (const auto& b : transfer_ranges_)
+        if (transfer_ranges_.intersection(a))
         {
-            if (std::max(a.first, b.first) < std::min(a.second, b.second))
-            {
-                return true;
-            }
+            return true;
         }
     }
 

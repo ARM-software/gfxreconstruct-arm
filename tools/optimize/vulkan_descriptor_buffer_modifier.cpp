@@ -23,6 +23,7 @@
 
 #include "vulkan_descriptor_buffer_modifier.h"
 
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
@@ -31,9 +32,8 @@
 #include "format/format_arm.h"
 #include "decode/vulkan_optimize_options.h"
 #include "util/defines.h"
+#include "util/interval_tree.h"
 #include "util/memory_output_stream.h"
-#include "encode/parameter_buffer.h"
-#include "encode/struct_pointer_encoder.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -141,10 +141,36 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
         return;
     }
 
-    std::unordered_set<uint64_t> occupied_offsets;
+    struct Range
+    {
+        uint64_t begin;
+        uint64_t end;
+    };
+
+    std::vector<Range> occupied_ranges;
     for (const auto& location : *locations)
     {
-        occupied_offsets.insert(location.descriptor_offset_in_memory);
+        const auto& payload = GetDescriptorPayload(location);
+        occupied_ranges.push_back(
+            { location.descriptor_offset_in_memory, location.descriptor_offset_in_memory + payload.size() });
+    }
+
+    std::sort(occupied_ranges.begin(), occupied_ranges.end(), [](const Range& lhs, const Range& rhs) {
+        return lhs.begin < rhs.begin || (lhs.begin == rhs.begin && lhs.end < rhs.end);
+    });
+
+    std::vector<Range> merged_occupied_ranges;
+    merged_occupied_ranges.reserve(occupied_ranges.size());
+    for (const auto& range : occupied_ranges)
+    {
+        if (merged_occupied_ranges.empty() || range.begin > merged_occupied_ranges.back().end)
+        {
+            merged_occupied_ranges.emplace_back(range);
+        }
+        else
+        {
+            merged_occupied_ranges.back().end = std::max(merged_occupied_ranges.back().end, range.end);
+        }
     }
 
     struct BoundBufferRange
@@ -153,18 +179,13 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
         uint64_t          end;
         const BufferInfo* buffer;
     };
-    struct ScanRange
-    {
-        uint64_t begin;
-        uint64_t end;
-    };
 
     const uint64_t fill_begin = memory->second.mapping.offset + offset;
     const uint64_t fill_end   = fill_begin + size;
     GFXRECON_ASSERT(fill_begin >= memory->second.mapping.offset && fill_end >= fill_begin);
 
     std::vector<BoundBufferRange> bound_buffers;
-    std::vector<ScanRange>        scan_ranges;
+    std::vector<Range>            scan_ranges;
     bound_buffers.reserve(memory->second.memory_binding_records_.size());
     scan_ranges.reserve(memory->second.memory_binding_records_.size());
 
@@ -186,15 +207,15 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
         if (search_begin < search_end)
         {
             bound_buffers.emplace_back(BoundBufferRange{ buffer_begin, buffer_end, &buffer->second });
-            scan_ranges.emplace_back(ScanRange{ search_begin, search_end });
+            scan_ranges.emplace_back(Range{ search_begin, search_end });
         }
     }
 
-    std::sort(scan_ranges.begin(), scan_ranges.end(), [](const ScanRange& lhs, const ScanRange& rhs) {
+    std::sort(scan_ranges.begin(), scan_ranges.end(), [](const Range& lhs, const Range& rhs) {
         return lhs.begin < rhs.begin || (lhs.begin == rhs.begin && lhs.end < rhs.end);
     });
 
-    std::vector<ScanRange> merged_scan_ranges;
+    std::vector<Range> merged_scan_ranges;
     merged_scan_ranges.reserve(scan_ranges.size());
     for (const auto& range : scan_ranges)
     {
@@ -208,14 +229,26 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
         }
     }
 
+    size_t occupied_range_idx = 0;
     for (const auto& scan_range : merged_scan_ranges)
     {
-        for (uint64_t memory_offset = scan_range.begin; (scan_range.end - memory_offset) >= kPrefixSize;
-             ++memory_offset)
+        uint64_t memory_offset = scan_range.begin;
+        while (memory_offset < scan_range.end && (scan_range.end - memory_offset) >= kPrefixSize)
         {
             const uint64_t data_offset = memory_offset - fill_begin;
-            if (occupied_offsets.find(data_offset) != occupied_offsets.end())
+
+            while (occupied_range_idx < merged_occupied_ranges.size() &&
+                   merged_occupied_ranges[occupied_range_idx].end <= data_offset)
             {
+                ++occupied_range_idx;
+            }
+
+            if (occupied_range_idx < merged_occupied_ranges.size() &&
+                merged_occupied_ranges[occupied_range_idx].begin <= data_offset)
+            {
+                const uint64_t occupied_end = fill_begin + merged_occupied_ranges[occupied_range_idx].end;
+                GFXRECON_ASSERT(occupied_end >= fill_begin);
+                memory_offset = std::min(scan_range.end, occupied_end);
                 continue;
             }
 
@@ -224,9 +257,11 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
             auto candidates = descriptor_versions_by_prefix_.find(prefix);
             if (candidates == descriptor_versions_by_prefix_.end())
             {
+                ++memory_offset;
                 continue;
             }
 
+            bool found_descriptor = false;
             for (auto candidate_it = candidates->second.rbegin(); candidate_it != candidates->second.rend();
                  ++candidate_it)
             {
@@ -238,8 +273,21 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
                 }
 
                 const auto& descriptor = descriptor_histories_.at(candidate.descriptor_addr).at(candidate.version - 1);
-                if (descriptor.size() <= scan_range.end - memory_offset &&
-                    util::platform::MemoryCompare(descriptor.data(), data + data_offset, descriptor.size()) == 0)
+
+                if (descriptor.size() > scan_range.end - memory_offset)
+                {
+                    continue;
+                }
+
+                const uint64_t descriptor_end = data_offset + descriptor.size();
+                GFXRECON_ASSERT(descriptor_end >= data_offset);
+                if (occupied_range_idx < merged_occupied_ranges.size() &&
+                    merged_occupied_ranges[occupied_range_idx].begin < descriptor_end)
+                {
+                    continue;
+                }
+
+                if (util::platform::MemoryCompare(descriptor.data(), data + data_offset, descriptor.size()) == 0)
                 {
                     auto bound_buffer = std::find_if(
                         bound_buffers.begin(), bound_buffers.end(), [memory_offset, &descriptor](const auto& range) {
@@ -258,20 +306,24 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
                     location.descriptor_addr                    = candidate.descriptor_addr;
                     location.orig_size                          = descriptor.size();
                     location.descriptor_generation              = candidate.version;
-                    location.is_descriptor_buffer =
-                        (bound_buffer->buffer->usage & (VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-                                                        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT)) != 0;
 
                     locations->emplace_back(location);
-                    occupied_offsets.insert(data_offset);
                     GFXRECON_LOG_DEBUG("Found descriptor generation %" PRIu64 " from 0x%lx in Filled Memory(%" PRIu64
                                        ") at relative offset 0x%lx.",
                                        candidate.version,
                                        candidate.descriptor_addr,
                                        memory_id,
                                        data_offset);
+
+                    memory_offset += descriptor.size();
+                    found_descriptor = true;
                     break;
                 }
+            }
+
+            if (!found_descriptor)
+            {
+                ++memory_offset;
             }
         }
     }
@@ -306,7 +358,6 @@ void VulkanDescriptorBufferModifier::WriteFixDescriptorDataCmd(format::HandleId 
         GFXRECON_LOG_DEBUG("    offset in filled memory %" PRIu64 ".", desc_locations[i].descriptor_offset_in_memory);
         GFXRECON_LOG_DEBUG("    descriptor addr 0x%lx.", desc_locations[i].descriptor_addr);
         GFXRECON_LOG_DEBUG("    orig size %" PRIu64 ".", desc_locations[i].orig_size);
-        GFXRECON_LOG_DEBUG("    is descriptor buffer %d.", desc_locations[i].is_descriptor_buffer);
     }
 
     new_call->parameter_buffer.Write(&fix_cmd_header, sizeof(format::FixDescriptorDataCommandHeader));
@@ -692,9 +743,6 @@ void VulkanDescriptorBufferModifier::Process_vkGetDescriptorEXT(const ApiCallInf
                         location.descriptor_offset_in_mapped_memory = desc_addr - mem_base_addr;
                         location.descriptor_offset_in_buffer =
                             desc_addr - mem_base_addr - (binding.offset - mem_obj.mapping.offset);
-                        location.is_descriptor_buffer = ((buffer_entries_[binding.handle].usage &
-                                                          VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) ==
-                                                         VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT);
 
                         auto& descriptor_locations = device_memory_descriptor_locations[mem_id][desc_addr];
                         auto  existing_location =

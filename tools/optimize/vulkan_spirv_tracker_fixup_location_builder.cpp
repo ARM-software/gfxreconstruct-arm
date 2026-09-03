@@ -66,7 +66,7 @@ nlohmann::ordered_json DescriptorDataLocationInfoToJson(const gfxrecon::format::
     jdata["offset_in_memory"]        = location.descriptor_offset_in_memory;
     gfxrecon::util::FieldToJsonAsHex(jdata["descriptor_address"], location.descriptor_addr);
     jdata["orig_size"]            = location.orig_size;
-    jdata["is_descriptor_buffer"] = location.is_descriptor_buffer;
+    jdata["generation"]           = location.descriptor_generation;
     return jdata;
 }
 

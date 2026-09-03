@@ -373,7 +373,8 @@ struct DescriptorDataLocationInfo
     uint64_t orig_size;
     // One-based generation of the descriptor payload at descriptor_addr. Zero selects the latest generation.
     uint64_t descriptor_generation;
-    bool     is_descriptor_buffer;
+    // This used to be a is_descriptor_buffer flag, that is not used, preserved for backwards compatibility
+    bool padding;
 };
 
 struct FixShadowMemoryCommand
