@@ -32,8 +32,8 @@ target_sources(gfxrecon-replay
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_settings.h
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_command_line.h
+                    ${CMAKE_CURRENT_LIST_DIR}/../tool_feature_options.h
                     ${CMAKE_CURRENT_LIST_DIR}/replay_settings.h
-                    ${CMAKE_CURRENT_LIST_DIR}/replay_settings_arm.h
                     ${CMAKE_CURRENT_LIST_DIR}/replay_feature.h
                     ${CMAKE_CURRENT_LIST_DIR}/replay_main_common.h
                     ${CMAKE_CURRENT_LIST_DIR}/replay_main_common.cpp

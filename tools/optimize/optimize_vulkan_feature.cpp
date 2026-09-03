@@ -91,44 +91,6 @@ bool OptimizeVulkanFeature::ShouldRun(const util::ArgumentParser& args) const
     return manual_mode || WasDetected();
 }
 
-std::string OptimizeVulkanFeature::GetOptions() const
-{
-    return "--vk-remove-rt";
-}
-
-std::string OptimizeVulkanFeature::GetArguments() const
-{
-    return "--set-replay-options,--remove-device-instance,--keep-device-instance,--replace-shaders";
-}
-
-std::string OptimizeVulkanFeature::GetSynopsisFragment() const
-{
-    return "[--set-replay-options <options>] [--remove-device-instance <names>] [--keep-device-instance <names>] "
-           "[--vk-remove-rt] [--replace-shaders <dir>]";
-}
-
-void OptimizeVulkanFeature::PrintUsage() const
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE(" // Vulkan-only options:");
-    GFXRECON_WRITE_CONSOLE(" // -------------------");
-    GFXRECON_WRITE_CONSOLE("  --set-replay-options <options>");
-    GFXRECON_WRITE_CONSOLE("      Add default playback options to the trace. Use quotation marks for multiple");
-    GFXRECON_WRITE_CONSOLE("      arguments. Do NOT combine this option with any other option.");
-    GFXRECON_WRITE_CONSOLE("  --remove-device-instance <names>");
-    GFXRECON_WRITE_CONSOLE("      Remove redundant instance/device and corresponding APIs. Use comma marks for");
-    GFXRECON_WRITE_CONSOLE("      multiple arguments. the default value is \"android framework\".");
-    GFXRECON_WRITE_CONSOLE("  --keep-device-instance <names>");
-    GFXRECON_WRITE_CONSOLE("      Keep only the specified instance/device and corresponding APIs. Use comma marks for");
-    GFXRECON_WRITE_CONSOLE("      multiple arguments.");
-    GFXRECON_WRITE_CONSOLE("  --vk-remove-rt");
-    GFXRECON_WRITE_CONSOLE("      Remove ray-tracing related API calls from the trace.");
-    GFXRECON_WRITE_CONSOLE("  --replace-shaders <dir>");
-    GFXRECON_WRITE_CONSOLE("      Replace the shader code in each `VkShaderModuleCreateInfo`");
-    GFXRECON_WRITE_CONSOLE("      with the content of the matching file in <dir> if found.");
-    GFXRECON_WRITE_CONSOLE("      See gfxrecon-extract.");
-}
-
 decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util::ArgumentParser& args) const
 {
     if (args.IsArgumentSet(kVulkanSetReplayOptionsArgument))
@@ -428,6 +390,31 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
     }
 
     return true;
+}
+
+std::vector<util::FeatureOptionDesc> OptimizeVulkanFeature::GetOptionDescs() const
+{
+    return { { "<options>",
+               { "Add default playback options to the trace. Use quotation marks for",
+                 "multiple arguments. Do NOT combine this option with any other option." },
+               true,
+               kVulkanSetReplayOptionsArgument },
+             { "<names>",
+               { "Remove redundant instance/device and corresponding APIs. Use comma",
+                 "marks for multiple arguments. Default value: 'android framework'" },
+               true,
+               kVulkanRemoveDeviceInstanceArgument },
+             { "<names>",
+               { "Keep only the specified instance/device and corresponding APIs.",
+                 "Use comma marks for multiple arguments." },
+               true,
+               kVulkanKeepDeviceInstanceArgument },
+             { "", { "Remove ray-tracing related API calls from the trace." }, false, kVulkanRemoveRtOption },
+             { "<dir>",
+               { "Replace the shader code in each `VkShaderModuleCreateInfo` with the",
+                 "content of the matching file in <dir> if found. See gfxrecon-extract." },
+               true,
+               kVulkanReplaceShadersArgument } };
 }
 
 GFXRECON_END_NAMESPACE(optimize)

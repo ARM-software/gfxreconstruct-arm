@@ -28,10 +28,14 @@
 #include <unordered_set>
 
 #include "util/defines.h"
+#include "util/logging.h"
 #include "util/options.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+// Default log level to use prior to loading settings.
+const util::LoggingSeverity kDefaultLogLevel = util::LoggingSeverity::kInfo;
 
 static constexpr char kDefaultScreenshotFilePrefix[] = "screenshot";
 
@@ -54,8 +58,6 @@ struct ReplayOptions
     bool                         sync_queue_submissions{ false };
     bool                         enable_debug_device_lost{ false };
     bool                         create_dummy_allocations{ false };
-    bool                         omit_null_hardware_buffers{ false };
-    bool                         omit_all_hardware_buffers{ false };
     bool                         quit_after_measurement_frame_range{ false };
     bool                         quit_after_frame{ false };
     bool                         flush_measurement_frame_range{ false };
@@ -92,6 +94,8 @@ struct ReplayOptions
     bool                         using_dump_resources_target{ false };
     bool                         do_device_deduplication{ false };
     bool                         streamline_annotate{ false };
+    std::string                  replace_shader_dir;
+    util::SwapchainOption        swapchain_option{ util::SwapchainOption::kVirtual };
 };
 
 GFXRECON_END_NAMESPACE(decode)

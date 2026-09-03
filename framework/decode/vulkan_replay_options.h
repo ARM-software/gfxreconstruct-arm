@@ -45,9 +45,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 typedef std::function<VulkanResourceAllocator*()> CreateResourceAllocator;
 
-// Default log level to use prior to loading settings.
-const util::LoggingSeverity kDefaultLogLevel = util::LoggingSeverity::kInfo;
-
 enum class SkipGetFenceStatus
 {
     NoSkip,
@@ -172,7 +169,6 @@ struct VulkanReplayOptions : public ReplayOptions
     bool                    use_colorspace_fallback{ true };
     bool                    disable_subpass_fusion{ false };
     bool                    use_ext_frame_boundary{ false };
-    util::SwapchainOption   swapchain_option{ util::SwapchainOption::kVirtual };
     util::PresentModeOption present_mode_option{ util::PresentModeOption::kCapture };
     bool                    virtual_swapchain_skip_blit{ false };
     bool                    annotate_injected_commands{ false };
@@ -185,7 +181,6 @@ struct VulkanReplayOptions : public ReplayOptions
     CreateResourceAllocator             create_resource_allocator;
     uint32_t                            screenshot_width, screenshot_height;
     std::optional<std::array<float, 2>> screenshot_scale;
-    std::string                         replace_shader_dir;
     SkipGetFenceStatus                  skip_get_fence_status{ SkipGetFenceStatus::NoSkip };
     std::vector<util::UintRange>        skip_get_fence_ranges;
     bool                                wait_before_present{ false };
@@ -277,6 +272,9 @@ struct VulkanReplayOptions : public ReplayOptions
 
     void MaybeWaitBeforeFirstSubmit() const;
     void MaybeWaitBeforeFrame() const;
+
+    bool omit_null_hardware_buffers{ false };
+    bool omit_all_hardware_buffers{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

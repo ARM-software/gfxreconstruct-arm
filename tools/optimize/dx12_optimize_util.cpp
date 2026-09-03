@@ -34,7 +34,7 @@
 #include "generated/generated_dx12_replay_consumer.h"
 #include "decode/dx12_resource_value_tracker.h"
 #include "decode/file_processor.h"
-#include "../tool_settings.h"
+#include "decode/dx12_default_allocator.h"
 #include "generated/generated_dx12_device_prune_modifier.h"
 
 #ifdef GFXRECON_AGS_SUPPORT
@@ -65,6 +65,12 @@ struct Dx12OptimizationInfo
     bool found_opt_fill_mem{ false };
     bool inject_noop_resource_value_optimization{ false };
 };
+
+static gfxrecon::decode::Dx12ResourceAllocator* CreateDxDefaultAllocator()
+{
+    return new gfxrecon::decode::Dx12DefaultAllocator(
+        "Try replay with the '-m rebind' options to enable memory translation.");
+}
 
 void CreateResourceValueTrackingConsumer(
     decode::FileProcessor*                                      file_processor,
