@@ -24,25 +24,24 @@
 #ifndef GFXRECON_TOOLS_OPTIMIZE_VULKAN_DESCRIPTOR_BUFFER_MODIFIER_H
 #define GFXRECON_TOOLS_OPTIMIZE_VULKAN_DESCRIPTOR_BUFFER_MODIFIER_H
 
+#include <bitset>
+#include <cstddef>
 #include <cstdint>
 #include <unordered_map>
-#include <unordered_set>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 #include "decode/api_decoder.h"
 #include "format/format.h"
 #include "util/defines.h"
-#include "encode/parameter_buffer.h"
 #include "util/vulkan_modifier_base.h"
 #include "decode/vulkan_optimize_options.h"
-
-#include <list>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 // Performs optimization of descriptor buffer content
-// In the first pass tracks memory modifications in order to indentify memory ranges
+// In the first pass tracks memory modifications in order to identify memory ranges
 // containing device addresses and shader group handles
 // In second pass injects FixDeviceAddress and FixShaderGroupHandle metacommand
 // instructing the replayer to replace memory range with a device address or shader group handle value
@@ -104,7 +103,7 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
     std::vector<format::DescriptorDataLocationInfo>
     GetDescriptorsInFillMemory(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
 
-    void                        RecordDescriptor(uint64_t descriptor_addr, size_t data_size, const uint8_t* data);
+    void RecordDescriptor(uint64_t call_index, uint64_t descriptor_addr, size_t data_size, const uint8_t* data);
     const std::vector<uint8_t>& GetDescriptorPayload(const format::DescriptorDataLocationInfo& location) const;
 
     void FindCopiedDescriptors(uint64_t                                         memory_id,
@@ -190,17 +189,49 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
     // -----memory handle id ----- address of memory saved descriptor ----- descriptor location history
     std::unordered_map<format::HandleId, DescriptorLocationMap> device_memory_descriptor_locations;
 
-    struct DescriptorVersion
+    struct DescriptorInfo
     {
         uint64_t descriptor_addr;
         uint64_t version;
+        uint64_t size;
+        uint64_t parent_call_index;
+    };
+
+    class DescriptorTrie
+    {
+        struct Edge
+        {
+            Edge(std::vector<uint8_t> label_in, uint32_t child_in) : label(std::move(label_in)), child(child_in) {}
+            std::vector<uint8_t> label;
+            uint32_t             child;
+        };
+        struct Node
+        {
+            Node() = default;
+            std::vector<Edge>           children;
+            std::vector<DescriptorInfo> descriptors;
+        };
+
+      public:
+        DescriptorTrie();
+        void Insert(const uint8_t* data, uint64_t size, const DescriptorInfo& descriptor);
+        void Match(const uint8_t* data, uint64_t size, std::vector<const DescriptorInfo*>& candidates);
+
+      private:
+        uint32_t AddNode();
+        size_t   CountCommonBytes(const uint8_t* p1, const uint8_t* p2, size_t size) const;
+
+        std::bitset<256>  mask_;
+        std::vector<Node> nodes_;
+
+        std::vector<uint32_t> match_scratch_;
     };
 
     VulkanOptimizationOptions options_;
     // vkGetDescriptorEXT payload generations recorded during the first pass. Version numbers are one-based.
     std::unordered_map<uint64_t, std::vector<std::vector<uint8_t>>> descriptor_histories_;
     std::unordered_map<uint64_t, uint64_t>                          descriptor_versions_seen_;
-    std::unordered_map<uint64_t, std::vector<DescriptorVersion>>    descriptor_versions_by_prefix_;
+    DescriptorTrie                                                  descriptor_trie_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

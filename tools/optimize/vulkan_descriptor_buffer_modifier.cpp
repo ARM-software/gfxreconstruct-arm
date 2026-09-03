@@ -25,14 +25,13 @@
 
 #include <cstdint>
 #include <unordered_map>
-#include <unordered_set>
 #include <algorithm>
 
 #include "format/format.h"
 #include "format/format_arm.h"
 #include "decode/vulkan_optimize_options.h"
 #include "util/defines.h"
-#include "util/interval_tree.h"
+#include "util/logging.h"
 #include "util/memory_output_stream.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -44,6 +43,178 @@ VulkanDescriptorBufferModifier::VulkanDescriptorBufferModifier(const VulkanOptim
 bool VulkanDescriptorBufferModifier::CanOptimize()
 {
     return true;
+}
+
+VulkanDescriptorBufferModifier::DescriptorTrie::DescriptorTrie()
+{
+    nodes_.emplace_back();
+}
+
+uint32_t VulkanDescriptorBufferModifier::DescriptorTrie::AddNode()
+{
+    const uint32_t index = static_cast<uint32_t>(nodes_.size());
+    nodes_.emplace_back();
+    return index;
+}
+
+size_t VulkanDescriptorBufferModifier::DescriptorTrie::CountCommonBytes(const uint8_t* p1,
+                                                                        const uint8_t* p2,
+                                                                        size_t         size) const
+{
+    size_t i = 0;
+    while (i < size && p1[i] == p2[i])
+    {
+        ++i;
+    }
+    return i;
+}
+
+void VulkanDescriptorBufferModifier::DescriptorTrie::Insert(const uint8_t*        data,
+                                                            uint64_t              data_size,
+                                                            const DescriptorInfo& version)
+{
+    if (data_size == 0)
+    {
+        return;
+    }
+
+    // Start the search with the root
+    uint32_t node_idx    = 0;
+    size_t   data_offset = 0;
+    while (data_offset < data_size)
+    {
+        auto& children = nodes_[node_idx].children;
+        auto  child =
+            std::lower_bound(children.begin(), children.end(), data[data_offset], [](const Edge& edge, uint8_t byte) {
+                return edge.label.front() < byte;
+            });
+        const auto child_offset = static_cast<size_t>(child - children.begin());
+
+        if (child == children.end() || child->label.front() != data[data_offset])
+        {
+            // Maintain the root lookup mask
+            if (node_idx == 0)
+            {
+                mask_[data[data_offset]] = true;
+            }
+            // not found, insert
+            uint32_t new_child = AddNode();
+            nodes_[new_child].descriptors.emplace_back(version);
+
+            nodes_[node_idx].children.insert(
+                nodes_[node_idx].children.begin() + child_offset,
+                Edge(std::vector<uint8_t>(data + data_offset, data + data_size), new_child));
+            return;
+        }
+        else
+        {
+            const size_t common_bytes = CountCommonBytes(
+                data + data_offset, child->label.data(), std::min(data_size - data_offset, child->label.size()));
+
+            // If it was a full match
+            if (common_bytes == nodes_[node_idx].children[child_offset].label.size())
+            {
+                // Continue matching from the child
+                data_offset += common_bytes;
+                node_idx = nodes_[node_idx].children[child_offset].child;
+                if (data_offset == data_size)
+                {
+                    nodes_[node_idx].descriptors.emplace_back(version);
+                    return;
+                }
+                continue;
+            }
+
+            // It is not a full match, we need to split the node
+            // One of the nodes spawned from the split should have this label
+            std::vector<uint8_t> leftover_label(nodes_[node_idx].children[child_offset].label.begin() + common_bytes,
+                                                nodes_[node_idx].children[child_offset].label.end());
+
+            // Leftover suffix
+            uint32_t split_node_idx = AddNode();
+            nodes_[split_node_idx].children.emplace_back(
+                Edge{ std::move(leftover_label), nodes_[node_idx].children[child_offset].child });
+
+            // Current node gets its label reduced to common prefix
+
+            nodes_[node_idx].children[child_offset].label.resize(common_bytes);
+            nodes_[node_idx].children[child_offset].child = split_node_idx;
+
+            data_offset += common_bytes;
+            if (data_offset == data_size)
+            {
+                nodes_[split_node_idx].descriptors.emplace_back(version);
+                return;
+            }
+
+            // The remaining data is added to the new node.
+            uint32_t new_node = AddNode();
+            nodes_[new_node].descriptors.emplace_back(version);
+            Edge  new_edge(std::vector<uint8_t>(data + data_offset, data + data_size), new_node);
+            auto& split_children = nodes_[split_node_idx].children;
+            auto  insert_at      = std::lower_bound(split_children.begin(),
+                                              split_children.end(),
+                                              new_edge.label.front(),
+                                              [](const Edge& edge, uint8_t byte) { return edge.label.front() < byte; });
+            split_children.insert(insert_at, std::move(new_edge));
+            return;
+        }
+    }
+}
+
+void VulkanDescriptorBufferModifier::DescriptorTrie::Match(const uint8_t*                      data,
+                                                           uint64_t                            data_size,
+                                                           std::vector<const DescriptorInfo*>& candidates)
+{
+    candidates.clear();
+
+    if (data_size == 0)
+    {
+        return;
+    }
+
+    if (!mask_[data[0]])
+    {
+        return;
+    }
+
+    uint32_t node_idx    = 0;
+    size_t   data_offset = 0;
+
+    match_scratch_.clear();
+
+    while (data_offset < data_size)
+    {
+        const auto& children = nodes_[node_idx].children;
+        auto        child =
+            std::lower_bound(children.begin(), children.end(), data[data_offset], [](const Edge& edge, uint8_t byte) {
+                return edge.label.front() < byte;
+            });
+        if (child == children.end() || child->label.front() != data[data_offset] ||
+            child->label.size() > data_size - data_offset ||
+            util::platform::MemoryCompare(data + data_offset, child->label.data(), child->label.size()) != 0)
+        {
+            break;
+        }
+
+        data_offset += child->label.size();
+        node_idx = child->child;
+
+        match_scratch_.push_back(node_idx);
+    }
+
+    for (auto node = match_scratch_.rbegin(); node != match_scratch_.rend(); ++node)
+    {
+        const auto& descriptors = nodes_[*node].descriptors;
+
+        for (auto descriptor = descriptors.rbegin(); descriptor != descriptors.rend(); ++descriptor)
+        {
+            candidates.push_back(&(*descriptor));
+        }
+    }
+    std::stable_sort(candidates.begin(), candidates.end(), [](const DescriptorInfo* lhs, const DescriptorInfo* rhs) {
+        return lhs->parent_call_index > rhs->parent_call_index;
+    });
 }
 
 std::vector<format::DescriptorDataLocationInfo> VulkanDescriptorBufferModifier::GetDescriptorsInFillMemory(
@@ -99,21 +270,17 @@ std::vector<format::DescriptorDataLocationInfo> VulkanDescriptorBufferModifier::
     return locations;
 }
 
-void VulkanDescriptorBufferModifier::RecordDescriptor(uint64_t descriptor_addr, size_t data_size, const uint8_t* data)
+void VulkanDescriptorBufferModifier::RecordDescriptor(uint64_t       call_index,
+                                                      uint64_t       descriptor_addr,
+                                                      size_t         data_size,
+                                                      const uint8_t* data)
 {
-    constexpr size_t kPrefixSize = sizeof(uint64_t);
-
     auto&    history = descriptor_histories_[descriptor_addr];
     uint64_t version = history.size() + 1;
     history.emplace_back(data_size);
     util::platform::MemoryCopy(history.back().data(), data_size, data, data_size);
 
-    if (data_size >= kPrefixSize)
-    {
-        uint64_t prefix = 0;
-        util::platform::MemoryCopy(&prefix, sizeof(prefix), data, kPrefixSize);
-        descriptor_versions_by_prefix_[prefix].emplace_back(DescriptorVersion{ descriptor_addr, version });
-    }
+    descriptor_trie_.Insert(data, data_size, DescriptorInfo{ descriptor_addr, version, data_size, call_index });
 }
 
 const std::vector<uint8_t>&
@@ -133,10 +300,8 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
                                                            const uint8_t*                                   data,
                                                            std::vector<format::DescriptorDataLocationInfo>* locations)
 {
-    constexpr size_t kPrefixSize = sizeof(uint64_t);
-
     auto memory = memory_binding_entries_.find(memory_id);
-    if (memory == memory_binding_entries_.end() || size < kPrefixSize)
+    if (memory == memory_binding_entries_.end() || size == 0)
     {
         return;
     }
@@ -229,11 +394,12 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
         }
     }
 
-    size_t occupied_range_idx = 0;
+    size_t                             occupied_range_idx = 0;
+    std::vector<const DescriptorInfo*> candidates;
     for (const auto& scan_range : merged_scan_ranges)
     {
         uint64_t memory_offset = scan_range.begin;
-        while (memory_offset < scan_range.end && (scan_range.end - memory_offset) >= kPrefixSize)
+        while (memory_offset < scan_range.end)
         {
             const uint64_t data_offset = memory_offset - fill_begin;
 
@@ -252,34 +418,28 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
                 continue;
             }
 
-            uint64_t prefix = 0;
-            util::platform::MemoryCopy(&prefix, sizeof(prefix), data + data_offset, kPrefixSize);
-            auto candidates = descriptor_versions_by_prefix_.find(prefix);
-            if (candidates == descriptor_versions_by_prefix_.end())
+            descriptor_trie_.Match(data + data_offset, scan_range.end - memory_offset, candidates);
+            if (candidates.empty())
             {
                 ++memory_offset;
                 continue;
             }
 
             bool found_descriptor = false;
-            for (auto candidate_it = candidates->second.rbegin(); candidate_it != candidates->second.rend();
-                 ++candidate_it)
+            for (const auto& candidate : candidates)
             {
-                const auto& candidate = *candidate_it;
-                auto        seen      = descriptor_versions_seen_.find(candidate.descriptor_addr);
-                if (seen == descriptor_versions_seen_.end() || candidate.version > seen->second)
+                auto seen = descriptor_versions_seen_.find(candidate->descriptor_addr);
+                if (seen == descriptor_versions_seen_.end() || candidate->version > seen->second)
                 {
                     continue;
                 }
 
-                const auto& descriptor = descriptor_histories_.at(candidate.descriptor_addr).at(candidate.version - 1);
-
-                if (descriptor.size() > scan_range.end - memory_offset)
+                if (candidate->size > scan_range.end - memory_offset)
                 {
                     continue;
                 }
 
-                const uint64_t descriptor_end = data_offset + descriptor.size();
+                const uint64_t descriptor_end = data_offset + candidate->size;
                 GFXRECON_ASSERT(descriptor_end >= data_offset);
                 if (occupied_range_idx < merged_occupied_ranges.size() &&
                     merged_occupied_ranges[occupied_range_idx].begin < descriptor_end)
@@ -287,38 +447,35 @@ void VulkanDescriptorBufferModifier::FindCopiedDescriptors(uint64_t             
                     continue;
                 }
 
-                if (util::platform::MemoryCompare(descriptor.data(), data + data_offset, descriptor.size()) == 0)
+                auto bound_buffer = std::find_if(
+                    bound_buffers.begin(), bound_buffers.end(), [memory_offset, &candidate](const auto& range) {
+                        return memory_offset >= range.begin && memory_offset < range.end &&
+                               candidate->size <= range.end - memory_offset;
+                    });
+                if (bound_buffer == bound_buffers.end())
                 {
-                    auto bound_buffer = std::find_if(
-                        bound_buffers.begin(), bound_buffers.end(), [memory_offset, &descriptor](const auto& range) {
-                            return memory_offset >= range.begin && memory_offset < range.end &&
-                                   descriptor.size() <= range.end - memory_offset;
-                        });
-                    if (bound_buffer == bound_buffers.end())
-                    {
-                        continue;
-                    }
-
-                    format::DescriptorDataLocationInfo location{};
-                    location.descriptor_offset_in_mapped_memory = memory_offset - memory->second.mapping.offset;
-                    location.descriptor_offset_in_buffer        = memory_offset - bound_buffer->begin;
-                    location.descriptor_offset_in_memory        = data_offset;
-                    location.descriptor_addr                    = candidate.descriptor_addr;
-                    location.orig_size                          = descriptor.size();
-                    location.descriptor_generation              = candidate.version;
-
-                    locations->emplace_back(location);
-                    GFXRECON_LOG_DEBUG("Found descriptor generation %" PRIu64 " from 0x%lx in Filled Memory(%" PRIu64
-                                       ") at relative offset 0x%lx.",
-                                       candidate.version,
-                                       candidate.descriptor_addr,
-                                       memory_id,
-                                       data_offset);
-
-                    memory_offset += descriptor.size();
-                    found_descriptor = true;
-                    break;
+                    continue;
                 }
+
+                format::DescriptorDataLocationInfo location{};
+                location.descriptor_offset_in_mapped_memory = memory_offset - memory->second.mapping.offset;
+                location.descriptor_offset_in_buffer        = memory_offset - bound_buffer->begin;
+                location.descriptor_offset_in_memory        = data_offset;
+                location.descriptor_addr                    = candidate->descriptor_addr;
+                location.orig_size                          = candidate->size;
+                location.descriptor_generation              = candidate->version;
+
+                locations->emplace_back(location);
+                GFXRECON_LOG_DEBUG("Found descriptor generation %" PRIu64 " from 0x%lx in Filled Memory(%" PRIu64
+                                   ") at relative offset 0x%lx.",
+                                   candidate->version,
+                                   candidate->descriptor_addr,
+                                   memory_id,
+                                   data_offset);
+
+                memory_offset += candidate->size;
+                found_descriptor = true;
+                break;
             }
 
             if (!found_descriptor)
@@ -705,7 +862,7 @@ void VulkanDescriptorBufferModifier::Process_vkGetDescriptorEXT(const ApiCallInf
         return;
     }
 
-    RecordDescriptor(desc_addr, args.dataSize, args.pDescriptor.GetPointer());
+    RecordDescriptor(call_info.index, desc_addr, args.dataSize, args.pDescriptor.GetPointer());
     bool found = false;
 
     format::DescriptorDataLocationInfo location{};
