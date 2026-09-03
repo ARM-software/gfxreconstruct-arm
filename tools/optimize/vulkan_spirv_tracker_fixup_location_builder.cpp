@@ -109,7 +109,7 @@ bool FixupLocationBuilder::HasFixups() const
     return !fixup_locations_by_root_.empty();
 }
 
-void FixupLocationBuilder::WriteRewritePlanJson(const std::string& path) const
+void FixupLocationBuilder::WriteRewritePlanJson(const std::filesystem::path& path) const
 {
     std::ofstream file(path, std::ios::out | std::ios::trunc);
     if (!file)

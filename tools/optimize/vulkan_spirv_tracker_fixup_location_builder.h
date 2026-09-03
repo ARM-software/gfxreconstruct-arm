@@ -24,7 +24,7 @@
 #define GFXRECON_TOOLS_OPTIMIZE_VULKAN_SPIRV_TRACKER_FIXUP_LOCATION_BUILDER_H
 
 #include <cstdint>
-#include <string>
+#include <filesystem>
 #include <unordered_map>
 #include <vector>
 
@@ -34,17 +34,21 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
+class FixupLocationBuilderTestAccess;
+
 // Holds root-source-local fixup locations built from analysis results and later
 // consumed by the modification pass.
 class FixupLocationBuilder
 {
+    friend class FixupLocationBuilderTestAccess;
+
   public:
     void Reset();
     // Lower one batch of finalized device-address fixup inputs into root-source-local
     // fixup locations owned by this builder.
     void Build(const std::vector<DeviceAddressFixupInput>& inputs);
     bool HasFixups() const;
-    void WriteRewritePlanJson(const std::string& path) const;
+    void WriteRewritePlanJson(const std::filesystem::path& path) const;
     // Look up the fixup locations attached to one resolved root source.
     const FixupLocations* GetFixupLocations(ProvenanceRootType type, uint64_t source_index) const;
 

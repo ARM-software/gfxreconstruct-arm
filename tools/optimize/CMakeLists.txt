@@ -109,3 +109,28 @@ include(${PROJECT_SOURCE_DIR}/cmake/AgilitySDK.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/InstallDXC.cmake)
 
 install(TARGETS gfxrecon-optimize RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+if (${RUN_TESTS})
+    add_executable(gfxrecon_descriptor_buffer_modifier_test "")
+    target_sources(gfxrecon_descriptor_buffer_modifier_test PRIVATE
+                   ${CMAKE_CURRENT_LIST_DIR}/test/vulkan_descriptor_buffer_modifier_test.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_spirv_tracker_fixup_location_builder.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp)
+    target_include_directories(gfxrecon_descriptor_buffer_modifier_test
+                               PRIVATE
+                                   ${CMAKE_BINARY_DIR}
+                                   ${CMAKE_CURRENT_LIST_DIR}/..
+                                   ${CMAKE_CURRENT_LIST_DIR})
+    target_link_libraries(gfxrecon_descriptor_buffer_modifier_test
+                          PRIVATE
+                              gfxrecon_application
+                              gfxrecon_decode
+                              gfxrecon_encode
+                              gfxrecon_graphics
+                              gfxrecon_format
+                              platform_specific
+                              project_version)
+    common_build_directives(gfxrecon_descriptor_buffer_modifier_test)
+    common_test_directives(gfxrecon_descriptor_buffer_modifier_test)
+endif()

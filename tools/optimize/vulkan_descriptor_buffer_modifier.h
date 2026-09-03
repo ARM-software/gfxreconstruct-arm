@@ -40,6 +40,8 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
+class VulkanDescriptorBufferModifierTestAccess;
+
 // Performs optimization of descriptor buffer content
 // In the first pass tracks memory modifications in order to identify memory ranges
 // containing device addresses and shader group handles
@@ -47,6 +49,8 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 // instructing the replayer to replace memory range with a device address or shader group handle value
 class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
 {
+    friend class VulkanDescriptorBufferModifierTestAccess;
+
   public:
     VulkanDescriptorBufferModifier() = default;
     VulkanDescriptorBufferModifier(const VulkanOptimizationOptions& options);
