@@ -176,6 +176,10 @@ class VulkanSpirvTrackModifier : public util::VulkanModifierBase
 
     void Process_vkCmdDispatch(const ApiCallInfo& call_info, args::CmdDispatch& args) override;
 
+    void Process_vkCmdDispatchBase(const ApiCallInfo& call_info, args::CmdDispatchBase& args) override;
+
+    void Process_vkCmdDispatchBaseKHR(const ApiCallInfo& call_info, args::CmdDispatchBaseKHR& args) override;
+
     void Process_vkCmdDispatchIndirect(const ApiCallInfo& call_info, args::CmdDispatchIndirect& args) override;
 
     void Process_vkCmdDraw(const ApiCallInfo& call_info, args::CmdDraw& args) override;
@@ -203,7 +207,6 @@ class VulkanSpirvTrackModifier : public util::VulkanModifierBase
     void signalSemaphoresFrom(uint64_t submitIndex);
 
     void executeCommandBuffer(format::HandleId commandBuffer_id);
-    void executeDispatchDraw(format::HandleId commandBuffer_id, VkPipelineBindPoint bindPoint);
     void outputSimulator(const SPIRVSimulator::SimulationResults& results);
     void resetRecording(format::HandleId commandBuffer);
 
@@ -503,11 +506,39 @@ class VulkanSpirvTrackModifier : public util::VulkanModifierBase
         std::vector<DescriptorBufferOffsetMap> descriptor_buffer_offsets;
     };
 
+    enum class DispatchCountSourceKind
+    {
+        Invalid = 0,
+        Inline,
+        Indirect,
+    };
+
+    struct RecordedDispatchGeometry
+    {
+        DispatchCountSourceKind                   count_source    = DispatchCountSourceKind::Invalid;
+        SPIRVSimulator::ComputeDispatchDimensions inline_counts   = {};
+        SPIRVSimulator::ComputeDispatchDimensions base_workgroups = { 0, 0, 0 };
+        format::HandleId                          indirect_buffer = format::kNullHandleId;
+        VkDeviceSize                              indirect_offset = 0;
+    };
+
+    struct ResolvedDispatchGeometry
+    {
+        bool                                      valid           = false;
+        SPIRVSimulator::ComputeDispatchDimensions counts          = {};
+        SPIRVSimulator::ComputeDispatchDimensions base_workgroups = { 0, 0, 0 };
+    };
+
+    void executeDispatchDraw(format::HandleId                               commandBuffer_id,
+                             VkPipelineBindPoint                            bindPoint,
+                             const std::optional<ResolvedDispatchGeometry>& dispatch_geometry);
+
     struct CommandBufferRecording
     {
-        format::HandleId    command_buffer = 0;
-        VkPipelineBindPoint bind_point     = VK_PIPELINE_BIND_POINT_MAX_ENUM;
-        bool                in_operation   = false;
+        format::HandleId         command_buffer = 0;
+        VkPipelineBindPoint      bind_point     = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+        bool                     in_operation   = false;
+        RecordedDispatchGeometry dispatch_geometry;
 
         std::vector<PushConstantData> push_constants;
 

@@ -1072,7 +1072,7 @@ void VulkanSpirvTrackModifier::Process_vkCreateGraphicsPipelines(const ApiCallIn
 
                     for (uint32_t j = 0; j < entry_count; j++)
                     {
-                        stage.specialization_offset_entries[entries[i].constantID] = entries[i].offset;
+                        stage.specialization_offset_entries[entries[j].constantID] = entries[j].offset;
                     }
                 }
             }
@@ -1205,8 +1205,9 @@ void VulkanSpirvTrackModifier::Process_vkBeginCommandBuffer(const ApiCallInfo&  
     command_buffer_submit_recordings.erase(args.commandBuffer);
     command_buffer_state.erase(args.commandBuffer);
 
-    command_buffer_recording[args.commandBuffer].command_buffer = args.commandBuffer;
-    command_buffer_recording[args.commandBuffer].bind_point     = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+    command_buffer_recording[args.commandBuffer].command_buffer    = args.commandBuffer;
+    command_buffer_recording[args.commandBuffer].bind_point        = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+    command_buffer_recording[args.commandBuffer].dispatch_geometry = {};
 
     command_buffer_state[args.commandBuffer].command_buffer = args.commandBuffer;
     command_buffer_state[args.commandBuffer].push_constant.assign(256, 0); // MAX_PUSHCONSTANT_SIZE
@@ -1771,8 +1772,77 @@ void VulkanSpirvTrackModifier::Process_vkCmdDispatch(const ApiCallInfo& call_inf
     {
         return;
     }
-    command_buffer_recording[args.commandBuffer].bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-    command_buffer_submit_recordings[args.commandBuffer].emplace_back(command_buffer_recording[args.commandBuffer]);
+
+    CommandBufferRecording& recording           = command_buffer_recording[args.commandBuffer];
+    recording.bind_point                        = VK_PIPELINE_BIND_POINT_COMPUTE;
+    recording.dispatch_geometry.count_source    = DispatchCountSourceKind::Inline;
+    recording.dispatch_geometry.inline_counts   = { static_cast<uint64_t>(args.groupCountX),
+                                                    static_cast<uint64_t>(args.groupCountY),
+                                                    static_cast<uint64_t>(args.groupCountZ) };
+    recording.dispatch_geometry.base_workgroups = { 0, 0, 0 };
+    recording.dispatch_geometry.indirect_buffer = format::kNullHandleId;
+    recording.dispatch_geometry.indirect_offset = 0;
+
+    command_buffer_submit_recordings[args.commandBuffer].emplace_back(recording);
+    resetRecording(args.commandBuffer);
+}
+
+void VulkanSpirvTrackModifier::Process_vkCmdDispatchBase(const ApiCallInfo& call_info, args::CmdDispatchBase& args)
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    if (command_buffer_entries_.find(args.commandBuffer) == command_buffer_entries_.end() ||
+        command_buffer_entries_[args.commandBuffer].state != CommandBufferLifeCycle::Recording)
+    {
+        return;
+    }
+
+    CommandBufferRecording& recording           = command_buffer_recording[args.commandBuffer];
+    recording.bind_point                        = VK_PIPELINE_BIND_POINT_COMPUTE;
+    recording.dispatch_geometry.count_source    = DispatchCountSourceKind::Inline;
+    recording.dispatch_geometry.inline_counts   = { static_cast<uint64_t>(args.groupCountX),
+                                                    static_cast<uint64_t>(args.groupCountY),
+                                                    static_cast<uint64_t>(args.groupCountZ) };
+    recording.dispatch_geometry.base_workgroups = { static_cast<uint64_t>(args.baseGroupX),
+                                                    static_cast<uint64_t>(args.baseGroupY),
+                                                    static_cast<uint64_t>(args.baseGroupZ) };
+    recording.dispatch_geometry.indirect_buffer = format::kNullHandleId;
+    recording.dispatch_geometry.indirect_offset = 0;
+
+    command_buffer_submit_recordings[args.commandBuffer].emplace_back(recording);
+    resetRecording(args.commandBuffer);
+}
+
+void VulkanSpirvTrackModifier::Process_vkCmdDispatchBaseKHR(const ApiCallInfo&        call_info,
+                                                            args::CmdDispatchBaseKHR& args)
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    if (command_buffer_entries_.find(args.commandBuffer) == command_buffer_entries_.end() ||
+        command_buffer_entries_[args.commandBuffer].state != CommandBufferLifeCycle::Recording)
+    {
+        return;
+    }
+
+    CommandBufferRecording& recording           = command_buffer_recording[args.commandBuffer];
+    recording.bind_point                        = VK_PIPELINE_BIND_POINT_COMPUTE;
+    recording.dispatch_geometry.count_source    = DispatchCountSourceKind::Inline;
+    recording.dispatch_geometry.inline_counts   = { static_cast<uint64_t>(args.groupCountX),
+                                                    static_cast<uint64_t>(args.groupCountY),
+                                                    static_cast<uint64_t>(args.groupCountZ) };
+    recording.dispatch_geometry.base_workgroups = { static_cast<uint64_t>(args.baseGroupX),
+                                                    static_cast<uint64_t>(args.baseGroupY),
+                                                    static_cast<uint64_t>(args.baseGroupZ) };
+    recording.dispatch_geometry.indirect_buffer = format::kNullHandleId;
+    recording.dispatch_geometry.indirect_offset = 0;
+
+    command_buffer_submit_recordings[args.commandBuffer].emplace_back(recording);
     resetRecording(args.commandBuffer);
 }
 
@@ -1790,8 +1860,15 @@ void VulkanSpirvTrackModifier::Process_vkCmdDispatchIndirect(const ApiCallInfo& 
         return;
     }
 
-    command_buffer_recording[args.commandBuffer].bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-    command_buffer_submit_recordings[args.commandBuffer].emplace_back(command_buffer_recording[args.commandBuffer]);
+    CommandBufferRecording& recording           = command_buffer_recording[args.commandBuffer];
+    recording.bind_point                        = VK_PIPELINE_BIND_POINT_COMPUTE;
+    recording.dispatch_geometry.count_source    = DispatchCountSourceKind::Indirect;
+    recording.dispatch_geometry.inline_counts   = { 0, 0, 0 };
+    recording.dispatch_geometry.base_workgroups = { 0, 0, 0 };
+    recording.dispatch_geometry.indirect_buffer = args.buffer;
+    recording.dispatch_geometry.indirect_offset = args.offset;
+
+    command_buffer_submit_recordings[args.commandBuffer].emplace_back(recording);
     resetRecording(args.commandBuffer);
 }
 
@@ -2087,8 +2164,9 @@ void VulkanSpirvTrackModifier::Process_vkQueueSubmit2KHR(const ApiCallInfo& call
 
 void VulkanSpirvTrackModifier::resetRecording(format::HandleId commandBuffer)
 {
-    command_buffer_recording[commandBuffer].bind_point   = VK_PIPELINE_BIND_POINT_MAX_ENUM;
-    command_buffer_recording[commandBuffer].in_operation = false;
+    command_buffer_recording[commandBuffer].bind_point        = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+    command_buffer_recording[commandBuffer].in_operation      = false;
+    command_buffer_recording[commandBuffer].dispatch_geometry = {};
     command_buffer_recording[commandBuffer].push_constants.clear();
     command_buffer_recording[commandBuffer].pipelines.clear();
     command_buffer_recording[commandBuffer].descriptor_state_commands.clear();
@@ -2622,18 +2700,56 @@ void VulkanSpirvTrackModifier::executeCommandBuffer(format::HandleId commandBuff
 
         ApplyDescriptorStateCommands(commandBuffer, recording);
 
-        // execute dispatch,draw
-        if (recording.bind_point == VK_PIPELINE_BIND_POINT_COMPUTE ||
-            recording.bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS)
+        std::optional<ResolvedDispatchGeometry> dispatch_geometry = std::nullopt;
+        if (recording.bind_point == VK_PIPELINE_BIND_POINT_COMPUTE)
         {
-            executeDispatchDraw(commandBuffer, recording.bind_point);
+            dispatch_geometry                  = ResolvedDispatchGeometry{};
+            dispatch_geometry->base_workgroups = recording.dispatch_geometry.base_workgroups;
+
+            if (recording.dispatch_geometry.count_source == DispatchCountSourceKind::Inline)
+            {
+                dispatch_geometry->valid  = true;
+                dispatch_geometry->counts = recording.dispatch_geometry.inline_counts;
+            }
+            else if (recording.dispatch_geometry.count_source == DispatchCountSourceKind::Indirect)
+            {
+                const auto buffer_iter = buffer_entries_.find(recording.dispatch_geometry.indirect_buffer);
+                if (buffer_iter != buffer_entries_.end())
+                {
+                    const size_t indirect_offset = static_cast<size_t>(recording.dispatch_geometry.indirect_offset);
+                    if (indirect_offset <= buffer_iter->second.data.size() &&
+                        sizeof(VkDispatchIndirectCommand) <= (buffer_iter->second.data.size() - indirect_offset))
+                    {
+                        VkDispatchIndirectCommand counts = {};
+                        std::memcpy(&counts, buffer_iter->second.data.data() + indirect_offset, sizeof(counts));
+                        dispatch_geometry->valid  = true;
+                        dispatch_geometry->counts = { static_cast<uint64_t>(counts.x),
+                                                      static_cast<uint64_t>(counts.y),
+                                                      static_cast<uint64_t>(counts.z) };
+                    }
+                }
+            }
+        }
+
+        const bool known_empty_compute_dispatch =
+            recording.bind_point == VK_PIPELINE_BIND_POINT_COMPUTE && dispatch_geometry.has_value() &&
+            dispatch_geometry->valid &&
+            (dispatch_geometry->counts.x == 0 || dispatch_geometry->counts.y == 0 || dispatch_geometry->counts.z == 0);
+
+        // execute dispatch,draw
+        if (!known_empty_compute_dispatch && (recording.bind_point == VK_PIPELINE_BIND_POINT_COMPUTE ||
+                                              recording.bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS))
+        {
+            executeDispatchDraw(commandBuffer, recording.bind_point, dispatch_geometry);
         }
     }
     command_buffer_submit_recordings.erase(commandBuffer);
     command_buffer_entries_.at(commandBuffer).state = CommandBufferLifeCycle::Executable;
 }
 
-void VulkanSpirvTrackModifier::executeDispatchDraw(format::HandleId commandBuffer, VkPipelineBindPoint bindPoint)
+void VulkanSpirvTrackModifier::executeDispatchDraw(format::HandleId                               commandBuffer,
+                                                   VkPipelineBindPoint                            bindPoint,
+                                                   const std::optional<ResolvedDispatchGeometry>& dispatch_geometry)
 {
     const BindPointState& bind_point_state = command_buffer_state[commandBuffer].bind_point_state.at(bindPoint);
 
@@ -2748,6 +2864,18 @@ void VulkanSpirvTrackModifier::executeDispatchDraw(format::HandleId commandBuffe
 
     SPIRVSimulator::SimulationData sim_data;
     DispatchBlockInfos             block_infos;
+
+    if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE && dispatch_geometry.has_value() && dispatch_geometry->valid)
+    {
+        sim_data.has_compute_num_workgroups = true;
+        sim_data.compute_num_workgroups     = dispatch_geometry->counts;
+        sim_data.base_workgroups            = dispatch_geometry->base_workgroups;
+    }
+    else
+    {
+        sim_data.has_compute_num_workgroups = false;
+        sim_data.base_workgroups            = { 0, 0, 0 };
+    }
 
     std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::vector<void*>>> sim_binding_pointer_tables;
 
