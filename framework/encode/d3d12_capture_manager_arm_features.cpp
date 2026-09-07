@@ -61,6 +61,17 @@ void D3D12CaptureManagerArmFeatures::WarnFullCaptureRequired()
     });
 }
 
+void D3D12CaptureManagerArmFeatures::DestroyDevice(ID3D12Device_Wrapper* wrapper)
+{
+    if (wrapper == nullptr)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(output_mutex_);
+    resource_data_utils_.erase(wrapper->GetCaptureId());
+}
+
 void D3D12CaptureManagerArmFeatures::DestroyResource(ID3D12Resource_Wrapper* wrapper)
 {
     if (wrapper == nullptr)

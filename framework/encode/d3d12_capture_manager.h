@@ -245,6 +245,8 @@ class D3D12CaptureManager : public ApiCaptureManager
         }
     }
 
+    void ProcessWrapperDestroy(ID3D12Device_Wrapper* wrapper);
+
     void PostProcess_IDXGIFactory_CreateSwapChain(IDXGIFactory_Wrapper* wrapper,
                                                   HRESULT               result,
                                                   IUnknown*             device,

@@ -96,6 +96,7 @@ class D3D12CaptureManagerArmFeatures
 
     void TrackWriteModeExecuteCommandLists(UINT num_lists, ID3D12CommandList* const* lists);
 
+    void DestroyDevice(ID3D12Device_Wrapper* wrapper);
     void DestroyResource(ID3D12Resource_Wrapper* wrapper);
 
   private:

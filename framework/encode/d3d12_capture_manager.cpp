@@ -93,6 +93,12 @@ void D3D12CaptureManager::DestroyInstance()
     singleton_->common_manager_->DestroyInstance(singleton_);
 }
 
+void D3D12CaptureManager::ProcessWrapperDestroy(ID3D12Device_Wrapper* wrapper)
+{
+    arm_features_->DestroyDevice(wrapper);
+    ProcessWrapperDestroy<ID3D12Device_Wrapper>(wrapper);
+}
+
 void D3D12CaptureManager::EndCreateApiCallCapture(HRESULT result, REFIID riid, void** handle)
 {
     if (IsCaptureModeTrack() && SUCCEEDED(result))
