@@ -22,6 +22,15 @@ lunarg_gfxreconstruct.capture_trigger =
 # changes. Valid values are frames and queue_submits. Default is: frames.
 lunarg_gfxreconstruct.capture_trigger_boundary = frames
 
+# Capture Trigger Boundary Limit
+# =====================
+# <LayerIdentifier>.capture_trigger_frames
+# Specify a limit on the number of capture boundaries to record after the
+# trigger starts capture. Boundaries are frames by default and queue submits
+# when capture_trigger_boundary is queue_submits. Default is: Empty string (no
+# limit).
+lunarg_gfxreconstruct.capture_trigger_frames =
+
 # Capture Specific Frames
 # =====================
 # <LayerIdentifier>.capture_frames
@@ -34,6 +43,13 @@ lunarg_gfxreconstruct.capture_trigger_boundary = frames
 # files, one containing a single frame and one containing five frames. Default
 # is: Empty string (all frames are captured).
 lunarg_gfxreconstruct.capture_frames =
+
+# Capture Specific Process
+# =====================
+# <LayerIdentifier>.capture_process_name
+# Specify one process name to capture. Default is: Empty string (all processes
+# are captured).
+lunarg_gfxreconstruct.capture_process_name =
 
 # Capture File Name
 # =====================
@@ -60,6 +76,14 @@ lunarg_gfxreconstruct.capture_file_flush = false
 # Compression format to use with the capture file. Valid values are: LZ4, ZLIB,
 # ZSTD, and NONE. Default is: LZ4
 lunarg_gfxreconstruct.capture_compression_type = LZ4
+
+# Capture Environment
+# =====================
+# <LayerIdentifier>.capture_environment
+# Specify a comma-separated list of environment-variable names to record in
+# the capture file. Default is: Empty string (no environment variables are
+# captured).
+lunarg_gfxreconstruct.capture_environment =
 
 # Memory Tracking Mode
 # =====================
@@ -126,7 +150,7 @@ lunarg_gfxreconstruct.page_guard_persistent_memory = false
 # the same page, avoiding data loss from simultaneous CPU writes to the shadow
 # allocation and GPU writes to the real allocation for different buffers bound
 # to the same page. This option is only available for the Vulkan API.
-lunarg_gfxreconstruct.page_guard_align_buffer_sizes = false
+lunarg_gfxreconstruct.page_guard_align_buffer_sizes = true
 
 # Page Guard Unblock SIGSEGV
 # =====================
@@ -152,7 +176,13 @@ lunarg_gfxreconstruct.log_level = info
 # Include name and line number from the file responsible.
 lunarg_gfxreconstruct.log_detailed = false
 
-# Log Name and Line Number
+# Log Timestamps
+# =====================
+# <LayerIdentifier>.log_timestamps
+# Prefix each log message with a timestamp. Default is: false.
+lunarg_gfxreconstruct.log_timestamps = false
+
+# Apply Additional Indentation
 # =====================
 # <LayerIdentifier>.log_allow_indents
 # Apply additional indentation formatting to log messages.
@@ -163,6 +193,12 @@ lunarg_gfxreconstruct.log_allow_indents = false
 # <LayerIdentifier>.log_output_to_console
 # Log messages will be written to stdout.
 lunarg_gfxreconstruct.log_output_to_console = true
+
+# Log Errors to stderr
+# =====================
+# <LayerIdentifier>.log_errors_to_stderr
+# Write error messages to stderr instead of stdout. Default is: true.
+lunarg_gfxreconstruct.log_errors_to_stderr = true
 
 # Trigger Debug Break on Error
 # =====================
