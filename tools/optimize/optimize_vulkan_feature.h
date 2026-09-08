@@ -55,10 +55,7 @@ class OptimizeVulkanFeature : public OptimizeFeature
 
     // Command-line options and arguments
     // -------------------------------------
-    std::string GetOptions() const override;
-    std::string GetArguments() const override;
-    std::string GetSynopsisFragment() const override;
-    void        PrintUsage() const override;
+    std::vector<util::FeatureOptionDesc> GetOptionDescs() const override;
 
   private:
     // Pass 1: collect handles that were never referenced in a command buffer submission.

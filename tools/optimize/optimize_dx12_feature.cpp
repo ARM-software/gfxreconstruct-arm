@@ -23,6 +23,9 @@
 
 #if defined(D3D12_SUPPORT)
 
+// This needs to be included before d3d12.h so that IIDs are defined and not just declared.
+#include <initguid.h>
+
 #include "optimize_dx12_feature.h"
 
 #include "tool_settings.h"
@@ -78,41 +81,33 @@ bool OptimizeDx12Feature::ShouldRun(const util::ArgumentParser& args) const
     return manual_mode || WasDetected();
 }
 
-std::string OptimizeDx12Feature::GetOptions() const
+std::vector<util::FeatureOptionDesc> OptimizeDx12Feature::GetOptionDescs() const
 {
-    return "--d3d12-pso-removal,--d3d12-resource-removal,--d3d12-no-default,--dxr,--dxr-experimental,--dxr-offline";
-}
-
-std::string OptimizeDx12Feature::GetArguments() const
-{
-    return "--gpu,--remove-device-ids";
-}
-
-std::string OptimizeDx12Feature::GetSynopsisFragment() const
-{
-    return "[--d3d12-pso-removal] [--d3d12-resource-removal] [--d3d12-no-default] [--dxr] [--dxr-offline]"
-           "[--gpu <index>] [--remove-device-ids <ids>]";
-}
-
-void OptimizeDx12Feature::PrintUsage() const
-{
-    GFXRECON_WRITE_CONSOLE("");
-    GFXRECON_WRITE_CONSOLE(" // D3D12-only options:");
-    GFXRECON_WRITE_CONSOLE(" // -------------------");
-    GFXRECON_WRITE_CONSOLE("  --d3d12-pso-removal\t\tRemove creation of unreferenced PSOs.");
-    GFXRECON_WRITE_CONSOLE("  --d3d12-resource-removal\tRemove initialization of unreferenced resources "
-                           "(experimental, off by default).");
-    GFXRECON_WRITE_CONSOLE(
-        "  --d3d12-no-default\t\tSkip D3D12 default optimizations. Not commonly used unless specifically required.");
-    GFXRECON_WRITE_CONSOLE("  --dxr\t\t\t\tOptimize for DXR and ExecuteIndirect replay.");
-    GFXRECON_WRITE_CONSOLE("  --dxr-offline\t\t\tOptimize for DXR and ExecuteIndirect replay offline (on by default).");
-    GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\t\tUse the specified device for the optimizer replay,");
-    GFXRECON_WRITE_CONSOLE("          \t\t\twhere index is the zero-based index to the array of adapters");
-    GFXRECON_WRITE_CONSOLE("          \t\t\treturned by IDXGIFactory1::EnumAdapters1.");
-    GFXRECON_WRITE_CONSOLE(
-        "          \t\t\tThe optimizer replay may fail if the specified device is not compatible with the");
-    GFXRECON_WRITE_CONSOLE("          \t\t\toriginal capture devices.");
-    GFXRECON_WRITE_CONSOLE("  --remove-device-ids <ids>\t\tRemove the specified device from the D3D12 trace.");
+    return { { "", { "Remove creation of unreferenced PSOs." }, false, kD3d12PsoRemoval },
+             { "",
+               { "Remove initialization of unreferenced resources (experimental,", "off by default)." },
+               false,
+               kD3d12ResourceRemoval },
+             { "",
+               { "Skip D3D12 default optimizations. Not commonly used unless specifically required." },
+               false,
+               kD3d12NoDefault },
+             { "", { "Optimize for DXR and ExecuteIndirect replay." }, false, kDx12OptimizeDxr },
+             // The experimental form of --dxr has no description, so it stays out of the usage text.
+             { "", {}, false, kDx12OptimizeDxrExperimental },
+             { "",
+               { "Optimize for DXR and ExecuteIndirect replay offline (on by default)." },
+               false,
+               kDx12OptimizeDxrOffline },
+             { "<index>",
+               { "Use the specified device for the optimizer replay, where index is",
+                 "the zero-based index to the array of adapters that",
+                 "IDXGIFactory1::EnumAdapters1 returns. The optimizer replay can fail",
+                 "when the specified device is not compatible with the original",
+                 "capture devices." },
+               true,
+               kOverrideGpuArgument },
+             { "<ids>", { "Remove the specified devices from the D3D12 trace." }, true, kDx12RemoveDeviceIds } };
 }
 
 decode::Dx12OptimizationOptions OptimizeDx12Feature::BuildOptions(const util::ArgumentParser& args) const
