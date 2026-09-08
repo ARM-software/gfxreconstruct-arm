@@ -48,9 +48,10 @@ struct MarkInjectedCommandsHelper
     // allow nested usage without hitting an assertion
     static thread_local uint32_t semaphore;
 
-    const decode::VulkanDeviceInfo* const device_info;
+    // Any Vulkan dispatchable handle
+    const void* const handle;
 
-    MarkInjectedCommandsHelper(const decode::VulkanDeviceInfo* info);
+    MarkInjectedCommandsHelper(const void* dispatchable_handle);
     ~MarkInjectedCommandsHelper();
 };
 

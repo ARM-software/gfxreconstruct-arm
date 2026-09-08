@@ -53,7 +53,6 @@ class VulkanMicromapBuilder
 
   public:
     VulkanMicromapBuilder(const graphics::VulkanDeviceTable*      device_table,
-                          const VulkanPhysicalDeviceInfo*         physical_device_info,
                           VkDevice                                device,
                           VulkanResourceAllocator*                allocator,
                           const VkPhysicalDeviceMemoryProperties& properties,
@@ -122,11 +121,11 @@ class VulkanMicromapBuilder
         PFN_vkCmdPipelineBarrier       cmd_pipeline_barrier{ nullptr };
     };
 
-    VulkanResourceAllocator*        allocator_;
-    Functions                       functions_;
-    VulkanDeviceAddressTracker&     device_address_tracker_;
-    VulkanInternalBufferManager     internal_buffer_manager_;
-    const VulkanPhysicalDeviceInfo* physical_device_info_;
+    VkDevice                    device_;
+    VulkanResourceAllocator*    allocator_;
+    Functions                   functions_;
+    VulkanDeviceAddressTracker& device_address_tracker_;
+    VulkanInternalBufferManager internal_buffer_manager_;
 
     struct MicromapData
     {

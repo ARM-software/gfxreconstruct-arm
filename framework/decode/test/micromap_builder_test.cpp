@@ -39,6 +39,7 @@ class VulkanMicromapBuilderTestAccess
 {
   public:
     static void AddPendingCompaction(VulkanMicromapBuilder&   builder,
+                                     VkDevice                 device,
                                      VkQueryPool              query_pool,
                                      uint32_t                 first_query,
                                      VkBuffer                 buffer,
@@ -52,7 +53,7 @@ class VulkanMicromapBuilderTestAccess
         builder.compacted_sizes_unprocessed_[query_pool].push_back(
             { first_query,
               std::make_unique<VulkanInternalBufferManager::BufferInfoWrapper>(
-                  buffer_info, VulkanDeviceMemoryInfo{}, allocator, nullptr),
+                  buffer_info, VulkanDeviceMemoryInfo{}, allocator, device),
               std::move(parents) });
     }
 };
@@ -136,16 +137,18 @@ TEST_CASE("Micromap compacted-size query barrier covers every result byte", "[de
     device_table.CmdCopyQueryPoolResults = CaptureCmdCopyQueryPoolResults;
     device_table.CmdPipelineBarrier      = CaptureCmdPipelineBarrier;
 
-    const VkDevice        device         = MakeHandle<VkDevice>(2001);
+    // Will be retrieved by MarkingLayersUtil as key for identifying device
+    const void* device_dispatch_table = nullptr;
+
+    const VkDevice        device         = reinterpret_cast<const VkDevice>(&device_dispatch_table);
     const VkCommandBuffer command_buffer = MakeHandle<VkCommandBuffer>(2002);
     const VkQueryPool     query_pool     = MakeHandle<VkQueryPool>(2003);
     const VkBuffer        buffer         = MakeHandle<VkBuffer>(2004);
     constexpr uint32_t    kFirstQuery    = 15;
 
-    VulkanMicromapBuilder builder(
-        &device_table, nullptr, device, &allocator, memory_properties, device_address_tracker);
+    VulkanMicromapBuilder builder(&device_table, device, &allocator, memory_properties, device_address_tracker);
     VulkanMicromapBuilderTestAccess::AddPendingCompaction(
-        builder, query_pool, kFirstQuery, buffer, result_count, &allocator);
+        builder, device, query_pool, kFirstQuery, buffer, result_count, &allocator);
 
     VulkanCommandBufferInfo command_buffer_info{};
     command_buffer_info.handle = command_buffer;

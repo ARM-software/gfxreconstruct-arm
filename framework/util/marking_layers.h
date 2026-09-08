@@ -28,9 +28,6 @@
 #include "util/defines.h"
 #include "format/format.h"
 
-#include "decode/vulkan_object_info.h"
-#include "decode/vulkan_object_info_table.h"
-
 #include <string>
 #include <set>
 #include <unordered_map>
@@ -38,132 +35,61 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
-typedef void MarkInjectedCallback(void*);
-struct MarkInjectedCallbacks
-{
-    void*                 user_data;
-    MarkInjectedCallback* begin_injected = nullptr;
-    MarkInjectedCallback* end_injected   = nullptr;
-};
-
 class MarkingLayersUtil
 {
+  private:
+    MarkingLayersUtil() = delete;
+
+    using MarkInjectedCallback = void(void*);
+
+    struct MarkInjectedCallbacks
+    {
+        void*                 user_data;
+        MarkInjectedCallback* begin_injected = nullptr;
+        MarkInjectedCallback* end_injected   = nullptr;
+    };
+
+    // Takes as input any Vulkan dispatchable handle (VkDevice, VkQueue, VkCommandBuffer...)
+    // Returns a key that is the same for every handle created from a same VkDevice
+    // See
+    // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderDriverInterface.md#driver-dispatchable-object-creation
+    static uintptr_t GetKey(const void* handle) { return *reinterpret_cast<const uintptr_t*>(handle); }
+
+    inline static std::unordered_map<uintptr_t, std::vector<MarkInjectedCallbacks>> callbacks_;
+
   public:
-    static MarkingLayersUtil& instance()
+    static void BeginInjected(const void* handle)
     {
-        static MarkingLayersUtil instance;
-        return instance;
-    }
+        const uintptr_t key = GetKey(handle);
+        auto            it  = callbacks_.find(key);
 
-    template <typename T>
-    void BeginInjected(const decode::VulkanObjectInfo<T>* info, const std::string& file = "", int line = 0)
-    {
-        if constexpr (is_debug_)
+        if (it != callbacks_.end())
         {
-            if (!scope_closed_)
+            for (const MarkInjectedCallbacks& callback : it->second)
             {
-                GFXRECON_LOG_FATAL("Marking was not closed, previous begin call at %s, %d", file_.c_str(), line_);
-                GFXRECON_ASSERT(false);
+                callback.begin_injected(callback.user_data);
             }
-            file_         = file;
-            line_         = line;
-            scope_closed_ = false;
-        }
-
-        callbacks_it_t entries = Callbacks(info);
-        if (entries == callbacks_.end())
-        {
-            return;
-        }
-
-        for (const MarkInjectedCallbacks& callback : entries->second)
-        {
-            callback.begin_injected(callback.user_data);
         }
     }
 
-    template <typename T>
-    void EndInjected(const decode::VulkanObjectInfo<T>* info)
+    static void EndInjected(const void* handle)
     {
-        if constexpr (is_debug_)
-        {
-            scope_closed_ = true;
-        }
+        const uintptr_t key = GetKey(handle);
+        auto            it  = callbacks_.find(key);
 
-        MarkingLayersUtil::callbacks_it_t entries = Callbacks(info);
-        if (entries == callbacks_.end())
+        if (it != callbacks_.end())
         {
-            return;
-        }
-
-        for (const MarkInjectedCallbacks& callback : entries->second)
-        {
-            callback.end_injected(callback.user_data);
+            for (const MarkInjectedCallbacks& callback : it->second)
+            {
+                callback.end_injected(callback.user_data);
+            }
         }
     }
 
-    void AddCallbacks(format::HandleId physical_device_id, const VkPhysicalDeviceToolProperties& tool_properties)
+    static void AddCallbacks(const void* handle, const VkPhysicalDeviceToolProperties& tool_properties)
     {
-        // Do not add callbacks for the layers that were not enabled by the respective argument
-        if (layer_names_.count(tool_properties.layer) == 0)
-        {
-            return;
-        }
-        GFXRECON_LOG_DEBUG(
-            "Adding a %s layer callbacks from physical device %" PRIu64, tool_properties.layer, physical_device_id);
-        callbacks_[physical_device_id].emplace_back(*reinterpret_cast<MarkInjectedCallbacks*>(tool_properties.pNext));
+        callbacks_[GetKey(handle)].emplace_back(*reinterpret_cast<MarkInjectedCallbacks*>(tool_properties.pNext));
     }
-
-    void SetInfoTable(const decode::VulkanObjectInfoTable* object_info_table)
-    {
-        object_info_table_ = object_info_table;
-    }
-
-    void AddLayerName(std::string_view name) { layer_names_.insert(name); }
-
-  private:
-    using callbacks_it_t = std::unordered_map<format::HandleId, std::vector<MarkInjectedCallbacks>>::iterator;
-
-  private:
-    MarkingLayersUtil() = default;
-
-    callbacks_it_t Callbacks(format::HandleId physical_device_id) { return callbacks_.find(physical_device_id); }
-
-    template <typename T>
-    callbacks_it_t Callbacks(const decode::VulkanObjectInfo<T>* info)
-    {
-        if (!object_info_table_ || !info)
-        {
-            return callbacks_.end();
-        }
-        const decode::VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(info->parent_id);
-        return Callbacks(device_info->parent_id);
-    }
-
-    MarkingLayersUtil::callbacks_it_t Callbacks(const decode::VulkanObjectInfo<VkDevice>* info)
-    {
-        return info ? Callbacks(info->parent_id) : callbacks_.end();
-    }
-
-    MarkingLayersUtil::callbacks_it_t Callbacks(const decode::VulkanObjectInfo<VkPhysicalDevice>* info)
-    {
-        return info ? Callbacks(info->capture_id) : callbacks_.end();
-    }
-
-  private:
-    std::set<std::string_view>                                               layer_names_;
-    std::unordered_map<format::HandleId, std::vector<MarkInjectedCallbacks>> callbacks_;
-    const decode::VulkanObjectInfoTable*                                     object_info_table_{ nullptr };
-
-    bool        scope_closed_{ true };
-    std::string file_;
-    int         line_;
-
-#ifdef NDEBUG
-    static const bool is_debug_ = false;
-#else
-    static const bool is_debug_ = true;
-#endif
 };
 
 GFXRECON_END_NAMESPACE(util)

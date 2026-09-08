@@ -83,9 +83,7 @@ class VulkanInjectedDeviceCalls
       private:
         friend class VulkanInjectedDeviceCalls;
 
-        explicit Scope(const VulkanDeviceTable* table, const decode::VulkanDeviceInfo* device_info) :
-            mark_helper_(device_info), table_(table)
-        {}
+        explicit Scope(const VulkanDeviceTable* table, const void* handle) : mark_helper_(handle), table_(table) {}
 
         util::MarkInjectedCommandsHelper mark_helper_;
         const VulkanDeviceTable*         table_;
@@ -116,13 +114,13 @@ class VulkanInjectedDeviceCalls
 
     VulkanInjectedDeviceCalls() = delete;
 
-    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, const decode::VulkanDeviceInfo* device_info);
+    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, const void* handle);
 
     bool IsValid() const { return table_ != nullptr; }
 
     // Opens the injected-commands window for the calling thread and grants
     // access to the dispatch table for its duration.
-    [[nodiscard]] Scope Open() const { return Scope(table_, device_info_); }
+    [[nodiscard]] Scope Open() const { return Scope(table_, handle_); }
 
     // Brackets injected commands recorded into command_buffer with a
     // Begin/EndDebugUtilsLabelEXT pair. Requires an open Scope; the parameter
@@ -131,8 +129,7 @@ class VulkanInjectedDeviceCalls
 
   private:
     const VulkanDeviceTable* table_;
-
-    const decode::VulkanDeviceInfo* device_info_;
+    const void*              handle_; // Any Vulkan dispatchable handle (needed for marking layers)
 };
 
 GFXRECON_END_NAMESPACE(graphics)

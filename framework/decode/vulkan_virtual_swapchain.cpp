@@ -104,11 +104,11 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainKHR(VkResult                    
 
     modified_create_info.imageUsage = modified_create_info.imageUsage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
+    util::MarkingLayersUtil::BeginInjected(device);
     VkResult result = instance_table_->GetPhysicalDeviceSurfaceCapabilitiesKHR(
         physical_device, create_info->surface, &surfCapabilities);
     GFXRECON_ASSERT(result == VK_SUCCESS);
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
+    util::MarkingLayersUtil::EndInjected(device);
 
     if (modified_create_info.minImageCount < surfCapabilities.minImageCount)
     {

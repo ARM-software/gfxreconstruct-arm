@@ -2166,14 +2166,10 @@ void VulkanReplayConsumerBase::AddInstanceTable(VkInstance instance)
     graphics::LoadVulkanInstanceTable(get_instance_proc_addr_, instance, &table);
 }
 
-void VulkanReplayConsumerBase::AddDeviceTable(const VulkanDeviceInfo* device_info, PFN_vkGetDeviceProcAddr gpa)
+void VulkanReplayConsumerBase::AddDeviceTable(VkDevice device, PFN_vkGetDeviceProcAddr gpa)
 {
-    graphics::VulkanDispatchKey dispatch_key = graphics::GetVulkanDispatchKey(device_info->handle);
-
-    device_infos_[dispatch_key] = device_info;
-
-    graphics::VulkanDeviceTable& table = device_tables_[dispatch_key];
-    graphics::LoadVulkanDeviceTable(gpa, device_info->handle, &table);
+    graphics::VulkanDeviceTable& table = device_tables_[graphics::GetVulkanDispatchKey(device)];
+    graphics::LoadVulkanDeviceTable(gpa, device, &table);
 }
 
 PFN_vkGetDeviceProcAddr VulkanReplayConsumerBase::GetDeviceAddrProc(VkPhysicalDevice physical_device)
@@ -2202,9 +2198,7 @@ const graphics::VulkanDeviceTable* VulkanReplayConsumerBase::GetDeviceTable(cons
 
 graphics::VulkanInjectedDeviceCalls VulkanReplayConsumerBase::GetInjectedDeviceCalls(const void* handle) const
 {
-    auto it = device_infos_.find(graphics::GetVulkanDispatchKey(handle));
-    assert(it != device_infos_.end());
-    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle), it->second);
+    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle), handle);
 }
 
 void* VulkanReplayConsumerBase::PreProcessExternalObject(uint64_t          object_id,
@@ -4131,13 +4125,11 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
         std::vector<VkQueueFamilyProperties> replay_queue_family_properties;
 
         // queries the capture did not make
-        util::MarkingLayersUtil::instance().BeginInjected(device_info);
         instance_table->GetPhysicalDeviceQueueFamilyProperties(physical_device, &replay_queue_family_count, nullptr);
 
         replay_queue_family_properties.resize(replay_queue_family_count);
         instance_table->GetPhysicalDeviceQueueFamilyProperties(
             physical_device, &replay_queue_family_count, replay_queue_family_properties.data());
-        util::MarkingLayersUtil::instance().EndInjected(device_info);
 
         std::vector<VkDeviceQueueCreateInfo>& modified_queue_create_infos = create_state.modified_queue_create_infos;
         modified_queue_create_infos.reserve(modified_create_info.queueCreateInfoCount);
@@ -4504,8 +4496,7 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
-    device_info->handle = replay_device;
-    AddDeviceTable(device_info, get_device_proc_addr);
+    AddDeviceTable(replay_device, get_device_proc_addr);
 
     auto instance_table = GetInstanceTable(physical_device);
 
@@ -4610,7 +4601,19 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
         GFXRECON_ASSERT(result == VK_SUCCESS);
         for (const VkPhysicalDeviceToolProperties& tool : tools)
         {
-            util::MarkingLayersUtil::instance().AddCallbacks(physical_device_info->capture_id, tool);
+            // Add marking layer callbacks only if enabled by the options
+            if (std::find(options_.marking_layers_names.begin(), options_.marking_layers_names.end(), tool.layer) !=
+                options_.marking_layers_names.end())
+            {
+                GFXRECON_LOG_DEBUG(
+                    "Adding a marking layer callback for device %p for layer '%s' ", replay_device, tool.layer);
+                util::MarkingLayersUtil::AddCallbacks(replay_device, tool);
+            }
+            else
+            {
+                GFXRECON_LOG_DEBUG(
+                    "Skipping marking layer callback for device %p for layer '%s' ", replay_device, tool.layer);
+            }
         }
     }
 
@@ -5527,7 +5530,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetEventStatus(PFN_vkGetEventStatus  
 
     VkResult result = func(device, event);
 
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
+    util::MarkingLayersUtil::BeginInjected(device);
 
     // If the query was successful at capture time, it MUST be successful at replay time, to avoid sync issues
     while (original_result == VK_EVENT_SET && result == VK_EVENT_RESET)
@@ -5536,7 +5539,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetEventStatus(PFN_vkGetEventStatus  
         result = func(device, event);
     }
 
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
+    util::MarkingLayersUtil::EndInjected(device);
 
     return result;
 }
@@ -9824,7 +9827,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
         if (!physical_device_info->surface_formats && options_.swapchain_option != util::SwapchainOption::kOffscreen)
         {
             const auto instance_table = GetInstanceTable(physical_device_info->handle);
-            util::MarkingLayersUtil::instance().BeginInjected(device_info);
+            util::MarkingLayersUtil::BeginInjected(device_info->handle);
             uint32_t surface_format_count = 0;
             auto     result               = instance_table->GetPhysicalDeviceSurfaceFormatsKHR(
                 physical_device_info->handle, modified_create_info.surface, &surface_format_count, nullptr);
@@ -9846,7 +9849,7 @@ VkResult VulkanReplayConsumerBase::OverrideCreateSwapchainKHR(
                     physical_device_info->surface_formats.reset();
                 }
             }
-            util::MarkingLayersUtil::instance().EndInjected(device_info);
+            util::MarkingLayersUtil::EndInjected(device_info->handle);
         }
 
         // check if 'replay_create_info->imageFormat' is supported,
@@ -13923,7 +13926,7 @@ VkResult VulkanReplayConsumerBase::CreateSwapchainImage(const VulkanDeviceInfo* 
 
     VulkanResourceAllocator::ResourceData allocator_image_data;
 
-    util::MarkingLayersUtil::instance().BeginInjected(device_info);
+    util::MarkingLayersUtil::BeginInjected(device_info->handle);
     VkResult result = allocator->CreateImageDirect(image_create_info, nullptr, image, &allocator_image_data);
 
     if (result == VK_SUCCESS)
@@ -13988,7 +13991,7 @@ VkResult VulkanReplayConsumerBase::CreateSwapchainImage(const VulkanDeviceInfo* 
             allocator->DestroyImageDirect(*image, nullptr, allocator_image_data);
         }
     }
-    util::MarkingLayersUtil::instance().EndInjected(device_info);
+    util::MarkingLayersUtil::EndInjected(device_info->handle);
 
     return result;
 }
@@ -14175,7 +14178,6 @@ VulkanReplayConsumerBase::GetAccelerationStructureBuilder(const decode::VulkanDe
             std::piecewise_construct,
             std::forward_as_tuple(device_info),
             std::forward_as_tuple(GetDeviceTable(device_info->handle),
-                                  physical_device_info,
                                   device_info->handle,
                                   device_info->allocator.get(),
                                   *physical_device_info->replay_device_info->memory_properties,
@@ -14199,7 +14201,6 @@ decode::VulkanMicromapBuilder& VulkanReplayConsumerBase::GetMicromapBuilder(cons
             std::piecewise_construct,
             std::forward_as_tuple(device_info),
             std::forward_as_tuple(GetDeviceTable(device_info->handle),
-                                  physical_device_info,
                                   device_info->handle,
                                   device_info->allocator.get(),
                                   *physical_device_info->replay_device_info->memory_properties,
@@ -15183,11 +15184,10 @@ void VulkanReplayConsumerBase::OverrideDestroyPipeline(
                 SavePipelineCache(id, itTracked->second);
             }
 
-            auto device_table = GetDeviceTable(device_info->handle);
-            util::MarkingLayersUtil::instance().BeginInjected(device_info);
-            device_table->DestroyPipelineCache(
-                itTracked->second.device_info->handle, itTracked->second.vk_cache, nullptr);
-            util::MarkingLayersUtil::instance().EndInjected(device_info);
+            auto device_table = GetDeviceTable(in_device);
+            util::MarkingLayersUtil::BeginInjected(in_device);
+            device_table->DestroyPipelineCache(in_device, itTracked->second.vk_cache, nullptr);
+            util::MarkingLayersUtil::EndInjected(in_device);
 
             tracked_pipeline_caches_.erase(itTracked);
         }
@@ -16873,8 +16873,6 @@ void VulkanReplayConsumerBase::InitializeReplayDataGraphOpticalFlowInfo(VulkanPh
     replay_device_info->data_graph_optical_flow_initialized = true;
     replay_device_info->data_graph_optical_flow_infos.clear();
 
-    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info);
-
     VkPhysicalDevice physical_device = physical_device_info->handle;
     auto*            instance_table  = GetInstanceTable(physical_device);
     GFXRECON_ASSERT(instance_table != nullptr);
@@ -16996,8 +16994,6 @@ void VulkanReplayConsumerBase::InitializeReplayDataGraphOpticalFlowInfo(VulkanPh
             replay_device_info->data_graph_optical_flow_infos.push_back(std::move(optical_flow_info));
         }
     }
-
-    util::MarkingLayersUtil::instance().EndInjected(physical_device_info);
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateDataGraphPipelinesARM(
@@ -17017,7 +17013,10 @@ VkResult VulkanReplayConsumerBase::OverrideCreateDataGraphPipelinesARM(
     auto* physical_device_info = object_info_table_->GetVkPhysicalDeviceInfo(device_info->parent_id);
     GFXRECON_ASSERT((physical_device_info != nullptr) && (physical_device_info->replay_device_info != nullptr));
 
+    util::MarkingLayersUtil::BeginInjected(device_info->handle);
     InitializeReplayDataGraphOpticalFlowInfo(physical_device_info);
+    util::MarkingLayersUtil::EndInjected(device_info->handle);
+
     const auto& replay_optical_flow_infos = physical_device_info->replay_device_info->data_graph_optical_flow_infos;
 
     auto any_optical_flow_support = !replay_optical_flow_infos.empty();

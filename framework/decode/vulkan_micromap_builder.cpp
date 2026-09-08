@@ -31,14 +31,13 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanMicromapBuilder::VulkanMicromapBuilder(const graphics::VulkanDeviceTable*      device_table,
-                                             const VulkanPhysicalDeviceInfo*         physical_device_info,
                                              VkDevice                                device,
                                              VulkanResourceAllocator*                allocator,
                                              const VkPhysicalDeviceMemoryProperties& properties,
                                              VulkanDeviceAddressTracker&             device_address_tracker) :
-    device_address_tracker_(device_address_tracker),
-    allocator_(allocator), physical_device_info_(physical_device_info),
-    internal_buffer_manager_(device_table, physical_device_info, device, allocator, properties)
+    device_(device),
+    allocator_(allocator), device_address_tracker_(device_address_tracker),
+    internal_buffer_manager_(device_table, device, allocator, properties)
 
 {
     InitializeFunctionPointers(device_table);
@@ -113,7 +112,7 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      de
                     std::vector<uint64_t> vector_of_mm_sizes(vector_of_mm.size(), 0);
                     uint64_t              buffer_size = vector_of_mm_sizes.size() * sizeof(uint64_t);
 
-                    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+                    util::MarkingLayersUtil::BeginInjected(device_);
                     void*    mapped;
                     VkResult mapping_result =
                         allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->info_.allocator_data);
@@ -122,7 +121,7 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      de
                     util::platform::MemoryCopy(vector_of_mm_sizes.data(), buffer_size, mapped, buffer_size);
 
                     allocator_->UnmapResourceMemoryDirect(buffer->info_.allocator_data);
-                    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+                    util::MarkingLayersUtil::EndInjected(device_);
 
                     // This assert may get hit if the opacity micromaps were not build and the optimized sizes are
                     // not known. This situation can happen if gpu is mocked and the assert can be triggered in debug
@@ -359,7 +358,7 @@ void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferI
 
     std::vector<PreProcessingCompactionInfo>& unprocessed = compacted_sizes_unprocessed_[query_pool_info->handle];
 
-    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+    util::MarkingLayersUtil::BeginInjected(device_);
     for (uint64_t i = 0; i < unprocessed.size(); i++)
     {
         PreProcessingCompactionInfo& pre_processed{ unprocessed[i] };
@@ -393,7 +392,7 @@ void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferI
                                         0,
                                         nullptr);
     }
-    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+    util::MarkingLayersUtil::EndInjected(device_);
 }
 
 // inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
@@ -415,7 +414,7 @@ void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    dev
 
         std::vector<uint64_t> vector_of_mm_sizes(pre_processed.parents.size(), 0);
 
-        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+        util::MarkingLayersUtil::BeginInjected(device_);
 
         functions_.get_query_pool_results(device_info->handle,
                                           query_pool_info->handle,
@@ -425,7 +424,7 @@ void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    dev
                                           vector_of_mm_sizes.data(),
                                           8,
                                           VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+        util::MarkingLayersUtil::EndInjected(device_);
 
         GFXRECON_ASSERT(vector_of_mm_sizes != std::vector<uint64_t>(vector_of_mm.size(), 0));
 

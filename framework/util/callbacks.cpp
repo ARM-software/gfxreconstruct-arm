@@ -94,12 +94,12 @@ class MarkInjectedCommands : public CallbackBase
 
 thread_local uint32_t MarkInjectedCommandsHelper::semaphore = 0;
 
-MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(const decode::VulkanDeviceInfo* info) : device_info(info)
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(const void* dispatchable_handle) : handle(dispatchable_handle)
 {
     // mark injected commands
     if (semaphore++ == 0)
     {
-        MarkingLayersUtil::instance().BeginInjected(device_info);
+        MarkingLayersUtil::BeginInjected(handle);
     }
 }
 
@@ -108,7 +108,7 @@ MarkInjectedCommandsHelper::~MarkInjectedCommandsHelper()
     // mark end of injected commands
     if (--semaphore == 0)
     {
-        MarkingLayersUtil::instance().EndInjected(device_info);
+        MarkingLayersUtil::EndInjected(handle);
     }
 }
 

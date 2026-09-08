@@ -24,6 +24,7 @@
 #ifndef GFXRECON_DECODE_VULKAN_INTERNAL_BUFFER_MANAGER_H
 #define GFXRECON_DECODE_VULKAN_INTERNAL_BUFFER_MANAGER_H
 
+#include "decode/vulkan_object_info.h"
 #include "decode/vulkan_resource_allocator.h"
 #include "util/vulkan_device_table_dispatcher.h"
 
@@ -40,29 +41,28 @@ class VulkanInternalBufferManager
   public:
     struct BufferInfoWrapper
     {
-        VulkanBufferInfo                info_;
-        VulkanDeviceMemoryInfo          memory_info_;
-        VulkanResourceAllocator*        allocator_;
-        const VulkanPhysicalDeviceInfo* physical_device_info_;
+        VulkanBufferInfo         info_;
+        VulkanDeviceMemoryInfo   memory_info_;
+        VulkanResourceAllocator* allocator_;
+        VkDevice                 device_;
 
-        BufferInfoWrapper(VulkanBufferInfo                buffer_info,
-                          VulkanDeviceMemoryInfo          memory_info,
-                          VulkanResourceAllocator*        allocator,
-                          const VulkanPhysicalDeviceInfo* physical_device_info) :
+        BufferInfoWrapper(VulkanBufferInfo         buffer_info,
+                          VulkanDeviceMemoryInfo   memory_info,
+                          VulkanResourceAllocator* allocator,
+                          VkDevice                 device) :
             info_(buffer_info),
-            memory_info_(memory_info), allocator_(allocator), physical_device_info_(physical_device_info)
+            memory_info_(memory_info), allocator_(allocator), device_(device)
         {}
         ~BufferInfoWrapper()
         {
-            util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+            util::MarkingLayersUtil::BeginInjected(device_);
             allocator_->DestroyBufferDirect(info_.handle, nullptr, info_.allocator_data);
             allocator_->FreeMemoryDirect(memory_info_.handle, nullptr, memory_info_.allocator_data);
-            util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+            util::MarkingLayersUtil::EndInjected(device_);
         }
     };
 
     VulkanInternalBufferManager(const graphics::VulkanDeviceTable*      device_table,
-                                const VulkanPhysicalDeviceInfo*         physical_device_info,
                                 VkDevice                                device,
                                 VulkanResourceAllocator*                allocator,
                                 const VkPhysicalDeviceMemoryProperties& properties);
@@ -80,7 +80,6 @@ class VulkanInternalBufferManager
     VkDevice                                        device_;
     VulkanResourceAllocator*                        allocator_;
     VkPhysicalDeviceMemoryProperties                physical_device_memory_properties_;
-    const VulkanPhysicalDeviceInfo*                 physical_device_info_;
     std::vector<std::unique_ptr<BufferInfoWrapper>> buffers_;
     util::VulkanDeviceTableDispatcher               dispatcher_;
 };

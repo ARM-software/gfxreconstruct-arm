@@ -38,16 +38,14 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanAccelerationStructureBuilder::VulkanAccelerationStructureBuilder(
     const graphics::VulkanDeviceTable*      device_table,
-    const VulkanPhysicalDeviceInfo*         physical_device_info,
     VkDevice                                device,
     VulkanResourceAllocator*                allocator,
     const VkPhysicalDeviceMemoryProperties& memory_properties,
     VulkanDeviceAddressTracker&             device_address_tracker) :
     device_(device),
-    physical_device_info_(physical_device_info), allocator_(allocator),
-    physical_device_memory_properties_(memory_properties), device_address_tracker_(device_address_tracker),
-    internal_buffer_manager_(
-        device_table, physical_device_info, device_, allocator_, physical_device_memory_properties_)
+    allocator_(allocator), physical_device_memory_properties_(memory_properties),
+    device_address_tracker_(device_address_tracker),
+    internal_buffer_manager_(device_table, device_, allocator_, physical_device_memory_properties_)
 {
     InitializeFunctionPointers(device_table);
     InitializeInternalExecObjects();
@@ -96,7 +94,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                     std::vector<uint64_t> vector_of_acc_str_sizes(sources.size(), 0);
                     uint64_t              buffer_size = vector_of_acc_str_sizes.size() * sizeof(uint64_t);
 
-                    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+                    util::MarkingLayersUtil::BeginInjected(device_info->handle);
                     void*    mapped;
                     VkResult mapping_result =
                         allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->info_.allocator_data);
@@ -105,7 +103,7 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
                     util::platform::MemoryCopy(vector_of_acc_str_sizes.data(), buffer_size, mapped, buffer_size);
 
                     allocator_->UnmapResourceMemoryDirect(buffer->info_.allocator_data);
-                    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+                    util::MarkingLayersUtil::EndInjected(device_info->handle);
 
                     // add results to compacted_sizes_processed map
                     for (uint64_t j = 0; j < sources.size(); j++)
@@ -299,7 +297,7 @@ void VulkanAccelerationStructureBuilder::InitializeFunctionPointers(const graphi
 
 void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
 {
-    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+    util::MarkingLayersUtil::BeginInjected(device_);
     VkResult result;
     cmd_execute_obj_.device_               = device_;
     cmd_execute_obj_.free_command_buffers_ = functions_.free_command_buffers;
@@ -335,7 +333,7 @@ void VulkanAccelerationStructureBuilder::InitializeInternalExecObjects()
 
     functions_.get_device_queue(device_, 0, 0, &cmd_execute_obj_.queue_);
     cmd_execute_obj_.initialized_ = true;
-    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+    util::MarkingLayersUtil::EndInjected(device_);
 }
 
 void VulkanAccelerationStructureBuilder::BeginCommandBuffer()
@@ -553,7 +551,7 @@ void VulkanAccelerationStructureBuilder::OnCmdCopyQueryPoolResults(const VulkanC
 
     std::vector<PreProcessingCompactionInfo>& unprocessed = compacted_sizes_unprocessed_[query_pool_info->handle];
 
-    util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+    util::MarkingLayersUtil::BeginInjected(command_buffer_info->handle);
     for (uint64_t i = 0; i < unprocessed.size(); i++)
     {
         PreProcessingCompactionInfo& pre_processed{ unprocessed[i] };
@@ -587,7 +585,7 @@ void VulkanAccelerationStructureBuilder::OnCmdCopyQueryPoolResults(const VulkanC
                                         0,
                                         nullptr);
     }
-    util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+    util::MarkingLayersUtil::EndInjected(command_buffer_info->handle);
 }
 
 // inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
@@ -609,7 +607,7 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const VulkanDevic
 
         std::vector<uint64_t> vector_of_acc_str_sizes(pre_processed.sources.size(), 0);
 
-        util::MarkingLayersUtil::instance().BeginInjected(physical_device_info_);
+        util::MarkingLayersUtil::BeginInjected(device_info->handle);
 
         functions_.get_query_pool_results(device_info->handle,
                                           query_pool_info->handle,
@@ -619,7 +617,7 @@ void VulkanAccelerationStructureBuilder::OnGetQueryPoolResults(const VulkanDevic
                                           vector_of_acc_str_sizes.data(),
                                           8,
                                           VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-        util::MarkingLayersUtil::instance().EndInjected(physical_device_info_);
+        util::MarkingLayersUtil::EndInjected(device_info->handle);
 
         // add results to compacted_sizes_processed map
         for (uint64_t j = 0; j < vector_of_acc_str.size(); j++)

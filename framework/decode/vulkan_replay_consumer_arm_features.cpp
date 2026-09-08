@@ -39,11 +39,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 VulkanReplayConsumerArmFeatures::VulkanReplayConsumerArmFeatures(VulkanReplayConsumerBase* consumer) :
     consumer_(consumer)
 {
-    util::MarkingLayersUtil::instance().SetInfoTable(consumer_->object_info_table_);
-    for (const std::string& name : consumer_->options_.marking_layers_names)
-    {
-        util::MarkingLayersUtil::instance().AddLayerName(name);
-    }
 }
 
 void VulkanReplayConsumerArmFeatures::ReplaceDeviceAddresses(VulkanCommandBufferInfo* command_buffer_info, void* data)

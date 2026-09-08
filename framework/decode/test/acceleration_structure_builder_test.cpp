@@ -57,6 +57,11 @@ struct TestFixture
     TestFixture() : buffer_tracker(object_info_table)
     {
         util::Log::Init(util::LoggingSeverity::kError);
+
+        // Needs a valid pointer for MarkingLayersUtil
+        // The value doesn't matter, it just needs to be readable so it doesn't SEGFAULT
+        device = reinterpret_cast<VkDevice>(&device);
+
         device_info.handle         = device;
         device_info.allocator      = std::make_unique<decode::VulkanResourceAllocatorMock>();
         mock_allocator             = dynamic_cast<decode::VulkanResourceAllocatorMock*>(device_info.allocator.get());
@@ -124,7 +129,7 @@ SCENARIO_METHOD(TestFixture, "Create single AS object with valid sizes")
 
         // Create tested object
         decode::VulkanAccelerationStructureBuilder asb(
-            &device_table, physical_device_info, device, mock_allocator, properties, buffer_tracker);
+            &device_table, device, mock_allocator, properties, buffer_tracker);
 
         // Simulate GetAccelerationStructureBuildSizes expected before each create call
         VkAccelerationStructureBuildSizesInfoKHR size_info;
@@ -189,6 +194,7 @@ class VulkanAccelerationStructureBuilderTestAccess
 {
   public:
     static void AddPendingCompaction(VulkanAccelerationStructureBuilder& builder,
+                                     VkDevice                            device,
                                      VkQueryPool                         query_pool,
                                      uint32_t                            first_query,
                                      VkBuffer                            buffer,
@@ -202,7 +208,7 @@ class VulkanAccelerationStructureBuilderTestAccess
         builder.compacted_sizes_unprocessed_[query_pool].push_back(
             { first_query,
               std::make_unique<VulkanInternalBufferManager::BufferInfoWrapper>(
-                  buffer_info, VulkanDeviceMemoryInfo{}, allocator, nullptr),
+                  buffer_info, VulkanDeviceMemoryInfo{}, allocator, device),
               std::move(sources) });
     }
 };
@@ -287,16 +293,19 @@ TEST_CASE("Acceleration structure compacted-size query barrier covers every resu
     device_table.CmdCopyQueryPoolResults = CaptureAccelerationStructureQueryCopy;
     device_table.CmdPipelineBarrier      = CaptureAccelerationStructureQueryBarrier;
 
-    const VkDevice        device         = MakeQueryBarrierHandle<VkDevice>(1001);
-    const VkCommandBuffer command_buffer = MakeQueryBarrierHandle<VkCommandBuffer>(1002);
+    // Will be retrieved by MarkingLayersUtil as key for identifying device
+    const void* dispatch_table = nullptr;
+
+    const VkDevice        device         = reinterpret_cast<const VkDevice>(&dispatch_table);
+    const VkCommandBuffer command_buffer = reinterpret_cast<const VkCommandBuffer>(&dispatch_table);
     const VkQueryPool     query_pool     = MakeQueryBarrierHandle<VkQueryPool>(1003);
     const VkBuffer        buffer         = MakeQueryBarrierHandle<VkBuffer>(1004);
     constexpr uint32_t    kFirstQuery    = 5;
 
     VulkanAccelerationStructureBuilder builder(
-        &device_table, nullptr, device, &allocator, memory_properties, device_address_tracker);
+        &device_table, device, &allocator, memory_properties, device_address_tracker);
     VulkanAccelerationStructureBuilderTestAccess::AddPendingCompaction(
-        builder, query_pool, kFirstQuery, buffer, result_count, &allocator);
+        builder, device, query_pool, kFirstQuery, buffer, result_count, &allocator);
 
     VulkanCommandBufferInfo command_buffer_info{};
     command_buffer_info.handle = command_buffer;
