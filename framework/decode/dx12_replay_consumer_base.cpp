@@ -2053,11 +2053,18 @@ Dx12ReplayConsumerBase::GetAccelerationStructureBuilder(const DxObjectInfo* repl
         {
             device_id = replay_object_info->extra_info->parent_id;
         }
+
+        if ((device_id == format::kNullHandleId) &&
+            (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12ResourceInfo))
+        {
+            // If the parent device id is null, it should be a swapchain buffer, it does not have a builder.
+            return nullptr;
+        }
     }
 
     if (device_id == format::kNullHandleId)
     {
-        GFXRECON_LOG_DEBUG("Failed to get device id for object_id %" PRIu64 " in GetAccelerationStructureBuilder.",
+        GFXRECON_LOG_ERROR("Failed to get device id for object_id %" PRIu64 " in GetAccelerationStructureBuilder.",
                            replay_object_info->capture_id);
         return nullptr;
     }

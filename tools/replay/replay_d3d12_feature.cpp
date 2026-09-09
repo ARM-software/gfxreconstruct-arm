@@ -223,12 +223,6 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         replay_options.headless = true;
     }
 
-    if (replay_options.swapchain_option == gfxrecon::util::SwapchainOption::kVirtual)
-    {
-        GFXRECON_LOG_WARNING("Virtual swapchain is not supported for DX12. Switching to captured swapchain.");
-        replay_options.swapchain_option = gfxrecon::util::SwapchainOption::kCaptured;
-    }
-
     return replay_options;
 }
 
