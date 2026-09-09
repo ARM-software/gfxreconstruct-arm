@@ -538,14 +538,15 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         std::vector<VmaMemoryInfo*>       bound_memory_infos; // VideoSession and sparse could be multiple bindings.
         std::vector<VkMemoryRequirements> capture_mem_reqs{};
 
-        VkObjectType  object_type{ VK_OBJECT_TYPE_UNKNOWN };
-        VkFlags       usage{ 0 };
-        VkImageTiling tiling{};
-        uint32_t      width{ 0 };
-        uint32_t      height{ 0 };
-        uint32_t      depth{ 0 };
-        bool          uses_extensions{ false };
-        VkFormat      format{ VK_FORMAT_UNDEFINED };
+        VkObjectType      object_type{ VK_OBJECT_TYPE_UNKNOWN };
+        VkFlags           usage{ 0 };
+        VkImageTiling     tiling{};
+        VkTensorTilingARM tensor_tiling{};
+        uint32_t          width{ 0 };
+        uint32_t          height{ 0 };
+        uint32_t          depth{ 0 };
+        bool              uses_extensions{ false };
+        VkFormat          format{ VK_FORMAT_UNDEFINED };
 
         // Captured VkBufferCreateInfo::size. Always present in the stream (unlike the memory
         // requirement size, which is 0 when vkGetBufferMemoryRequirements was never captured), so it

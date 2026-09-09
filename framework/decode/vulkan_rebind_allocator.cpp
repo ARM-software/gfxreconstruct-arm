@@ -2134,6 +2134,17 @@ void VulkanRebindAllocator::WriteBoundResourceDirect(ResourceAllocInfo* resource
             }
             break;
         }
+        case VK_OBJECT_TYPE_TENSOR_ARM:
+        {
+            if (resource_alloc_info->tensor_tiling == VK_TENSOR_TILING_LINEAR_ARM)
+            {
+                util::platform::MemoryCopy(static_cast<uint8_t*>(bound_memory_info->mapped_pointer) + dst_offset,
+                                           data_size,
+                                           data + src_offset,
+                                           data_size);
+            }
+            break;
+        }
         case VK_OBJECT_TYPE_VIDEO_SESSION_KHR:
         {
             // TODO: implement direct video session copy
@@ -4470,11 +4481,12 @@ VkResult VulkanRebindAllocator::CreateTensor(const VkTensorCreateInfoARM* create
 
         if (result >= 0)
         {
-            auto resource_alloc_info         = new ResourceAllocInfo;
-            resource_alloc_info->usage       = create_info->pDescription->usage;
-            resource_alloc_info->object_type = VK_OBJECT_TYPE_TENSOR_ARM;
-            resource_alloc_info->capture_id  = capture_id;
-            (*allocator_data)                = reinterpret_cast<uintptr_t>(resource_alloc_info);
+            auto resource_alloc_info           = new ResourceAllocInfo;
+            resource_alloc_info->usage         = create_info->pDescription->usage;
+            resource_alloc_info->tensor_tiling = create_info->pDescription->tiling;
+            resource_alloc_info->object_type   = VK_OBJECT_TYPE_TENSOR_ARM;
+            resource_alloc_info->capture_id    = capture_id;
+            (*allocator_data)                  = reinterpret_cast<uintptr_t>(resource_alloc_info);
 
             if (create_info->pNext != nullptr)
             {
