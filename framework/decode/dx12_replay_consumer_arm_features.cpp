@@ -819,7 +819,7 @@ void Dx12ReplayConsumerArmFeatures::SetResourceReplayRequiredSize(
                     accel_struct_size = accel_struct_builder->GetLastPrebuildInfo().ResultDataMaxSizeInBytes;
                 }
 
-                if (accel_struct_size != 0 && accel_struct_size > desc_pointer->Width)
+                if (accel_struct_size != 0)
                 {
                     const_cast<D3D12_RESOURCE_DESC*>(desc_pointer)->Width = accel_struct_size;
                 }
@@ -849,7 +849,7 @@ void Dx12ReplayConsumerArmFeatures::SetResourceReplayRequiredSize(
                     accel_struct_size = accel_struct_builder->GetLastPrebuildInfo().ResultDataMaxSizeInBytes;
                 }
 
-                if (accel_struct_size != 0 && accel_struct_size > desc_pointer->Width)
+                if (accel_struct_size != 0)
                 {
                     const_cast<D3D12_RESOURCE_DESC1*>(desc_pointer)->Width = accel_struct_size;
                 }
