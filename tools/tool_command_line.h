@@ -57,27 +57,23 @@ inline void PrintVersionHeader(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  GFXReconstruct Version %s", GetProjectVersionString());
 }
 
-static void PrintVersion(const char* exe_name)
-{
-    PrintVersionHeader(exe_name);
-    GFXRECON_WRITE_CONSOLE("  Vulkan Header Version %u.%u.%u",
-                           VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
-                           VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
-                           VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
-
-#if ENABLE_OPENXR_SUPPORT
-    GFXRECON_WRITE_CONSOLE("  OpenXR Header Version %u.%u.%u",
-                           XR_VERSION_MAJOR(XR_CURRENT_API_VERSION),
-                           XR_VERSION_MINOR(XR_CURRENT_API_VERSION),
-                           XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
-#endif
-}
-
 static bool CheckOptionPrintVersion(const char* exe_name, const gfxrecon::util::ArgumentParser& arg_parser)
 {
     if (arg_parser.IsOptionSet(kVersionOption))
     {
-        PrintVersion(exe_name);
+        PrintVersionHeader(exe_name);
+        GFXRECON_WRITE_CONSOLE("  Vulkan Header Version %u.%u.%u",
+                               VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
+                               VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
+                               VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
+
+#if ENABLE_OPENXR_SUPPORT
+        GFXRECON_WRITE_CONSOLE("  OpenXR Header Version %u.%u.%u",
+                               XR_VERSION_MAJOR(XR_CURRENT_API_VERSION),
+                               XR_VERSION_MINOR(XR_CURRENT_API_VERSION),
+                               XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
+#endif
+
         return true;
     }
 

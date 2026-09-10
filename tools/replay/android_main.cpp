@@ -112,6 +112,9 @@ void android_main(struct android_app* app)
 
     if (run)
     {
+        // Always print version information for the ARM-based replay tool.
+        PrintVersions<gfxrecon::replay::ReplayFeatureBase>(kApplicationName);
+
         gfxrecon::util::Log::Settings log_settings;
         GetLogSettings(arg_parser, log_settings);
         gfxrecon::util::Log::UpdateWithSettings(log_settings);

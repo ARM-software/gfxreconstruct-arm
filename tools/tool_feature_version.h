@@ -62,4 +62,11 @@ inline bool CheckOptionPrintFeatureVersions(const char* exe_name, const gfxrecon
     return false;
 }
 
+template <typename FeatureBaseT>
+inline void PrintVersions(const char* exe_name)
+{
+    PrintVersionHeader(exe_name);
+    PrintFeatureVersions<FeatureBaseT>();
+}
+
 #endif // GFXRECON_TOOL_FEATURE_VERSION_H

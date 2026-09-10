@@ -119,6 +119,9 @@ int main(int argc, const char** argv)
         ProcessDisableDebugPopup(arg_parser);
     }
 
+    // Always print version information for the ARM-based replay tool.
+    PrintVersions<gfxrecon::replay::ReplayFeatureBase>(argv[0]);
+
     gfxrecon::util::Log::Settings log_settings;
     GetLogSettings(arg_parser, log_settings);
     gfxrecon::util::Log::UpdateWithSettings(log_settings);
