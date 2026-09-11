@@ -62,8 +62,13 @@ struct TestFixture
         // The value doesn't matter, it just needs to be readable so it doesn't SEGFAULT
         device = reinterpret_cast<VkDevice>(&device);
 
-        device_info.handle         = device;
-        device_info.allocator      = std::make_unique<decode::VulkanResourceAllocatorMock>();
+        device_info.handle    = device;
+        device_info.allocator = std::make_unique<decode::VulkanResourceAllocatorMock>();
+
+        VkDeviceCreateInfo            device_create_info;
+        graphics::VulkanInstanceTable instance_table;
+        device_info.allocator->Initialize(nullptr, device, device_create_info, {}, instance_table, &device_table);
+
         mock_allocator             = dynamic_cast<decode::VulkanResourceAllocatorMock*>(device_info.allocator.get());
         physical_device_info       = nullptr;
         properties.memoryTypeCount = 2;
@@ -139,7 +144,7 @@ SCENARIO_METHOD(TestFixture, "Create single AS object with valid sizes")
         WHEN("OnCreateAccelerationStructure is called")
         {
             // ASB may attempt to create new storage - record its size
-            mock_allocator->OnCreateBufferDirect = [&](const VkBufferCreateInfo* info) { storage_size = info->size; };
+            mock_allocator->OnCreateBuffer = [&](const VkBufferCreateInfo* info) { storage_size = info->size; };
             // ASB will attempt to fetch size of the storage buffer from allocator
             // This may be called either on the input storage buffer or the recreated storage buffer
             mock_allocator->OnGetBufferSize = [&](decode::VulkanResourceAllocator::ResourceData alloc_data) {
@@ -301,6 +306,10 @@ TEST_CASE("Acceleration structure compacted-size query barrier covers every resu
     const VkQueryPool     query_pool     = MakeQueryBarrierHandle<VkQueryPool>(1003);
     const VkBuffer        buffer         = MakeQueryBarrierHandle<VkBuffer>(1004);
     constexpr uint32_t    kFirstQuery    = 5;
+
+    VkDeviceCreateInfo            device_create_info;
+    graphics::VulkanInstanceTable instance_table;
+    allocator.Initialize(nullptr, device, device_create_info, {}, instance_table, &device_table);
 
     VulkanAccelerationStructureBuilder builder(
         &device_table, device, &allocator, memory_properties, device_address_tracker);

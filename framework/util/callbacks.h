@@ -34,21 +34,10 @@ using PFN_EventBeginCallBack = void (*)(void*);
 using PFN_EventEndCallBack   = void (*)(void*);
 using PFN_SetEventsCallbacks = void (*)(PFN_EventBeginCallBack, PFN_EventEndCallBack, void*);
 
-/* !!!!! DISABLED IN ARM REPOSITORY !!!!!
-
-void BeginInjectedCommands();
-
-void EndInjectedCommands();
-
-!!!!! DISABLED IN ARM REPOSITORY !!!!! */
-
 //! RAII helper to mark injected commands in scope
 class MarkInjectedCommandsHelper
 {
   public:
-    // allow nested usage without hitting an assertion
-    static thread_local uint32_t semaphore;
-
     MarkInjectedCommandsHelper(VkDevice device);
     MarkInjectedCommandsHelper(VkQueue queue);
     MarkInjectedCommandsHelper(VkCommandBuffer commande_buffer);
@@ -59,6 +48,9 @@ class MarkInjectedCommandsHelper
 
     void* const handle_; // Any Vulkan dispatchable handle
 };
+
+// Returns true while the calling thread is inside a MarkInjectedCommandsHelper scope.
+bool InjectedCommandsActive();
 
 // Interface for registering callbacks so that GFXReconstruct can notify an external library about
 // generated API calls that are not included in the capture file.

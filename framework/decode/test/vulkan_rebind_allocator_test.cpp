@@ -75,12 +75,14 @@ class VulkanRebindAllocatorTestAccess
                          VkCommandPool                             cmd_pool,
                          VkQueue                                   staging_queue,
                          const VulkanResourceAllocator::Functions& functions,
+                         const graphics::VulkanDeviceTable&        device_table,
                          VmaBackend*                               vma_backend = nullptr)
     {
         allocator.device_        = device;
         allocator.cmd_pool_      = cmd_pool;
         allocator.staging_queue_ = staging_queue;
         allocator.functions_     = functions;
+        allocator.device_table_  = graphics::VulkanInjectedDeviceCalls(&device_table, device);
         allocator.allocator_     = reinterpret_cast<VmaAllocator>(static_cast<uintptr_t>(1));
         if (vma_backend != nullptr)
         {
@@ -448,10 +450,15 @@ struct ImageMemorySelectionFixture
 
     ImageMemorySelectionFixture()
     {
-        VulkanResourceAllocator::Functions functions{};
+        // Will be retrieved by MarkingLayersUtil as key for identifying device
+        const void* device_dispatch_table = nullptr;
+        VkDevice    device                = reinterpret_cast<VkDevice>(&device_dispatch_table);
+
+        VulkanResourceAllocator::Functions    functions{};
+        gfxrecon::graphics::VulkanDeviceTable device_table{};
         // A fake allocator handle is sufficient because the backend intercepts the VMA calls exercised by these tests.
         gfxrecon::decode::VulkanRebindAllocatorTestAccess::SetState(
-            allocator, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, functions, &mock_vma_backend);
+            allocator, device, VK_NULL_HANDLE, VK_NULL_HANDLE, functions, device_table, &mock_vma_backend);
         gfxrecon::decode::VulkanRebindAllocatorTestAccess::SetMemoryProperties(
             allocator, capture_memory_properties, replay_memory_properties);
     }
@@ -468,6 +475,7 @@ struct WriteBoundResourceStagingFixture
     StrictMock<MockVmaBackend>                                         mock_vma_backend;
     gfxrecon::decode::VulkanRebindAllocator                            allocator;
     gfxrecon::decode::VulkanResourceAllocator::Functions               functions{};
+    gfxrecon::graphics::VulkanDeviceTable                              device_table{};
     ResourceAllocInfo                                                  resource_alloc_info;
     std::array<uint8_t, 32>                                            original_memory{};
     std::array<uint8_t, 32>                                            staging_memory{};
@@ -475,9 +483,13 @@ struct WriteBoundResourceStagingFixture
     VmaMemoryInfo                                                      bound_memory_info;
     std::vector<uint8_t>                                               write_data{ 0, 1, 2, 3, 4, 5, 6, 7 };
     std::unique_ptr<gfxrecon::decode::VulkanAndroidHardwareBufferInfo> ahb_info;
-    VkDevice                                                           device       = MakeHandle<VkDevice>(0x1001);
-    VkCommandPool                                                      command_pool = MakeHandle<VkCommandPool>(0x1002);
-    VkQueue                                                            staging_queue = MakeHandle<VkQueue>(0x1003);
+
+    // Will be retrieved by MarkingLayersUtil as key for identifying device
+    const void* device_dispatch_table = nullptr;
+
+    VkDevice        device             = reinterpret_cast<VkDevice>(&device_dispatch_table);
+    VkCommandPool   command_pool       = MakeHandle<VkCommandPool>(0x1002);
+    VkQueue         staging_queue      = MakeHandle<VkQueue>(0x1003);
     VkCommandBuffer command_buffer     = MakeHandle<VkCommandBuffer>(0x1004);
     VkBuffer        staging_buffer     = MakeHandle<VkBuffer>(0x4001);
     VmaAllocation   staging_allocation = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x5001));
@@ -496,17 +508,19 @@ struct WriteBoundResourceStagingFixture
     {
         gfxrecon::util::Log::Init(gfxrecon::util::LoggingSeverity::kError);
 
-        functions.allocate_command_buffers = &AllocateCommandBuffersThunk;
-        functions.begin_command_buffer     = &BeginCommandBufferThunk;
-        functions.cmd_copy_buffer          = &CmdCopyBufferThunk;
-        functions.cmd_copy_buffer_to_image = &CmdCopyBufferToImageThunk;
-        functions.end_command_buffer       = &EndCommandBufferThunk;
-        functions.create_semaphore         = &CreateSemaphoreThunk;
-        functions.create_fence             = &CreateFenceThunk;
-        functions.queue_submit             = &QueueSubmitThunk;
+        functions.cmd_copy_buffer = &CmdCopyBufferThunk;
+
+        device_table.AllocateCommandBuffers = &AllocateCommandBuffersThunk;
+        device_table.BeginCommandBuffer     = &BeginCommandBufferThunk;
+        device_table.CmdCopyBuffer          = &CmdCopyBufferThunk;
+        device_table.CmdCopyBufferToImage   = &CmdCopyBufferToImageThunk;
+        device_table.EndCommandBuffer       = &EndCommandBufferThunk;
+        device_table.CreateSemaphore        = &CreateSemaphoreThunk;
+        device_table.CreateFence            = &CreateFenceThunk;
+        device_table.QueueSubmit            = &QueueSubmitThunk;
 
         gfxrecon::decode::VulkanRebindAllocatorTestAccess::SetState(
-            allocator, device, command_pool, staging_queue, functions, &mock_vma_backend);
+            allocator, device, command_pool, staging_queue, functions, device_table, &mock_vma_backend);
 
         g_mock_vulkan_functions = &mock_vulkan_functions;
     }
@@ -1329,19 +1343,27 @@ TEST_CASE("Data graph rebind synthesizes the replay session binding set", "[deco
     StrictMock<MockVmaBackend>              mock_vma_backend;
     gfxrecon::decode::VulkanRebindAllocator allocator;
 
-    const VkDevice device      = MakeHandle<VkDevice>(0x1001);
-    const auto     session     = MakeHandle<VkDataGraphPipelineSessionARM>(0x2001);
-    const auto     allocation0 = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x3001));
-    const auto     allocation1 = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x3002));
-    const auto     memory0     = MakeHandle<VkDeviceMemory>(0x4001);
-    const auto     memory1     = MakeHandle<VkDeviceMemory>(0x4002);
+    // Will be retrieved by MarkingLayersUtil as key for identifying device
+    const void* device_dispatch_table = nullptr;
+
+    const auto device      = reinterpret_cast<const VkDevice>(&device_dispatch_table);
+    const auto session     = MakeHandle<VkDataGraphPipelineSessionARM>(0x2001);
+    const auto allocation0 = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x3001));
+    const auto allocation1 = reinterpret_cast<VmaAllocation>(static_cast<uintptr_t>(0x3002));
+    const auto memory0     = MakeHandle<VkDeviceMemory>(0x4001);
+    const auto memory1     = MakeHandle<VkDeviceMemory>(0x4002);
 
     gfxrecon::decode::VulkanResourceAllocator::Functions functions{};
     functions.get_data_graph_pipeline_session_bind_point_requirements = &GetDataGraphBindPointRequirementsThunk;
     functions.get_data_graph_pipeline_session_memory_requirements     = &GetDataGraphMemoryRequirementsThunk;
     functions.bind_data_graph_pipeline_session_memory                 = &BindDataGraphSessionMemoryThunk;
 
-    TestAccess::SetState(allocator, device, VK_NULL_HANDLE, VK_NULL_HANDLE, functions, &mock_vma_backend);
+    gfxrecon::graphics::VulkanDeviceTable device_table{};
+    device_table.GetDataGraphPipelineSessionBindPointRequirementsARM = &GetDataGraphBindPointRequirementsThunk;
+    device_table.GetDataGraphPipelineSessionMemoryRequirementsARM    = &GetDataGraphMemoryRequirementsThunk;
+    device_table.BindDataGraphPipelineSessionMemoryARM               = &BindDataGraphSessionMemoryThunk;
+
+    TestAccess::SetState(allocator, device, VK_NULL_HANDLE, VK_NULL_HANDLE, functions, device_table, &mock_vma_backend);
     const auto memory_properties = MakeMemoryProperties({ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT });
     TestAccess::SetMemoryProperties(allocator, memory_properties, memory_properties);
     g_mock_vulkan_functions = &mock_vulkan_functions;

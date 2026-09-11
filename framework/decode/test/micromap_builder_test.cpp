@@ -146,6 +146,10 @@ TEST_CASE("Micromap compacted-size query barrier covers every result byte", "[de
     const VkBuffer        buffer         = MakeHandle<VkBuffer>(2004);
     constexpr uint32_t    kFirstQuery    = 15;
 
+    VkDeviceCreateInfo            device_create_info;
+    graphics::VulkanInstanceTable instance_table;
+    allocator.Initialize(nullptr, device, device_create_info, {}, instance_table, &device_table);
+
     VulkanMicromapBuilder builder(&device_table, device, &allocator, memory_properties, device_address_tracker);
     VulkanMicromapBuilderTestAccess::AddPendingCompaction(
         builder, device, query_pool, kFirstQuery, buffer, result_count, &allocator);
