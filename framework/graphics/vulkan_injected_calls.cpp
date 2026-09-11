@@ -50,11 +50,11 @@ static VkDebugUtilsLabelEXT MakeLabel(const std::string& label_name)
     return label;
 }
 
-VulkanInjectedDeviceCalls::VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, const void* handle) :
+VulkanInjectedDeviceCalls::VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, VkDevice handle) :
     table_(table), handle_(handle)
 {
     GFXRECON_ASSERT(table_ != nullptr);
-    GFXRECON_ASSERT(handle_ != nullptr);
+    GFXRECON_ASSERT(handle_ != VK_NULL_HANDLE);
 }
 
 void VulkanInjectedDeviceCalls::Scope::InsertLabel(VkCommandBuffer command_buffer, const char* category) const

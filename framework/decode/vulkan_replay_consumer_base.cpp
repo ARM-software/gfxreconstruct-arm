@@ -2198,7 +2198,8 @@ const graphics::VulkanDeviceTable* VulkanReplayConsumerBase::GetDeviceTable(cons
 
 graphics::VulkanInjectedDeviceCalls VulkanReplayConsumerBase::GetInjectedDeviceCalls(const void* handle) const
 {
-    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle), handle);
+    return graphics::VulkanInjectedDeviceCalls(GetDeviceTable(handle),
+                                               reinterpret_cast<VkDevice>(const_cast<void*>(handle)));
 }
 
 void* VulkanReplayConsumerBase::PreProcessExternalObject(uint64_t          object_id,
@@ -3424,7 +3425,7 @@ bool VulkanReplayConsumerBase::CheckCommandBufferInfoForFrameBoundary(
 
             VkPhysicalDeviceMemoryProperties memory_properties;
             {
-                util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info);
+                util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info->handle);
                 auto                             instance_table = GetInstanceTable(device_info->parent);
                 GFXRECON_ASSERT(instance_table != nullptr);
 
@@ -3510,7 +3511,7 @@ bool VulkanReplayConsumerBase::CheckPNextChainForFrameBoundary(const VulkanDevic
 
     VkPhysicalDeviceMemoryProperties memory_properties;
     {
-        util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info);
+        util::MarkInjectedCommandsHelper mark_injected_commands_helper(device_info->handle);
         auto                             instance_table = GetInstanceTable(device_info->parent);
         GFXRECON_ASSERT(instance_table != nullptr);
 

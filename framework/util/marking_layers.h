@@ -49,15 +49,29 @@ class MarkingLayersUtil
         MarkInjectedCallback* end_injected   = nullptr;
     };
 
+    inline static std::unordered_map<uintptr_t, std::vector<MarkInjectedCallbacks>> callbacks_;
+
+  public:
+    static void AddCallbacks(const void* handle, const VkPhysicalDeviceToolProperties& tool_properties)
+    {
+        callbacks_[GetKey(handle)].emplace_back(*reinterpret_cast<MarkInjectedCallbacks*>(tool_properties.pNext));
+    }
+
+    static void BeginInjected(VkDevice handle) { BeginInjected(static_cast<const void*>(handle)); }
+    static void BeginInjected(VkQueue handle) { BeginInjected(static_cast<const void*>(handle)); }
+    static void BeginInjected(VkCommandBuffer handle) { BeginInjected(static_cast<const void*>(handle)); }
+
+    static void EndInjected(VkDevice handle) { EndInjected(static_cast<const void*>(handle)); }
+    static void EndInjected(VkQueue handle) { EndInjected(static_cast<const void*>(handle)); }
+    static void EndInjected(VkCommandBuffer handle) { EndInjected(static_cast<const void*>(handle)); }
+
+  private:
     // Takes as input any Vulkan dispatchable handle (VkDevice, VkQueue, VkCommandBuffer...)
     // Returns a key that is the same for every handle created from a same VkDevice
     // See
     // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderDriverInterface.md#driver-dispatchable-object-creation
     static uintptr_t GetKey(const void* handle) { return *reinterpret_cast<const uintptr_t*>(handle); }
 
-    inline static std::unordered_map<uintptr_t, std::vector<MarkInjectedCallbacks>> callbacks_;
-
-  public:
     static void BeginInjected(const void* handle)
     {
         const uintptr_t key = GetKey(handle);
@@ -84,11 +98,6 @@ class MarkingLayersUtil
                 callback.end_injected(callback.user_data);
             }
         }
-    }
-
-    static void AddCallbacks(const void* handle, const VkPhysicalDeviceToolProperties& tool_properties)
-    {
-        callbacks_[GetKey(handle)].emplace_back(*reinterpret_cast<MarkInjectedCallbacks*>(tool_properties.pNext));
     }
 };
 

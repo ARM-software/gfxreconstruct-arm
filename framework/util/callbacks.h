@@ -43,16 +43,21 @@ void EndInjectedCommands();
 !!!!! DISABLED IN ARM REPOSITORY !!!!! */
 
 //! RAII helper to mark injected commands in scope
-struct MarkInjectedCommandsHelper
+class MarkInjectedCommandsHelper
 {
+  public:
     // allow nested usage without hitting an assertion
     static thread_local uint32_t semaphore;
 
-    // Any Vulkan dispatchable handle
-    const void* const handle;
-
-    MarkInjectedCommandsHelper(const void* dispatchable_handle);
+    MarkInjectedCommandsHelper(VkDevice device);
+    MarkInjectedCommandsHelper(VkQueue queue);
+    MarkInjectedCommandsHelper(VkCommandBuffer commande_buffer);
     ~MarkInjectedCommandsHelper();
+
+  private:
+    MarkInjectedCommandsHelper(void* handle);
+
+    void* const handle_; // Any Vulkan dispatchable handle
 };
 
 // Interface for registering callbacks so that GFXReconstruct can notify an external library about

@@ -94,12 +94,22 @@ class MarkInjectedCommands : public CallbackBase
 
 thread_local uint32_t MarkInjectedCommandsHelper::semaphore = 0;
 
-MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(const void* dispatchable_handle) : handle(dispatchable_handle)
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(VkDevice device) :
+    MarkInjectedCommandsHelper(static_cast<void*>(device))
+{}
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(VkQueue queue) :
+    MarkInjectedCommandsHelper(static_cast<void*>(queue))
+{}
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(VkCommandBuffer commande_buffer) :
+    MarkInjectedCommandsHelper(static_cast<void*>(commande_buffer))
+{}
+
+MarkInjectedCommandsHelper::MarkInjectedCommandsHelper(void* handle) : handle_(handle)
 {
     // mark injected commands
     if (semaphore++ == 0)
     {
-        MarkingLayersUtil::BeginInjected(handle);
+        MarkingLayersUtil::BeginInjected(reinterpret_cast<VkDevice>(handle_));
     }
 }
 
@@ -108,7 +118,7 @@ MarkInjectedCommandsHelper::~MarkInjectedCommandsHelper()
     // mark end of injected commands
     if (--semaphore == 0)
     {
-        MarkingLayersUtil::EndInjected(handle);
+        MarkingLayersUtil::EndInjected(reinterpret_cast<VkDevice>(handle_));
     }
 }
 

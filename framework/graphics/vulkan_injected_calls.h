@@ -83,7 +83,7 @@ class VulkanInjectedDeviceCalls
       private:
         friend class VulkanInjectedDeviceCalls;
 
-        explicit Scope(const VulkanDeviceTable* table, const void* handle) : mark_helper_(handle), table_(table) {}
+        explicit Scope(const VulkanDeviceTable* table, VkDevice handle) : mark_helper_(handle), table_(table) {}
 
         util::MarkInjectedCommandsHelper mark_helper_;
         const VulkanDeviceTable*         table_;
@@ -114,7 +114,7 @@ class VulkanInjectedDeviceCalls
 
     VulkanInjectedDeviceCalls() = delete;
 
-    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, const void* handle);
+    explicit VulkanInjectedDeviceCalls(const VulkanDeviceTable* table, VkDevice handle);
 
     bool IsValid() const { return table_ != nullptr; }
 
@@ -129,7 +129,10 @@ class VulkanInjectedDeviceCalls
 
   private:
     const VulkanDeviceTable* table_;
-    const void*              handle_; // Any Vulkan dispatchable handle (needed for marking layers)
+
+    // Could be any Vulkan dispatchable handle (needed for marking layers) but for now only VkDevice is needed.
+    // If constructor is needed for another type of handle, change this to `const void*` and handle casts
+    VkDevice handle_{ nullptr };
 };
 
 GFXRECON_END_NAMESPACE(graphics)
