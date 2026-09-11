@@ -1387,7 +1387,10 @@ HRESULT Dx12ReplayConsumerBase::OverridePresent(DxObjectInfo* replay_object_info
     auto replay_object = static_cast<IDXGISwapChain*>(replay_object_info->object);
     PrePresent(replay_object_info, flags);
     auto result = replay_object->Present(sync_interval, flags);
-    PostPresent();
+    if ((flags & DXGI_PRESENT_TEST) == 0)
+    {
+        PostPresent();
+    }
 
     return result;
 }
@@ -1402,7 +1405,10 @@ Dx12ReplayConsumerBase::OverridePresent1(DxObjectInfo*                          
     auto replay_object = static_cast<IDXGISwapChain1*>(replay_object_info->object);
     PrePresent(replay_object_info, flags);
     auto result = replay_object->Present1(sync_interval, flags, present_parameters->GetPointer());
-    PostPresent();
+    if ((flags & DXGI_PRESENT_TEST) == 0)
+    {
+        PostPresent();
+    }
 
     return result;
 }
