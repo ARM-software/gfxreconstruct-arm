@@ -2030,7 +2030,12 @@ void VulkanReplayConsumerBase::ProcessInitImageCommand(format::HandleId         
             }
 
             image_info->intermediate_layout = static_cast<VkImageLayout>(layout);
-            image_info->current_layout      = static_cast<VkImageLayout>(layout);
+
+            // This runs per aspect.
+            const VkImageSubresourceRange aspect_range = {
+                static_cast<VkImageAspectFlags>(aspect), 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
+            };
+            image_info->subresource_layouts.SetLayout(aspect_range, static_cast<VkImageLayout>(layout));
 
             if (result != VK_SUCCESS)
             {
@@ -3237,9 +3242,10 @@ void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* 
                 uint32_t      num_layers   = 1;
 
                 // apply swapchain-image override, if any
+                const VulkanImageInfo* override_img_info = nullptr;
                 if (present_override_image_id_ != format::kNullHandleId)
                 {
-                    auto* override_img_info = object_info_table_->GetVkImageInfo(present_override_image_id_);
+                    override_img_info = object_info_table_->GetVkImageInfo(present_override_image_id_);
                     GFXRECON_ASSERT(override_img_info != nullptr);
 
                     if (override_img_info != nullptr)
@@ -3249,9 +3255,6 @@ void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* 
                         image_width  = override_img_info->extent.width;
                         image_height = override_img_info->extent.height;
                         num_layers   = override_img_info->layer_count;
-                        image_layout = override_img_info->current_layout != VK_IMAGE_LAYOUT_UNDEFINED
-                                           ? override_img_info->current_layout
-                                           : VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
                     }
                 }
 
@@ -3267,6 +3270,18 @@ void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* 
 
                 for (uint32_t layer = 0; layer < num_layers; ++layer)
                 {
+                    // WriteImage barriers only the layer it copies, so it has to transition from that layer's layout.
+                    VkImageLayout layer_layout = image_layout;
+                    if (override_img_info != nullptr)
+                    {
+                        const VkImageLayout tracked_layout =
+                            override_img_info->subresource_layouts.GetSubresourceLayout(
+                                VK_IMAGE_ASPECT_COLOR_BIT, 0, layer);
+                        layer_layout = (tracked_layout != VK_IMAGE_LAYOUT_UNDEFINED)
+                                           ? tracked_layout
+                                           : VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+                    }
+
                     screenshot_handler_->WriteImage(
                         num_layers > 1 ? filename_prefix + "_layer_" + std::to_string(layer) : filename_prefix,
                         device_info,
@@ -3279,7 +3294,7 @@ void VulkanReplayConsumerBase::WriteScreenshots(const Decoded_VkPresentInfoKHR* 
                         image_height,
                         layer,
                         screenshot_scale,
-                        image_layout,
+                        layer_layout,
                         options_.screenshot_apply_prerotation ? swapchain_info->pre_transform
                                                               : VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR);
                 }
@@ -3352,19 +3367,20 @@ bool VulkanReplayConsumerBase::CheckCommandBufferInfoForFrameBoundary(
                                                  static_cast<float>(image_info->extent.height) };
                     }
 
-                    screenshot_handler_->WriteImage(filename_prefix,
-                                                    device_info,
-                                                    GetInjectedDeviceCalls(device_info->handle),
-                                                    memory_properties,
-                                                    device_info->allocator.get(),
-                                                    image_info->handle,
-                                                    image_info->format,
-                                                    image_info->extent.width,
-                                                    image_info->extent.height,
-                                                    0,
-                                                    screenshot_scale,
-                                                    image_info->current_layout,
-                                                    VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR);
+                    screenshot_handler_->WriteImage(
+                        filename_prefix,
+                        device_info,
+                        GetInjectedDeviceCalls(device_info->handle),
+                        memory_properties,
+                        device_info->allocator.get(),
+                        image_info->handle,
+                        image_info->format,
+                        image_info->extent.width,
+                        image_info->extent.height,
+                        0,
+                        screenshot_scale,
+                        image_info->subresource_layouts.GetSubresourceLayout(VK_IMAGE_ASPECT_COLOR_BIT, 0, 0),
+                        VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR);
                 }
             }
         }
@@ -3418,18 +3434,19 @@ bool VulkanReplayConsumerBase::CheckPNextChainForFrameBoundary(const VulkanDevic
                 };
             }
 
-            screenshot_handler_->WriteImage(filename_prefix,
-                                            device_info,
-                                            GetInjectedDeviceCalls(device_info->handle),
-                                            memory_properties,
-                                            device_info->allocator.get(),
-                                            image_info->handle,
-                                            image_info->format,
-                                            image_info->extent.width,
-                                            image_info->extent.height,
-                                            0,
-                                            screenshot_scale,
-                                            image_info->current_layout);
+            screenshot_handler_->WriteImage(
+                filename_prefix,
+                device_info,
+                GetInjectedDeviceCalls(device_info->handle),
+                memory_properties,
+                device_info->allocator.get(),
+                image_info->handle,
+                image_info->format,
+                image_info->extent.width,
+                image_info->extent.height,
+                0,
+                screenshot_scale,
+                image_info->subresource_layouts.GetSubresourceLayout(VK_IMAGE_ASPECT_COLOR_BIT, 0, 0));
         }
     }
 
@@ -5949,9 +5966,20 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit        
         completion_source = GFXR_REPLAY_QUEUE_SUBMIT_COMPLETION_SOURCE_QUEUE_IDLE;
     }
 
+    // Update layout on the image infos.
+    if ((result == VK_SUCCESS) && (submit_info_data != nullptr))
+    {
+        for (auto submit : pSubmits->GetMetaStructSpan())
+        {
+            for (auto command_buffer : submit.pCommandBuffers.GetSpan())
+            {
+                PropagateImageLayouts(GetObjectInfoTable().GetVkCommandBufferInfo(command_buffer));
+            }
+        }
+    }
+
     if (screenshot_handler_ != nullptr)
     {
-        VulkanCommandBufferInfo* frame_boundary_command_buffer_info = nullptr;
         for (uint32_t i = 0; i < submitCount; ++i)
         {
             if (submit_info_data != nullptr)
@@ -5968,17 +5996,6 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit(PFN_vkQueueSubmit        
                 {
                     auto command_buffer_info = GetObjectInfoTable().GetVkCommandBufferInfo(command_buffer_ids[j]);
 
-                    // Apply any layouts from submitted command lists.
-                    for (auto image_layout : command_buffer_info->image_layout_barriers)
-                    {
-                        auto image_info = GetObjectInfoTable().GetVkImageInfo(image_layout.first);
-                        if (image_info != nullptr)
-                        {
-                            image_info->current_layout = image_layout.second;
-                        }
-                    }
-
-                    // Check whether any of the submitted command lists buffers are frame boundaries.
                     if (CheckCommandBufferInfoForFrameBoundary(command_buffer_info))
                     {
                         break;
@@ -6253,10 +6270,26 @@ VkResult VulkanReplayConsumerBase::OverrideQueueSubmit2(PFN_vkQueueSubmit2      
         completion_source = GFXR_REPLAY_QUEUE_SUBMIT_COMPLETION_SOURCE_QUEUE_IDLE;
     }
 
+    // Update layout on the image infos.
+    if ((result == VK_SUCCESS) && (submit_info_data != nullptr))
+    {
+        for (const auto& submit : pSubmits->GetMetaStructSpan())
+        {
+            if (submit.pCommandBufferInfos == nullptr)
+            {
+                continue;
+            }
+
+            for (const auto& command_buffer_info : submit.pCommandBufferInfos->GetMetaStructSpan())
+            {
+                PropagateImageLayouts(GetObjectInfoTable().GetVkCommandBufferInfo(command_buffer_info.commandBuffer));
+            }
+        }
+    }
+
     // Check whether any of the submitted command buffers are frame boundaries.
     if (screenshot_handler_ != nullptr)
     {
-        bool is_frame_boundary = false;
         for (uint32_t i = 0; i < submitCount; ++i)
         {
             if (submit_info_data != nullptr)
@@ -7003,6 +7036,20 @@ void VulkanReplayConsumerBase::OverrideCmdExecuteCommands(PFN_vkCmdExecuteComman
         {
             in_commandBuffer->addresses_to_replace.insert(secondary_cmd_buffer_info->addresses_to_replace.begin(),
                                                           secondary_cmd_buffer_info->addresses_to_replace.end());
+        }
+
+        // Update the image's layout based on the recorded layout transitions in the secondary command buffer.
+        for (const auto& [image_id, secondary_layouts] : secondary_cmd_buffer_info->image_layout_barriers)
+        {
+            auto& primary_layouts = in_commandBuffer->image_layout_barriers[image_id];
+            if (primary_layouts.IsInitialized())
+            {
+                primary_layouts.MergeFrom(secondary_layouts);
+            }
+            else
+            {
+                primary_layouts = secondary_layouts;
+            }
         }
 
         // preserve set/reset event ordering from executed secondaries for submit-time state tracking
@@ -8399,7 +8446,10 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
         image_info->layer_count    = modified_create_info.arrayLayers;
         image_info->level_count    = modified_create_info.mipLevels;
 
-        image_info->current_layout = modified_create_info.initialLayout;
+        image_info->subresource_layouts.Initialize(modified_create_info.mipLevels,
+                                                   modified_create_info.arrayLayers,
+                                                   graphics::GetFormatAspects(modified_create_info.format));
+        image_info->subresource_layouts.SetUniformLayout(modified_create_info.initialLayout);
 
         if ((modified_create_info.sharingMode == VK_SHARING_MODE_CONCURRENT) &&
             (modified_create_info.queueFamilyIndexCount > 0) && (modified_create_info.pQueueFamilyIndices != nullptr))
@@ -8721,6 +8771,19 @@ VkResult VulkanReplayConsumerBase::OverrideGetVideoSessionMemoryRequirementsKHR(
         video_session_info->allocator_data);
 }
 
+static VkImageLayout GetAttachmentStencilFinalLayout(const VkAttachmentDescription&)
+{
+    // Overload when VkAttachmentDescription has no pNext chain, so it can never carry a separate stencil final layout.
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
+static VkImageLayout GetAttachmentStencilFinalLayout(const VkAttachmentDescription2& attachment_desc)
+{
+    const auto* stencil_layout =
+        graphics::vulkan_struct_get_pnext<VkAttachmentDescriptionStencilLayout>(&attachment_desc);
+    return (stencil_layout != nullptr) ? stencil_layout->stencilFinalLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
 template <typename T>
 void StoreAttachmentDescriptionFinalLayouts(const T* pCreateInfo, HandlePointerDecoder<VkRenderPass>* pRenderPass)
 {
@@ -8735,9 +8798,12 @@ void StoreAttachmentDescriptionFinalLayouts(const T* pCreateInfo, HandlePointerD
 
         // Save attachment descriptions to VulkanRenderPassInfo.
         render_pass_info->attachment_description_final_layouts.resize(attachment_count);
+        render_pass_info->attachment_description_stencil_final_layouts.resize(attachment_count);
         for (uint32_t i = 0; i < attachment_count; ++i)
         {
             render_pass_info->attachment_description_final_layouts[i] = attachment_descs[i].finalLayout;
+            render_pass_info->attachment_description_stencil_final_layouts[i] =
+                GetAttachmentStencilFinalLayout(attachment_descs[i]);
         }
     }
 }
@@ -8871,14 +8937,10 @@ void VulkanReplayConsumerBase::OverrideCmdPipelineBarrier(
                                    imageMemoryBarrierCount,
                                    pImageMemoryBarriers->GetPointer());
 
-    for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
-    {
-        auto image_id                                        = pImageMemoryBarriers->GetMetaStructPointer()[i].image;
-        command_buffer_info->image_layout_barriers[image_id] = pImageMemoryBarriers->GetPointer()[i].newLayout;
-        VulkanImageInfo* img_info                            = object_info_table_->GetVkImageInfo(image_id);
-        assert(img_info != nullptr);
-        img_info->intermediate_layout = pImageMemoryBarriers->GetPointer()[i].newLayout;
-    }
+    UpdateTrackedImageLayoutBarriers(command_buffer_info,
+                                     imageMemoryBarrierCount,
+                                     pImageMemoryBarriers->GetMetaStructPointer(),
+                                     pImageMemoryBarriers->GetPointer());
 }
 
 void VulkanReplayConsumerBase::OverrideCmdPipelineBarrier2(
@@ -8893,16 +8955,11 @@ void VulkanReplayConsumerBase::OverrideCmdPipelineBarrier2(
         const auto* dependency_info_meta = pDependencyInfo->GetMetaStructPointer();
         if (dependency_info_meta->pImageMemoryBarriers != nullptr)
         {
-            const auto* img_barriers_meta = dependency_info_meta->pImageMemoryBarriers->GetMetaStructPointer();
-            for (uint32_t i = 0; i < dependency_info_meta->pImageMemoryBarriers->GetLength(); ++i)
-            {
-                format::HandleId image_id = img_barriers_meta[i].image;
-                command_buffer_info->image_layout_barriers[image_id] =
-                    dependency_info_meta->pImageMemoryBarriers->GetPointer()[i].newLayout;
-
-                VulkanImageInfo* img_info     = object_info_table_->GetVkImageInfo(image_id);
-                img_info->intermediate_layout = dependency_info_meta->pImageMemoryBarriers->GetPointer()[i].newLayout;
-            }
+            UpdateTrackedImageLayoutBarriers(
+                command_buffer_info,
+                static_cast<uint32_t>(dependency_info_meta->pImageMemoryBarriers->GetLength()),
+                dependency_info_meta->pImageMemoryBarriers->GetMetaStructPointer(),
+                dependency_info_meta->pImageMemoryBarriers->GetPointer());
         }
     }
 }
@@ -8913,6 +8970,71 @@ void VulkanReplayConsumerBase::OverrideCmdPipelineBarrier2KHR(
     StructPointerDecoder<Decoded_VkDependencyInfo>* pDependencyInfo)
 {
     OverrideCmdPipelineBarrier2(func, command_buffer_info, pDependencyInfo);
+}
+
+void VulkanReplayConsumerBase::OverrideCmdWaitEvents(
+    PFN_vkCmdWaitEvents                                        func,
+    VulkanCommandBufferInfo*                                   command_buffer_info,
+    uint32_t                                                   eventCount,
+    HandlePointerDecoder<VkEvent>*                             pEvents,
+    VkPipelineStageFlags                                       srcStageMask,
+    VkPipelineStageFlags                                       dstStageMask,
+    uint32_t                                                   memoryBarrierCount,
+    const StructPointerDecoder<Decoded_VkMemoryBarrier>*       pMemoryBarriers,
+    uint32_t                                                   bufferMemoryBarrierCount,
+    const StructPointerDecoder<Decoded_VkBufferMemoryBarrier>* pBufferMemoryBarriers,
+    uint32_t                                                   imageMemoryBarrierCount,
+    const StructPointerDecoder<Decoded_VkImageMemoryBarrier>*  pImageMemoryBarriers)
+{
+    func(command_buffer_info->handle,
+         eventCount,
+         pEvents->GetHandlePointer(),
+         srcStageMask,
+         dstStageMask,
+         memoryBarrierCount,
+         pMemoryBarriers->GetPointer(),
+         bufferMemoryBarrierCount,
+         pBufferMemoryBarriers->GetPointer(),
+         imageMemoryBarrierCount,
+         pImageMemoryBarriers->GetPointer());
+
+    UpdateTrackedImageLayoutBarriers(command_buffer_info,
+                                     imageMemoryBarrierCount,
+                                     pImageMemoryBarriers->GetMetaStructPointer(),
+                                     pImageMemoryBarriers->GetPointer());
+}
+
+void VulkanReplayConsumerBase::OverrideCmdWaitEvents2(
+    PFN_vkCmdWaitEvents2                                  func,
+    VulkanCommandBufferInfo*                              command_buffer_info,
+    uint32_t                                              eventCount,
+    HandlePointerDecoder<VkEvent>*                        pEvents,
+    const StructPointerDecoder<Decoded_VkDependencyInfo>* pDependencyInfos)
+{
+    func(command_buffer_info->handle, eventCount, pEvents->GetHandlePointer(), pDependencyInfos->GetPointer());
+
+    const auto* dependency_info_meta = pDependencyInfos->GetMetaStructPointer();
+    const auto* dependency_info      = pDependencyInfos->GetPointer();
+    if (dependency_info_meta != nullptr && dependency_info != nullptr)
+    {
+        for (uint32_t i = 0; i < pDependencyInfos->GetLength(); ++i)
+        {
+            if (dependency_info_meta[i].pImageMemoryBarriers == nullptr)
+            {
+                continue;
+            }
+
+            const auto* img_barriers_meta = dependency_info_meta[i].pImageMemoryBarriers->GetMetaStructPointer();
+            const auto* img_barriers      = dependency_info[i].pImageMemoryBarriers;
+            if (img_barriers_meta == nullptr || img_barriers == nullptr)
+            {
+                continue;
+            }
+
+            UpdateTrackedImageLayoutBarriers(
+                command_buffer_info, dependency_info[i].imageMemoryBarrierCount, img_barriers_meta, img_barriers);
+        }
+    }
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateDescriptorUpdateTemplate(
@@ -10329,16 +10451,19 @@ VkResult VulkanReplayConsumerBase::OverrideGetSwapchainImagesKHR(PFN_vkGetSwapch
                     break;
                 }
 
-                image_info->format         = swapchain_info->format;
-                image_info->extent         = { swapchain_info->width, swapchain_info->height, 1 };
-                image_info->layer_count    = swapchain_info->image_array_layers;
-                image_info->level_count    = 1;
-                image_info->tiling         = VK_IMAGE_TILING_OPTIMAL;
-                image_info->usage          = swapchain_info->image_usage;
-                image_info->sample_count   = VK_SAMPLE_COUNT_1_BIT;
-                image_info->type           = VK_IMAGE_TYPE_2D;
-                image_info->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-                image_info->swapchain_id   = swapchain_info->capture_id;
+                image_info->format       = swapchain_info->format;
+                image_info->extent       = { swapchain_info->width, swapchain_info->height, 1 };
+                image_info->layer_count  = swapchain_info->image_array_layers;
+                image_info->level_count  = 1;
+                image_info->tiling       = VK_IMAGE_TILING_OPTIMAL;
+                image_info->usage        = swapchain_info->image_usage;
+                image_info->sample_count = VK_SAMPLE_COUNT_1_BIT;
+                image_info->type         = VK_IMAGE_TYPE_2D;
+                image_info->swapchain_id = swapchain_info->capture_id;
+
+                // Initialize() leaves every subresource VK_IMAGE_LAYOUT_UNDEFINED, where swapchain images start.
+                image_info->subresource_layouts.Initialize(
+                    image_info->level_count, image_info->layer_count, graphics::GetFormatAspects(image_info->format));
 
                 // Create a copy of the image info to use for image cleanup when the swapchain is destroyed.
                 swapchain_info->image_infos.push_back(*image_info);
@@ -10371,16 +10496,19 @@ VkResult VulkanReplayConsumerBase::OverrideGetSwapchainImagesKHR(PFN_vkGetSwapch
                 auto* image_info = static_cast<VulkanImageInfo*>(pSwapchainImages->GetConsumerData(i));
                 GFXRECON_ASSERT(image_info != nullptr);
 
-                image_info->format         = swapchain_info->format;
-                image_info->extent         = { swapchain_info->width, swapchain_info->height, 1 };
-                image_info->layer_count    = swapchain_info->image_array_layers;
-                image_info->level_count    = 1;
-                image_info->tiling         = VK_IMAGE_TILING_OPTIMAL;
-                image_info->usage          = swapchain_info->image_usage;
-                image_info->sample_count   = VK_SAMPLE_COUNT_1_BIT;
-                image_info->type           = VK_IMAGE_TYPE_2D;
-                image_info->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-                image_info->swapchain_id   = swapchain_info->capture_id;
+                image_info->format       = swapchain_info->format;
+                image_info->extent       = { swapchain_info->width, swapchain_info->height, 1 };
+                image_info->layer_count  = swapchain_info->image_array_layers;
+                image_info->level_count  = 1;
+                image_info->tiling       = VK_IMAGE_TILING_OPTIMAL;
+                image_info->usage        = swapchain_info->image_usage;
+                image_info->sample_count = VK_SAMPLE_COUNT_1_BIT;
+                image_info->type         = VK_IMAGE_TYPE_2D;
+                image_info->swapchain_id = swapchain_info->capture_id;
+
+                // Initialize() leaves every subresource VK_IMAGE_LAYOUT_UNDEFINED, where swapchain images start.
+                image_info->subresource_layouts.Initialize(
+                    image_info->level_count, image_info->layer_count, graphics::GetFormatAspects(image_info->format));
             }
 
             // Store image handles for screenshot generation.
@@ -12595,6 +12723,7 @@ void VulkanReplayConsumerBase::ClearCommandBufferInfo(VulkanCommandBufferInfo* c
     command_buffer_info->active_render_pass_id = format::kNullHandleId;
     command_buffer_info->active_framebuffer_id = format::kNullHandleId;
     command_buffer_info->active_render_pass_attachment_image_view_ids.clear();
+    command_buffer_info->image_layout_barriers.clear();
     command_buffer_info->bound_pipelines.clear();
     command_buffer_info->push_constant_data.clear();
     command_buffer_info->push_constant_stage_flags     = 0;
@@ -13093,7 +13222,7 @@ void VulkanReplayConsumerBase::OverrideCmdBeginRenderPass2(
     func(command_buffer, render_pass_begin_info_decoder->GetPointer(), subpass_begin_info_decode->GetPointer());
 }
 
-void VulkanReplayConsumerBase::ApplyRenderPassFinalLayouts(VulkanCommandBufferInfo* command_buffer_info)
+void VulkanReplayConsumerBase::UpdateTrackedRenderPassFinalLayouts(VulkanCommandBufferInfo* command_buffer_info)
 {
     GFXRECON_ASSERT(command_buffer_info != nullptr);
 
@@ -13113,21 +13242,169 @@ void VulkanReplayConsumerBase::ApplyRenderPassFinalLayouts(VulkanCommandBufferIn
 
     for (size_t i = 0; i < render_pass_info->attachment_description_final_layouts.size(); ++i)
     {
-        auto image_view_id   = attachment_image_view_ids[i];
-        auto image_view_info = object_info_table_->GetVkImageViewInfo(image_view_id);
-        if (image_view_info == nullptr)
+        format::HandleId image_view_id = attachment_image_view_ids[i];
+
+        UpdateTrackedImageViewLayout(
+            command_buffer_info, image_view_id, render_pass_info->attachment_description_final_layouts[i]);
+
+        // The stencil aspect can have its own final layout
+        UpdateTrackedImageViewLayout(
+            command_buffer_info, image_view_id, render_pass_info->attachment_description_stencil_final_layouts[i]);
+    }
+}
+
+void VulkanReplayConsumerBase::UpdateTrackedImageViewLayout(VulkanCommandBufferInfo* command_buffer_info,
+                                                            format::HandleId         image_view_id,
+                                                            VkImageLayout            layout)
+{
+    if ((image_view_id == format::kNullHandleId) || (layout == VK_IMAGE_LAYOUT_UNDEFINED))
+    {
+        return;
+    }
+
+    const VulkanImageViewInfo* image_view_info = object_info_table_->GetVkImageViewInfo(image_view_id);
+    if (image_view_info == nullptr)
+    {
+        return;
+    }
+
+    VulkanImageInfo* image_info = object_info_table_->GetVkImageInfo(image_view_info->image_id);
+    if (image_info == nullptr)
+    {
+        return;
+    }
+
+    InitializeCommandBufferImageLayouts(command_buffer_info, image_info);
+
+    VkImageSubresourceRange range = image_view_info->subresource_range;
+    range.aspectMask &= graphics::GetLayoutAspects(layout);
+
+    if (range.aspectMask != 0)
+    {
+        command_buffer_info->image_layout_barriers[image_view_info->image_id].SetLayout(range, layout);
+    }
+
+    image_info->intermediate_layout = layout;
+}
+
+void VulkanReplayConsumerBase::UpdateTrackedImageLayoutBarriers(
+    VulkanCommandBufferInfo*            command_buffer_info,
+    uint32_t                            imageMemoryBarrierCount,
+    const Decoded_VkImageMemoryBarrier* image_memory_barriers_meta,
+    const VkImageMemoryBarrier*         image_memory_barriers)
+{
+    for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
+    {
+        format::HandleId image_id = image_memory_barriers_meta[i].image;
+
+        VulkanImageInfo* img_info = object_info_table_->GetVkImageInfo(image_id);
+        if (img_info != nullptr)
+        {
+            InitializeCommandBufferImageLayouts(command_buffer_info, img_info);
+            command_buffer_info->image_layout_barriers[image_id].SetLayout(image_memory_barriers[i].subresourceRange,
+                                                                           image_memory_barriers[i].newLayout);
+
+            img_info->intermediate_layout = image_memory_barriers[i].newLayout;
+        }
+    }
+}
+
+void VulkanReplayConsumerBase::UpdateTrackedImageLayoutBarriers(
+    VulkanCommandBufferInfo*             command_buffer_info,
+    uint32_t                             imageMemoryBarrierCount,
+    const Decoded_VkImageMemoryBarrier2* image_memory_barriers_meta,
+    const VkImageMemoryBarrier2*         image_memory_barriers)
+{
+    for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
+    {
+        format::HandleId image_id = image_memory_barriers_meta[i].image;
+
+        VulkanImageInfo* img_info = object_info_table_->GetVkImageInfo(image_id);
+        if (img_info != nullptr)
+        {
+            InitializeCommandBufferImageLayouts(command_buffer_info, img_info);
+            command_buffer_info->image_layout_barriers[image_id].SetLayout(image_memory_barriers[i].subresourceRange,
+                                                                           image_memory_barriers[i].newLayout);
+
+            img_info->intermediate_layout = image_memory_barriers[i].newLayout;
+        }
+    }
+}
+
+void VulkanReplayConsumerBase::UpdateTrackedAttachmentLayout(VulkanCommandBufferInfo*         command_buffer_info,
+                                                             const VkRenderingAttachmentInfo* attachment,
+                                                             const Decoded_VkRenderingAttachmentInfo* attachment_meta)
+{
+    if ((attachment == nullptr) || (attachment_meta == nullptr))
+    {
+        return;
+    }
+
+    UpdateTrackedImageViewLayout(command_buffer_info, attachment_meta->imageView, attachment->imageLayout);
+
+    if (attachment->resolveMode != VK_RESOLVE_MODE_NONE)
+    {
+        UpdateTrackedImageViewLayout(
+            command_buffer_info, attachment_meta->resolveImageView, attachment->resolveImageLayout);
+    }
+}
+
+void VulkanReplayConsumerBase::UpdateTrackedRenderingLayouts(
+    VulkanCommandBufferInfo* command_buffer_info, StructPointerDecoder<Decoded_VkRenderingInfo>* rendering_info_decoder)
+{
+    GFXRECON_ASSERT(command_buffer_info != nullptr);
+
+    if (rendering_info_decoder == nullptr)
+    {
+        return;
+    }
+
+    const VkRenderingInfo*         rendering_info = rendering_info_decoder->GetPointer();
+    const Decoded_VkRenderingInfo* rendering_meta = rendering_info_decoder->GetMetaStructPointer();
+    if ((rendering_info == nullptr) || (rendering_meta == nullptr))
+    {
+        return;
+    }
+
+    if ((rendering_info->pColorAttachments != nullptr) && (rendering_meta->pColorAttachments != nullptr))
+    {
+        const Decoded_VkRenderingAttachmentInfo* color_meta = rendering_meta->pColorAttachments->GetMetaStructPointer();
+        const size_t color_count = std::min(static_cast<size_t>(rendering_info->colorAttachmentCount),
+                                            rendering_meta->pColorAttachments->GetLength());
+        for (size_t i = 0; (color_meta != nullptr) && (i < color_count); ++i)
+        {
+            UpdateTrackedAttachmentLayout(command_buffer_info, &rendering_info->pColorAttachments[i], &color_meta[i]);
+        }
+    }
+
+    UpdateTrackedAttachmentLayout(command_buffer_info,
+                                  rendering_info->pDepthAttachment,
+                                  (rendering_meta->pDepthAttachment != nullptr)
+                                      ? rendering_meta->pDepthAttachment->GetMetaStructPointer()
+                                      : nullptr);
+    UpdateTrackedAttachmentLayout(command_buffer_info,
+                                  rendering_info->pStencilAttachment,
+                                  (rendering_meta->pStencilAttachment != nullptr)
+                                      ? rendering_meta->pStencilAttachment->GetMetaStructPointer()
+                                      : nullptr);
+}
+
+void VulkanReplayConsumerBase::PropagateImageLayouts(const VulkanCommandBufferInfo* command_buffer_info)
+{
+    if (command_buffer_info == nullptr)
+    {
+        return;
+    }
+
+    for (const auto& [image_id, command_buffer_layouts] : command_buffer_info->image_layout_barriers)
+    {
+        VulkanImageInfo* image_info = object_info_table_->GetVkImageInfo(image_id);
+        if (image_info == nullptr)
         {
             continue;
         }
 
-        command_buffer_info->image_layout_barriers[image_view_info->image_id] =
-            render_pass_info->attachment_description_final_layouts[i];
-
-        VulkanImageInfo* img_info = object_info_table_->GetVkImageInfo(image_view_info->image_id);
-        if (img_info != nullptr)
-        {
-            img_info->intermediate_layout = render_pass_info->attachment_description_final_layouts[i];
-        }
+        image_info->subresource_layouts.MergeFrom(command_buffer_layouts);
     }
 }
 
@@ -13136,7 +13413,7 @@ void VulkanReplayConsumerBase::OverrideCmdEndRenderPass(PFN_vkCmdEndRenderPass  
 {
     GFXRECON_ASSERT(command_buffer_info != nullptr);
     func(command_buffer_info->handle);
-    ApplyRenderPassFinalLayouts(command_buffer_info);
+    UpdateTrackedRenderPassFinalLayouts(command_buffer_info);
     command_buffer_info->active_render_pass_id = format::kNullHandleId;
     command_buffer_info->active_framebuffer_id = format::kNullHandleId;
     command_buffer_info->active_render_pass_attachment_image_view_ids.clear();
@@ -13156,7 +13433,7 @@ void VulkanReplayConsumerBase::OverrideCmdEndRenderPass2(
 {
     GFXRECON_ASSERT(command_buffer_info != nullptr);
     func(command_buffer_info->handle, pSubpassEndInfo->GetPointer());
-    ApplyRenderPassFinalLayouts(command_buffer_info);
+    UpdateTrackedRenderPassFinalLayouts(command_buffer_info);
     command_buffer_info->active_render_pass_id = format::kNullHandleId;
     command_buffer_info->active_framebuffer_id = format::kNullHandleId;
     command_buffer_info->active_render_pass_attachment_image_view_ids.clear();
@@ -13186,6 +13463,8 @@ void VulkanReplayConsumerBase::OverrideCmdBeginRendering(
     command_buffer_info->in_rendering_scope = true;
 
     func(command_buffer_info->handle, rendering_info_decoder->GetPointer());
+
+    UpdateTrackedRenderingLayouts(command_buffer_info, rendering_info_decoder);
 }
 
 void VulkanReplayConsumerBase::OverrideCmdEndRendering(PFN_vkCmdEndRendering    func,
@@ -13402,7 +13681,8 @@ VkResult VulkanReplayConsumerBase::OverrideCreateImageView(
         auto* image_view_info = static_cast<VulkanImageViewInfo*>(view_decoder->GetConsumerData(0));
         GFXRECON_ASSERT(image_view_info != nullptr);
 
-        image_view_info->image_id = create_info_decoder->GetMetaStructPointer()->image;
+        image_view_info->image_id          = create_info_decoder->GetMetaStructPointer()->image;
+        image_view_info->subresource_range = modified_create_info.subresourceRange;
     }
 
     // clean potential opaque creation-data
@@ -13525,18 +13805,19 @@ void VulkanReplayConsumerBase::OverrideFrameBoundaryANDROID(PFN_vkFrameBoundaryA
                 };
             }
 
-            screenshot_handler_->WriteImage(filename_prefix,
-                                            device_info,
-                                            GetInjectedDeviceCalls(device_info->handle),
-                                            memory_properties,
-                                            device_info->allocator.get(),
-                                            image_info->handle,
-                                            image_info->format,
-                                            image_info->extent.width,
-                                            image_info->extent.height,
-                                            0,
-                                            screenshot_scale,
-                                            image_info->current_layout);
+            screenshot_handler_->WriteImage(
+                filename_prefix,
+                device_info,
+                GetInjectedDeviceCalls(device_info->handle),
+                memory_properties,
+                device_info->allocator.get(),
+                image_info->handle,
+                image_info->format,
+                image_info->extent.width,
+                image_info->extent.height,
+                0,
+                screenshot_scale,
+                image_info->subresource_layouts.GetSubresourceLayout(VK_IMAGE_ASPECT_COLOR_BIT, 0, 0));
         }
 
         screenshot_handler_->EndFrame();
