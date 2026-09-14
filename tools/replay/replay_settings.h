@@ -32,10 +32,10 @@
 
 const char kOptions[] =
     "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--remove-unsupported,--validate,"
-    "--debug-device-lost,--create-dummy-allocations,--screenshot-all,--streamline-annotate,"
-    "--qamr|--quit-after-measurement-range,--fmr|--flush-measurement-range,--flush-inside-measurement-range,"
-    "--pbi-all,--preload-measurement-range,--log-timestamps,--async-processing,"
-    "--dump-resources-before-draw,--dump-resources-modifiable-state-only,--use-captured-swapchain-indices";
+    "--streamline-annotate,--use-captured-swapchain-indices,"
+    "--debug-device-lost,--create-dummy-allocations,--screenshot-all,--qamr|--quit-after-measurement-range,"
+    "--fmr|--flush-measurement-range,--flush-inside-measurement-range,--pbi-all,--preload-measurement-range,"
+    "--log-timestamps,--async-processing,--dump-resources-before-draw,--dump-resources-modifiable-state-only";
 
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--pause-frame,--wsi,--screenshots,--screenshot-interval,"
@@ -107,7 +107,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-scale <scale>] [--screenshot-interval <N>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--wsi <platform>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--remove-unsupported] [--validate]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--onhb | --omit-null-hardware-buffers]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--mfr|--measurement-frame-range <start-frame>-<end-frame>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--measurement-file <file>] [--quit-after-measurement-range]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--flush-measurement-range] [--quit-after-frame <frame>]");
@@ -146,13 +145,13 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --log-level <level>\tSpecify lowest level message to log. Options are:");
     GFXRECON_WRITE_CONSOLE("          \t\tfatal, error, warning, info, and debug. Default is info.");
     GFXRECON_WRITE_CONSOLE("  --log-timestamps\tOutput a timestamp in front of each log message.");
-    GFXRECON_WRITE_CONSOLE("  --log-file <file>\tWrite log messages to a file at the specified path.")
+    GFXRECON_WRITE_CONSOLE("  --log-file <file>\tWrite log messages to a file at the specified path.");
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is: Empty string (file logging disabled).");
 #if defined(_WIN32)
     GFXRECON_WRITE_CONSOLE("  --log-debugview\tLog messages with OutputDebugStringA.");
 #endif
     GFXRECON_WRITE_CONSOLE(
-        "  --debug-messenger-level <level>\tSpecify lowest debug messenger severity level. Options are:")
+        "  --debug-messenger-level <level>\tSpecify lowest debug messenger severity level. Options are:");
     GFXRECON_WRITE_CONSOLE("          \t\terror, warning, info, and debug. Default is warning.");
     GFXRECON_WRITE_CONSOLE("  --pause-frame <N>\tPause after replaying frame number N.");
     GFXRECON_WRITE_CONSOLE("  --paused\t\tPause after replaying the first frame (same");
@@ -272,8 +271,8 @@ static void PrintUsage(const char* exe_name)
     // End of Arm specific
 
 #if defined(_WIN32)
-    GFXRECON_WRITE_CONSOLE("")
-    GFXRECON_WRITE_CONSOLE("Windows only:")
+    GFXRECON_WRITE_CONSOLE("");
+    GFXRECON_WRITE_CONSOLE("Windows only:");
     GFXRECON_WRITE_CONSOLE("  --dump-resources <submit-index,command-index,drawcall-index>");
     GFXRECON_WRITE_CONSOLE("          \t\tDump resources for a specific drawcall.");
     GFXRECON_WRITE_CONSOLE(

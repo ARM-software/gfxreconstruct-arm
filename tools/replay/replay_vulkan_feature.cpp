@@ -107,11 +107,11 @@ const char kReplayEventPluginPath[]                 = "--replay-event-plugin-pat
 const char kReplayEventPluginParams[]               = "--replay-event-plugin-params";
 const char kIsolateRenderPasses[]                   = "--isolate-render-passes";
 const char kSerializeComputeAndTransfer[]           = "--serialize-compute-and-transfer";
+const char kOmitNullHardwareBuffersShortOption[]    = "--onhb";
+const char kOmitNullHardwareBuffersLongOption[]     = "--omit-null-hardware-buffers";
 
 // Arm specific
 const char kBlackholeOption[]                    = "--blackhole";
-const char kOmitNullHardwareBuffersShortOption[] = "--onhb";
-const char kOmitNullHardwareBuffersLongOption[]  = "--omit-null-hardware-buffers";
 const char kOmitAllHardwareBuffersShortOption[]  = "--oahb";
 const char kOmitAllHardwareBuffersLongOption[]   = "--omit-all-hardware-buffers";
 const char kColorspaceFallbackAliasOption[]      = "--colorspace-fallback";
@@ -465,6 +465,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
 
     replay_options.screenshot_apply_prerotation = arg_parser.IsOptionSet(kScreenshotApplyPrerotationArgument);
 
+    replay_options.omit_null_hardware_buffers = arg_parser.IsOptionSet(kOmitNullHardwareBuffersLongOption);
+
     // ----------------------------------------------------------------------------
     // Arm specific
     // ----------------------------------------------------------------------------
@@ -492,7 +494,6 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.blackhole = true;
     }
 
-    replay_options.omit_null_hardware_buffers = arg_parser.IsOptionSet(kOmitNullHardwareBuffersShortOption);
     replay_options.omit_all_hardware_buffers  = arg_parser.IsOptionSet(kOmitAllHardwareBuffersShortOption);
 
     if (arg_parser.IsOptionSet(kOffscreenSwapchainFrameBoundary))
@@ -680,6 +681,11 @@ std::vector<util::FeatureOptionDesc> ReplayVulkanFeature::GetOptionDescs() const
                  "debug, info, warning, and error. The default is warning." },
                true,
                kDebugMessageSeverityArgument },
+             { "",
+               { "Skip calls to `vkGetAndroidHardwareBufferPropertiesANDROID` when the provided Android",
+                 "AHardwareBuffer is NULL at replay time (for example when it could not be recreated)." },
+               false,
+               AliasNames(kOmitNullHardwareBuffersShortOption, kOmitNullHardwareBuffersLongOption) },
              // This entry has no description, so it stays out of the usage text.
              { "", {}, false, kSerializeComputeAndTransfer },
 
