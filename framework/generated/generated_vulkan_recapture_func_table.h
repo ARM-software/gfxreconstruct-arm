@@ -800,6 +800,7 @@ static inline const std::unordered_map<std::string, PFN_vkVoidFunction> GetVulka
         { "vkGetPhysicalDeviceQueueFamilyDataGraphOpticalFlowImageFormatsARM",                                   reinterpret_cast<PFN_vkVoidFunction>(encode::vkGetPhysicalDeviceQueueFamilyDataGraphOpticalFlowImageFormatsARM) },
         { "vkGetPhysicalDeviceQueueFamilyDataGraphEngineOperationPropertiesARM",                                 reinterpret_cast<PFN_vkVoidFunction>(encode::vkGetPhysicalDeviceQueueFamilyDataGraphEngineOperationPropertiesARM) },
         { "vkCmdSetComputeOccupancyPriorityNV",                                                                  reinterpret_cast<PFN_vkVoidFunction>(encode::vkCmdSetComputeOccupancyPriorityNV) },
+        { "vkGetPhysicalDeviceCooperativeMatrixProperties2EXT",                                                  reinterpret_cast<PFN_vkVoidFunction>(encode::vkGetPhysicalDeviceCooperativeMatrixProperties2EXT) },
         { "vkCmdSetPrimitiveRestartIndexEXT",                                                                    reinterpret_cast<PFN_vkVoidFunction>(encode::vkCmdSetPrimitiveRestartIndexEXT) },
         { "vkCmdUpdateBuffer2ARM",                                                                               reinterpret_cast<PFN_vkVoidFunction>(encode::vkCmdUpdateBuffer2ARM) },
         { "vkCmdUpdateMemory2ARM",                                                                               reinterpret_cast<PFN_vkVoidFunction>(encode::vkCmdUpdateMemory2ARM) },

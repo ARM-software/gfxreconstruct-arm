@@ -2817,6 +2817,9 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
     void Process_vkCmdSetComputeOccupancyPriorityNV(
         const ApiCallInfo&                          call_info,
         args::CmdSetComputeOccupancyPriorityNV&     args) override { CheckSkiavk(args.commandBuffer);}
+    void Process_vkGetPhysicalDeviceCooperativeMatrixProperties2EXT(
+        const ApiCallInfo&                          call_info,
+        args::GetPhysicalDeviceCooperativeMatrixProperties2EXT& args) override { CheckSkiavk(args.physicalDevice);}
     void Process_vkCmdSetPrimitiveRestartIndexEXT(
         const ApiCallInfo&                          call_info,
         args::CmdSetPrimitiveRestartIndexEXT&       args) override { CheckSkiavk(args.commandBuffer);}

@@ -1,5 +1,5 @@
 diff --git a/external/Vulkan-Headers/include/vulkan/vulkan_core.h b/external/Vulkan-Headers/include/vulkan/vulkan_core.h
-index 913006e..080a754 100644
+index 1856273..66658b8 100644
 --- a/external/Vulkan-Headers/include/vulkan/vulkan_core.h
 +++ b/external/Vulkan-Headers/include/vulkan/vulkan_core.h
 @@ -1343,6 +1343,11 @@ typedef enum VkStructureType {
@@ -14,7 +14,7 @@ index 913006e..080a754 100644
      VK_STRUCTURE_TYPE_TENSOR_EXPLICIT_TILING_FORMAT_PROPERTIES_ARM = 1000565000,
      VK_STRUCTURE_TYPE_TENSOR_ROLLING_BACKING_CREATE_INFO_ARM = 1000565001,
      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT = 1000567000,
-@@ -24849,6 +24854,28 @@ typedef struct VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT {
+@@ -24917,6 +24922,28 @@ typedef struct VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT {
      VkBool32           shaderReplicatedComposites;
  } VkPhysicalDeviceShaderReplicatedCompositesFeaturesEXT;
  
@@ -43,7 +43,7 @@ index 913006e..080a754 100644
  
  
  // VK_ARM_tensor_controls is a preprocessor guard. Do not pass it to API calls.
-@@ -26884,6 +26911,94 @@ VKAPI_ATTR void VKAPI_CALL vkCmdSetRayTracingPipelineStackSizeKHR(
+@@ -27043,6 +27070,94 @@ VKAPI_ATTR void VKAPI_CALL vkCmdSetRayTracingPipelineStackSizeKHR(
  #endif
  #endif
  
@@ -139,10 +139,10 @@ index 913006e..080a754 100644
  // VK_KHR_ray_query is a preprocessor guard. Do not pass it to API calls.
  #define VK_KHR_ray_query 1
 diff --git a/external/Vulkan-Headers/registry/vk.xml b/external/Vulkan-Headers/registry/vk.xml
-index 76589cc..3624155 100644
+index caddc54..6110de9 100644
 --- a/external/Vulkan-Headers/registry/vk.xml
 +++ b/external/Vulkan-Headers/registry/vk.xml
-@@ -423,6 +423,7 @@ typedef void* <name>MTLSharedEvent_id</name>;
+@@ -424,6 +424,7 @@ typedef void* <name>MTLSharedEvent_id</name>;
          <type bitvalues="VkImageUsageFlagBits2KHR" category="bitmask">typedef <type>VkFlags64</type> <name>VkImageUsageFlags2KHR</name>;</type>
          <type bitvalues="VkImageCreateFlagBits2KHR" category="bitmask">typedef <type>VkFlags64</type> <name>VkImageCreateFlags2KHR</name>;</type>
          <type requires="VkAddressCopyFlagBitsKHR" category="bitmask">typedef <type>VkFlags</type> <name>VkAddressCopyFlagsKHR</name>;</type>
@@ -150,7 +150,7 @@ index 76589cc..3624155 100644
          <type bitvalues="VkTensorCreateFlagBitsARM" category="bitmask">typedef <type>VkFlags64</type> <name>VkTensorCreateFlagsARM</name>;</type>
          <type bitvalues="VkTensorUsageFlagBitsARM" category="bitmask">typedef <type>VkFlags64</type> <name>VkTensorUsageFlagsARM</name>;</type>
          <type bitvalues="VkTensorViewCreateFlagBitsARM" category="bitmask">typedef <type>VkFlags64</type> <name>VkTensorViewCreateFlagsARM</name>;</type>
-@@ -921,6 +922,9 @@ typedef void* <name>MTLSharedEvent_id</name>;
+@@ -927,6 +928,9 @@ typedef void* <name>MTLSharedEvent_id</name>;
          <type name="VkTileShadingRenderPassFlagBitsQCOM" category="enum" />
          <type name="VkCooperativeVectorMatrixLayoutNV" category="enum" />
          <type name="VkAddressCopyFlagBitsKHR" category="enum" />
@@ -160,7 +160,7 @@ index 76589cc..3624155 100644
          <type name="VkTensorCreateFlagBitsARM" category="enum" />
          <type name="VkTensorUsageFlagBitsARM" category="enum" />
          <type name="VkTensorTilingARM" category="enum" />
-@@ -1358,6 +1362,11 @@ typedef void* <name>MTLSharedEvent_id</name>;
+@@ -1364,6 +1368,11 @@ typedef void* <name>MTLSharedEvent_id</name>;
              <member><type>VkDeviceSize</type>           <name>offset</name><comment>Offset within the memory object where the range starts</comment></member>
              <member><type>VkDeviceSize</type>           <name>size</name><comment>Size of the range within the memory object</comment></member>
          </type>
@@ -172,7 +172,7 @@ index 76589cc..3624155 100644
          <type category="struct" name="VkFormatProperties" returnedonly="true" requiredlimittype="true">
              <member optional="true" limittype="bitmask"><type>VkFormatFeatureFlags</type>   <name>linearTilingFeatures</name><comment>Format features in case of linear tiling</comment></member>
              <member optional="true" limittype="bitmask"><type>VkFormatFeatureFlags</type>   <name>optimalTilingFeatures</name><comment>Format features in case of optimal tiling</comment></member>
-@@ -10516,6 +10525,41 @@ typedef void* <name>MTLSharedEvent_id</name>;
+@@ -10546,6 +10555,41 @@ typedef void* <name>MTLSharedEvent_id</name>;
              <member len="size">const <type>void</type>*                                         <name>pValues</name></member>
          </type>
          <type category="struct" name="VkPushConstantsInfoKHR" alias="VkPushConstantsInfo" />
@@ -214,7 +214,7 @@ index 76589cc..3624155 100644
          <type category="struct" name="VkPushDescriptorSetInfo">
              <member values="VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO"><type>VkStructureType</type> <name>sType</name></member>
              <member optional="true">const <type>void</type>*                                    <name>pNext</name></member>
-@@ -14599,6 +14643,20 @@ typedef void* <name>MTLSharedEvent_id</name>;
+@@ -14651,6 +14695,20 @@ typedef void* <name>MTLSharedEvent_id</name>;
          <enum bitpos="2" name="VK_ADDRESS_COMMAND_STORAGE_BUFFER_USAGE_BIT_KHR" />
          <enum bitpos="3" name="VK_ADDRESS_COMMAND_UNKNOWN_STORAGE_BUFFER_USAGE_BIT_KHR" />
      </enums>
@@ -235,7 +235,7 @@ index 76589cc..3624155 100644
      <enums name="VkDataGraphTOSAQualityFlagBitsARM" type="bitmask">
          <enum bitpos="0" name="VK_DATA_GRAPH_TOSA_QUALITY_ACCELERATED_ARM" />
          <enum bitpos="1" name="VK_DATA_GRAPH_TOSA_QUALITY_CONFORMANT_ARM" />
-@@ -14844,6 +14902,30 @@ endif::VK_KHR_internally_synchronized_queues[]
+@@ -14901,6 +14959,30 @@ endif::VK_KHR_internally_synchronized_queues[]
              <param><type>uint32_t</type> <name>memoryRangeCount</name></param>
              <param len="memoryRangeCount">const <type>VkMappedMemoryRange</type>* <name>pMemoryRanges</name></param>
          </command>
@@ -266,7 +266,7 @@ index 76589cc..3624155 100644
          <command export="vulkan,vulkansc">
              <proto><type>void</type> <name>vkGetDeviceMemoryCommitment</name></proto>
              <param><type>VkDevice</type> <name>device</name></param>
-@@ -30635,6 +30717,38 @@ endif::VK_KHR_internally_synchronized_queues[]
+@@ -30746,6 +30828,38 @@ endif::VK_KHR_internally_synchronized_queues[]
                  <enum value="&quot;VK_ARM_extension_567&quot;" name="VK_ARM_EXTENSION_567_EXTENSION_NAME" />
              </require>
          </extension>

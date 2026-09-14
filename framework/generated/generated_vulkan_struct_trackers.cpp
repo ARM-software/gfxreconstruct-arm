@@ -17583,6 +17583,51 @@ VkPhysicalDeviceComputeOccupancyPriorityFeaturesNV* TrackStruct(const VkPhysical
     return unwrapped_struct;
 }
 
+VkCooperativeMatrixProperties2EXT* TrackStruct(const VkCooperativeMatrixProperties2EXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkCooperativeMatrixProperties2EXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceCooperativeMatrixInfo2EXT* TrackStruct(const VkPhysicalDeviceCooperativeMatrixInfo2EXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceCooperativeMatrixInfo2EXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceCooperativeMatrixMaintenance1FeaturesEXT* TrackStruct(const VkPhysicalDeviceCooperativeMatrixMaintenance1FeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceCooperativeMatrixMaintenance1FeaturesEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
 VkPhysicalDeviceShaderSubgroupPartitionedFeaturesEXT* TrackStruct(const VkPhysicalDeviceShaderSubgroupPartitionedFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -17718,6 +17763,36 @@ VkPhysicalDevicePrimitiveRestartIndexFeaturesEXT* TrackStruct(const VkPhysicalDe
     return unwrapped_struct;
 }
 
+VkPhysicalDeviceImageTilingControlFeaturesEXT* TrackStruct(const VkPhysicalDeviceImageTilingControlFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceImageTilingControlFeaturesEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkImageTilingControlCreateInfoEXT* TrackStruct(const VkImageTilingControlCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkImageTilingControlCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
 VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV* TrackStruct(const VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -17726,6 +17801,21 @@ VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV* TrackStruct(const VkPhy
     }
 
     VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDevicePrivateDataBaseHandleFeaturesNV* TrackStruct(const VkPhysicalDevicePrivateDataBaseHandleFeaturesNV* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDevicePrivateDataBaseHandleFeaturesNV* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
 
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
@@ -20393,6 +20483,12 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkComputeOccupancyPriorityParametersNV*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_OCCUPANCY_PRIORITY_FEATURES_NV:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceComputeOccupancyPriorityFeaturesNV*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_2_EXT:
+            return TrackStruct(reinterpret_cast<const VkCooperativeMatrixProperties2EXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_INFO_2_EXT:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceCooperativeMatrixInfo2EXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_MAINTENANCE_1_FEATURES_EXT:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceCooperativeMatrixMaintenance1FeaturesEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_PARTITIONED_FEATURES_EXT:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceShaderSubgroupPartitionedFeaturesEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OCP_MICROSCALING_TYPES_FEATURES_EXT:
@@ -20411,8 +20507,14 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkDataGraphPipelineSessionNeuralStatisticsCreateInfoARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_RESTART_INDEX_FEATURES_EXT:
             return TrackStruct(reinterpret_cast<const VkPhysicalDevicePrimitiveRestartIndexFeaturesEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_TILING_CONTROL_FEATURES_EXT:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceImageTilingControlFeaturesEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_IMAGE_TILING_CONTROL_CREATE_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkImageTilingControlCreateInfoEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_DECODE_VECTOR_FEATURES_NV:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIVATE_DATA_BASE_HANDLE_FEATURES_NV:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDevicePrivateDataBaseHandleFeaturesNV*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXPLICIT_HOST_UPDATES_FEATURES_ARM:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceExplicitHostUpdatesFeaturesARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_FLUSH_RANGES_FLAGS_ARM:
