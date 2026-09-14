@@ -1545,7 +1545,7 @@ void VulkanStateWriter::WriteDeviceMemoryState(const VulkanStateTable& state_tab
 void VulkanStateWriter::WriteBufferDeviceAddressState(const VulkanStateTable& state_table)
 {
     state_table.VisitWrappers([&](const vulkan_wrappers::BufferWrapper* wrapper) {
-        GFXRECON_ASSERT(wrapper != nullptr && wrapper->device != VK_NULL_HANDLE);
+        GFXRECON_ASSERT(wrapper != nullptr && wrapper->device != nullptr);
         if (wrapper->device != nullptr && wrapper->address != 0)
         {
             const vulkan_wrappers::DeviceMemoryWrapper* memory_wrapper =
@@ -5576,12 +5576,7 @@ void VulkanStateWriter::WriteTensorSnapshotState(const VulkanStateTable& state_t
         GFXRECON_ASSERT(wrapper != nullptr);
 
         const vulkan_wrappers::DeviceWrapper* device_wrapper = wrapper->device;
-        if (device_wrapper == nullptr)
-        {
-            GFXRECON_LOG_WARNING("Skipping tensor trim snapshot for tensor %" PRIu64 ": no bound device is tracked",
-                                 wrapper->handle_id);
-            return;
-        }
+        GFXRECON_ASSERT(device_wrapper != nullptr);
 
         const auto* memory_wrapper = state_table.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
         if (memory_wrapper == nullptr)
