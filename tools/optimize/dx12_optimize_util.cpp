@@ -522,7 +522,7 @@ GetDx12OptimizationData(const std::string& input_filename, const decode::Dx12Opt
 
         if (file_processor.GetErrorState() != gfxrecon::decode::kErrorNone)
         {
-            throw std::runtime_error("Failed to scan input file for optimizations");
+            GFXRECON_LOG_FATAL("Failed to scan input file for optimizations");
         }
 
         if (!options.no_default)
@@ -591,7 +591,7 @@ void ApplyDx12OptimizationData(const std::string&                     input_file
         if (file_optimizer.GetErrorState() != gfxrecon::decode::BlockIOError::kErrorNone &&
             file_optimizer.GetErrorState() != gfxrecon::decode::BlockIOError::kErrorReadingBlockHeader)
         {
-            throw std::runtime_error("A failure has occurred during file processing");
+            GFXRECON_LOG_FATAL("A failure has occurred during file processing");
         }
 
         GFXRECON_WRITE_CONSOLE("Dx12 optimizations complete.");

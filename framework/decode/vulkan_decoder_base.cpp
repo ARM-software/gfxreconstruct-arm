@@ -785,7 +785,6 @@ void VulkanDecoderBase::DispatchResourceMemoryRequirements(
                            static_cast<unsigned long long>(bytes_read),
                            static_cast<unsigned long long>(parameter_data_size),
                            command_header.resources_count);
-        throw std::runtime_error("Failed to decode ResourceMemoryRequirements metadata");
     };
     auto log_property_decode_skip = [&](Property     property_type,
                                         uint32_t     resource_index,

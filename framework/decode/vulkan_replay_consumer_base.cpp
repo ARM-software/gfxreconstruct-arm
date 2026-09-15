@@ -787,7 +787,6 @@ void VulkanReplayConsumerBase::ProcessResourceMemoryRequirements(
     {
         GFXRECON_LOG_FATAL("Received ResourceMemoryRequirements metadata for unknown device id: %" PRIu64,
                            command_header.device_id);
-        throw std::runtime_error("Received ResourceMemoryRequirements metadata for unknown device id");
     }
 
     VulkanResourceAllocator* allocator = device_info->allocator.get();
@@ -796,7 +795,6 @@ void VulkanReplayConsumerBase::ProcessResourceMemoryRequirements(
         GFXRECON_LOG_FATAL(
             "Received ResourceMemoryRequirements metadata before allocator initialization for device id: %" PRIu64,
             command_header.device_id);
-        throw std::runtime_error("Received ResourceMemoryRequirements metadata before allocator initialization");
     }
 
     allocator->ProcessResourceMemoryRequirements(resources);

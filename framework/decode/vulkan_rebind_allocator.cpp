@@ -2897,7 +2897,6 @@ VmaMemoryUsage VulkanRebindAllocator::GetAliasedGroupMemoryUsage(uint8_t        
                 if (!resource_info.tiling.has_value())
                 {
                     GFXRECON_LOG_FATAL("Missing tiling metadata for aliased image resource group %u", aliasing_group);
-                    throw std::runtime_error("Missing tiling metadata for aliased image resource group");
                 }
                 usage = GetImageMemoryUsage(static_cast<VkImageUsageFlags>(resource_info.usage),
                                             *resource_info.tiling,
@@ -3168,7 +3167,6 @@ VkResult VulkanRebindAllocator::AllocateMemoryForAliasedObjects(const ResourceAl
         GFXRECON_LOG_FATAL("Aliased allocation cache contains null entry for capture memory %" PRIu64 " group %u",
                            memory_alloc_info.capture_id,
                            aliasing_group);
-        throw std::runtime_error("Aliased allocation cache contains null entry");
     }
 
     VmaAllocationCreateInfo create_info{};
@@ -4225,7 +4223,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                *resource_handle,
                                *aliasing_group,
                                static_cast<uint32_t>(resource_type));
-            throw std::runtime_error("Missing create info for aliased resource memory requirements query");
         }
 
         VkMemoryRequirements2 requirements2{ VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
@@ -4242,8 +4239,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error("Invalid VkBuffer create info for aliased resource memory requirements "
-                                             "query");
                 }
 
                 if ((injected->GetDeviceBufferMemoryRequirements ==
@@ -4255,9 +4250,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "memory requirements query: handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error(
-                        "Missing vkGetDeviceBufferMemoryRequirements function for aliased resource memory "
-                        "requirements query");
                 }
 
                 if ((create_info != nullptr) && (create_info->decoded_value != nullptr))
@@ -4294,8 +4286,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error("Invalid VkImage create info for aliased resource memory requirements "
-                                             "query");
                 }
 
                 if ((injected->GetDeviceImageMemoryRequirements ==
@@ -4307,9 +4297,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "memory requirements query: handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error(
-                        "Missing vkGetDeviceImageMemoryRequirements function for aliased resource memory "
-                        "requirements query");
                 }
 
                 if ((create_info != nullptr) && (create_info->decoded_value != nullptr))
@@ -4347,8 +4334,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error("Invalid VkTensor create info for aliased resource memory requirements "
-                                             "query");
                 }
 
                 if (injected->GetDeviceTensorMemoryRequirementsARM ==
@@ -4358,9 +4343,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                        "memory requirements query: handle=%" PRIu64 " aliasing_group=%u",
                                        *resource_handle,
                                        *aliasing_group);
-                    throw std::runtime_error(
-                        "Missing vkGetDeviceTensorMemoryRequirementsARM function for aliased resource memory "
-                        "requirements query");
                 }
 
                 if ((create_info != nullptr) && (create_info->decoded_value != nullptr) &&
@@ -4386,7 +4368,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                    *resource_handle,
                                    *aliasing_group,
                                    static_cast<uint32_t>(resource_type));
-                throw std::runtime_error("Unsupported aliased resource type for memory requirements query");
                 break;
         }
 
@@ -4397,7 +4378,6 @@ void VulkanRebindAllocator::ProcessResourceMemoryRequirements(
                                *resource_handle,
                                *aliasing_group,
                                static_cast<uint32_t>(resource_type));
-            throw std::runtime_error("Failed to query memory requirements for aliased resource");
         }
         else
         {
