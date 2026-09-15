@@ -693,7 +693,7 @@ inline void InitializeState<VkDevice, vulkan_wrappers::BufferWrapper, VkBufferCr
     assert(create_info != nullptr);
     assert(create_parameters != nullptr);
 
-    wrapper->device            = GetWrapper<DeviceWrapper>(parent_handle);
+    wrapper->device            = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(parent_handle);
     wrapper->create_call_id    = create_call_id;
     wrapper->create_parameters = std::move(create_parameters);
 

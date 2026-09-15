@@ -12035,6 +12035,9 @@ void VulkanReplayConsumerBase::OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdW
                                            firstQuery);
     }
     func(command_buffer, count, pMicromaps_dec, queryType, query_pool, firstQuery);
+
+    command_buffer_info->recorded_query_ops.push_back({ query_pool_info->capture_id, firstQuery, count, true });
+    track_query_state_ = true;
 }
 
 VkResult VulkanReplayConsumerBase::OverrideCreateRayTracingPipelinesKHR(
