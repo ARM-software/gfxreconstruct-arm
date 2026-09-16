@@ -175,6 +175,16 @@ struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateShader
 };
 
 template <>
+struct CustomReplayPreCall<format::ApiCallId::ApiCall_ID3D12Device_CreateUnorderedAccessView>
+{
+    template <typename... Args>
+    static void Dispatch(Dx12ReplayConsumerBase* replay, Args... args)
+    {
+        replay->PreCall_ID3D12Device_CreateUnorderedAccessView(args...);
+    }
+};
+
+template <>
 struct CustomReplayPostCall<format::ApiCallId::ApiCall_ID3D12Device_CreateUnorderedAccessView>
 {
     template <typename... Args>

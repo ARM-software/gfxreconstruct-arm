@@ -7200,6 +7200,75 @@ void Dx12ReplayConsumerBase::PostCall_ID3D12Device_CreateShaderResourceView(
     heap_extra_info->cbv_srv_uav_infos[DestDescriptor.index] = std::move(info);
 }
 
+void Dx12ReplayConsumerBase::PreCall_ID3D12Device_CreateUnorderedAccessView(
+    const ApiCallInfo&                                              call_info,
+    DxObjectInfo*                                                   object_info,
+    format::HandleId                                                pResource,
+    format::HandleId                                                pCounterResource,
+    StructPointerDecoder<Decoded_D3D12_UNORDERED_ACCESS_VIEW_DESC>* pDesc,
+    Decoded_D3D12_CPU_DESCRIPTOR_HANDLE                             DestDescriptor)
+{
+    if ((pResource == format::kNullHandleId) || pDesc->IsNull())
+    {
+        return;
+    }
+
+    auto captured_width_iter = resource_buffer_widths_.find(pResource);
+    if (captured_width_iter == resource_buffer_widths_.end())
+    {
+        return;
+    }
+
+    auto* uav_meta_desc = pDesc->GetMetaStructPointer();
+    if ((uav_meta_desc == nullptr) || (uav_meta_desc->decoded_value == nullptr))
+    {
+        return;
+    }
+
+    auto* uav_desc = uav_meta_desc->decoded_value;
+    if ((uav_desc->ViewDimension != D3D12_UAV_DIMENSION_BUFFER) ||
+        ((uav_desc->Buffer.Flags & D3D12_BUFFER_UAV_FLAG_RAW) == 0) || (uav_desc->Buffer.StructureByteStride != 0) ||
+        (uav_desc->Buffer.CounterOffsetInBytes != 0) || (uav_desc->Buffer.FirstElement != 0))
+    {
+        return;
+    }
+
+    auto* resource = MapObject<ID3D12Resource>(pResource);
+    if (resource == nullptr)
+    {
+        return;
+    }
+
+    const auto resource_desc = resource->GetDesc();
+    if (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER)
+    {
+        return;
+    }
+
+    uint64_t element_size = graphics::dx12::GetPixelByteSize(uav_desc->Format);
+    if (element_size == 0)
+    {
+        return;
+    }
+
+    // this should ideally cover a resized DXR buffer with a full raw UAV and confirm that partial or structured UAV
+    // descriptors are not changed.
+    const uint64_t capture_num_elements = captured_width_iter->second / element_size;
+    const uint64_t replay_num_elements  = resource_desc.Width / element_size;
+    if ((capture_num_elements == uav_desc->Buffer.NumElements) && (replay_num_elements < capture_num_elements))
+    {
+        GFXRECON_LOG_DEBUG("Clamping buffer UAV for resource ID %" PRIu64 " from %u to %" PRIu64
+                           " elements because replay buffer width (%" PRIu64
+                           ") differs from capture buffer width (%" PRIu64 ").",
+                           pResource,
+                           uav_desc->Buffer.NumElements,
+                           replay_num_elements,
+                           resource_desc.Width,
+                           captured_width_iter->second);
+        uav_desc->Buffer.NumElements = static_cast<UINT>(replay_num_elements);
+    }
+}
+
 void Dx12ReplayConsumerBase::PostCall_ID3D12Device_CreateUnorderedAccessView(
     const ApiCallInfo&                                              call_info,
     DxObjectInfo*                                                   object_info,

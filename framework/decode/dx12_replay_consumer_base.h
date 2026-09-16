@@ -249,6 +249,14 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                    StructPointerDecoder<Decoded_D3D12_SHADER_RESOURCE_VIEW_DESC>* pDesc,
                                                    Decoded_D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor);
 
+    void PreCall_ID3D12Device_CreateUnorderedAccessView(
+        const ApiCallInfo&                                              call_info,
+        DxObjectInfo*                                                   object_info,
+        format::HandleId                                                pResource,
+        format::HandleId                                                pCounterResource,
+        StructPointerDecoder<Decoded_D3D12_UNORDERED_ACCESS_VIEW_DESC>* pDesc,
+        Decoded_D3D12_CPU_DESCRIPTOR_HANDLE                             DestDescriptor);
+
     void PostCall_ID3D12Device_CreateUnorderedAccessView(
         const ApiCallInfo&                                              call_info,
         DxObjectInfo*                                                   object_info,
