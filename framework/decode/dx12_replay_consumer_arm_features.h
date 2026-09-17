@@ -45,6 +45,26 @@ class Dx12ReplayConsumerArmFeatures
 
     void LogFrameDebugInfo();
 
+    bool SetVirtualSwapchainInitialIndex(DxObjectInfo* swapchain_info, uint32_t capture_index);
+
+    UINT GetVirtualSwapchainCurrentBackBufferIndex(DxObjectInfo* swapchain_info, UINT capture_result);
+
+    HRESULT CreateSwapChain(DxObjectInfo*                                       replay_object_info,
+                            HRESULT                                             original_result,
+                            DxObjectInfo*                                       device_info,
+                            StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC>* desc,
+                            HandlePointerDecoder<IDXGISwapChain*>*              swapchain);
+
+    HRESULT
+    CreateSwapChainForHwnd(DxObjectInfo*                           replay_object_info,
+                           HRESULT                                 original_result,
+                           DxObjectInfo*                           device_info,
+                           uint64_t                                hwnd_id,
+                           DXGI_SWAP_CHAIN_DESC1*                  desc,
+                           DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
+                           DxObjectInfo*                           restrict_to_output_info,
+                           HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
+
     HRESULT
     CreateSwapChainForComposition(DxObjectInfo*                          replay_object_info,
                                   HRESULT                                original_result,
@@ -97,6 +117,18 @@ class Dx12ReplayConsumerArmFeatures
     void    OnSharedResourceGetDesc(DxObjectInfo* resource_object_info, const D3D12_RESOURCE_DESC* captured_desc);
 
   private:
+    HRESULT SetSwapchainInfo(DxObjectInfo*    info,
+                             IDXGISwapChain*  replay_swapchain,
+                             format::HandleId capture_id,
+                             Window*          window,
+                             uint64_t         hwnd_id,
+                             HWND             hwnd,
+                             uint32_t         image_count,
+                             IUnknown*        queue_iunknown,
+                             bool             windowed,
+                             bool             headless  = false,
+                             bool             offscreen = false);
+
     bool RecreateSharedResourcePlaceholder(DxObjectInfo*              resource_object_info,
                                            const D3D12_RESOURCE_DESC& captured_desc);
 

@@ -179,6 +179,11 @@ Dx12ReplayConsumerBase::Dx12ReplayConsumerBase(std::shared_ptr<application::Appl
         std::make_unique<Dx12ResourceValueMapper>(get_object_func, shader_id_map_, gpu_va_map_, descriptor_map_);
 
     arm_features_ = std::make_unique<Dx12ReplayConsumerArmFeatures>(this);
+
+    if (options_.swapchain_option == util::SwapchainOption::kVirtual)
+    {
+        GFXRECON_LOG_INFO("DX12 virtual swapchain mapping activates for a trimmed current back-buffer index mismatch.");
+    }
 }
 
 #ifdef GFXRECON_AGS_SUPPORT
@@ -488,26 +493,30 @@ void Dx12ReplayConsumerBase::ApplyBatchedResourceInitInfo(
         std::map<IDXGISwapChain3*, DxgiSwapchainInfo*> swapchain_infos;
         for (const auto& resource_info : swapchain_resource_infos)
         {
-            auto object_info           = GetObjectInfo(resource_info.second->resource_id);
-            auto extra_info            = GetExtraInfo<D3D12ResourceInfo>(object_info);
-            auto swapchain_info        = GetObjectInfo(extra_info->swap_chain_id);
-            auto swapchain_extra_info  = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
-            auto swapchain             = reinterpret_cast<IDXGISwapChain3*>(swapchain_info->object);
-            swapchain_infos[swapchain] = swapchain_extra_info;
-
-            for (auto& state : resource_info.second->before_states)
+            auto object_info               = GetObjectInfo(resource_info.second->resource_id);
+            auto extra_info                = GetExtraInfo<D3D12ResourceInfo>(object_info);
+            auto swapchain_info            = GetObjectInfo(extra_info->swap_chain_id);
+            auto swapchain_extra_info      = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
+            auto swapchain                 = reinterpret_cast<IDXGISwapChain3*>(swapchain_info->object);
+            swapchain_infos[swapchain]     = swapchain_extra_info;
+            ID3D12CommandQueue* init_queue = swapchain_extra_info->command_queue;
+            if (swapchain_extra_info->virtual_swapchain == nullptr)
             {
-                if (state.states != D3D12_RESOURCE_STATE_PRESENT)
+                for (auto& state : resource_info.second->before_states)
                 {
-                    GFXRECON_LOG_WARNING(
-                        "Initializing Swapchain Buffers. The before state supposed to be COMMON|PRESENT, but it's %s",
-                        util::ToString<D3D12_RESOURCE_STATES>(state.states).c_str());
+                    if (state.states != D3D12_RESOURCE_STATE_PRESENT)
+                    {
+                        GFXRECON_LOG_WARNING(
+                            "Initializing Swapchain Buffers. The before state supposed to be COMMON|PRESENT, but it's "
+                            "%s",
+                            util::ToString<D3D12_RESOURCE_STATES>(state.states).c_str());
+                    }
                 }
-            }
 
-            while (extra_info->buffer_index != swapchain->GetCurrentBackBufferIndex())
-            {
-                swapchain->Present(0, 0);
+                while (extra_info->replay_buffer_index != swapchain->GetCurrentBackBufferIndex())
+                {
+                    swapchain->Present(0, 0);
+                }
             }
 
             resource_data_util_->ResetCommandList();
@@ -524,12 +533,19 @@ void Dx12ReplayConsumerBase::ApplyBatchedResourceInitInfo(
             }
             extra_info->resource_state_infos = resource_info.second->after_states;
             resource_data_util_->CloseCommandList();
-            resource_data_util_->ExecuteAndWaitForCommandList(swapchain_extra_info->command_queue);
+            resource_data_util_->ExecuteAndWaitForCommandList(init_queue);
         }
 
         for (const auto& info : swapchain_infos)
         {
-            while (info.second->init_buffer_index != info.first->GetCurrentBackBufferIndex())
+            if (info.second->virtual_swapchain != nullptr)
+            {
+                continue;
+            }
+
+            UINT init_replay_buffer_index = info.second->init_buffer_index;
+
+            while (init_replay_buffer_index != info.first->GetCurrentBackBufferIndex())
             {
                 info.first->Present(0, 0);
             }
@@ -537,15 +553,16 @@ void Dx12ReplayConsumerBase::ApplyBatchedResourceInitInfo(
 
         for (const auto& resource_info : swapchain_resource_infos)
         {
-            auto object_info          = GetObjectInfo(resource_info.second->resource_id);
-            auto extra_info           = GetExtraInfo<D3D12ResourceInfo>(object_info);
-            auto swapchain_info       = GetObjectInfo(extra_info->swap_chain_id);
-            auto swapchain_extra_info = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
+            auto                object_info          = GetObjectInfo(resource_info.second->resource_id);
+            auto                extra_info           = GetExtraInfo<D3D12ResourceInfo>(object_info);
+            auto                swapchain_info       = GetObjectInfo(extra_info->swap_chain_id);
+            auto                swapchain_extra_info = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
+            ID3D12CommandQueue* transition_queue     = swapchain_extra_info->command_queue;
 
             resource_data_util_->ExecuteTransitionCommandList(resource_info.second->resource,
                                                               resource_info.second->before_states,
                                                               resource_info.second->after_states,
-                                                              swapchain_extra_info->command_queue);
+                                                              transition_queue);
         }
 
         resource_data_util_->ResetCommandList();
@@ -981,6 +998,11 @@ void Dx12ReplayConsumerBase::ProcessSetSwapchainImageStateQueueSubmit(ID3D12Comm
     DXGI_SWAP_CHAIN_DESC swap_chain_desc;
     swapchain->GetDesc(&swap_chain_desc);
     auto buffer_count = swap_chain_desc.BufferCount;
+
+    if (arm_features_->SetVirtualSwapchainInitialIndex(swapchain_info, current_buffer_index))
+    {
+        return;
+    }
 
     for (uint32_t n = 0; n < buffer_count; ++n)
     {
@@ -1421,6 +1443,11 @@ Dx12ReplayConsumerBase::OverridePresent1(DxObjectInfo*                          
     return result;
 }
 
+UINT Dx12ReplayConsumerBase::OverrideGetCurrentBackBufferIndex(DxObjectInfo* replay_object_info, UINT original_result)
+{
+    return arm_features_->GetVirtualSwapchainCurrentBackBufferIndex(replay_object_info, original_result);
+}
+
 HRESULT
 Dx12ReplayConsumerBase::OverrideGetFullscreenDesc(DxObjectInfo* replay_object_info,
                                                   HRESULT       original_result,
@@ -1498,14 +1525,14 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateSwapChainForHwnd(
                                                             swapchain);
     }
 
-    return CreateSwapChainForHwnd(replay_object_info,
-                                  original_result,
-                                  device_info,
-                                  hwnd_id,
-                                  desc->GetPointer(),
-                                  full_screen_desc->GetPointer(),
-                                  restrict_to_output_info,
-                                  swapchain);
+    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
+                                                 original_result,
+                                                 device_info,
+                                                 hwnd_id,
+                                                 desc->GetPointer(),
+                                                 full_screen_desc->GetPointer(),
+                                                 restrict_to_output_info,
+                                                 swapchain);
 }
 
 HRESULT
@@ -1529,87 +1556,7 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChain(DxObjectInfo*                   
             replay_object_info, original_result, device_info, desc->GetPointer(), swapchain);
     }
 
-    auto    desc_pointer   = desc->GetPointer();
-    HRESULT result         = E_FAIL;
-    Window* window         = nullptr;
-    auto    wsi_context    = application_ ? application_->GetWsiContext("", true) : nullptr;
-    auto    window_factory = wsi_context ? wsi_context->GetWindowFactory() : nullptr;
-
-    DXGI_FORMAT format = desc_pointer->BufferDesc.Format;
-
-    if (format != DXGI_FORMAT_R8G8B8A8_UNORM && format != DXGI_FORMAT_R10G10B10A2_UNORM &&
-        format != DXGI_FORMAT_R16G16B16A16_FLOAT)
-    {
-        GFXRECON_LOG_WARNING(
-            "SwapChain uses uncommon DXGI_FORMAT: %s. This may affect image capture or display fidelity.",
-            util::ToString<DXGI_FORMAT>(format).c_str());
-    }
-
-    if (window_factory != nullptr && desc_pointer != nullptr)
-    {
-        ReplaceWindowedResolution(desc_pointer->BufferDesc.Width, desc_pointer->BufferDesc.Height);
-
-        // By default, the created window will be automatically in full screen mode, and its location will be set to 0,0
-        // if the requested size exceeds or equals the current screen size. If the user specifies "--fw" or "--fwo" this
-        // behavior will change, and replay will instead render in windowed mode.
-        window = window_factory->Create(options_.window_topleft_x,
-                                        options_.window_topleft_y,
-                                        desc_pointer->BufferDesc.Width,
-                                        desc_pointer->BufferDesc.Height,
-                                        options_.force_windowed || options_.force_windowed_origin);
-    }
-
-    if (window != nullptr)
-    {
-        HWND hwnd{};
-        if (window->GetNativeHandle(Window::kWin32HWnd, reinterpret_cast<void**>(&hwnd)))
-        {
-            assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr) &&
-                   (swapchain != nullptr));
-
-            auto      replay_object = static_cast<IDXGIFactory*>(replay_object_info->object);
-            IUnknown* device        = nullptr;
-
-            if (device_info != nullptr)
-            {
-                device = device_info->object;
-            }
-
-            desc_pointer->OutputWindow = hwnd;
-
-            result = replay_object->CreateSwapChain(device, desc_pointer, swapchain->GetHandlePointer());
-
-            if (SUCCEEDED(result))
-            {
-                auto     object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-                auto     meta_info   = desc->GetMetaStructPointer();
-                uint64_t hwnd_id     = 0;
-
-                if (meta_info != nullptr)
-                {
-                    hwnd_id = meta_info->OutputWindow;
-                }
-
-                SetSwapchainInfo(
-                    object_info, window, hwnd_id, hwnd, desc_pointer->BufferCount, device, desc_pointer->Windowed);
-            }
-            else
-            {
-                window_factory->Destroy(window);
-            }
-        }
-        else
-        {
-            GFXRECON_LOG_FATAL("Failed to retrieve handle from window");
-            window_factory->Destroy(window);
-        }
-    }
-    else
-    {
-        GFXRECON_LOG_FATAL("Failed to create a window.  Replay cannot continue.");
-    }
-
-    return result;
+    return arm_features_->CreateSwapChain(replay_object_info, original_result, device_info, desc, swapchain);
 }
 
 HRESULT
@@ -1660,14 +1607,14 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChainForCoreWindow(DxObjectInfo* repla
                                                             swapchain);
     }
 
-    return CreateSwapChainForHwnd(replay_object_info,
-                                  original_result,
-                                  device_info,
-                                  GetUniqueProxyWindowId(),
-                                  desc_pointer,
-                                  nullptr,
-                                  restrict_to_output_info,
-                                  swapchain);
+    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
+                                                 original_result,
+                                                 device_info,
+                                                 GetUniqueProxyWindowId(),
+                                                 desc_pointer,
+                                                 nullptr,
+                                                 restrict_to_output_info,
+                                                 swapchain);
 }
 
 HRESULT
@@ -1710,14 +1657,14 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChainForComposition(DxObjectInfo* repl
                                                             swapchain);
     }
 
-    return CreateSwapChainForHwnd(replay_object_info,
-                                  original_result,
-                                  device_info,
-                                  GetUniqueProxyWindowId(),
-                                  desc_pointer,
-                                  nullptr,
-                                  restrict_to_output_info,
-                                  swapchain);
+    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
+                                                 original_result,
+                                                 device_info,
+                                                 GetUniqueProxyWindowId(),
+                                                 desc_pointer,
+                                                 nullptr,
+                                                 restrict_to_output_info,
+                                                 swapchain);
 }
 
 HRESULT Dx12ReplayConsumerBase::OverrideEnumAdapterByLuid(DxObjectInfo*                replay_object_info,
@@ -3918,12 +3865,23 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
 
     assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (surface != nullptr));
 
-    auto replay_object = static_cast<IDXGISwapChain*>(replay_object_info->object);
-    auto replay_result = replay_object->GetBuffer(buffer, *riid.decoded_value, surface->GetHandlePointer());
+    auto swapchain_info    = GetExtraInfo<DxgiSwapchainInfo>(replay_object_info);
+    auto virtual_swapchain = (swapchain_info != nullptr) ? swapchain_info->virtual_swapchain.get()
+                                                         : static_cast<Dx12VirtualSwapchain*>(nullptr);
+
+    HRESULT replay_result = E_FAIL;
+    if (virtual_swapchain != nullptr)
+    {
+        replay_result = virtual_swapchain->GetBuffer(buffer, *riid.decoded_value, surface->GetHandlePointer());
+    }
+    else
+    {
+        auto replay_object = static_cast<IDXGISwapChain*>(replay_object_info->object);
+        replay_result      = replay_object->GetBuffer(buffer, *riid.decoded_value, surface->GetHandlePointer());
+    }
 
     if (SUCCEEDED(replay_result) && !surface->IsNull())
     {
-        auto swapchain_info = GetExtraInfo<DxgiSwapchainInfo>(replay_object_info);
         if (swapchain_info != nullptr)
         {
             GFXRECON_ASSERT(buffer < swapchain_info->image_ids.size());
@@ -3943,7 +3901,17 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
                     auto res_info           = GetExtraInfo<D3D12ResourceInfo>(object_info);
                     res_info->swap_chain_id = replay_object_info->capture_id;
                     res_info->buffer_index  = buffer;
-                    res_info->parent_id     = format::kNullHandleId;
+                    if (virtual_swapchain != nullptr)
+                    {
+                        const auto replay_buffer_index = virtual_swapchain->MapCaptureToReplay(buffer);
+                        res_info->replay_buffer_index =
+                            replay_buffer_index.value_or(std::numeric_limits<uint32_t>::max());
+                    }
+                    else
+                    {
+                        res_info->replay_buffer_index = buffer;
+                    }
+                    res_info->parent_id = format::kNullHandleId;
                 }
 
                 // Increment the replay reference to prevent the swapchain image info entry from being removed from the
@@ -3953,7 +3921,20 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
                 // Store the surface's HandleId so the reference can be released later.
                 swapchain_info->image_ids[buffer] = *surface->GetPointer();
             }
+
+            if (virtual_swapchain != nullptr)
+            {
+                virtual_swapchain->MarkBuffersExposed();
+            }
         }
+    }
+    else if ((virtual_swapchain != nullptr) && FAILED(replay_result))
+    {
+        GFXRECON_LOG_ERROR("DX12 virtual swapchain GetBuffer failed at block %" PRIu64 " for swapchain %" PRIu64
+                           " (HRESULT: 0x%08X)",
+                           GetCurrentBlockIndex(),
+                           replay_object_info->capture_id,
+                           replay_result);
     }
 
     return replay_result;
@@ -3973,12 +3954,36 @@ HRESULT Dx12ReplayConsumerBase::OverrideResizeBuffers(DxObjectInfo* replay_objec
 
     ReplaceWindowedResolution(width, height);
 
-    auto replay_object = static_cast<IDXGISwapChain*>(replay_object_info->object);
+    auto replay_object     = static_cast<IDXGISwapChain*>(replay_object_info->object);
+    auto swapchain_info    = GetExtraInfo<DxgiSwapchainInfo>(replay_object_info);
+    auto virtual_swapchain = (swapchain_info != nullptr) ? swapchain_info->virtual_swapchain.get()
+                                                         : static_cast<Dx12VirtualSwapchain*>(nullptr);
+
     auto replay_result = replay_object->ResizeBuffers(buffer_count, width, height, new_format, flags);
 
     if (SUCCEEDED(replay_result))
     {
-        ResetSwapchainImages(replay_object_info, buffer_count, width, height);
+        const UINT resized_buffer_count =
+            ((buffer_count == 0) && (swapchain_info != nullptr)) ? swapchain_info->buffer_count : buffer_count;
+        ResetSwapchainImages(replay_object_info, resized_buffer_count, width, height);
+        if (swapchain_info != nullptr)
+        {
+            swapchain_info->buffer_count = resized_buffer_count;
+        }
+
+        if (virtual_swapchain != nullptr)
+        {
+            const HRESULT init_result = virtual_swapchain->Reset(resized_buffer_count);
+            if (FAILED(init_result))
+            {
+                GFXRECON_LOG_ERROR("DX12 virtual swapchain ResizeBuffers reinitialization failed at block %" PRIu64
+                                   " for swapchain %" PRIu64 " (HRESULT: 0x%08X)",
+                                   GetCurrentBlockIndex(),
+                                   replay_object_info->capture_id,
+                                   init_result);
+                return init_result;
+            }
+        }
     }
 
     return replay_result;
@@ -4000,13 +4005,37 @@ HRESULT Dx12ReplayConsumerBase::OverrideResizeBuffers1(DxObjectInfo*            
 
     ReplaceWindowedResolution(width, height);
 
-    auto replay_object = static_cast<IDXGISwapChain3*>(replay_object_info->object);
+    auto replay_object     = static_cast<IDXGISwapChain3*>(replay_object_info->object);
+    auto swapchain_info    = GetExtraInfo<DxgiSwapchainInfo>(replay_object_info);
+    auto virtual_swapchain = (swapchain_info != nullptr) ? swapchain_info->virtual_swapchain.get()
+                                                         : static_cast<Dx12VirtualSwapchain*>(nullptr);
+
     auto replay_result = replay_object->ResizeBuffers1(
         buffer_count, width, height, new_format, flags, node_mask->GetPointer(), present_queue->GetHandlePointer());
 
     if (SUCCEEDED(replay_result))
     {
-        ResetSwapchainImages(replay_object_info, buffer_count, width, height);
+        const UINT resized_buffer_count =
+            ((buffer_count == 0) && (swapchain_info != nullptr)) ? swapchain_info->buffer_count : buffer_count;
+        ResetSwapchainImages(replay_object_info, resized_buffer_count, width, height);
+        if (swapchain_info != nullptr)
+        {
+            swapchain_info->buffer_count = resized_buffer_count;
+        }
+
+        if (virtual_swapchain != nullptr)
+        {
+            const HRESULT init_result = virtual_swapchain->Reset(resized_buffer_count);
+            if (FAILED(init_result))
+            {
+                GFXRECON_LOG_ERROR("DX12 virtual swapchain ResizeBuffers1 reinitialization failed at block %" PRIu64
+                                   " for swapchain %" PRIu64 " (HRESULT: 0x%08X)",
+                                   GetCurrentBlockIndex(),
+                                   replay_object_info->capture_id,
+                                   init_result);
+                return init_result;
+            }
+        }
     }
 
     return replay_result;
@@ -4138,133 +4167,6 @@ void Dx12ReplayConsumerBase::OverrideSetPipelineStackSize(DxObjectInfo* replay_o
     }
 
     state_object->SetPipelineStackSize(ps_size);
-}
-
-HRESULT Dx12ReplayConsumerBase::CreateSwapChainForHwnd(DxObjectInfo*                           replay_object_info,
-                                                       HRESULT                                 original_result,
-                                                       DxObjectInfo*                           device_info,
-                                                       uint64_t                                hwnd_id,
-                                                       DXGI_SWAP_CHAIN_DESC1*                  desc,
-                                                       DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
-                                                       DxObjectInfo*                           restrict_to_output_info,
-                                                       HandlePointerDecoder<IDXGISwapChain1*>* swapchain)
-{
-    GFXRECON_ASSERT((device_info != nullptr) && (device_info->object != nullptr));
-
-    HRESULT result         = E_FAIL;
-    Window* window         = nullptr;
-    auto    wsi_context    = application_ ? application_->GetWsiContext("", true) : nullptr;
-    auto    window_factory = wsi_context ? wsi_context->GetWindowFactory() : nullptr;
-
-    if ((window_factory != nullptr) && (desc != nullptr))
-    {
-        ReplaceWindowedResolution(desc->Width, desc->Height);
-        window = window_factory->Create(options_.window_topleft_x,
-                                        options_.window_topleft_y,
-                                        desc->Width,
-                                        desc->Height,
-                                        options_.force_windowed || options_.force_windowed_origin);
-    }
-
-    if (window != nullptr)
-    {
-        HWND hwnd{};
-        if (window->GetNativeHandle(Window::kWin32HWnd, reinterpret_cast<void**>(&hwnd)))
-        {
-            assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr) &&
-                   (swapchain != nullptr));
-
-            auto replay_object = static_cast<IDXGIFactory2*>(replay_object_info->object);
-            auto device        = device_info->object;
-
-            IDXGIOutput* restrict_to_output = nullptr;
-
-            if (restrict_to_output_info != nullptr)
-            {
-                restrict_to_output = static_cast<IDXGIOutput*>(restrict_to_output_info->object);
-            }
-
-            if (options_.force_windowed || options_.force_windowed_origin)
-            {
-                full_screen_desc = nullptr;
-            }
-            result = replay_object->CreateSwapChainForHwnd(
-                device, hwnd, desc, full_screen_desc, restrict_to_output, swapchain->GetHandlePointer());
-
-            if (SUCCEEDED(result))
-            {
-                auto object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-                SetSwapchainInfo(
-                    object_info, window, hwnd_id, hwnd, desc->BufferCount, device, (full_screen_desc == nullptr));
-            }
-            else
-            {
-                window_factory->Destroy(window);
-            }
-        }
-        else
-        {
-            GFXRECON_LOG_FATAL("Failed to retrieve handle from window");
-            window_factory->Destroy(window);
-        }
-    }
-    else
-    {
-        GFXRECON_LOG_FATAL("Failed to create a window.  Replay cannot continue.");
-    }
-
-    return result;
-}
-
-void Dx12ReplayConsumerBase::SetSwapchainInfo(DxObjectInfo* info,
-                                              Window*       window,
-                                              uint64_t      hwnd_id,
-                                              HWND          hwnd,
-                                              uint32_t      image_count,
-                                              IUnknown*     queue_iunknown,
-                                              bool          windowed,
-                                              bool          headless,
-                                              bool          offscreen)
-{
-    if ((window != nullptr) || headless || offscreen)
-    {
-        if (info != nullptr)
-        {
-            assert(info->extra_info == nullptr);
-
-            auto swapchain_info     = std::make_unique<DxgiSwapchainInfo>();
-            swapchain_info->window  = window;
-            swapchain_info->hwnd_id = hwnd_id;
-            swapchain_info->image_ids.resize(image_count);
-            swapchain_info->is_fullscreen = !windowed;
-            swapchain_info->is_headless   = headless;
-            swapchain_info->is_offscreen  = offscreen;
-            std::fill(swapchain_info->image_ids.begin(), swapchain_info->image_ids.end(), format::kNullHandleId);
-
-            // Get the ID3D12CommandQueue from the IUnknown queue object.
-            HRESULT hr = queue_iunknown->QueryInterface(IID_PPV_ARGS(&swapchain_info->command_queue));
-            if (FAILED(hr))
-            {
-                GFXRECON_LOG_WARNING("Failed to get the ID3D12CommandQueue interface from the IUnknown* device "
-                                     "argument to CreateSwapChain.");
-            }
-
-            info->extra_info = std::move(swapchain_info);
-
-            // Functions such as CreateSwapChainForCoreWindow and CreateSwapchainForComposition, which are mapped to
-            // CreateSwapChainForHwnd for replay, won't have HWND IDs because they don't use HWND handles.
-            if ((hwnd_id != 0) && !headless && !offscreen)
-            {
-                assert(hwnd != nullptr);
-                window_handles_[hwnd_id] = hwnd;
-            }
-        }
-
-        if (window != nullptr)
-        {
-            active_windows_.insert(window);
-        }
-    }
 }
 
 void Dx12ReplayConsumerBase::ResetSwapchainImages(DxObjectInfo* info,

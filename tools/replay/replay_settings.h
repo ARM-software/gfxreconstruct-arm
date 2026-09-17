@@ -255,9 +255,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\t             uses VMA to manage allocations and suballocations.");
     GFXRECON_WRITE_CONSOLE("  --swapchain <mode>");
     GFXRECON_WRITE_CONSOLE("          \t\tChoose a swapchain mode to replay.");
-    GFXRECON_WRITE_CONSOLE("          \t\t    virtual    A swapchain of images that match the swapchain in effect");
-    GFXRECON_WRITE_CONSOLE("          \t\t               at capture time. The images are copied to the swapchain");
-    GFXRECON_WRITE_CONSOLE("          \t\t               of the implementation that replays them. This mode also");
+    GFXRECON_WRITE_CONSOLE("          \t\t    virtual    Preserve capture swapchain image identity by mapping");
+    GFXRECON_WRITE_CONSOLE("          \t\t               differing capture and replay back-buffer indices.");
+    GFXRECON_WRITE_CONSOLE("          \t\t               This mode also");
     GFXRECON_WRITE_CONSOLE("          \t\t               shows offscreen frame boundaries in an additional window.");
     GFXRECON_WRITE_CONSOLE("          \t\t               This is the default mode.");
     GFXRECON_WRITE_CONSOLE("          \t\t    captured   Use the swapchain indices from the capture directly on");

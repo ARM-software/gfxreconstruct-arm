@@ -163,6 +163,7 @@
       "GetHwnd": "OverrideGetHwnd"
     },
     "IDXGISwapChain3": {
+      "GetCurrentBackBufferIndex": "OverrideGetCurrentBackBufferIndex",
       "ResizeBuffers1": "OverrideResizeBuffers1"
     },
     "ID3D10Blob": {

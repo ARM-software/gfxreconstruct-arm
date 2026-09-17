@@ -554,6 +554,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                              UINT                                                   flags,
                              StructPointerDecoder<Decoded_DXGI_PRESENT_PARAMETERS>* present_parameters);
 
+    UINT OverrideGetCurrentBackBufferIndex(DxObjectInfo* replay_object_info, UINT original_result);
+
     HRESULT OverrideGetFullscreenDesc(DxObjectInfo*                                                  replay_object_info,
                                       HRESULT                                                        original_result,
                                       StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_FULLSCREEN_DESC>* pDesc);
@@ -1430,26 +1432,6 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         return ++unique_proxy_window_id_counter_;
     }
-
-    HRESULT
-    CreateSwapChainForHwnd(DxObjectInfo*                           replay_object_info,
-                           HRESULT                                 original_result,
-                           DxObjectInfo*                           device_info,
-                           uint64_t                                hwnd_id,
-                           DXGI_SWAP_CHAIN_DESC1*                  desc,
-                           DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
-                           DxObjectInfo*                           restrict_to_output_info,
-                           HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
-
-    void SetSwapchainInfo(DxObjectInfo* info,
-                          Window*       window,
-                          uint64_t      hwnd_id,
-                          HWND          hwnd,
-                          uint32_t      image_count,
-                          IUnknown*     queue_iunknown,
-                          bool          windowed,
-                          bool          headless  = false,
-                          bool          offscreen = false);
 
     void ResetSwapchainImages(DxObjectInfo* info, uint32_t buffer_count, uint32_t width, uint32_t height);
 

@@ -17701,7 +17701,8 @@ void Dx12ReplayConsumer::Process_IDXGISwapChain3_GetCurrentBackBufferIndex(
             this,
             call_info,
             replay_object);
-        auto replay_result = reinterpret_cast<IDXGISwapChain3*>(replay_object->object)->GetCurrentBackBufferIndex();
+        auto replay_result = OverrideGetCurrentBackBufferIndex(replay_object,
+                                                               return_value);
         CustomReplayPostCall<format::ApiCallId::ApiCall_IDXGISwapChain3_GetCurrentBackBufferIndex>::Dispatch(
             this,
             call_info,

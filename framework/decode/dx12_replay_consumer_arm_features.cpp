@@ -24,6 +24,7 @@
 #include "dx12_replay_consumer_arm_features.h"
 #include "dx12_replay_consumer_base.h"
 #include "decode/dx12_enum_util.h"
+#include "generated/generated_dx12_enum_to_string.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -293,6 +294,269 @@ void Dx12ReplayConsumerArmFeatures::LogFrameDebugInfo()
     }
 }
 
+bool Dx12ReplayConsumerArmFeatures::SetVirtualSwapchainInitialIndex(DxObjectInfo* swapchain_info,
+                                                                    uint32_t      capture_index)
+{
+    auto swapchain_extra_info = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
+    if ((swapchain_extra_info == nullptr) || (swapchain_extra_info->virtual_swapchain == nullptr))
+    {
+        return false;
+    }
+
+    auto*         virtual_swapchain = swapchain_extra_info->virtual_swapchain.get();
+    const HRESULT result            = virtual_swapchain->SetCaptureInitialIndex(capture_index);
+    if (FAILED(result))
+    {
+        GFXRECON_LOG_ERROR("DX12 virtual swapchain trim current-index mapping failed at block %" PRIu64
+                           " for swapchain %" PRIu64 " (capture index %u, HRESULT: 0x%08X)",
+                           consumer_->GetCurrentBlockIndex(),
+                           swapchain_info->capture_id,
+                           capture_index,
+                           result);
+        return true;
+    }
+
+    const UINT replay_index = virtual_swapchain->GetReplayCurrentIndex();
+    if (capture_index != replay_index)
+    {
+        GFXRECON_LOG_INFO("Enabled DX12 virtual swapchain index mapping at block %" PRIu64 " for swapchain %" PRIu64
+                          ": capture index %u, replay index %u, buffer count %u",
+                          consumer_->GetCurrentBlockIndex(),
+                          swapchain_info->capture_id,
+                          capture_index,
+                          replay_index,
+                          virtual_swapchain->GetBufferCount());
+    }
+
+    return true;
+}
+
+UINT Dx12ReplayConsumerArmFeatures::GetVirtualSwapchainCurrentBackBufferIndex(DxObjectInfo* swapchain_info,
+                                                                              UINT          capture_result)
+{
+    GFXRECON_ASSERT((swapchain_info != nullptr) && (swapchain_info->object != nullptr));
+
+    const UINT replay_result = static_cast<IDXGISwapChain3*>(swapchain_info->object)->GetCurrentBackBufferIndex();
+    auto       extra_info    = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
+    if ((extra_info == nullptr) || (extra_info->virtual_swapchain == nullptr))
+    {
+        return replay_result;
+    }
+
+    auto*      virtual_swapchain = extra_info->virtual_swapchain.get();
+    const auto mapped_result     = virtual_swapchain->MapReplayToCapture(replay_result);
+    if (!mapped_result.has_value())
+    {
+        GFXRECON_LOG_ERROR("DX12 virtual swapchain GetCurrentBackBufferIndex failed at block %" PRIu64
+                           " for swapchain %" PRIu64 " (HRESULT: 0x%08X)",
+                           consumer_->GetCurrentBlockIndex(),
+                           swapchain_info->capture_id,
+                           DXGI_ERROR_INVALID_CALL);
+        return capture_result;
+    }
+
+    if (mapped_result.value() != capture_result)
+    {
+        GFXRECON_LOG_ERROR("DX12 virtual swapchain current-index mismatch at block %" PRIu64 " for swapchain %" PRIu64
+                           ": capture returned %u, mapped replay result %u, replay returned %u, buffer count %u",
+                           consumer_->GetCurrentBlockIndex(),
+                           swapchain_info->capture_id,
+                           capture_result,
+                           mapped_result.value(),
+                           replay_result,
+                           virtual_swapchain->GetBufferCount());
+    }
+
+    return mapped_result.value();
+}
+
+HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChain(DxObjectInfo* replay_object_info,
+                                                       HRESULT       original_result,
+                                                       DxObjectInfo* device_info,
+                                                       StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC>* desc,
+                                                       HandlePointerDecoder<IDXGISwapChain*>*              swapchain)
+{
+    auto    desc_pointer   = desc->GetPointer();
+    HRESULT result         = E_FAIL;
+    Window* window         = nullptr;
+    auto    wsi_context    = consumer_->application_ ? consumer_->application_->GetWsiContext("", true) : nullptr;
+    auto    window_factory = wsi_context ? wsi_context->GetWindowFactory() : nullptr;
+
+    DXGI_FORMAT format = desc_pointer->BufferDesc.Format;
+    if (format != DXGI_FORMAT_R8G8B8A8_UNORM && format != DXGI_FORMAT_R10G10B10A2_UNORM &&
+        format != DXGI_FORMAT_R16G16B16A16_FLOAT)
+    {
+        GFXRECON_LOG_WARNING(
+            "SwapChain uses uncommon DXGI_FORMAT: %s. This may affect image capture or display fidelity.",
+            util::ToString<DXGI_FORMAT>(format).c_str());
+    }
+
+    if ((window_factory != nullptr) && (desc_pointer != nullptr))
+    {
+        consumer_->ReplaceWindowedResolution(desc_pointer->BufferDesc.Width, desc_pointer->BufferDesc.Height);
+        window =
+            window_factory->Create(consumer_->options_.window_topleft_x,
+                                   consumer_->options_.window_topleft_y,
+                                   desc_pointer->BufferDesc.Width,
+                                   desc_pointer->BufferDesc.Height,
+                                   consumer_->options_.force_windowed || consumer_->options_.force_windowed_origin);
+    }
+
+    if (window == nullptr)
+    {
+        GFXRECON_LOG_FATAL("Failed to create a window.  Replay cannot continue.");
+        return result;
+    }
+
+    HWND hwnd{};
+    if (!window->GetNativeHandle(Window::kWin32HWnd, reinterpret_cast<void**>(&hwnd)))
+    {
+        GFXRECON_LOG_FATAL("Failed to retrieve handle from window");
+        window_factory->Destroy(window);
+        return result;
+    }
+
+    GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) &&
+                    (swapchain != nullptr));
+
+    auto      replay_object    = static_cast<IDXGIFactory*>(replay_object_info->object);
+    IUnknown* device           = (device_info != nullptr) ? device_info->object : nullptr;
+    desc_pointer->OutputWindow = hwnd;
+
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    const UINT buffer_count = desc_pointer->BufferCount;
+    result                  = replay_object->CreateSwapChain(device, desc_pointer, swapchain->GetHandlePointer());
+
+    if (SUCCEEDED(result))
+    {
+        auto     object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+        auto     meta_info   = desc->GetMetaStructPointer();
+        uint64_t hwnd_id     = (meta_info != nullptr) ? meta_info->OutputWindow : 0;
+
+        const format::HandleId capture_id =
+            (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+        result = SetSwapchainInfo(object_info,
+                                  *swapchain->GetHandlePointer(),
+                                  capture_id,
+                                  window,
+                                  hwnd_id,
+                                  hwnd,
+                                  buffer_count,
+                                  device,
+                                  desc_pointer->Windowed,
+                                  false,
+                                  false);
+        if (FAILED(result))
+        {
+            (*swapchain->GetHandlePointer())->Release();
+            *swapchain->GetHandlePointer() = nullptr;
+            window_factory->Destroy(window);
+        }
+    }
+    else
+    {
+        window_factory->Destroy(window);
+    }
+
+    return result;
+}
+
+HRESULT
+Dx12ReplayConsumerArmFeatures::CreateSwapChainForHwnd(DxObjectInfo*                           replay_object_info,
+                                                      HRESULT                                 original_result,
+                                                      DxObjectInfo*                           device_info,
+                                                      uint64_t                                hwnd_id,
+                                                      DXGI_SWAP_CHAIN_DESC1*                  desc,
+                                                      DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
+                                                      DxObjectInfo*                           restrict_to_output_info,
+                                                      HandlePointerDecoder<IDXGISwapChain1*>* swapchain)
+{
+    GFXRECON_ASSERT((device_info != nullptr) && (device_info->object != nullptr));
+
+    HRESULT result         = E_FAIL;
+    Window* window         = nullptr;
+    auto    wsi_context    = consumer_->application_ ? consumer_->application_->GetWsiContext("", true) : nullptr;
+    auto    window_factory = wsi_context ? wsi_context->GetWindowFactory() : nullptr;
+
+    if ((window_factory != nullptr) && (desc != nullptr))
+    {
+        consumer_->ReplaceWindowedResolution(desc->Width, desc->Height);
+        window =
+            window_factory->Create(consumer_->options_.window_topleft_x,
+                                   consumer_->options_.window_topleft_y,
+                                   desc->Width,
+                                   desc->Height,
+                                   consumer_->options_.force_windowed || consumer_->options_.force_windowed_origin);
+    }
+
+    if (window == nullptr)
+    {
+        GFXRECON_LOG_FATAL("Failed to create a window.  Replay cannot continue.");
+        return result;
+    }
+
+    HWND hwnd{};
+    if (!window->GetNativeHandle(Window::kWin32HWnd, reinterpret_cast<void**>(&hwnd)))
+    {
+        GFXRECON_LOG_FATAL("Failed to retrieve handle from window");
+        window_factory->Destroy(window);
+        return result;
+    }
+
+    GFXRECON_ASSERT((replay_object_info != nullptr) && (replay_object_info->object != nullptr) &&
+                    (swapchain != nullptr));
+
+    auto         replay_object      = static_cast<IDXGIFactory2*>(replay_object_info->object);
+    auto         device             = device_info->object;
+    IDXGIOutput* restrict_to_output = nullptr;
+    if (restrict_to_output_info != nullptr)
+    {
+        restrict_to_output = static_cast<IDXGIOutput*>(restrict_to_output_info->object);
+    }
+
+    if (consumer_->options_.force_windowed || consumer_->options_.force_windowed_origin)
+    {
+        full_screen_desc = nullptr;
+    }
+
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    const UINT buffer_count = desc->BufferCount;
+    result                  = replay_object->CreateSwapChainForHwnd(
+        device, hwnd, desc, full_screen_desc, restrict_to_output, swapchain->GetHandlePointer());
+
+    if (SUCCEEDED(result))
+    {
+        auto                   object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+        const format::HandleId capture_id =
+            (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+        result = SetSwapchainInfo(object_info,
+                                  *swapchain->GetHandlePointer(),
+                                  capture_id,
+                                  window,
+                                  hwnd_id,
+                                  hwnd,
+                                  buffer_count,
+                                  device,
+                                  (full_screen_desc == nullptr),
+                                  false,
+                                  false);
+        if (FAILED(result))
+        {
+            (*swapchain->GetHandlePointer())->Release();
+            *swapchain->GetHandlePointer() = nullptr;
+            window_factory->Destroy(window);
+        }
+    }
+    else
+    {
+        window_factory->Destroy(window);
+    }
+
+    return result;
+}
+
 HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChainForComposition(DxObjectInfo*         replay_object_info,
                                                                      HRESULT               original_result,
                                                                      DxObjectInfo*         device_info,
@@ -364,13 +628,24 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChainForComposition(DxObjectInf
 
     IDXGISwapChain1* pSwapchain1 = nullptr;
 
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    const UINT buffer_count = desc->BufferCount;
     result = replay_object->CreateSwapChainForComposition(device, pDesc, restrict_to_output, &pSwapchain1);
     *(swapchain->GetHandlePointer()) = pSwapchain1;
 
     if (SUCCEEDED(result))
     {
-        auto object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-        consumer_->SetSwapchainInfo(object_info, window, 0, 0, desc->BufferCount, device, desc->Windowed, true);
+        auto                   object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+        const format::HandleId capture_id =
+            (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+        result = SetSwapchainInfo(
+            object_info, pSwapchain1, capture_id, window, 0, 0, buffer_count, device, desc->Windowed, true, false);
+        if (FAILED(result))
+        {
+            pSwapchain1->Release();
+            *(swapchain->GetHandlePointer()) = nullptr;
+        }
     }
 
     delete pDesc;
@@ -450,14 +725,33 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChainForComposition(DxObjectInf
     desc->Scaling    = DXGI_SCALING_STRETCH;
     desc->SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+
+    const UINT buffer_count = desc->BufferCount;
     result =
         replay_object->CreateSwapChainForComposition(device, desc, restrict_to_output, swapchain->GetHandlePointer());
 
     if (SUCCEEDED(result))
     {
-        auto object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-        consumer_->SetSwapchainInfo(
-            object_info, window, hwnd_id, 0, desc->BufferCount, device, (full_screen_desc == nullptr), true);
+        auto                   object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+        const format::HandleId capture_id =
+            (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+        result = SetSwapchainInfo(object_info,
+                                  *swapchain->GetHandlePointer(),
+                                  capture_id,
+                                  window,
+                                  hwnd_id,
+                                  0,
+                                  buffer_count,
+                                  device,
+                                  (full_screen_desc == nullptr),
+                                  true,
+                                  false);
+        if (FAILED(result))
+        {
+            (*swapchain->GetHandlePointer())->Release();
+            *swapchain->GetHandlePointer() = nullptr;
+        }
     }
 
     return result;
@@ -546,8 +840,20 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChainForOffscreen(DxObjectInfo*
 
     *(swapchain->GetHandlePointer()) = offscreen_swapchain.Detach();
 
-    auto object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-    consumer_->SetSwapchainInfo(object_info, nullptr, 0, 0, desc->BufferCount, device, false, false, true);
+    auto                   object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+    const format::HandleId capture_id =
+        (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+    SetSwapchainInfo(object_info,
+                     *swapchain->GetHandlePointer(),
+                     capture_id,
+                     nullptr,
+                     0,
+                     0,
+                     desc->BufferCount,
+                     device,
+                     false,
+                     false,
+                     true);
 
     return S_OK;
 }
@@ -636,8 +942,99 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChainForOffscreen(DxObjectInfo*
 
     *(swapchain->GetHandlePointer()) = offscreen_swapchain.Detach();
 
-    auto object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
-    consumer_->SetSwapchainInfo(object_info, nullptr, 0, 0, desc->BufferCount, device, false, false, true);
+    auto                   object_info = static_cast<DxObjectInfo*>(swapchain->GetConsumerData(0));
+    const format::HandleId capture_id =
+        (swapchain->GetPointer() != nullptr) ? *swapchain->GetPointer() : format::kNullHandleId;
+    SetSwapchainInfo(object_info,
+                     *swapchain->GetHandlePointer(),
+                     capture_id,
+                     nullptr,
+                     0,
+                     0,
+                     desc->BufferCount,
+                     device,
+                     false,
+                     false,
+                     true);
+
+    return S_OK;
+}
+
+HRESULT Dx12ReplayConsumerArmFeatures::SetSwapchainInfo(DxObjectInfo*    info,
+                                                        IDXGISwapChain*  replay_swapchain,
+                                                        format::HandleId capture_id,
+                                                        Window*          window,
+                                                        uint64_t         hwnd_id,
+                                                        HWND             hwnd,
+                                                        uint32_t         image_count,
+                                                        IUnknown*        queue_iunknown,
+                                                        bool             windowed,
+                                                        bool             headless,
+                                                        bool             offscreen)
+{
+    if ((window == nullptr) && !headless && !offscreen)
+    {
+        return S_OK;
+    }
+
+    if (info == nullptr)
+    {
+        if (window != nullptr)
+        {
+            consumer_->active_windows_.insert(window);
+        }
+        return S_OK;
+    }
+
+    GFXRECON_ASSERT(info->extra_info == nullptr);
+
+    auto swapchain_info          = std::make_unique<DxgiSwapchainInfo>();
+    swapchain_info->window       = window;
+    swapchain_info->hwnd_id      = hwnd_id;
+    swapchain_info->buffer_count = image_count;
+    swapchain_info->image_ids.resize(image_count);
+    swapchain_info->is_fullscreen = !windowed;
+    swapchain_info->is_headless   = headless;
+    swapchain_info->is_offscreen  = offscreen;
+    std::fill(swapchain_info->image_ids.begin(), swapchain_info->image_ids.end(), format::kNullHandleId);
+
+    HRESULT result = queue_iunknown->QueryInterface(IID_PPV_ARGS(&swapchain_info->command_queue));
+    if (FAILED(result))
+    {
+        GFXRECON_LOG_WARNING("Failed to get the ID3D12CommandQueue interface from the IUnknown* device "
+                             "argument to CreateSwapChain.");
+    }
+
+    if ((consumer_->options_.swapchain_option == util::SwapchainOption::kVirtual) && !offscreen)
+    {
+        auto virtual_swapchain = std::make_unique<Dx12VirtualSwapchain>(image_count);
+        result                 = virtual_swapchain->Initialize(replay_swapchain);
+        if (FAILED(result))
+        {
+            GFXRECON_LOG_ERROR("Failed to initialize DX12 virtual swapchain at block %" PRIu64 " for swapchain %" PRIu64
+                               ": buffer count %u, HRESULT 0x%08X",
+                               consumer_->GetCurrentBlockIndex(),
+                               capture_id,
+                               image_count,
+                               result);
+            return result;
+        }
+
+        swapchain_info->virtual_swapchain = std::move(virtual_swapchain);
+    }
+
+    info->extra_info = std::move(swapchain_info);
+
+    if ((hwnd_id != 0) && !headless && !offscreen)
+    {
+        GFXRECON_ASSERT(hwnd != nullptr);
+        consumer_->window_handles_[hwnd_id] = hwnd;
+    }
+
+    if (window != nullptr)
+    {
+        consumer_->active_windows_.insert(window);
+    }
 
     return S_OK;
 }

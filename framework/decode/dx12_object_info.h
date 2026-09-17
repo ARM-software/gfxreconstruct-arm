@@ -32,6 +32,7 @@
 #include "util/logging.h"
 #include "decode/dx12_descriptor_map.h"
 #include "decode/dx12_resource_allocator.h"
+#include "decode/dx12_virtual_swapchain.h"
 
 #include <d3d12.h>
 
@@ -238,7 +239,8 @@ struct DxgiSwapchainInfo : DxObjectExtraInfo
     static constexpr char             kObjectType[] = "IDXGISwapChain";
     DxgiSwapchainInfo() : DxObjectExtraInfo(kType) {}
 
-    uint32_t init_buffer_index{ 0 };
+    uint32_t init_buffer_index{ 0 }; ///< Capture current back-buffer index from trim metadata.
+    uint32_t buffer_count{ 0 };
     Window*  window{ nullptr }; ///< Pointer to the platform-specific window object associated with the swapchain.
     uint64_t hwnd_id{ 0 };      ///< Capture ID for the HWND handle used with swapchain creation.
 
@@ -252,6 +254,8 @@ struct DxgiSwapchainInfo : DxObjectExtraInfo
     bool is_fullscreen{ false }; ///< Swapchain full screen flag.
     bool is_headless{ false };
     bool is_offscreen{ false }; ///< Swapchain offscreen flag.
+
+    std::unique_ptr<Dx12VirtualSwapchain> virtual_swapchain;
 };
 
 struct D3D12CommandQueueInfo : DxObjectExtraInfo
@@ -420,6 +424,7 @@ struct D3D12ResourceInfo : DxObjectExtraInfo
     D3D12_RESOURCE_DESC1 desc = {};
     format::HandleId     swap_chain_id{ format::kNullHandleId };
     uint32_t             buffer_index{ 0 };
+    uint32_t             replay_buffer_index{ 0 };
 
     size_t                                         subresource_count{ 0 };
     std::vector<graphics::dx12::ResourceStateInfo> resource_state_infos;
