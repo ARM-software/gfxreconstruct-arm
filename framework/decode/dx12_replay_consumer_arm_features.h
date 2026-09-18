@@ -100,6 +100,9 @@ class Dx12ReplayConsumerArmFeatures
     bool RecreateSharedResourcePlaceholder(DxObjectInfo*              resource_object_info,
                                            const D3D12_RESOURCE_DESC& captured_desc);
 
+    bool ReportVideoMemoryBudget(DXGI_QUERY_VIDEO_MEMORY_INFO& local_mem_info,
+                                 DXGI_QUERY_VIDEO_MEMORY_INFO& non_local_mem_info);
+
     Dx12ReplayConsumerBase*              consumer_;
     std::unordered_set<format::HandleId> placeholder_shared_resources_;
     std::unordered_set<format::HandleId> outgoing_shared_fences_;

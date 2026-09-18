@@ -195,25 +195,14 @@ void Dx12ReplayConsumerArmFeatures::CheckReplayResult(const char* call_name,
     {
         if ((replay_result == DXGI_ERROR_DEVICE_REMOVED) || (replay_result == E_OUTOFMEMORY))
         {
-            graphics::dx12::IDXGIFactory1ComPtr factory  = nullptr;
-            graphics::dx12::IDXGIAdapter1ComPtr adapter1 = nullptr;
-            graphics::dx12::IDXGIAdapter3ComPtr adapter3 = nullptr;
-
-            HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
-            GFXRECON_ASSERT(SUCCEEDED(result) && (factory != nullptr));
-
-            int32_t adapter_index =
-                consumer_->options_.override_gpu_index >= 0 ? consumer_->options_.override_gpu_index : 0;
-            result = factory->EnumAdapters1(adapter_index, &adapter1.GetInterfacePtr());
-            GFXRECON_ASSERT(SUCCEEDED(result) && (adapter1 != nullptr));
-            adapter1->QueryInterface(IID_PPV_ARGS(&adapter3));
-            if (adapter3 != nullptr)
+            DXGI_QUERY_VIDEO_MEMORY_INFO local_mem_info     = {};
+            DXGI_QUERY_VIDEO_MEMORY_INFO non_local_mem_info = {};
+            if (ReportVideoMemoryBudget(local_mem_info, non_local_mem_info))
             {
-                DXGI_QUERY_VIDEO_MEMORY_INFO memInfo = {};
-                adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
-                GFXRECON_LOG_INFO("GPU Memory Usage: %" PRIu64 " KB / %" PRIu64 " KB ",
-                                  memInfo.CurrentUsage / 1024,
-                                  memInfo.Budget / 1024);
+                const double f = 1024.0 * 1024.0;
+                GFXRECON_LOG_INFO("GPU Memory Total Usage(mb)/Budget(mb) : %.02f / %.02f ",
+                                  (double)(local_mem_info.CurrentUsage + non_local_mem_info.CurrentUsage) / f,
+                                  (double)(local_mem_info.Budget + non_local_mem_info.Budget) / f);
             }
         }
 
@@ -236,35 +225,63 @@ void Dx12ReplayConsumerArmFeatures::CheckReplayResult(const char* call_name,
     }
 }
 
+bool Dx12ReplayConsumerArmFeatures::ReportVideoMemoryBudget(DXGI_QUERY_VIDEO_MEMORY_INFO& local_mem_info,
+                                                            DXGI_QUERY_VIDEO_MEMORY_INFO& non_local_mem_info)
+{
+    graphics::dx12::IDXGIAdapter3ComPtr adapter3 = nullptr;
+    graphics::dx12::IDXGIAdapterComPtr  adapter  = consumer_->GetAdapter();
+    if (adapter == nullptr)
+    {
+        return false;
+    }
+
+    HRESULT hr = adapter->QueryInterface(IID_PPV_ARGS(&adapter3));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    hr = adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &local_mem_info);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    hr = adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local_mem_info);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 void Dx12ReplayConsumerArmFeatures::LogFrameDebugInfo()
 {
-    if (util::Log::WillOutputMessage(util::LoggingSeverity::kDebug))
+    if (!util::Log::WillOutputMessage(util::LoggingSeverity::kDebug))
     {
-        graphics::dx12::IDXGIAdapter3ComPtr adapter3 = nullptr;
-        graphics::dx12::IDXGIAdapterComPtr  adapter  = consumer_->GetAdapter();
-        if (adapter == nullptr)
+        return;
+    }
+
+    DXGI_QUERY_VIDEO_MEMORY_INFO local_mem_info     = {};
+    DXGI_QUERY_VIDEO_MEMORY_INFO non_local_mem_info = {};
+    if (!ReportVideoMemoryBudget(local_mem_info, non_local_mem_info))
+    {
+        GFXRECON_LOG_DEBUG("Completed frame %d", consumer_->application_->GetCurrentFrameNumber() + 1);
+        return;
+    }
+    else
+    {
+        const double f = 1024.0 * 1024.0;
+        GFXRECON_LOG_DEBUG("Frame %d local memory (mb): %.02f Budget, %.02f current Usage, %.02f current "
+                           "Reservation, %.02f available Reservation",
+                           consumer_->application_->GetCurrentFrameNumber() + 1,
+                           (double)local_mem_info.Budget / f,
+                           (double)local_mem_info.CurrentUsage / f,
+                           (double)local_mem_info.CurrentReservation / f,
+                           (double)local_mem_info.AvailableForReservation / f);
+        if (non_local_mem_info.Budget && non_local_mem_info.CurrentUsage)
         {
-            GFXRECON_LOG_DEBUG("Completed frame %d", consumer_->application_->GetCurrentFrameNumber() + 1);
-            return;
-        }
-
-        adapter->QueryInterface(IID_PPV_ARGS(&adapter3));
-        if (adapter3 != nullptr)
-        {
-            DXGI_QUERY_VIDEO_MEMORY_INFO local_mem_info     = {};
-            DXGI_QUERY_VIDEO_MEMORY_INFO non_local_mem_info = {};
-
-            adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &local_mem_info);
-            adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local_mem_info);
-
-            const double f = 1024.0 * 1024.0;
-            GFXRECON_LOG_DEBUG("Frame %d local memory (mb): %.02f Budget, %.02f current Usage, %.02f current "
-                               "Reservation, %.02f available Reservation",
-                               consumer_->application_->GetCurrentFrameNumber() + 1,
-                               (double)local_mem_info.Budget / f,
-                               (double)local_mem_info.CurrentUsage / f,
-                               (double)local_mem_info.CurrentReservation / f,
-                               (double)local_mem_info.AvailableForReservation / f);
             GFXRECON_LOG_DEBUG("Frame %d non local memory (mb): %.02f Budget, %.02f current Usage, %.02f current "
                                "Reservation, %.02f available Reservation",
                                consumer_->application_->GetCurrentFrameNumber() + 1,
@@ -272,10 +289,6 @@ void Dx12ReplayConsumerArmFeatures::LogFrameDebugInfo()
                                (double)non_local_mem_info.CurrentUsage / f,
                                (double)non_local_mem_info.CurrentReservation / f,
                                (double)non_local_mem_info.AvailableForReservation / f);
-        }
-        else
-        {
-            GFXRECON_LOG_DEBUG("Completed frame %d", consumer_->application_->GetCurrentFrameNumber() + 1);
         }
     }
 }

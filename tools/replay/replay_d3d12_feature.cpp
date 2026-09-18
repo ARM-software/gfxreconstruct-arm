@@ -28,9 +28,9 @@
 
 #include "replay_d3d12_feature.h"
 
-#include "decode/dx_replay_options.h"
 #include "decode/dx12_default_allocator.h"
 #include "decode/dx12_rebind_allocator.h"
+#include "decode/dx_replay_options.h"
 #include "generated/generated_dx12_decoder.h"
 
 #include "tool_feature_options.h"

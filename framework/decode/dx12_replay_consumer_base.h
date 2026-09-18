@@ -45,9 +45,9 @@
 #include "graphics/dx12_resource_data_util.h"
 #include "graphics/dx12_image_renderer.h"
 #include "decode/screenshot_handler_base.h"
+#include "graphics/fps_info.h"
 #include "graphics/dx12_util.h"
 #include "application/application.h"
-#include "graphics/fps_info.h"
 
 #ifdef GFXRECON_AGS_SUPPORT
 #include "graphics/dx12_ags_marker_injector.h"
@@ -1543,6 +1543,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     bool                                                  set_page_fault_enablement_;
     bool                                                  loading_trim_state_;
     bool                                                  support_memory_allocator_{ false };
+    graphics::FpsInfo*                                    fps_info_;
     std::unique_ptr<Dx12ResourceValueMapper>              resource_value_mapper_;
     std::unique_ptr<Dx12AccelerationStructureBuilder>     accel_struct_builder_;
     graphics::Dx12ShaderIdMap                             shader_id_map_;
@@ -1556,7 +1557,6 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     uint64_t                                              unique_proxy_window_id_counter_;
     std::unordered_map<ID3D12Resource*, ResourceInitInfo> resource_init_infos_;
     uint64_t                                              frame_end_marker_count_;
-    graphics::FpsInfo*                                    fps_info_;
     std::unordered_map<ID3D12MetaCommand*, GUID>          meta_command_guids_;
     std::unordered_set<ID3D12CommandQueue*>               trim_state_tile_update_queues_;
 

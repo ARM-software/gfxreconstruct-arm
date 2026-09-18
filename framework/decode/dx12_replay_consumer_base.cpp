@@ -127,7 +127,7 @@ Dx12ReplayConsumerBase::Dx12ReplayConsumerBase(std::shared_ptr<application::Appl
     options_(options), current_message_length_(0), info_queue_(nullptr), resource_data_util_(nullptr),
     frame_buffer_renderer_(nullptr), debug_layer_enabled_(false), set_auto_breadcrumbs_enablement_(false),
     set_breadcrumb_context_enablement_(false), set_page_fault_enablement_(false), loading_trim_state_(false),
-    unique_proxy_window_id_counter_(0), frame_end_marker_count_(0), fps_info_(nullptr)
+    fps_info_(nullptr), unique_proxy_window_id_counter_(0), frame_end_marker_count_(0)
 {
     assert(options_.create_resource_allocator != nullptr);
 
@@ -841,6 +841,8 @@ void Dx12ReplayConsumerBase::ProcessDx12ResourceAliasingCommand(
     {
         aliasing_resource_sizes_[aliasing_infos[i].resource_id] = max_allocation_size;
     }
+
+    opt_fillmem_ = true;
 }
 
 void Dx12ReplayConsumerBase::ProcessInitDx12AccelerationStructureCommand(
@@ -959,6 +961,8 @@ void Dx12ReplayConsumerBase::ProcessGetDx12AccelerationStructureSizeCommand(
 
         accel_struct_builder->SetPrebuildInfo(accel_struct_id, accel_struct_address, result_data_max_size, gpu_va_map_);
     }
+
+    opt_fillmem_ = true;
 }
 
 void Dx12ReplayConsumerBase::ProcessSetSwapchainImageStateQueueSubmit(ID3D12CommandQueue* command_queue,
