@@ -20,18 +20,18 @@
 ** FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ** DEALINGS IN THE SOFTWARE.
 */
+#include "decode/vulkan_internal_buffer_manager.h"
 #include "decode/vulkan_object_info.h"
 #include "decode/vulkan_query_util.h"
 #include "format/format.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
 #include "decode/vulkan_micromap_builder.h"
-#include "util/callbacks.h"
 #include "util/logging.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <sys/types.h>
-#include <vulkan/vulkan_core.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -64,8 +64,8 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
     // Create new storage buffer for AccelerationStructure based on previously recorded
     // GetAccelerationStructureBuildSize (this call must be inserted by gfxrecon-optimize)
     VulkanResourceAllocator* allocator = device_info->allocator.get();
-    assert(allocator != nullptr);
-    assert(buffer_info != nullptr);
+    GFXRECON_ASSERT(allocator != nullptr);
+    GFXRECON_ASSERT(buffer_info != nullptr);
 
     VkAccelerationStructureBuildSizesInfoKHR build_sizes = max_build_sizes_;
     max_build_sizes_                                     = {};
@@ -164,13 +164,12 @@ VkResult VulkanAccelerationStructureBuilder::OnCreateAccelerationStructure(
 
     if (reallocate)
     {
-        auto& replacements    = replaced_buffers_[buffer_info->capture_id];
-        auto& new_replacement = replacements.emplace_back(internal_buffer_manager_.CreateBuffer(
+        auto& replacements                     = replaced_buffers_[buffer_info->capture_id];
+        auto& new_replacement                  = replacements.emplace_back(internal_buffer_manager_.CreateBuffer(
             build_sizes.accelerationStructureSize,
             buffer_info->usage | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             buffer_info->memory_property_flags));
-
         new_replacement->info_.capture_address = acceleration_structure_info->capture_address;
         new_replacement->info_.capture_size    = create_info->size;
 

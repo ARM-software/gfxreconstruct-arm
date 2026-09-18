@@ -242,8 +242,7 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
     std::map<VkDeviceSize, VkSparseMemoryBind> sparse_memory_bind_map;
     VkQueue                                    sparse_bind_queue{ VK_NULL_HANDLE };
 
-    std::unordered_map<VkDeviceAddress, AccelerationStructureBuildState> acceleration_structures;
-    std::set<format::HandleId>                                           input_buffer_to_as_storage_map;
+    std::unordered_map<format::HandleId, std::shared_ptr<AccelerationStructureBuildState>> acceleration_structures;
 
     // optional opaque descriptor-data used by VK_EXT_descriptor_buffer
     std::vector<uint8_t> opaque_descriptor_data;
@@ -525,8 +524,9 @@ struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
     // TODO: Base pipeline
     // TODO: Pipeline cache
 
-    std::unordered_set<AssetWrapperBase*> modified_assets;
-    std::vector<CommandBufferWrapper*>    secondaries;
+    std::unordered_set<AssetWrapperBase*>                                  modified_assets;
+    std::vector<CommandBufferWrapper*>                                     secondaries;
+    std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> acceleration_structure_input_snapshots;
 };
 
 struct DeferredOperationKHRWrapper : public HandleWrapper<VkDeferredOperationKHR>

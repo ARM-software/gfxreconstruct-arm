@@ -83,8 +83,6 @@ VkResult CreateVkImage(const CommonObjectInfoTable&               object_info_ta
                        VkImage*                                   new_image,
                        VkDeviceMemory*                            new_image_memory);
 
-uint32_t VkIndexTypeToBytes(VkIndexType type);
-
 MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
                                           uint32_t                    index_count,
                                           uint32_t                    first_index,

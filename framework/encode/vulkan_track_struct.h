@@ -25,6 +25,9 @@
 #ifndef GFXRECON_GRAPHICS_VULKAN_TRACK_STRUCT_H
 #define GFXRECON_GRAPHICS_VULKAN_TRACK_STRUCT_H
 
+#include <memory>
+#include <vector>
+
 #include "graphics/vulkan_struct_deep_copy.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -47,6 +50,21 @@ inline void* TrackStruct(const void* value, std::unique_ptr<uint8_t[]>& out_data
 }
 
 /**
+ * @brief   TrackStruct can be used to track (deep-copy) a provided vulkan-struct-pointer.
+ *
+ * @param   value       pointer to an arbitrary vulkan-struct.
+ * @param   out_data    reference to an output std::unique_pointer
+ * @return  a void-pointer to the tracked struct-memory.
+ */
+inline void* TrackStruct(const void* value, std::vector<uint8_t>& out_data)
+{
+    size_t num_bytes = graphics::vulkan_struct_deep_copy_stype(value, nullptr);
+    out_data         = std::vector<uint8_t>(num_bytes);
+    graphics::vulkan_struct_deep_copy_stype(value, out_data.data());
+    return out_data.data();
+}
+
+/**
  * @brief   TrackStructs can be used to track (deep-copy) an array of vulkan-structures.
  *
  * @tparam  T           structure-type
@@ -62,6 +80,24 @@ inline T* TrackStructs(const T* structs, uint32_t count, std::unique_ptr<uint8_t
     out_data         = std::make_unique<uint8_t[]>(num_bytes);
     graphics::vulkan_struct_deep_copy(structs, count, out_data.get());
     return reinterpret_cast<T*>(out_data.get());
+}
+
+/**
+ * @brief   TrackStructs can be used to track (deep-copy) an array of vulkan-structures.
+ *
+ * @tparam  T           structure-type
+ * @param   structs     an array of vulkan-structures
+ * @param   count       element count in structs-array
+ * @param   out_data    reference to an output std::unique_pointer
+ * @return  a typed pointer to the beginning of the tracked struct-memory.
+ */
+template <typename T>
+inline T* TrackStructs(const T* structs, uint32_t count, std::vector<uint8_t>& out_data)
+{
+    size_t num_bytes = graphics::vulkan_struct_deep_copy(structs, count, nullptr);
+    out_data         = std::vector<uint8_t>(num_bytes);
+    graphics::vulkan_struct_deep_copy(structs, count, out_data.data());
+    return reinterpret_cast<T*>(out_data.data());
 }
 
 GFXRECON_END_NAMESPACE(vulkan_trackers)

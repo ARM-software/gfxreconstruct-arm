@@ -28,32 +28,40 @@
 #include "util/logging.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
 /**
- * @brief interval_tree is a height-balanced binary search tree storing half-open intervals.
+ * @brief interval_tree is a height-balanced binary search tree storing half-open intervals and optional payloads.
  *
  * Each node records the greatest upper bound in its subtree. This augmentation
- * allows an overlap query to discard subtrees which cannot contain a match.
- * The tree is AVL-balanced, so insertion, erasure, and intersection are
- * O(log n).
+ * allows overlap and point queries to discard subtrees which cannot contain a match.
+ * The tree is AVL-balanced, so insertion and erasure are O(log n), while
+ * intersection and contains are O(log n + k), where k is the number of matches.
  *
  * Intervals are half-open: [a, b) intersects [c, d) when a < d and c < b.
- * Inserting an interval already present in the tree has no effect. Pointers
- * returned by intersection remain valid until a non-const operation is
- * performed on the tree. The pointed-to interval must not be modified.
+ * Inserting an interval and payload already present in the tree has no effect.
+ * Equal intervals with distinct payloads are retained and returned separately.
  *
- * @tparam T
+ * @tparam T Interval endpoint type.
+ * @tparam Payload Value associated with an interval.
  */
-template <typename T>
+template <typename T, typename Payload = std::nullptr_t>
 class interval_tree
 {
   public:
     using interval_type = std::pair<T, T>;
+
+    struct value_type
+    {
+        interval_type interval;
+        Payload       payload;
+    };
 
     interval_tree() = default;
 
@@ -71,12 +79,14 @@ class interval_tree
     interval_tree(interval_tree&&) noexcept            = default;
     interval_tree& operator=(interval_tree&&) noexcept = default;
 
-    void insert(interval_type interval)
+    void insert(interval_type interval) { insert(std::move(interval), Payload{}); }
+
+    void insert(interval_type interval, Payload payload)
     {
         GFXRECON_ASSERT(is_valid(interval));
         if (is_valid(interval))
         {
-            root_ = insert(std::move(root_), std::move(interval));
+            root_ = insert(std::move(root_), value_type{ std::move(interval), std::move(payload) });
         }
     }
 
@@ -89,17 +99,12 @@ class interval_tree
         }
     }
 
-    interval_type* intersection(const interval_type& interval)
-    {
-        return const_cast<interval_type*>(static_cast<const interval_tree&>(*this).intersection(interval));
-    }
-
-    const interval_type* intersection(const interval_type& interval) const
+    bool intersects(const interval_type& interval) const
     {
         GFXRECON_ASSERT(is_valid(interval));
         if (!is_valid(interval))
         {
-            return nullptr;
+            return false;
         }
 
         const Node* node = root_.get();
@@ -107,7 +112,7 @@ class interval_tree
         {
             if (overlaps(node->interval, interval))
             {
-                return &node->interval;
+                return true;
             }
 
             if ((node->left != nullptr) && less(interval.first, node->left->maximum))
@@ -119,18 +124,40 @@ class interval_tree
                 node = node->right.get();
             }
         }
-
-        return nullptr;
+        return false;
     }
+
+    std::vector<value_type> intersection(const interval_type& interval) const
+    {
+        std::vector<value_type> results;
+        GFXRECON_ASSERT(is_valid(interval));
+        if (is_valid(interval))
+        {
+            intersection(root_.get(), interval, results);
+        }
+        return results;
+    }
+
+    std::vector<value_type> contains(const T& value) const
+    {
+        std::vector<value_type> results;
+        contains(root_.get(), value, results);
+        return results;
+    }
+
+    bool empty() const { return root_ == nullptr; }
 
     void clear() { root_.reset(); }
 
   private:
     struct Node
     {
-        explicit Node(interval_type value) : interval(std::move(value)), maximum(interval.second) {}
+        explicit Node(value_type value) :
+            interval(std::move(value.interval)), payloads{ std::move(value.payload) }, maximum(interval.second)
+        {}
 
         interval_type         interval;
+        std::vector<Payload>  payloads;
         T                     maximum;
         int                   height{ 1 };
         std::unique_ptr<Node> left;
@@ -218,23 +245,27 @@ class interval_tree
         return node;
     }
 
-    std::unique_ptr<Node> insert(std::unique_ptr<Node> node, interval_type interval)
+    std::unique_ptr<Node> insert(std::unique_ptr<Node> node, value_type value)
     {
         if (node == nullptr)
         {
-            return std::make_unique<Node>(std::move(interval));
+            return std::make_unique<Node>(std::move(value));
         }
 
-        if (interval_less(interval, node->interval))
+        if (interval_less(value.interval, node->interval))
         {
-            node->left = insert(std::move(node->left), std::move(interval));
+            node->left = insert(std::move(node->left), std::move(value));
         }
-        else if (interval_less(node->interval, interval))
+        else if (interval_less(node->interval, value.interval))
         {
-            node->right = insert(std::move(node->right), std::move(interval));
+            node->right = insert(std::move(node->right), std::move(value));
         }
         else
         {
+            if (std::find(node->payloads.begin(), node->payloads.end(), value.payload) == node->payloads.end())
+            {
+                node->payloads.push_back(std::move(value.payload));
+            }
             return node;
         }
         return rebalance(std::move(node));
@@ -272,6 +303,7 @@ class interval_tree
                 successor = successor->left.get();
             }
             node->interval = successor->interval;
+            node->payloads = successor->payloads;
             node->right    = erase(std::move(node->right), successor->interval);
         }
         return rebalance(std::move(node));
@@ -284,12 +316,66 @@ class interval_tree
             return nullptr;
         }
 
-        auto result     = std::make_unique<Node>(node->interval);
-        result->maximum = node->maximum;
-        result->height  = node->height;
-        result->left    = clone(node->left);
-        result->right   = clone(node->right);
+        auto result      = std::make_unique<Node>(value_type{ node->interval, node->payloads.front() });
+        result->payloads = node->payloads;
+        result->maximum  = node->maximum;
+        result->height   = node->height;
+        result->left     = clone(node->left);
+        result->right    = clone(node->right);
         return result;
+    }
+
+    void intersection(const Node* node, const interval_type& interval, std::vector<value_type>& results) const
+    {
+        if (node == nullptr)
+        {
+            return;
+        }
+
+        if ((node->left != nullptr) && less(interval.first, node->left->maximum))
+        {
+            intersection(node->left.get(), interval, results);
+        }
+
+        if (overlaps(node->interval, interval))
+        {
+            for (const auto& payload : node->payloads)
+            {
+                results.push_back({ node->interval, payload });
+            }
+        }
+
+        if (less(node->interval.first, interval.second))
+        {
+            intersection(node->right.get(), interval, results);
+        }
+    }
+
+    void contains(const Node* node, const T& value, std::vector<value_type>& results) const
+    {
+        if (node == nullptr)
+        {
+            return;
+        }
+
+        if ((node->left != nullptr) && less(value, node->left->maximum))
+        {
+            contains(node->left.get(), value, results);
+        }
+
+        const interval_type& interval = node->interval;
+        if (!less(value, interval.first) && less(value, interval.second))
+        {
+            for (const auto& payload : node->payloads)
+            {
+                results.push_back({ interval, payload });
+            }
+        }
+
+        if (!less(value, interval.first))
+        {
+            contains(node->right.get(), value, results);
+        }
     }
 
     std::unique_ptr<Node> root_;

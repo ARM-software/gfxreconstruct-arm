@@ -25,9 +25,11 @@
 
 #include "util/defines.h"
 #include "format/format.h"
-#include "vulkan/vulkan.h"
 #include "vulkan/vulkan_core.h"
+#include <memory>
 #include <optional>
+#include <unordered_map>
+#include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -35,63 +37,92 @@ GFXRECON_BEGIN_NAMESPACE(encode)
 namespace vulkan_wrappers
 {
 struct DeviceWrapper;
-}
+struct AccelerationStructureKHRWrapper;
+} // namespace vulkan_wrappers
 
-struct AccelerationStructureInputBuffer
+struct RestoreableBuffer
 {
     // Required data to correctly create a buffer
     VkBuffer                              handle{ VK_NULL_HANDLE };
     format::HandleId                      handle_id{ format::kNullHandleId };
-    const vulkan_wrappers::DeviceWrapper* bind_device{ nullptr };
+    const vulkan_wrappers::DeviceWrapper* device{ nullptr };
     uint32_t                              queue_family_index{ 0 };
     VkDeviceSize                          created_size{ 0 };
     VkBufferUsageFlags                    usage{ 0 };
 
-    bool destroyed{ false };
-
     VkDeviceAddress capture_address{ 0 };
     VkDeviceAddress actual_address{ 0 };
-
-    std::vector<uint8_t> bytes;
 
     VkMemoryRequirements memory_requirements{};
     format::HandleId     bind_memory{};
     VkDeviceMemory       bind_memory_handle{ VK_NULL_HANDLE };
 };
 
+struct AccelerationStructureInputBufferSnapshot
+{
+    VkBuffer                        buffer{ VK_NULL_HANDLE };
+    VkDeviceMemory                  memory{ VK_NULL_HANDLE };
+    vulkan_wrappers::DeviceWrapper* device{ nullptr };
+    VkDeviceSize                    size{ 0 };
+    uint32_t                        queue_family_index{ 0 };
+    VkMemoryRequirements            memory_requirements{};
+    VkMemoryPropertyFlags           memory_properties{ 0 };
+    std::vector<uint8_t>            bytes;
+    uint32_t                        pending_submissions{ 0 };
+    bool                            recording_alive{ true };
+    bool                            release_on_completion{ false };
+    bool                            resources_destroyed{ false };
+};
+
+struct AccelerationStructureInputBuffer : public RestoreableBuffer
+{
+    VkDeviceAddress build_copy_source_address{ 0 };
+    VkDeviceSize    build_copy_source_offset{ 0 };
+
+    std::shared_ptr<AccelerationStructureInputBufferSnapshot> build_copy_snapshot;
+};
+
 struct AccelerationStructureKHRBuildCommandData
 {
+    format::HandleId               device_id          = format::kNullHandleId;
+    format::HandleId               handle_id          = format::kNullHandleId;
     VkAccelerationStructureTypeKHR type               = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
-    VkBuffer                       buffer             = VK_NULL_HANDLE;
     VkDeviceSize                   size               = 0;
     VkDeviceSize                   offset             = 0;
     format::HandleId               replaced_handle_id = format::kNullHandleId;
     VkAccelerationStructureKHR     replaced_handle    = VK_NULL_HANDLE;
 
     VkAccelerationStructureBuildGeometryInfoKHR                            geometry_info;
-    std::unique_ptr<uint8_t[]>                                             geometry_info_memory;
+    std::vector<uint8_t>                                                   geometry_info_memory;
     std::vector<VkAccelerationStructureBuildRangeInfoKHR>                  build_range_infos;
     std::unordered_map<format::HandleId, AccelerationStructureInputBuffer> input_buffers;
+    RestoreableBuffer                                                      storage_buffer;
 };
 
 struct AccelerationStructureCopyCommandData
 {
-    format::HandleId                   device;
-    VkCopyAccelerationStructureInfoKHR info;
+    format::HandleId                   device = format::kNullHandleId;
+    format::HandleId                   src    = format::kNullHandleId;
+    format::HandleId                   dst    = format::kNullHandleId;
+    VkCopyAccelerationStructureModeKHR mode   = VK_COPY_ACCELERATION_STRUCTURE_MODE_MAX_ENUM_KHR;
 };
 
 struct AccelerationStructureWritePropertiesCommandData
 {
-    format::HandleId device;
-    VkQueryType      query_type;
+    format::HandleId device     = format::kNullHandleId;
+    VkQueryType      query_type = VK_QUERY_TYPE_MAX_ENUM;
 };
 
 struct AccelerationStructureBuildState
 {
+    format::HandleId                                               id{ format::kNullHandleId };
     VkAccelerationStructureTypeKHR                                 type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
     std::optional<AccelerationStructureKHRBuildCommandData>        latest_build_command{ std::nullopt };
     std::optional<AccelerationStructureCopyCommandData>            latest_copy_command{ std::nullopt };
     std::optional<AccelerationStructureWritePropertiesCommandData> latest_write_properties_command{ std::nullopt };
+
+    std::vector<format::HandleId>                                 copy_destinations;
+    std::vector<std::shared_ptr<AccelerationStructureBuildState>> dependencies{};
 };
 
 GFXRECON_END_NAMESPACE(encode)

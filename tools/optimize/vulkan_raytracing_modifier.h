@@ -213,6 +213,8 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     std::vector<format::AddressLocationInfo> GetBufferDeviceAddressesInFillMemory(
         std::vector<format::AddressLocationInfo>& as_locations, const void* data, size_t size);
 
+    void TrackBufferDeviceAddress(VkDeviceAddress address, format::HandleId buffer_id);
+
     std::vector<format::AddressLocationInfo> GetAccelerationStructureDeviceAddressesInFillMemory(const void* data,
                                                                                                  size_t      size);
 
@@ -336,8 +338,10 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     // -----acceleration structure handle-----AccelerationStructureBuildInfo
     std::unordered_map<format::HandleId, AccelerationStructureBuildInfo> acceleration_structure_build_infos_;
 
-    // -----buffer device address-----handle id
-    std::unordered_map<uint64_t, format::HandleId> buffer_device_addresses_;
+    // -----buffer device address range-----handle id
+    util::interval_tree<VkDeviceAddress, format::HandleId> buffer_device_address_ranges_;
+    VkDeviceAddress buffer_device_address_min_{ std::numeric_limits<VkDeviceAddress>::max() };
+    VkDeviceAddress buffer_device_address_max_{ 0 };
 
     // -----acceleration structure device address-----set of unique handle ids
     std::unordered_map<uint64_t, std::unordered_set<format::HandleId>> acceleration_structure_device_addresses_;

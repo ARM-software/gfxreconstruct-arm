@@ -23,19 +23,22 @@
 
 #include "encode/vulkan_state_writer.h"
 
+#include "encode/parameter_encoder.h"
+#include "encode/vulkan_capture_common.h"
 #include "encode/struct_pointer_encoder.h"
 #include "encode/vulkan_acceleration_structure_build_state.h"
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_info.h"
 #include "encode/custom_vulkan_array_size_2d.h"
-#include "encode/vulkan_capture_common.h"
 #include "format/format.h"
 #include "format/format_arm.h"
 #include "format/format_util.h"
+#include "generated/generated_vulkan_state_table.h"
 #include "util/logging.h"
 #include "custom_vulkan_array_size_2d.h"
 #include "util/vulkan_device_table_dispatcher.h"
+#include "graphics/vulkan_struct_get_pnext.h"
 
 #include <algorithm>
 #include <array>
@@ -45,6 +48,7 @@
 #include <limits>
 #include <ranges>
 #include <unordered_map>
+#include <vulkan/vulkan_core.h>
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 #include <android/hardware_buffer.h>
@@ -182,8 +186,6 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     // Map memory after uploading resource data to buffers and images, which may require mapping resource memory ranges.
     WriteMappedMemoryState(state_table);
-    WriteBufferDeviceAddressCalls(state_table);
-
     WriteBufferViewState(state_table);
 
     // Sampler and image view create infos can reference a VkSamplerYcbcrConversion object (through VkSamplerYcbcrConversionInfo
@@ -1642,7 +1644,7 @@ void VulkanStateWriter::WriteImageState(const VulkanStateTable& state_table)
     });
 }
 
-void VulkanStateWriter::BeginAccelerationStructuresSection(format::HandleId device_id, uint64_t max_resource_size)
+void VulkanStateWriter::BeginResourceInitSection(format::HandleId device_id, uint64_t max_resource_size)
 {
     uint64_t max_staging_copy_size = 0;
 
@@ -1661,87 +1663,121 @@ void VulkanStateWriter::BeginAccelerationStructuresSection(format::HandleId devi
     ++blocks_written_;
 }
 
-void VulkanStateWriter::WriteRecreateAccelerationHandle(encode::AccelerationStructureKHRBuildCommandData& command)
+void VulkanStateWriter::WriteRecreateAccelerationHandle(const VulkanStateTable&                           state_table,
+                                                        format::HandleId                                  original_id,
+                                                        encode::AccelerationStructureKHRBuildCommandData* command)
 {
-    GFXRECON_ASSERT(!command.input_buffers.empty());
-
-    // grab device from first input-buffer
-    const vulkan_wrappers::DeviceWrapper* device_wrapper  = command.input_buffers.begin()->second.bind_device;
+    const vulkan_wrappers::DeviceWrapper* device_wrapper  = state_table.GetVulkanDeviceWrapper(command->device_id);
     const VkAllocationCallbacks*          alloc_callbacks = nullptr;
 
     VkAccelerationStructureCreateInfoKHR create_info = {};
     create_info.sType                                = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-    create_info.type                                 = command.type;
-    create_info.buffer                               = command.buffer;
-    create_info.size                                 = command.size;
-    create_info.offset                               = command.offset;
-
-    VkResult result = device_wrapper->layer_table.CreateAccelerationStructureKHR(
-        device_wrapper->handle, &create_info, nullptr, &command.replaced_handle);
-
-    GFXRECON_ASSERT(result == VK_SUCCESS);
-    vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper,
-                                         vulkan_wrappers::NoParentWrapper,
-                                         vulkan_wrappers::AccelerationStructureKHRWrapper>(
-        device_wrapper->handle,
-        vulkan_wrappers::NoParentWrapper::kHandleValue,
-        &command.replaced_handle,
-        get_unique_id_);
-
-    auto* as_wrapper =
-        vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(command.replaced_handle, false);
-    GFXRECON_ASSERT(as_wrapper != nullptr);
-    command.replaced_handle_id = as_wrapper->handle_id;
-
-    // replace stale handle
-    command.geometry_info.dstAccelerationStructure = command.replaced_handle;
-
-    // Write down this new call
-    parameter_stream_.Clear();
-    encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-    EncodeStructPtr(&encoder_, &create_info);
-    EncodeStructPtr(&encoder_, alloc_callbacks);
-    encoder_.EncodeHandleIdPtr(&command.replaced_handle_id);
-    encoder_.EncodeEnumValue(VK_SUCCESS);
-    WriteFunctionCall(format::ApiCallId::ApiCall_vkCreateAccelerationStructureKHR, &parameter_stream_);
-}
-
-void VulkanStateWriter::WriteDestroyAccelerationHandle(const encode::AccelerationStructureKHRBuildCommandData& command)
-{
-    if (command.replaced_handle_id != format::kNullHandleId)
+    create_info.type                                 = command->type;
+    if (auto storage_buffer_wrapper = state_table.GetVulkanBufferWrapper(command->storage_buffer.handle_id);
+        storage_buffer_wrapper != nullptr)
     {
-        GFXRECON_ASSERT(!command.input_buffers.empty());
+        create_info.buffer = storage_buffer_wrapper->handle;
 
-        // grab device from first input-buffer
-        const vulkan_wrappers::DeviceWrapper* device_wrapper  = command.input_buffers.begin()->second.bind_device;
-        const VkAllocationCallbacks*          alloc_callbacks = nullptr;
+        create_info.size   = command->size;
+        create_info.offset = command->offset;
 
-        device_wrapper->layer_table.DestroyAccelerationStructureKHR(
-            device_wrapper->handle, command.replaced_handle, nullptr);
+        VkResult result = device_wrapper->layer_table.CreateAccelerationStructureKHR(
+            device_wrapper->handle, &create_info, nullptr, &command->replaced_handle);
+
+        GFXRECON_ASSERT(result == VK_SUCCESS);
+        vulkan_wrappers::CreateWrappedHandle<vulkan_wrappers::DeviceWrapper,
+                                             vulkan_wrappers::NoParentWrapper,
+                                             vulkan_wrappers::AccelerationStructureKHRWrapper>(
+            device_wrapper->handle,
+            vulkan_wrappers::NoParentWrapper::kHandleValue,
+            &command->replaced_handle,
+            get_unique_id_);
+
+        auto* as_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(
+            command->replaced_handle, false);
+        GFXRECON_ASSERT(as_wrapper != nullptr);
+        as_wrapper->device                              = (DeviceWrapper*)device_wrapper;
+        command->replaced_handle_id                     = as_wrapper->handle_id;
+        command->geometry_info.dstAccelerationStructure = command->replaced_handle;
 
         parameter_stream_.Clear();
         encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
-        encoder_.EncodeHandleIdValue(command.replaced_handle_id);
+
+        encoder_.EncodeStructPtrPreamble(&create_info, false, false);
+        encoder_.EncodeEnumValue(create_info.sType);
+        EncodePNextStruct(&encoder_, create_info.pNext);
+        encoder_.EncodeFlagsValue(create_info.createFlags);
+        encoder_.EncodeHandleIdValue(command->storage_buffer.handle_id);
+        encoder_.EncodeUInt64Value(create_info.offset);
+        encoder_.EncodeUInt64Value(create_info.size);
+        encoder_.EncodeEnumValue(create_info.type);
+        encoder_.EncodeUInt64Value(create_info.deviceAddress);
+
+        EncodeStructPtr(&encoder_, alloc_callbacks);
+        encoder_.EncodeHandleIdPtr(&command->replaced_handle_id);
+        encoder_.EncodeEnumValue(VK_SUCCESS);
+        WriteFunctionCall(format::ApiCallId::ApiCall_vkCreateAccelerationStructureKHR, &parameter_stream_);
+        as_wrapper->address = storage_buffer_wrapper->address;
+        WriteGetAccelerationStructureDeviceAddressKHRCall(state_table, as_wrapper);
+    }
+    else
+    {
+        WriteRestorableBufferCreate(command->storage_buffer);
+        WriteRestorableBufferBinding(command->storage_buffer);
+        WriteSyntheticAccelerationStructureCreate(command);
+        WriteSyntheticAccelerationStructureGetDeviceAddressCall(command, command->storage_buffer.actual_address);
+    }
+
+    destroyed_as_id_remap[original_id] = command;
+}
+
+void VulkanStateWriter::WriteDestroyAccelerationHandle(const VulkanStateTable& state_table,
+                                                       const encode::AccelerationStructureKHRBuildCommandData* command)
+{
+    if (command->replaced_handle_id != format::kNullHandleId)
+    {
+
+        // grab device from first input-buffer
+        const vulkan_wrappers::DeviceWrapper* device_wrapper  = state_table.GetVulkanDeviceWrapper(command->device_id);
+        const VkAllocationCallbacks*          alloc_callbacks = nullptr;
+
+        device_wrapper->layer_table.DestroyAccelerationStructureKHR(
+            device_wrapper->handle, command->replaced_handle, nullptr);
+
+        parameter_stream_.Clear();
+        encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
+        encoder_.EncodeHandleIdValue(command->replaced_handle_id);
         EncodeStructPtr(&encoder_, alloc_callbacks);
         WriteFunctionCall(format::ApiCall_vkDestroyAccelerationStructureKHR, &parameter_stream_);
-        parameter_stream_.Clear();
 
+        parameter_stream_.Clear();
+        if (state_table.GetVulkanBufferWrapper(command->storage_buffer.handle_id) == nullptr)
+        {
+            WriteRestorableBufferDestroy(command->storage_buffer);
+        }
+    }
+    if (command->replaced_handle != VK_NULL_HANDLE)
+    {
         auto* as_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::AccelerationStructureKHRWrapper>(
-            command.replaced_handle, false);
+            command->replaced_handle, false);
         GFXRECON_ASSERT(as_wrapper != nullptr);
         vulkan_wrappers::RemoveWrapper(as_wrapper);
     }
 }
 
-void VulkanStateWriter::WriteASInputBufferState(encode::AccelerationStructureInputBuffer& buffer)
+void VulkanStateWriter::WriteRestorableBufferCreate(encode::RestoreableBuffer& buffer, VkDeviceSize size)
 {
     const VkAllocationCallbacks* alloc_callbacks = nullptr;
+    if (size == 0)
+    {
+        size = buffer.created_size;
+    }
 
     // Issue a new create call, creating the buffer we want, and replacing data
     VkBufferCreateInfo create_info{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                     nullptr,
                                     {},
-                                    buffer.created_size,
+                                    size,
                                     buffer.usage,
                                     VK_SHARING_MODE_EXCLUSIVE,
                                     1,
@@ -1750,7 +1786,7 @@ void VulkanStateWriter::WriteASInputBufferState(encode::AccelerationStructureInp
     buffer.handle_id = get_unique_id_();
     // Write down this new call
     parameter_stream_.Clear();
-    encoder_.EncodeHandleIdValue(buffer.bind_device->handle_id);
+    encoder_.EncodeHandleIdValue(buffer.device->handle_id);
     EncodeStructPtr(&encoder_, &create_info);
     EncodeStructPtr(&encoder_, alloc_callbacks);
     encoder_.EncodeHandleIdPtr(&buffer.handle_id);
@@ -1758,14 +1794,19 @@ void VulkanStateWriter::WriteASInputBufferState(encode::AccelerationStructureInp
     WriteFunctionCall(format::ApiCallId::ApiCall_vkCreateBuffer, &parameter_stream_);
 }
 
-void VulkanStateWriter::WriteASInputMemoryState(encode::AccelerationStructureInputBuffer& buffer)
+void VulkanStateWriter::WriteRestorableBufferBinding(encode::RestoreableBuffer&  buffer,
+                                                     const VkMemoryRequirements* memory_requirements)
 {
     const VkAllocationCallbacks*          alloc_callbacks = nullptr;
-    const vulkan_wrappers::DeviceWrapper* device_wrapper  = buffer.bind_device;
+    const vulkan_wrappers::DeviceWrapper* device_wrapper  = buffer.device;
+    if (memory_requirements == nullptr)
+    {
+        memory_requirements = &buffer.memory_requirements;
+    }
 
     // Write allocate memory call
     VkMemoryAllocateInfo allocate_info{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr };
-    allocate_info.allocationSize = buffer.memory_requirements.size;
+    allocate_info.allocationSize = memory_requirements->size;
 
     VkMemoryAllocateFlagsInfo memory_allocate_flags_info{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO, nullptr };
     memory_allocate_flags_info.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
@@ -1774,8 +1815,8 @@ void VulkanStateWriter::WriteASInputMemoryState(encode::AccelerationStructureInp
     uint32_t              mem_type_index = 0;
     VkMemoryPropertyFlags desired_flags{};
     VkMemoryPropertyFlags found_flags{};
-    graphics::FindMemoryTypeIndex(buffer.bind_device->physical_device->memory_properties,
-                                  buffer.memory_requirements.memoryTypeBits,
+    graphics::FindMemoryTypeIndex(buffer.device->physical_device->memory_properties,
+                                  memory_requirements->memoryTypeBits,
                                   desired_flags,
                                   &mem_type_index,
                                   &found_flags);
@@ -1791,7 +1832,7 @@ void VulkanStateWriter::WriteASInputMemoryState(encode::AccelerationStructureInp
     WriteFunctionCall(format::ApiCallId::ApiCall_vkAllocateMemory, &parameter_stream_);
     parameter_stream_.Clear();
 
-    encoder_.EncodeHandleIdValue(buffer.bind_device->handle_id);
+    encoder_.EncodeHandleIdValue(buffer.device->handle_id);
     encoder_.EncodeHandleIdValue(buffer.handle_id);
     encoder_.EncodeHandleIdValue(buffer.bind_memory);
     encoder_.EncodeUInt64Value(0);
@@ -1800,11 +1841,10 @@ void VulkanStateWriter::WriteASInputMemoryState(encode::AccelerationStructureInp
     parameter_stream_.Clear();
 
     VkBufferDeviceAddressInfo pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, buffer.handle };
-    mock_address_counter_ -= buffer.memory_requirements.size;
+    mock_address_counter_ -= memory_requirements->size;
     buffer.actual_address = mock_address_counter_;
 
-    auto physical_device_wrapper = buffer.bind_device->physical_device;
-
+    auto physical_device_wrapper = buffer.device->physical_device;
     // Manual encoding because tmp objects are not in the state table
     encoder_.EncodeHandleIdValue(device_wrapper->handle_id);
     encoder_.EncodeStructPtrPreamble(&pInfo);
@@ -1823,11 +1863,27 @@ void VulkanStateWriter::InitializeASInputBuffer(encode::AccelerationStructureInp
 {
     parameter_stream_.Clear();
 
-    format::HandleId device_id = buffer.bind_device->handle_id;
+    const auto& snapshot = buffer.build_copy_snapshot;
+    if (snapshot == nullptr || snapshot->bytes.empty())
+    {
+        GFXRECON_LOG_WARNING("Acceleration structure input buffer snapshot is unavailable");
+        return;
+    }
 
-    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, buffer.created_size);
+    format::HandleId   device_id  = buffer.device->handle_id;
+    const VkDeviceSize input_size = snapshot->size;
+    GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, input_size);
 
-    auto                            data_size = static_cast<size_t>(buffer.created_size);
+    const std::vector<uint8_t>& input_bytes = snapshot->bytes;
+    if (input_bytes.size() < input_size)
+    {
+        GFXRECON_LOG_WARNING("Acceleration structure input buffer snapshot is smaller than expected (%zu of %" PRIu64
+                             " bytes)",
+                             input_bytes.size(),
+                             input_size);
+    }
+
+    auto                            data_size = std::min(static_cast<size_t>(input_size), input_bytes.size());
     format::InitBufferCommandHeader upload_cmd{};
 
     upload_cmd.meta_header.block_header.type = format::kMetaDataBlock;
@@ -1838,8 +1894,8 @@ void VulkanStateWriter::InitializeASInputBuffer(encode::AccelerationStructureInp
     upload_cmd.buffer_id = buffer.handle_id;
     upload_cmd.data_size = data_size;
 
-    const uint8_t* bytes = buffer.bytes.data();
-    if (compressor_ != nullptr)
+    const uint8_t* bytes = input_bytes.data();
+    if (compressor_ != nullptr && data_size != 0)
     {
         size_t compressed_size = compressor_->Compress(data_size, bytes, &compressed_parameter_buffer_, 0);
 
@@ -1856,25 +1912,28 @@ void VulkanStateWriter::InitializeASInputBuffer(encode::AccelerationStructureInp
     upload_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(upload_cmd) + data_size;
 
     output_stream_->Write(&upload_cmd, sizeof(upload_cmd));
-    output_stream_->Write(bytes, data_size);
+    if (data_size != 0)
+    {
+        output_stream_->Write(bytes, data_size);
+    }
     ++blocks_written_;
 }
 
-void VulkanStateWriter::WriteDestroyASInputBuffer(encode::AccelerationStructureInputBuffer& buffer)
+void VulkanStateWriter::WriteRestorableBufferDestroy(const encode::RestoreableBuffer& buffer)
 {
     const VkAllocationCallbacks*          callbacks      = nullptr;
-    const vulkan_wrappers::DeviceWrapper* device_wrapper = buffer.bind_device;
+    const vulkan_wrappers::DeviceWrapper* device_wrapper = buffer.device;
 
     parameter_stream_.Clear();
 
-    encoder_.EncodeHandleIdValue(buffer.bind_device->handle_id);
+    encoder_.EncodeHandleIdValue(buffer.device->handle_id);
     encoder_.EncodeHandleIdValue(buffer.handle_id);
     EncodeStructPtr(&encoder_, callbacks);
     WriteFunctionCall(format::ApiCall_vkDestroyBuffer, &parameter_stream_);
 
     parameter_stream_.Clear();
 
-    encoder_.EncodeHandleIdValue(buffer.bind_device->handle_id);
+    encoder_.EncodeHandleIdValue(buffer.device->handle_id);
     encoder_.EncodeHandleIdValue(buffer.bind_memory);
     EncodeStructPtr(&encoder_, callbacks);
     WriteFunctionCall(format::ApiCall_vkFreeMemory, &parameter_stream_);
@@ -1882,7 +1941,7 @@ void VulkanStateWriter::WriteDestroyASInputBuffer(encode::AccelerationStructureI
     parameter_stream_.Clear();
 }
 
-void VulkanStateWriter::EndAccelerationStructureSection(format::HandleId device_id)
+void VulkanStateWriter::EndResourceInitSection(format::HandleId device_id)
 {
     format::EndResourceInitCommand end_cmd{};
     end_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(end_cmd);
@@ -1928,20 +1987,81 @@ void VulkanStateWriter::WriteTlasToBlasDependenciesMetadata(const VulkanStateTab
     });
 }
 
+void VulkanStateWriter::AppendBuildCommand(encode::AccelerationStructureBuildState* build_state,
+                                           AccelerationStructureCommands&           commands,
+                                           std::set<format::HandleId>&              queued_build_commands,
+                                           size_t&                                  max_resource_size)
+{
+    if (!build_state->latest_build_command)
+    {
+        return;
+    }
+
+    if (!queued_build_commands.insert(build_state->id).second)
+    {
+        return;
+    }
+
+    auto& build_command = build_state->latest_build_command.value();
+
+    switch (build_state->type)
+    {
+        case VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR:
+            commands.blas_build.push_back(&build_command);
+            break;
+        case VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR:
+            commands.tlas_build.push_back(&build_command);
+            break;
+        default:
+            break;
+    }
+
+    for (auto& [handle_id, buffer] : build_command.input_buffers)
+    {
+        if (buffer.build_copy_snapshot != nullptr)
+        {
+            max_resource_size = std::max(max_resource_size, buffer.build_copy_snapshot->bytes.size());
+        }
+    }
+}
+
+void VulkanStateWriter::AppendCopyCommand(const VulkanStateTable&                  state_table,
+                                          encode::AccelerationStructureBuildState* build_state,
+                                          AccelerationStructureCommands&           commands)
+{
+    if (!build_state->latest_copy_command)
+    {
+        return;
+    }
+
+    const auto& copy_command = build_state->latest_copy_command.value();
+    if (state_table.GetVulkanAccelerationStructureKHRWrapper(copy_command.dst) != nullptr)
+    {
+        commands.copy_infos.push_back(&build_state->latest_copy_command.value());
+    }
+}
+
+void VulkanStateWriter::AppendWriteProperties(encode::AccelerationStructureBuildState* build_state,
+                                              AccelerationStructureCommands&           commands)
+{
+    if (build_state->latest_write_properties_command)
+    {
+        commands.write_properties.push_back(
+            { build_state->latest_write_properties_command->query_type, build_state->id });
+    }
+}
+
 // Rename this to represent the whole acc structure prepare process
 void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const VulkanStateTable& state_table)
 {
-    struct AccelerationStructureCommands
-    {
-        std::vector<encode::AccelerationStructureKHRBuildCommandData*> blas_build;
-        std::vector<encode::AccelerationStructureKHRBuildCommandData*> tlas_build;
-        std::vector<AccelerationStructureWritePropertiesCommandData>   write_properties;
-        std::vector<VkCopyAccelerationStructureInfoKHR>                copy_infos;
-    };
+    size_t max_resource_size = 0;
+
+    std::set<format::HandleId> queued_build_commands;
 
     // AS build/copy commands grouped by device
     std::unordered_map<VkDevice, AccelerationStructureCommands> commands;
-    size_t                                                      max_resource_size = 0;
+
+    std::set<format::HandleId> destroyed_to_be_recreated;
 
     state_table.VisitWrappers([&](vulkan_wrappers::BufferWrapper* buffer_wrapper) {
         GFXRECON_ASSERT(buffer_wrapper != nullptr && buffer_wrapper->device != nullptr);
@@ -1951,49 +2071,42 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
         {
             return;
         }
-        auto        get_id          = vulkan_wrappers::GetWrappedId<vulkan_wrappers::AccelerationStructureKHRWrapper>;
-        const auto& address_tracker = device_address_trackers_.at(buffer_wrapper->device->handle);
-        auto&       per_device_container = commands[buffer_wrapper->device->handle];
+        auto& per_device_container = commands[buffer_wrapper->device->handle];
 
-        for (auto& [device_address, as_build_state] : buffer_wrapper->acceleration_structures)
+        for (auto& [as_handle_id, as_build_state] : buffer_wrapper->acceleration_structures)
         {
-            if (as_build_state.latest_build_command)
+            for (const auto& dependency : as_build_state->dependencies)
             {
-                if (as_build_state.type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+                AccelerationStructureBuildState* src_state = dependency.get();
+                auto [it, inserted]                        = destroyed_to_be_recreated.insert(dependency->id);
+                if (inserted)
                 {
-                    per_device_container.blas_build.push_back(&as_build_state.latest_build_command.value());
-                }
-                else if (as_build_state.type == VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)
-                {
-                    per_device_container.tlas_build.push_back(&as_build_state.latest_build_command.value());
-                }
-
-                for (const auto& [handle_id, buffer] : as_build_state.latest_build_command->input_buffers)
-                {
-                    max_resource_size = std::max(max_resource_size, buffer.bytes.size());
+                    AppendBuildCommand(src_state, per_device_container, queued_build_commands, max_resource_size);
+                    AppendCopyCommand(state_table, src_state, per_device_container);
+                    AppendWriteProperties(src_state, per_device_container);
                 }
             }
-
-            if (as_build_state.latest_copy_command)
+        }
+        for (auto& [as_handle_id, as_build_state] : buffer_wrapper->acceleration_structures)
+        {
+            const vulkan_wrappers::AccelerationStructureKHRWrapper* wrapper =
+                state_table.GetVulkanAccelerationStructureKHRWrapper(as_build_state->id);
+            if (wrapper == nullptr)
             {
-                // filter out stale handles
-                if (get_id(as_build_state.latest_copy_command->info.src, false) != 0 &&
-                    get_id(as_build_state.latest_copy_command->info.dst, false) != 0)
+                if (!destroyed_to_be_recreated.contains(as_build_state->id))
                 {
-                    per_device_container.copy_infos.push_back(as_build_state.latest_copy_command.value().info);
+                    AppendBuildCommand(
+                        as_build_state.get(), per_device_container, queued_build_commands, max_resource_size);
+                    AppendCopyCommand(state_table, as_build_state.get(), per_device_container);
+                    AppendWriteProperties(as_build_state.get(), per_device_container);
                 }
             }
-
-            if (as_build_state.latest_write_properties_command)
+            else
             {
-                VkAccelerationStructureKHR as_handle =
-                    address_tracker.GetAccelerationStructureByDeviceAddress(device_address);
-                format::HandleId handle_id = get_id(as_handle, false);
-                if (handle_id != format::kNullHandleId)
-                {
-                    per_device_container.write_properties.push_back(
-                        { as_build_state.latest_write_properties_command->query_type, handle_id });
-                }
+                AppendBuildCommand(
+                    as_build_state.get(), per_device_container, queued_build_commands, max_resource_size);
+                AppendCopyCommand(state_table, as_build_state.get(), per_device_container);
+                AppendWriteProperties(as_build_state.get(), per_device_container);
             }
         }
     });
@@ -2003,105 +2116,106 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
         auto device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device, true);
         // resource init
 
-        BeginAccelerationStructuresSection(device_id, max_resource_size);
-
-        for (auto& blas_build : command.blas_build)
-        {
-            WriteAccelerationStructureResourceInit(device_id, *blas_build);
-        }
-
-        for (auto& tlas_build : command.tlas_build)
-        {
-            WriteAccelerationStructureResourceInit(device_id, *tlas_build);
-        }
+        BeginResourceInitSection(device_id, max_resource_size);
 
         // build + cleanup
         for (auto& blas_build : command.blas_build)
         {
-            WriteAccelerationStructureBuildState(device_id, *blas_build);
+            WriteAccelerationStructureResourceInit(blas_build);
+            WriteAccelerationStructureBuildState(state_table, blas_build);
         }
 
         for (const auto& cmd_properties : command.write_properties)
         {
-            EncodeAccelerationStructureWritePropertiesCommand(device_id, cmd_properties);
+            EncodeAccelerationStructureWritePropertiesCommand(state_table, device_id, &cmd_properties);
         }
 
         // Check if there are actually any kVulkanCopyAccelerationStructuresCommand before dumping.
         // This saves from dumping a basically empty block
         if (!command.copy_infos.empty())
         {
-            EncodeAccelerationStructuresCopyMetaCommand(device_id, command.copy_infos);
+            EncodeAccelerationStructuresCopyMetaCommand(state_table, device_id, command.copy_infos);
         }
 
         for (auto& tlas_build : command.tlas_build)
         {
-            WriteAccelerationStructureBuildState(device_id, *tlas_build);
+            WriteAccelerationStructureResourceInit(tlas_build);
+            WriteAccelerationStructureBuildState(state_table, tlas_build);
         }
-        EndAccelerationStructureSection(device_id);
+
+        for (auto& delayed : delayed_destruction)
+        {
+            WriteDestroyAccelerationHandle(state_table, delayed);
+        }
+        EndResourceInitSection(device_id);
+        delayed_destruction.clear();
     }
 }
 
 void VulkanStateWriter::WriteAccelerationStructureResourceInit(
-    const gfxrecon::format::HandleId& device, encode::AccelerationStructureKHRBuildCommandData& command)
+    encode::AccelerationStructureKHRBuildCommandData* command)
 {
-    for (auto& [handle_id, buffer] : command.input_buffers)
+    for (auto& [handle_id, buffer] : command->input_buffers)
     {
-        if (buffer.destroyed)
+        const auto& snapshot       = buffer.build_copy_snapshot;
+        const bool  has_build_copy = snapshot != nullptr && !snapshot->bytes.empty();
+        if (has_build_copy)
         {
-            WriteASInputBufferState(buffer);
-            WriteASInputMemoryState(buffer);
+            WriteRestorableBufferCreate(buffer, snapshot->size);
+            WriteRestorableBufferBinding(buffer, &snapshot->memory_requirements);
             InitializeASInputBuffer(buffer);
         }
     }
     UpdateAddresses(command);
 }
 
-void VulkanStateWriter::WriteAccelerationStructureBuildState(const gfxrecon::format::HandleId&                 device,
-                                                             encode::AccelerationStructureKHRBuildCommandData& command)
+void VulkanStateWriter::WriteAccelerationStructureBuildState(const VulkanStateTable& state_table,
+                                                             encode::AccelerationStructureKHRBuildCommandData* command)
 {
     // check for deleted handles, create replacements
-    bool as_destroyed = vulkan_wrappers::GetWrappedId<vulkan_wrappers::AccelerationStructureKHRWrapper>(
-                            command.geometry_info.dstAccelerationStructure, false) == format::kNullHandleId;
+    const vulkan_wrappers::AccelerationStructureKHRWrapper* wrapper =
+        state_table.GetVulkanAccelerationStructureKHRWrapper(command->handle_id);
+    bool as_destroyed = wrapper == nullptr;
 
     // handle was deleted. we'll require one for rebuilding, so encode calls to create a temporary AS+buffer
-    if (as_destroyed)
+    if (as_destroyed && !destroyed_as_id_remap.contains(command->handle_id))
     {
         GFXRECON_LOG_WARNING_ONCE("VulkanStateWriter: substituting deleted Acceleration-Structure handles");
-        WriteRecreateAccelerationHandle(command);
+        WriteRecreateAccelerationHandle(state_table, command->handle_id, command);
     }
 
-    EncodeAccelerationStructureBuildMetaCommand(device, command);
+    EncodeAccelerationStructureBuildMetaCommand(command);
 
-    for (auto& [handle_id, buffer] : command.input_buffers)
+    for (auto& [handle_id, buffer] : command->input_buffers)
     {
-        if (buffer.destroyed)
+        if (buffer.build_copy_snapshot != nullptr && !buffer.build_copy_snapshot->bytes.empty())
         {
-            WriteDestroyASInputBuffer(buffer);
+            WriteRestorableBufferDestroy(buffer);
         }
     }
 
     if (as_destroyed)
     {
-        WriteDestroyAccelerationHandle(command);
+        delayed_destruction.push_back(command);
     }
 }
 
-void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCommandData& command)
+void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCommandData* command)
 {
-    if (command.input_buffers.empty())
+    if (command->input_buffers.empty())
     {
         return;
     }
 
-    std::unordered_map<VkDeviceAddress, VkDeviceAddress*> addresses_to_replace;
+    std::vector<std::pair<VkDeviceAddress, VkDeviceAddress*>> addresses_to_replace;
     auto insert_address = [&addresses_to_replace](const VkDeviceAddress& address) {
-        addresses_to_replace[address] = const_cast<VkDeviceAddress*>(&address);
+        addresses_to_replace.emplace_back(address, const_cast<VkDeviceAddress*>(&address));
     };
 
-    for (uint32_t g = 0; g < command.geometry_info.geometryCount; ++g)
+    for (uint32_t g = 0; g < command->geometry_info.geometryCount; ++g)
     {
-        auto geometry = command.geometry_info.pGeometries != nullptr ? command.geometry_info.pGeometries + g
-                                                                     : command.geometry_info.ppGeometries[g];
+        auto geometry = command->geometry_info.pGeometries != nullptr ? command->geometry_info.pGeometries + g
+                                                                      : command->geometry_info.ppGeometries[g];
 
         switch (geometry->geometryType)
         {
@@ -2110,13 +2224,11 @@ void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCom
                 insert_address(geometry->geometry.triangles.vertexData.deviceAddress);
                 insert_address(geometry->geometry.triangles.indexData.deviceAddress);
                 insert_address(geometry->geometry.triangles.transformData.deviceAddress);
-                const VkBaseOutStructure* p_next =
-                    reinterpret_cast<const VkBaseOutStructure*>(geometry->geometry.triangles.pNext);
-                if (p_next != nullptr &&
-                    p_next->sType == VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT)
+                auto opacity_micromap =
+                    graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
+                        &geometry->geometry.triangles);
+                if (opacity_micromap != nullptr)
                 {
-                    auto opacity_micromap =
-                        reinterpret_cast<const VkAccelerationStructureTrianglesOpacityMicromapEXT*>(p_next);
                     insert_address(opacity_micromap->indexBuffer.deviceAddress);
                 }
                 break;
@@ -2142,22 +2254,38 @@ void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCom
         }
     }
 
-    for (const auto& [handle_id, buffer] : command.input_buffers)
+    for (const auto& [handle_id, buffer] : command->input_buffers)
     {
-        if (buffer.destroyed)
+        const auto& snapshot = buffer.build_copy_snapshot;
+        if (snapshot != nullptr && !snapshot->bytes.empty())
         {
-            auto it = addresses_to_replace.find(buffer.capture_address);
-            if (it != addresses_to_replace.end())
+            if (buffer.build_copy_source_address != 0 && snapshot != nullptr && snapshot->size != 0)
             {
-                VkDeviceAddress* address = it->second;
-                *address                 = buffer.actual_address;
+                for (auto& [capture_address, address] : addresses_to_replace)
+                {
+                    if (capture_address >= buffer.build_copy_source_address &&
+                        capture_address - buffer.build_copy_source_address < snapshot->size)
+                    {
+                        *address = buffer.actual_address + (capture_address - buffer.build_copy_source_address);
+                    }
+                }
+            }
+            else
+            {
+                for (auto& [capture_address, address] : addresses_to_replace)
+                {
+                    if (capture_address == buffer.capture_address)
+                    {
+                        *address = buffer.actual_address;
+                    }
+                }
             }
         }
     }
 }
 
 void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
-    format::HandleId device_id, const encode::AccelerationStructureKHRBuildCommandData& command)
+    const encode::AccelerationStructureKHRBuildCommandData* command)
 {
     using RangeInfoArraySize = encode::ArraySize2D<VkCommandBuffer,
                                                    uint32_t,
@@ -2172,12 +2300,25 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
     header.meta_header.meta_data_id      = format::MakeMetaDataId(
         format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kVulkanBuildAccelerationStructuresCommand);
 
-    encoder_.EncodeHandleIdValue(device_id);
+    encoder_.EncodeHandleIdValue(command->device_id);
 
-    EncodeStructArray(&encoder_, &command.geometry_info, 1);
+    format::HandleId src_acceleration_structure_id =
+        vulkan_wrappers::GetWrappedId<vulkan_wrappers::AccelerationStructureKHRWrapper>(
+            command->geometry_info.srcAccelerationStructure);
+    format::HandleId dst_acceleration_structure_id = command->replaced_handle_id;
+    if (dst_acceleration_structure_id == format::kNullHandleId)
+    {
+        dst_acceleration_structure_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::AccelerationStructureKHRWrapper>(
+            command->geometry_info.dstAccelerationStructure);
+    }
+    GFXRECON_ASSERT(dst_acceleration_structure_id != format::kNullHandleId);
 
-    const VkAccelerationStructureBuildRangeInfoKHR* ptr = command.build_range_infos.data();
-    EncodeStructArray2D(&encoder_, &ptr, RangeInfoArraySize(VK_NULL_HANDLE, 1, &command.geometry_info, &ptr));
+    encoder_.EncodeStructArrayPreamble(&command->geometry_info, 1);
+    EncodeAccelerationStructureBuildGeometryInfo(
+        command->geometry_info, src_acceleration_structure_id, dst_acceleration_structure_id);
+
+    const VkAccelerationStructureBuildRangeInfoKHR* ptr = command->build_range_infos.data();
+    EncodeStructArray2D(&encoder_, &ptr, RangeInfoArraySize(VK_NULL_HANDLE, 1, &command->geometry_info, &ptr));
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
     output_stream_->Write(&header, sizeof(header));
@@ -2187,8 +2328,28 @@ void VulkanStateWriter::EncodeAccelerationStructureBuildMetaCommand(
     ++blocks_written_;
 }
 
+void VulkanStateWriter::EncodeAccelerationStructureBuildGeometryInfo(
+    const VkAccelerationStructureBuildGeometryInfoKHR& geometry_info,
+    format::HandleId                                   src_acceleration_structure_id,
+    format::HandleId                                   dst_acceleration_structure_id)
+{
+    encoder_.EncodeEnumValue(geometry_info.sType);
+    EncodePNextStructIfValid(&encoder_, geometry_info.pNext);
+    encoder_.EncodeEnumValue(geometry_info.type);
+    encoder_.EncodeFlagsValue(geometry_info.flags);
+    encoder_.EncodeEnumValue(geometry_info.mode);
+    encoder_.EncodeHandleIdValue(src_acceleration_structure_id);
+    encoder_.EncodeHandleIdValue(dst_acceleration_structure_id);
+    encoder_.EncodeUInt32Value(geometry_info.geometryCount);
+    EncodeStructArray(&encoder_, geometry_info.pGeometries, geometry_info.geometryCount);
+    EncodeStructArray2D(&encoder_, geometry_info.ppGeometries, geometry_info.geometryCount, 1);
+    EncodeStruct(&encoder_, geometry_info.scratchData);
+}
+
 void VulkanStateWriter::EncodeAccelerationStructuresCopyMetaCommand(
-    format::HandleId device_id, const std::vector<VkCopyAccelerationStructureInfoKHR>& infos)
+    const VulkanStateTable&                                           state_table,
+    format::HandleId                                                  device_id,
+    const std::vector<encode::AccelerationStructureCopyCommandData*>& infos)
 {
     if (infos.empty())
     {
@@ -2203,7 +2364,32 @@ void VulkanStateWriter::EncodeAccelerationStructuresCopyMetaCommand(
         format::ApiFamilyId::ApiFamily_Vulkan, format::MetaDataType::kVulkanCopyAccelerationStructuresCommand);
 
     encoder_.EncodeHandleIdValue(device_id);
-    EncodeStructArray(&encoder_, infos.data(), infos.size());
+
+    encoder_.EncodeStructArrayPreamble(infos.data(), infos.size());
+
+    for (const auto& info : infos)
+    {
+        auto*            src_wrapper = state_table.GetVulkanAccelerationStructureKHRWrapper(info->src);
+        format::HandleId src_handle_id;
+        if (src_wrapper == nullptr)
+        {
+            auto result = destroyed_as_id_remap.find(info->src);
+            src_handle_id =
+                result != destroyed_as_id_remap.end() ? result->second->replaced_handle_id : format::kNullHandleId;
+        }
+        else
+        {
+            src_handle_id = src_wrapper->handle_id;
+        }
+
+        auto* dst_wrapper = state_table.GetVulkanAccelerationStructureKHRWrapper(info->dst);
+
+        encoder_.EncodeEnumValue(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
+        EncodePNextStructIfValid(&encoder_, nullptr);
+        encoder_.EncodeHandleIdValue(src_handle_id);
+        encoder_.EncodeHandleIdValue(dst_wrapper->handle_id);
+        encoder_.EncodeEnumValue(info->mode);
+    }
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 
@@ -2216,7 +2402,9 @@ void VulkanStateWriter::EncodeAccelerationStructuresCopyMetaCommand(
 }
 
 void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
-    format::HandleId device_id, const AccelerationStructureWritePropertiesCommandData& command)
+    const VulkanStateTable&                                state_table,
+    format::HandleId                                       device_id,
+    const AccelerationStructureWritePropertiesCommandData* command)
 {
     parameter_stream_.Clear();
 
@@ -2229,8 +2417,22 @@ void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
                                format::MetaDataType::kVulkanWriteAccelerationStructuresPropertiesCommand);
 
     encoder_.EncodeHandleIdValue(device_id);
-    encoder_.EncodeEnumValue(command.query_type);
-    encoder_.EncodeHandleIdValue(command.acceleration_structure);
+    encoder_.EncodeEnumValue(command->query_type);
+    auto*            target = state_table.GetVulkanAccelerationStructureKHRWrapper(command->acceleration_structure);
+    format::HandleId target_handle_id = format::kNullHandleId;
+    if (target == nullptr)
+    {
+        auto result = destroyed_as_id_remap.find(command->acceleration_structure);
+        target_handle_id =
+            result != destroyed_as_id_remap.end() ? result->second->replaced_handle_id : format::kNullHandleId;
+    }
+    else
+    {
+        target_handle_id = target->handle_id;
+    }
+    GFXRECON_ASSERT(target_handle_id != format::kNullHandleId);
+
+    encoder_.EncodeHandleIdValue(target_handle_id);
 
     header.meta_header.block_header.size += parameter_stream_.GetDataSize();
 
@@ -2253,8 +2455,10 @@ void VulkanStateWriter::WriteGetAccelerationStructureDeviceAddressKHRCall(
                                                       wrapper->handle };
 
     EncodeStructPtr(&encoder_, &info);
-    encoder_.EncodeVkDeviceAddressValue(vulkan_wrappers::GetDeviceTable(device_wrapper->handle)
-                                            ->GetAccelerationStructureDeviceAddressKHR(device_wrapper->handle, &info));
+    const VkDeviceAddress captured_address =
+        vulkan_wrappers::GetDeviceTable(device_wrapper->handle)
+            ->GetAccelerationStructureDeviceAddressKHR(device_wrapper->handle, &info);
+    encoder_.EncodeVkDeviceAddressValue(captured_address);
     WriteFunctionCall(format::ApiCallId::ApiCall_vkGetAccelerationStructureDeviceAddressKHR, &parameter_stream_);
     parameter_stream_.Clear();
 }
@@ -2467,22 +2671,27 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
     {
         for (const AccelerationStructureInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
-            max_resource_size = std::max(max_resource_size, buffer.bytes.size());
+            if (buffer.build_copy_snapshot != nullptr)
+            {
+                max_resource_size = std::max(max_resource_size, buffer.build_copy_snapshot->bytes.size());
+            }
         }
     }
 
-    BeginAccelerationStructuresSection(device_wrapper->handle_id, max_resource_size);
+    BeginResourceInitSection(device_wrapper->handle_id, max_resource_size);
 
     for (MicromapEXTWrapper* wrapper : wrappers_build)
     {
         for (AccelerationStructureInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
-            if (!buffer.destroyed)
+            const auto& snapshot       = buffer.build_copy_snapshot;
+            const bool  has_build_copy = snapshot != nullptr && !snapshot->bytes.empty();
+            if (!has_build_copy)
             {
                 continue;
             }
-            WriteASInputBufferState(buffer);
-            WriteASInputMemoryState(buffer);
+            WriteRestorableBufferCreate(buffer, snapshot->size);
+            WriteRestorableBufferBinding(buffer, &snapshot->memory_requirements);
             InitializeASInputBuffer(buffer);
         }
 
@@ -2499,7 +2708,7 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
             {
                 for (const AccelerationStructureInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
                 {
-                    if (!buffer.destroyed)
+                    if (buffer.build_copy_snapshot == nullptr || buffer.build_copy_snapshot->bytes.empty())
                     {
                         continue;
                     }
@@ -2539,14 +2748,14 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
 
         for (AccelerationStructureInputBuffer& buffer : wrapper->latest_build_command_->input_buffers)
         {
-            if (!buffer.destroyed)
+            if (buffer.build_copy_snapshot == nullptr || buffer.build_copy_snapshot->bytes.empty())
             {
                 continue;
             }
-            WriteDestroyASInputBuffer(buffer);
+            WriteRestorableBufferDestroy(buffer);
         }
     }
-    EndAccelerationStructureSection(device_wrapper->handle_id);
+    EndResourceInitSection(device_wrapper->handle_id);
 }
 
 void VulkanStateWriter::WriteMicromapEXTWriteProperties(DeviceWrapper*                          device_wrapper,
@@ -2751,36 +2960,6 @@ void VulkanStateWriter::InjectEndCommandBufferSubmitWaitQueue(format::HandleId& 
 
     WriteFunctionCall(format::ApiCall_vkQueueWaitIdle, &parameter_stream_);
     parameter_stream_.Clear();
-}
-
-void VulkanStateWriter::WriteBufferDeviceAddressCalls(const VulkanStateTable& state_table)
-{
-    std::vector<const BufferWrapper*> buffers_to_query;
-    state_table.VisitWrappers([&](const BufferWrapper* wrapper) {
-        if ((wrapper->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        {
-            buffers_to_query.emplace_back(wrapper);
-        }
-    });
-
-    for (const BufferWrapper* wrapper : buffers_to_query)
-    {
-        VkBufferDeviceAddressInfo info{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, wrapper->handle };
-        VkDevice                  device = wrapper->device->handle;
-        VkDeviceAddress           address =
-            util::VulkanDeviceTableDispatcher(GetDeviceTable(device)).GetBufferDeviceAddress(device, &info);
-
-        auto call_id = wrapper->device->physical_device->parent_info.api_version >= VK_MAKE_VERSION(1, 2, 0)
-                           ? format::ApiCall_vkGetBufferDeviceAddress
-                           : format::ApiCall_vkGetBufferDeviceAddressKHR;
-
-        parameter_stream_.Clear();
-        encoder_.EncodeHandleIdValue(wrapper->device->handle_id);
-        EncodeStructPtr(&encoder_, &info);
-        encoder_.EncodeVkDeviceAddressValue(address);
-        WriteFunctionCall(call_id, &parameter_stream_);
-        parameter_stream_.Clear();
-    }
 }
 
 void VulkanStateWriter::WriteDeferredOperationJoinCommand(format::HandleId device_id,
@@ -4373,7 +4552,7 @@ void VulkanStateWriter::WriteCommandProcessingCreateCommands(format::HandleId de
 {
     const VkResult               result    = VK_SUCCESS;
     const VkAllocationCallbacks* allocator = nullptr;
-
+    parameter_stream_.Clear();
     // Retrieve the queue for the queue family index.
     encoder_.EncodeHandleIdValue(device_id);
     encoder_.EncodeUInt32Value(queue_family_index);
@@ -5774,6 +5953,54 @@ void VulkanStateWriter::WriteTensorMemoryState(const VulkanStateTable& state_tab
         WriteFunctionCall(format::ApiCallId::ApiCall_vkBindTensorMemoryARM, &parameter_stream_);
     });
     parameter_stream_.Clear();
+}
+
+void VulkanStateWriter::WriteSyntheticAccelerationStructureCreate(
+    encode::AccelerationStructureKHRBuildCommandData* build_command)
+{
+    build_command->replaced_handle    = VK_NULL_HANDLE;
+    build_command->replaced_handle_id = get_unique_id_();
+
+    parameter_stream_.Clear();
+    encoder_.EncodeHandleIdValue(build_command->device_id);
+
+    VkAccelerationStructureCreateInfoKHR create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+
+    encoder_.EncodeStructPtrPreamble(&create_info);
+    encoder_.EncodeEnumValue(create_info.sType);
+    EncodePNextStruct(&encoder_, create_info.pNext);
+    encoder_.EncodeFlagsValue(create_info.createFlags);
+    encoder_.EncodeHandleIdValue(build_command->storage_buffer.handle_id);
+    encoder_.EncodeUInt64Value(0); // Synthetic storage buffers use the whole allocation.
+    encoder_.EncodeUInt64Value(build_command->size);
+    encoder_.EncodeEnumValue(build_command->type);
+    encoder_.EncodeUInt64Value(create_info.deviceAddress);
+
+    const VkAllocationCallbacks* allocator = nullptr;
+
+    EncodeStructPtr(&encoder_, allocator);
+    encoder_.EncodeHandleIdPtr(&build_command->replaced_handle_id);
+    encoder_.EncodeEnumValue(VK_SUCCESS);
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkCreateAccelerationStructureKHR, &parameter_stream_);
+}
+
+void VulkanStateWriter::WriteSyntheticAccelerationStructureGetDeviceAddressCall(
+    encode::AccelerationStructureKHRBuildCommandData* build_command, VkDeviceAddress synthetic_device_address)
+{
+    parameter_stream_.Clear();
+    encoder_.EncodeHandleIdValue(build_command->device_id);
+
+    VkAccelerationStructureDeviceAddressInfoKHR address_info{};
+    address_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+
+    encoder_.EncodeStructPtrPreamble(&address_info);
+    encoder_.EncodeEnumValue(address_info.sType);
+    EncodePNextStructIfValid(&encoder_, address_info.pNext);
+    encoder_.EncodeHandleIdValue(build_command->replaced_handle_id);
+
+    encoder_.EncodeVkDeviceAddressValue(synthetic_device_address);
+    WriteFunctionCall(format::ApiCallId::ApiCall_vkGetAccelerationStructureDeviceAddressKHR, &parameter_stream_);
 }
 
 GFXRECON_END_NAMESPACE(encode)

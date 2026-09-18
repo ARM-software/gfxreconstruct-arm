@@ -195,27 +195,6 @@ VkResult CreateVkImage(const CommonObjectInfoTable&               object_info_ta
     return VK_SUCCESS;
 }
 
-uint32_t VkIndexTypeToBytes(VkIndexType type)
-{
-    switch (type)
-    {
-        case VK_INDEX_TYPE_UINT8_EXT:
-            return 1;
-
-        case VK_INDEX_TYPE_UINT16:
-            return 2;
-
-        case VK_INDEX_TYPE_UINT32:
-            return 4;
-
-        case VK_INDEX_TYPE_NONE_KHR:
-        default:
-            GFXRECON_LOG_ERROR("%s() Unrecognized/unhandled index type (%u)", __func__, static_cast<uint32_t>(type));
-            assert(0);
-            return 0;
-    }
-}
-
 MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
                                           uint32_t                    index_count,
                                           uint32_t                    first_index,

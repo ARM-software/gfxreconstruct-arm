@@ -820,6 +820,26 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkGetFenceStatus>
 };
 
 template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkQueueWaitIdle>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkQueueWaitIdle(result, args...);
+    }
+};
+
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkDeviceWaitIdle>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkDeviceWaitIdle(result, args...);
+    }
+};
+
+template <>
 struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkQueueSubmit>
 {
     template <typename... Args>
@@ -2133,6 +2153,8 @@ struct CustomEncoderPreCall<format::ApiCallId::ApiCall_vkBeginCommandBuffer>
     }
 };
 
+#endif // ENABLE_OPENXR_SUPPORT
+
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBeginCommandBuffer>
 {
@@ -2143,7 +2165,15 @@ struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkBeginCommandBuffer>
     }
 };
 
-#endif // ENABLE_OPENXR_SUPPORT
+template <>
+struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkResetCommandBuffer>
+{
+    template <typename... Args>
+    static void Dispatch(VulkanCaptureManager* manager, VkResult result, Args... args)
+    {
+        manager->PostProcess_vkResetCommandBuffer(result, args...);
+    }
+};
 
 template <>
 struct CustomEncoderPostCall<format::ApiCallId::ApiCall_vkTransitionImageLayout>

@@ -69,6 +69,8 @@ bool ImageHasUsage(VkImageUsageFlags usage_flags, VkImageUsageFlagBits bit);
 
 bool ContainsFormat(const std::vector<VkFormat>& formats, VkFormat format);
 
+uint32_t VkIndexTypeToBytes(VkIndexType type);
+
 // Aligns a byte offset up to the next multiple of `alignment`.
 // Unlike util::platform::GetAlignedSize, this helper is safe for non-power-of-two alignments
 // (for example, 3-byte RGB formats).

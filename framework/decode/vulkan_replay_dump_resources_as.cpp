@@ -231,7 +231,7 @@ VkResult AccelerationStructureDumpResourcesContext::CloneBuildAccelerationStruct
                     if (index_buffer_info != nullptr)
                     {
                         const size_t index_buffer_size =
-                            3 * range.primitiveCount * VkIndexTypeToBytes(triangles.indexType);
+                            3 * range.primitiveCount * graphics::VkIndexTypeToBytes(triangles.indexType);
                         new_triangles.index_type        = triangles.indexType;
                         new_triangles.index_buffer_size = index_buffer_size;
 

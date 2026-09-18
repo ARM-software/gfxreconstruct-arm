@@ -22,6 +22,7 @@
  ** DEALINGS IN THE SOFTWARE.
  */
 
+#include "encode/vulkan_acceleration_structure_build_state.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
@@ -1713,9 +1714,6 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
         accel_struct_wrapper->offset = modified_create_info->offset;
         accel_struct_wrapper->size   = modified_create_info->size;
 
-        // associated buffer keeps track of existing acceleration-structures
-        buffer_wrapper->acceleration_structures[accel_struct_wrapper->address].type = accel_struct_wrapper->type;
-
         if (buffer_wrapper->bind_memory_id != format::kNullHandleId)
         {
             VkAccelerationStructureDeviceAddressInfoKHR address_info{
@@ -1765,6 +1763,12 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
                 accel_struct_wrapper->opaque_descriptor_data = std::move(opaque_data);
             }
         }
+        // associated buffer keeps track of existing acceleration-structures
+        std::shared_ptr<AccelerationStructureBuildState> build_state =
+            std::make_shared<AccelerationStructureBuildState>();
+        build_state->id                                                          = accel_struct_wrapper->handle_id;
+        build_state->type                                                        = accel_struct_wrapper->type;
+        buffer_wrapper->acceleration_structures[accel_struct_wrapper->handle_id] = build_state;
     }
     return result;
 }
@@ -4853,13 +4857,13 @@ void VulkanCaptureManager::PostProcess_vkResetFences(VkResult       result,
                                                      uint32_t       fenceCount,
                                                      const VkFence* pFences)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(result);
     GFXRECON_UNREFERENCED_PARAMETER(device);
 
-    if (IsCaptureModeTrack())
+    if (IsCaptureModeTrack() && result == VK_SUCCESS)
     {
         for (uint32_t i = 0; i < fenceCount; ++i)
         {
+            state_tracker_->CompleteAccelerationStructureSnapshotFence(pFences[i]);
             auto* fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(pFences[i]);
             if (fence_wrapper != nullptr)
             {
@@ -4879,18 +4883,24 @@ void VulkanCaptureManager::PostProcess_vkResetFences(VkResult       result,
 void VulkanCaptureManager::PostProcess_vkWaitForFences(
     VkResult result, VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(device);
-    GFXRECON_UNREFERENCED_PARAMETER(waitAll);
     GFXRECON_UNREFERENCED_PARAMETER(timeout);
 
     if (IsCaptureModeTrack() && result == VK_SUCCESS)
     {
+        auto* device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
         for (uint32_t i = 0; i < fenceCount; ++i)
         {
-            auto* fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(pFences[i]);
-            if (fence_wrapper != nullptr)
+            auto*      fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(pFences[i]);
+            const bool completed     = waitAll || (fence_wrapper != nullptr && device_wrapper != nullptr &&
+                                               device_wrapper->layer_table.GetFenceStatus(
+                                                   device_wrapper->handle, fence_wrapper->handle) == VK_SUCCESS);
+            if (completed)
             {
-                fence_wrapper->in_flight = false;
+                state_tracker_->CompleteAccelerationStructureSnapshotFence(pFences[i]);
+                if (fence_wrapper != nullptr)
+                {
+                    fence_wrapper->in_flight = false;
+                }
             }
         }
     }
@@ -4902,6 +4912,7 @@ void VulkanCaptureManager::PostProcess_vkGetFenceStatus(VkResult result, VkDevic
 
     if (IsCaptureModeTrack() && result == VK_SUCCESS)
     {
+        state_tracker_->CompleteAccelerationStructureSnapshotFence(fence);
         auto* fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(fence);
         if (fence_wrapper != nullptr)
         {

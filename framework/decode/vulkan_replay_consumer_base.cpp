@@ -15027,10 +15027,6 @@ void VulkanReplayConsumerBase::ProcessVulkanWriteAccelerationStructuresPropertie
         GetAccelerationStructureBuilder(device_info)
             .ProcessVulkanWriteAccelerationStructuresPropertiesCommand(query_type, acceleration_structure);
     }
-
-    // TODO: implement
-    //    acceleration_structure_builders_[device_id]->ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
-    //        query_type, acceleration_structure);
 }
 
 void VulkanReplayConsumerBase::OverrideUpdateDescriptorSets(

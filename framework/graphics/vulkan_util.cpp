@@ -24,6 +24,7 @@
 #include "graphics/vulkan_struct_get_pnext.h"
 
 #include "Vulkan-Utility-Libraries/vk_format_utils.h"
+#include "util/logging.h"
 
 #include <algorithm>
 #include <vector>
@@ -59,6 +60,25 @@ bool ImageHasUsage(VkImageUsageFlags usage_flags, VkImageUsageFlagBits bit)
 bool ContainsFormat(const std::vector<VkFormat>& formats, VkFormat format)
 {
     return std::find(formats.begin(), formats.end(), format) != formats.end();
+}
+
+uint32_t VkIndexTypeToBytes(VkIndexType type)
+{
+    switch (type)
+    {
+        case VK_INDEX_TYPE_UINT8:
+            return 1;
+        case VK_INDEX_TYPE_UINT16:
+            return 2;
+        case VK_INDEX_TYPE_UINT32:
+            return 4;
+        case VK_INDEX_TYPE_NONE_KHR:
+            return 0;
+        default:
+            GFXRECON_LOG_ERROR("%s() Unrecognized/unhandled index type (%u)", __func__, static_cast<uint32_t>(type));
+            GFXRECON_ASSERT(false);
+            return 0;
+    }
 }
 
 VkDeviceSize AlignBufferOffset(VkDeviceSize offset, VkDeviceSize alignment)

@@ -475,7 +475,16 @@ class VulkanCaptureManager : public ApiCaptureManager
     {
         if (IsCaptureModeTrack() && result == VK_SUCCESS)
         {
+            state_tracker_->ResetAccelerationStructureSnapshots(commandBuffer);
             state_tracker_->TrackBeginCommandBuffer(commandBuffer, pBeginInfo->flags);
+        }
+    }
+
+    void PostProcess_vkResetCommandBuffer(VkResult result, VkCommandBuffer commandBuffer, VkCommandBufferResetFlags)
+    {
+        if (IsCaptureModeTrack() && result == VK_SUCCESS)
+        {
+            state_tracker_->ResetAccelerationStructureSnapshots(commandBuffer);
         }
     }
 
@@ -658,6 +667,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
             assert((state_tracker_ != nullptr) && ((bindInfoCount == 0) || (pBindInfo != nullptr)));
+            state_tracker_->TrackAccelerationStructureSnapshotSubmission(queue, 0, nullptr, fence);
             for (uint32_t i = 0; i < bindInfoCount; ++i)
             {
                 state_tracker_->TrackSemaphoreSignalState(pBindInfo[i].waitSemaphoreCount,
@@ -1107,16 +1117,29 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     void PostProcess_vkQueueSubmit(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
                                    VkResult                                               result,
-                                   VkQueue,
-                                   uint32_t            submitCount,
-                                   const VkSubmitInfo* pSubmits,
-                                   VkFence)
+                                   VkQueue                                                queue,
+                                   uint32_t                                               submitCount,
+                                   const VkSubmitInfo*                                    pSubmits,
+                                   VkFence                                                fence)
     {
         PostQueueSubmit(current_lock);
 
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
             assert((state_tracker_ != nullptr) && ((submitCount == 0) || (pSubmits != nullptr)));
+
+            std::vector<VkCommandBuffer> command_buffers;
+            for (uint32_t i = 0; i < submitCount; ++i)
+            {
+                if (pSubmits[i].commandBufferCount != 0)
+                {
+                    command_buffers.insert(command_buffers.end(),
+                                           pSubmits[i].pCommandBuffers,
+                                           pSubmits[i].pCommandBuffers + pSubmits[i].commandBufferCount);
+                }
+            }
+            state_tracker_->TrackAccelerationStructureSnapshotSubmission(
+                queue, command_buffers.size(), command_buffers.data(), fence);
 
             state_tracker_->TrackCommandBufferSubmissions(submitCount, pSubmits);
 
@@ -1161,6 +1184,17 @@ class VulkanCaptureManager : public ApiCaptureManager
         if (IsCaptureModeTrack() && (result == VK_SUCCESS))
         {
             assert((state_tracker_ != nullptr) && ((submitCount == 0) || (pSubmits != nullptr)));
+
+            std::vector<VkCommandBuffer> command_buffers;
+            for (uint32_t i = 0; i < submitCount; ++i)
+            {
+                for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j)
+                {
+                    command_buffers.push_back(pSubmits[i].pCommandBufferInfos[j].commandBuffer);
+                }
+            }
+            state_tracker_->TrackAccelerationStructureSnapshotSubmission(
+                queue, command_buffers.size(), command_buffers.data(), fence);
 
             state_tracker_->TrackCommandBufferSubmissions2(submitCount, pSubmits);
 
@@ -1492,6 +1526,26 @@ class VulkanCaptureManager : public ApiCaptureManager
                                      VkBool32       waitAll,
                                      uint64_t       timeout);
     void PostProcess_vkGetFenceStatus(VkResult result, VkDevice device, VkFence fence);
+
+    void PostProcess_vkQueueWaitIdle(VkResult result, VkQueue queue)
+    {
+        if (IsCaptureModeTrack() && result == VK_SUCCESS)
+        {
+            state_tracker_->CompleteAccelerationStructureSnapshotQueue(queue);
+        }
+    }
+
+    void PostProcess_vkDeviceWaitIdle(VkResult result, VkDevice device)
+    {
+        if (IsCaptureModeTrack() && result == VK_SUCCESS)
+        {
+            auto* device_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::DeviceWrapper>(device);
+            if (device_wrapper != nullptr)
+            {
+                state_tracker_->CompleteAccelerationStructureSnapshotDevice(device_wrapper->handle);
+            }
+        }
+    }
 
     void PostProcess_vkSetPrivateData(VkResult          result,
                                       VkDevice          device,

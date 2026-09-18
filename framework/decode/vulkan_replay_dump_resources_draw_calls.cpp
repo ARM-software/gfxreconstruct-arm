@@ -2310,7 +2310,7 @@ VkResult DrawCallsDumpingContext::DumpVertexIndexBuffers(uint64_t               
         if (abs_index_count)
         {
             const VkIndexType  index_type = dc_params.referenced_index_buffer.index_type;
-            const uint32_t     index_size = VkIndexTypeToBytes(index_type);
+            const uint32_t     index_size = graphics::VkIndexTypeToBytes(index_type);
             const VkDeviceSize offset     = dc_params.referenced_index_buffer.offset;
 
             // Check if the exact size has been provided by vkCmdBindIndexBuffer2

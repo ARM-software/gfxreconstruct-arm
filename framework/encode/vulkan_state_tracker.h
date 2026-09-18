@@ -43,6 +43,7 @@
 #include "vulkan/vulkan_core.h"
 
 #include <cassert>
+#include <deque>
 #include <functional>
 #include <mutex>
 
@@ -517,6 +518,19 @@ class VulkanStateTracker
 
     void TrackCommandBuffersSubmision(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
+    void TrackAccelerationStructureSnapshotSubmission(VkQueue                queue,
+                                                      uint32_t               command_buffer_count,
+                                                      const VkCommandBuffer* command_buffers,
+                                                      VkFence                fence);
+
+    void CompleteAccelerationStructureSnapshotFence(VkFence fence);
+
+    void CompleteAccelerationStructureSnapshotQueue(VkQueue queue);
+
+    void CompleteAccelerationStructureSnapshotDevice(VkDevice device);
+
+    void ResetAccelerationStructureSnapshots(VkCommandBuffer command_buffer);
+
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
 
@@ -866,6 +880,8 @@ class VulkanStateTracker
 
     void DestroyState(vulkan_wrappers::CommandPoolWrapper* wrapper);
 
+    void DestroyState(vulkan_wrappers::CommandBufferWrapper* wrapper);
+
     void DestroyState(vulkan_wrappers::DescriptorPoolWrapper* wrapper);
 
     void DestroyState(vulkan_wrappers::SwapchainKHRWrapper* wrapper);
@@ -909,6 +925,27 @@ class VulkanStateTracker
 
     void MarkReferencedAssetsAsDirty(vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper);
 
+    bool CreateAccelerationStructureInputBufferCopy(vulkan_wrappers::DeviceWrapper*   device_wrapper,
+                                                    AccelerationStructureInputBuffer* input_buffer);
+
+    void CaptureAccelerationStructureBuildInputs(VkCommandBuffer                           command_buffer,
+                                                 vulkan_wrappers::DeviceWrapper*           device_wrapper,
+                                                 AccelerationStructureKHRBuildCommandData* build_command);
+
+    void CaptureBuildInputBuffers(VkCommandBuffer                                command_buffer,
+                                  vulkan_wrappers::DeviceWrapper*                device_wrapper,
+                                  std::vector<AccelerationStructureInputBuffer*> input_buffers,
+                                  VkAccessFlags                                  build_read_access);
+
+    void ReleaseAccelerationStructureSnapshots(vulkan_wrappers::CommandBufferWrapper* wrapper);
+
+    bool ReadAccelerationStructureSnapshot(const std::shared_ptr<AccelerationStructureInputBufferSnapshot>& snapshot);
+
+    void
+    DestroyAccelerationStructureSnapshot(const std::shared_ptr<AccelerationStructureInputBufferSnapshot>& snapshot);
+
+    void CompleteAccelerationStructureSnapshotSubmissions(VkQueue queue, uint64_t serial);
+
     std::mutex       state_table_mutex_;
     VulkanStateTable state_table_;
 
@@ -922,6 +959,24 @@ class VulkanStateTracker
 
     std::map<VkDevice, graphics::VulkanResourcesUtil> resource_utils_;
     std::mutex                                        resource_utils_mutex_;
+
+    struct AccelerationStructureSnapshotSubmission
+    {
+        uint64_t                                                               serial{ 0 };
+        VkDevice                                                               device{ VK_NULL_HANDLE };
+        std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
+    };
+    struct AccelerationStructureSnapshotQueueState
+    {
+        uint64_t                                            next_serial{ 0 };
+        VkDevice                                            device{ VK_NULL_HANDLE };
+        std::deque<AccelerationStructureSnapshotSubmission> submissions;
+    };
+    std::mutex                                                           acceleration_structure_snapshot_mutex_;
+    std::unordered_map<VkQueue, AccelerationStructureSnapshotQueueState> acceleration_structure_snapshot_queue_states_;
+    std::unordered_map<VkFence, std::pair<VkQueue, uint64_t>>            acceleration_structure_snapshot_fences_;
+    std::unordered_map<VkDevice, std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>>>
+        acceleration_structure_input_buffer_resources_;
 
     VulkanStateWriter::AssetFileOffsetsInfo asset_file_offsets_;
 };

@@ -54,6 +54,29 @@ bool VulkanRayTracingModifier::CanOptimize()
     return true;
 }
 
+void VulkanRayTracingModifier::TrackBufferDeviceAddress(VkDeviceAddress address, format::HandleId buffer_id)
+{
+    auto buffer_entry = buffer_entries_.find(buffer_id);
+    GFXRECON_ASSERT(buffer_entry != buffer_entries_.end());
+    if (buffer_entry == buffer_entries_.end())
+    {
+        return;
+    }
+
+    const VkDeviceSize size = buffer_entry->second.size;
+    GFXRECON_ASSERT(size <= std::numeric_limits<VkDeviceAddress>::max() - address);
+    if ((size == 0) || (size > std::numeric_limits<VkDeviceAddress>::max() - address))
+    {
+        return;
+    }
+
+    const VkDeviceAddress end = address + size;
+    buffer_device_address_ranges_.insert({ address, end }, buffer_id);
+    buffer_device_address_min_          = std::min(buffer_device_address_min_, address);
+    buffer_device_address_max_          = std::max(buffer_device_address_max_, end);
+    buffer_entry->second.device_address = address;
+}
+
 void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddress(const ApiCallInfo&            call_info,
                                                                 args::GetBufferDeviceAddress& args)
 {
@@ -61,9 +84,7 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddress(const ApiCallInf
     {
         return;
     }
-    const auto& buffer_id                     = args.pInfo.GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[args.result]     = buffer_id;
-    buffer_entries_[buffer_id].device_address = args.result;
+    TrackBufferDeviceAddress(args.result, args.pInfo.GetMetaStructPointer()->buffer);
 }
 
 void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressKHR(const ApiCallInfo&               call_info,
@@ -73,9 +94,7 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressKHR(const ApiCall
     {
         return;
     }
-    const auto& buffer_id                     = args.pInfo.GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[args.result]     = buffer_id;
-    buffer_entries_[buffer_id].device_address = args.result;
+    TrackBufferDeviceAddress(args.result, args.pInfo.GetMetaStructPointer()->buffer);
 }
 
 void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressEXT(const ApiCallInfo&               call_info,
@@ -85,9 +104,7 @@ void VulkanRayTracingModifier::Process_vkGetBufferDeviceAddressEXT(const ApiCall
     {
         return;
     }
-    const auto& buffer_id                     = args.pInfo.GetMetaStructPointer()->buffer;
-    buffer_device_addresses_[args.result]     = buffer_id;
-    buffer_entries_[buffer_id].device_address = args.result;
+    TrackBufferDeviceAddress(args.result, args.pInfo.GetMetaStructPointer()->buffer);
 }
 
 void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKHR(
@@ -130,9 +147,17 @@ void VulkanRayTracingModifier::Process_vkGetAccelerationStructureDeviceAddressKH
 
     if (acceleration_structure_entries_.find(as_id) != acceleration_structure_entries_.end())
     {
-        if (buffer_device_addresses_.find(args.result) != buffer_device_addresses_.end())
+        for (;;)
         {
-            buffer_device_addresses_.erase(args.result);
+            const auto ranges = buffer_device_address_ranges_.contains(args.result);
+            const auto range  = std::find_if(ranges.begin(), ranges.end(), [address = args.result](const auto& entry) {
+                return entry.interval.first == address;
+            });
+            if (range == ranges.end())
+            {
+                break;
+            }
+            buffer_device_address_ranges_.erase(range->interval);
         }
     }
 }
@@ -174,39 +199,27 @@ void VulkanRayTracingModifier::Process_vkGetRayTracingShaderGroupHandlesKHR(
 std::vector<format::AddressLocationInfo> VulkanRayTracingModifier::GetBufferDeviceAddressesInFillMemory(
     std::vector<format::AddressLocationInfo>& as_locations, const void* data, size_t size)
 {
-    if (buffer_device_addresses_.empty())
-    {
-        return {};
-    }
-
-    auto [min, max] = std::minmax_element(buffer_device_addresses_.begin(),
-                                          buffer_device_addresses_.end(),
-                                          [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    if (buffer_entries_.find(max->second) == buffer_entries_.end())
+    if (buffer_device_address_ranges_.empty())
     {
         return {};
     }
 
     std::vector<format::AddressLocationInfo> locations;
-    const VkDeviceAddress                    min_addr = min->first;
-    const VkDeviceAddress                    max_addr = max->first + buffer_entries_[max->second].size;
-    uint64_t*                                start    = (uint64_t*)data;
-    for (int i = 0; i < size / sizeof(VkDeviceAddress); i++)
+    const uint64_t*                          start = static_cast<const uint64_t*>(data);
+    for (size_t i = 0; i < size / sizeof(VkDeviceAddress); ++i)
     {
-        uint64_t*      ptr               = start + i;
-        const uint64_t value             = *ptr;
-        const uint64_t offset_in_memory  = (uint64_t)ptr - (uint64_t)start;
-        bool           value_is_in_range = value >= min_addr && value <= max_addr;
-        if (!value_is_in_range)
+        const uint64_t* ptr              = start + i;
+        const uint64_t  value            = *ptr;
+        const uint64_t  offset_in_memory = reinterpret_cast<uintptr_t>(ptr) - reinterpret_cast<uintptr_t>(start);
+        if ((value < buffer_device_address_min_) || (value >= buffer_device_address_max_))
         {
             continue;
         }
 
         // If there is acceleration structure address at the same offset, buffer address will no longer be found.
         auto as_location =
-            std::find_if(as_locations.begin(), as_locations.end(), [offset_in_memory](auto& as_location) {
-                return (offset_in_memory == as_location.offset_in_memory);
+            std::find_if(as_locations.begin(), as_locations.end(), [offset_in_memory](const auto& as_location) {
+                return offset_in_memory == as_location.offset_in_memory;
             });
 
         if (as_location != as_locations.end())
@@ -214,29 +227,17 @@ std::vector<format::AddressLocationInfo> VulkanRayTracingModifier::GetBufferDevi
             continue;
         }
 
-        auto entry =
-            std::find_if(buffer_device_addresses_.begin(), buffer_device_addresses_.end(), [value, this](auto& entry) {
-                auto it = buffer_entries_.find(entry.second);
-                if (it == buffer_entries_.end())
-                {
-                    return false;
-                }
-                const auto& buffer_entry = it->second;
-                return (value >= entry.first) && (value <= entry.first + buffer_entry.size);
-            });
-
-        if (entry == buffer_device_addresses_.end())
+        const auto entries = buffer_device_address_ranges_.contains(value);
+        for (const auto& entry : entries)
         {
-            continue;
+            format::AddressLocationInfo loc{};
+            loc.id               = entry.payload;
+            loc.original_address = entry.interval.first;
+            loc.adjusted_address = value;
+            loc.size             = entry.interval.second - entry.interval.first;
+            loc.offset_in_memory = offset_in_memory;
+            locations.push_back(loc);
         }
-
-        format::AddressLocationInfo loc{};
-        loc.id               = entry->second;
-        loc.original_address = entry->first;
-        loc.adjusted_address = value;
-        loc.size             = buffer_entries_[entry->second].size;
-        loc.offset_in_memory = offset_in_memory;
-        locations.push_back(loc);
     }
     return locations;
 }
@@ -1751,7 +1752,7 @@ bool VulkanRayTracingModifier::HeuristicCheck(format::HandleId command_buffer)
 
     for (const auto& a : instance_buffer_ranges_)
     {
-        if (transfer_ranges_.intersection(a))
+        if (transfer_ranges_.intersects(a))
         {
             return true;
         }
