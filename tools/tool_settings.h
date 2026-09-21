@@ -972,6 +972,9 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
     options.screenshot_dir         = GetScreenshotDir(arg_parser);
     options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
 
+    GetScreenshotSize(arg_parser, options.screenshot_width, options.screenshot_height);
+    options.screenshot_scale = GetScreenshotScale(arg_parser);
+
     // ----------------------------------------------------------------------------
     // Arm specific
     // ----------------------------------------------------------------------------
