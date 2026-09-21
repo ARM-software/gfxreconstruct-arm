@@ -170,6 +170,7 @@
     "vkCreateComputePipelines": "OverrideCreateComputePipelines",
     "vkDestroyShaderModule": "OverrideDestroyShaderModule",
     "vkDestroyPipeline": "OverrideDestroyPipeline",
+    "vkDestroyPipelineLayout": "OverrideDestroyPipelineLayout",
     "vkDestroyRenderPass": "OverrideDestroyRenderPass",
     "vkGetMicromapBuildSizesEXT": "OverrideGetMicromapBuildSizesEXT",
     "vkCreateMicromapEXT": "OverrideCreateMicromapEXT",

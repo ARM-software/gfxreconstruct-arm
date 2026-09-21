@@ -226,20 +226,6 @@ class VulkanDecoderBase : public ApiDecoder
     DispatchAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
                                                              const std::vector<format::HandleId>& children) override;
 
-    virtual void DispatchInitDx12AccelerationStructureCommand(
-        const format::InitDx12AccelerationStructureCommandHeader&             command_header,
-        const std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
-        const std::vector<uint8_t>&                                           build_inputs,
-        const uint8_t*                                                        build_inputs_data) override
-    {}
-
-    virtual void DispatchGetDx12AccelerationStructureSizeCommand(
-        const format::arm::GetDx12AccelerationStructureSizeCommandHeader& command_header,
-        const uint8_t*                                                    inputs_data) override
-    {}
-
-    virtual void DispatchDriverInfo(format::ThreadId thread_id, const format::DriverInfoBlock& info) override {}
-
     virtual void DispatchExeFileInfo(format::ThreadId thread_id, const format::ExeFileInfoBlock& info) override;
 
     virtual void DispatchSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header,
