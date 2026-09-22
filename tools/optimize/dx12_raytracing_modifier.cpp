@@ -1756,8 +1756,22 @@ void Dx12RayTracingModifier::Process_ID3D12CommandQueue_ExecuteCommandLists(
 {
     if (IsModificationPass())
     {
+        if (call_info.index == final_execute_index_)
+        {
+            if (present_after_final_execute_index_ == UINT64_MAX)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+            else if (present_after_final_execute_index_ < call_info.index)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+        }
         return;
     }
+
+    final_execute_index_    = call_info.index;
+    final_execute_queue_id_ = object_id;
 
     auto command_lists = ppCommandLists->GetPointer();
     for (UINT i = 0; i < NumCommandLists; ++i)
@@ -1770,6 +1784,94 @@ void Dx12RayTracingModifier::Process_ID3D12CommandQueue_ExecuteCommandLists(
             command_list_related_infos_[command_list_id].state_object_id = format::kNullHandleId;
         }
     }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device_CreateCommandQueue(
+    const ApiCallInfo&                                      call_info,
+    format::HandleId                                        object_id,
+    HRESULT                                                 return_value,
+    StructPointerDecoder<Decoded_D3D12_COMMAND_QUEUE_DESC>* pDesc,
+    Decoded_GUID                                            riid,
+    HandlePointerDecoder<void*>*                            ppCommandQueue)
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    if (SUCCEEDED(return_value) && (ppCommandQueue != nullptr) && (ppCommandQueue->GetPointer() != nullptr))
+    {
+        command_queue_devices_[*ppCommandQueue->GetPointer()] = object_id;
+    }
+}
+
+void Dx12RayTracingModifier::Process_ID3D12Device9_CreateCommandQueue1(
+    const ApiCallInfo&                                      call_info,
+    format::HandleId                                        object_id,
+    HRESULT                                                 return_value,
+    StructPointerDecoder<Decoded_D3D12_COMMAND_QUEUE_DESC>* pDesc,
+    Decoded_GUID                                            CreatorID,
+    Decoded_GUID                                            riid,
+    HandlePointerDecoder<void*>*                            ppCommandQueue)
+{
+    if (IsModificationPass())
+    {
+        return;
+    }
+
+    if (SUCCEEDED(return_value) && (ppCommandQueue != nullptr) && (ppCommandQueue->GetPointer() != nullptr))
+    {
+        command_queue_devices_[*ppCommandQueue->GetPointer()] = object_id;
+    }
+}
+
+void Dx12RayTracingModifier::Process_IDXGISwapChain_Present(
+    const ApiCallInfo& call_info, format::HandleId object_id, HRESULT return_value, UINT SyncInterval, UINT Flags)
+{
+    if (IsModificationPass())
+    {
+        if (call_info.index == present_after_final_execute_index_)
+        {
+            if (final_execute_index_ == UINT64_MAX)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+            else if (final_execute_index_ < call_info.index)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+        }
+        return;
+    }
+
+    present_after_final_execute_index_ = call_info.index;
+}
+
+void Dx12RayTracingModifier::Process_IDXGISwapChain1_Present1(
+    const ApiCallInfo&                                     call_info,
+    format::HandleId                                       object_id,
+    HRESULT                                                return_value,
+    UINT                                                   SyncInterval,
+    UINT                                                   PresentFlags,
+    StructPointerDecoder<Decoded_DXGI_PRESENT_PARAMETERS>* pPresentParameters)
+{
+    if (IsModificationPass())
+    {
+        if (call_info.index == present_after_final_execute_index_)
+        {
+            if (final_execute_index_ == UINT64_MAX)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+            else if (final_execute_index_ < call_info.index)
+            {
+                AddFinalCommandQueueSyncCalls();
+            }
+        }
+        return;
+    }
+
+    present_after_final_execute_index_ = call_info.index;
 }
 
 void Dx12RayTracingModifier::Process_ID3D12GraphicsCommandList_Reset(const ApiCallInfo& call_info,
@@ -2197,6 +2299,12 @@ void Dx12RayTracingModifier::Process_IUnknown_QueryInterface(const ApiCallInfo& 
     if (return_value != S_OK)
     {
         return;
+    }
+
+    const auto command_queue_device_iter = command_queue_devices_.find(object_id);
+    if (command_queue_device_iter != command_queue_devices_.end())
+    {
+        command_queue_devices_[handle_id] = command_queue_device_iter->second;
     }
 
     if (*riid.decoded_value == __uuidof(ID3D12Resource) || *riid.decoded_value == __uuidof(ID3D12Resource1) ||
@@ -2628,6 +2736,81 @@ void Dx12RayTracingModifier::CreateDeviceAndCheckRayTracingSupport()
             "DXR offline could not find a hardware adapter with raytracing support for prebuild info query.");
     }
 }
+
+void Dx12RayTracingModifier::AddFinalCommandQueueSyncCalls()
+{
+    // Keep optimizer-injected IDs outside the normal low, monotonically increasing capture ID range.
+    constexpr format::HandleId kInjectedFenceId      = std::numeric_limits<format::HandleId>::max() - 1;
+    constexpr uint64_t         kInjectedFenceEventId = std::numeric_limits<uint64_t>::max() - 2;
+
+    const auto command_queue_device_iter = command_queue_devices_.find(final_execute_queue_id_);
+    const auto final_execute_device_id   = (command_queue_device_iter != command_queue_devices_.end())
+                                               ? command_queue_device_iter->second
+                                               : format::kNullHandleId;
+
+    if ((final_execute_queue_id_ == format::kNullHandleId) || (final_execute_device_id == format::kNullHandleId))
+    {
+        GFXRECON_LOG_ERROR("Cannot insert final command queue synchronization because queue %" PRIu64
+                           " has no tracked device.",
+                           final_execute_queue_id_);
+        return;
+    }
+
+    constexpr UINT64 kFenceValue = 1;
+
+    {
+        auto new_call       = CreatePostCall();
+        new_call->type      = NewCallDataType::ApiCall;
+        new_call->call_id   = format::ApiCallId::ApiCall_ID3D12Device_CreateFence;
+        new_call->object_id = final_execute_device_id;
+        new_call->thread_id = 1;
+
+        encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+        encoder.EncodeUInt64Value(0);
+        encoder.EncodeEnumValue(D3D12_FENCE_FLAG_NONE);
+        encode::EncodeStruct(&encoder, IID_ID3D12Fence);
+        encoder.EncodeHandleIdPtr(&kInjectedFenceId);
+        encoder.EncodeInt32Value(S_OK);
+    }
+
+    {
+        auto new_call       = CreatePostCall();
+        new_call->type      = NewCallDataType::ApiCall;
+        new_call->call_id   = format::ApiCallId::ApiCall_ID3D12CommandQueue_Signal;
+        new_call->object_id = final_execute_queue_id_;
+        new_call->thread_id = 1;
+
+        encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+        encoder.EncodeHandleIdValue(kInjectedFenceId);
+        encoder.EncodeUInt64Value(kFenceValue);
+        encoder.EncodeInt32Value(S_OK);
+    }
+
+    {
+        auto new_call       = CreatePostCall();
+        new_call->type      = NewCallDataType::ApiCall;
+        new_call->call_id   = format::ApiCallId::ApiCall_ID3D12Fence_SetEventOnCompletion;
+        new_call->object_id = kInjectedFenceId;
+        new_call->thread_id = 1;
+
+        encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+        encoder.EncodeUInt64Value(kFenceValue);
+        encoder.EncodeUInt64Value(kInjectedFenceEventId);
+        encoder.EncodeInt32Value(S_OK);
+    }
+
+    {
+        auto new_call       = CreatePostCall();
+        new_call->type      = NewCallDataType::ApiCall;
+        new_call->call_id   = format::ApiCallId::ApiCall_IUnknown_Release;
+        new_call->object_id = kInjectedFenceId;
+        new_call->thread_id = 1;
+
+        encode::ParameterEncoder encoder(&new_call->parameter_buffer);
+        encoder.EncodeUInt32Value(0);
+    }
+}
+
 bool Dx12RayTracingModifier::CanOptimize()
 {
     if (opt_fillmem_ && (fill_cmd_resource_addresses_.size() > 0))

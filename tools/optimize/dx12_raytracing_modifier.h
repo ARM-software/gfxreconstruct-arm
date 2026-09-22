@@ -352,6 +352,36 @@ class Dx12RayTracingModifier : public util::Dx12ModifierBase
                                                    UINT                                      NumCommandLists,
                                                    HandlePointerDecoder<ID3D12CommandList*>* ppCommandLists) override;
 
+    virtual void Process_ID3D12Device_CreateCommandQueue(const ApiCallInfo& call_info,
+                                                         format::HandleId   object_id,
+                                                         HRESULT            return_value,
+                                                         StructPointerDecoder<Decoded_D3D12_COMMAND_QUEUE_DESC>* pDesc,
+                                                         Decoded_GUID                                            riid,
+                                                         HandlePointerDecoder<void*>* ppCommandQueue) override;
+
+    virtual void
+    Process_ID3D12Device9_CreateCommandQueue1(const ApiCallInfo&                                      call_info,
+                                              format::HandleId                                        object_id,
+                                              HRESULT                                                 return_value,
+                                              StructPointerDecoder<Decoded_D3D12_COMMAND_QUEUE_DESC>* pDesc,
+                                              Decoded_GUID                                            CreatorID,
+                                              Decoded_GUID                                            riid,
+                                              HandlePointerDecoder<void*>* ppCommandQueue) override;
+
+    virtual void Process_IDXGISwapChain_Present(const ApiCallInfo& call_info,
+                                                format::HandleId   object_id,
+                                                HRESULT            return_value,
+                                                UINT               SyncInterval,
+                                                UINT               Flags) override;
+
+    virtual void Process_IDXGISwapChain1_Present1(
+        const ApiCallInfo&                                     call_info,
+        format::HandleId                                       object_id,
+        HRESULT                                                return_value,
+        UINT                                                   SyncInterval,
+        UINT                                                   PresentFlags,
+        StructPointerDecoder<Decoded_DXGI_PRESENT_PARAMETERS>* pPresentParameters) override;
+
     virtual void Process_ID3D12GraphicsCommandList_Reset(const ApiCallInfo& call_info,
                                                          format::HandleId   object_id,
                                                          HRESULT            return_value,
@@ -434,6 +464,8 @@ class Dx12RayTracingModifier : public util::Dx12ModifierBase
     void AddPrebuildInfoResourceValueCommand();
 
     void AddFillMemoryResourceAddressCommand(const uint64_t object_id);
+
+    void AddFinalCommandQueueSyncCalls();
 
   private:
     struct ResourceObject
@@ -579,6 +611,11 @@ class Dx12RayTracingModifier : public util::Dx12ModifierBase
 
     Dx12PrebuildInfoResourceValueMap  prebuild_info_insert_values_;
     Dx12FillCommandResourceAddressMap fill_cmd_resource_addresses_;
+
+    std::unordered_map<format::HandleId, format::HandleId> command_queue_devices_;
+    uint64_t                                               final_execute_index_{ UINT64_MAX };
+    uint64_t                                               present_after_final_execute_index_{ UINT64_MAX };
+    format::HandleId                                       final_execute_queue_id_{ format::kNullHandleId };
 };
 
 GFXRECON_END_NAMESPACE(decode)
