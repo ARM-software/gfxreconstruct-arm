@@ -1135,6 +1135,7 @@ VkResult VulkanRebindAllocator::BindBufferMemory(VkBuffer                       
 
             if (result >= 0)
             {
+                resource_alloc_info->direct_map_offset = offset;
                 UpdateAllocInfo(*resource_alloc_info,
                                 VK_HANDLE_TO_UINT64(buffer),
                                 MemoryInfoType::kBasic,
@@ -1213,6 +1214,7 @@ VkResult VulkanRebindAllocator::BindBufferMemory2(uint32_t                      
 
                     if (result >= 0)
                     {
+                        resource_alloc_info->direct_map_offset = offset;
                         UpdateAllocInfo(*resource_alloc_info,
                                         VK_HANDLE_TO_UINT64(buffer),
                                         MemoryInfoType::kBasic,
@@ -3022,7 +3024,7 @@ VkResult VulkanRebindAllocator::MapResourceMemoryDirectImpl(VkDeviceSize     siz
 
             if (result == VK_SUCCESS)
             {
-                (*data) = reinterpret_cast<uint8_t*>(mem_info->mapped_pointer);
+                (*data) = reinterpret_cast<uint8_t*>(mem_info->mapped_pointer) + resource_alloc_info->direct_map_offset;
             }
         }
 

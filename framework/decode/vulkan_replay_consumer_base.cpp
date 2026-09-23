@@ -3694,14 +3694,6 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
             modified_extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
         }
 
-        // Detect if trace helpers extensions are supported, if not at replay time we will alter their behaviour
-        if (graphics::feature_util::IsSupportedExtension(available_extensions, VK_ARM_TRACE_HELPERS_EXTENSION_NAME) &&
-            graphics::feature_util::IsSupportedExtension(available_extensions,
-                                                         VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME))
-        {
-            is_trace_helpers_supported_ = true;
-        }
-
         // All VK_KHR_get_physical_device_properties2 functionalities are included in Vulkan 1.1,
         // otherwise always enable it if available.
         if (modified_create_info.pApplicationInfo != nullptr &&
@@ -4164,19 +4156,6 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
         // Fake VK_GOOGLE_display_timing if requested, but not supported
         sanitize_faked_extension(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
 
-        // If supported (replay being captured) don't remove it. Otherwise fake it
-        sanitize_faked_extension(VK_ARM_TRACE_HELPERS_EXTENSION_NAME);
-        if (sanitize_faked_extension(VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME))
-        {
-            // also remove related feature-struct from pnext-chain
-            if (graphics::vulkan_struct_remove_pnext<VkPhysicalDeviceExplicitHostUpdatesFeaturesARM>(
-                    &modified_create_info))
-            {
-                GFXRECON_LOG_WARNING("VkPhysicalDeviceExplicitHostUpdatesFeaturesARM instance was removed from "
-                                     "replay device creation");
-            }
-        }
-
         if (graphics::feature_util::IsSupportedExtension(available_extensions, VK_EXT_DEVICE_FAULT_EXTENSION_NAME))
         {
             modified_extensions.emplace_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
@@ -4194,6 +4173,27 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
         if (graphics::feature_util::IsSupportedExtension(available_extensions, VK_EXT_TOOLING_INFO_EXTENSION_NAME))
         {
             modified_extensions.emplace_back(VK_EXT_TOOLING_INFO_EXTENSION_NAME);
+        }
+
+        // Detect if trace helpers extensions are supported, if not at replay time we will alter their behaviour
+        if (graphics::feature_util::IsSupportedExtension(available_extensions, VK_ARM_TRACE_HELPERS_EXTENSION_NAME) &&
+            graphics::feature_util::IsSupportedExtension(available_extensions,
+                                                         VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME))
+        {
+            is_trace_helpers_supported_ = true;
+        }
+        else
+        {
+            // Use the fallback implementations when the replay device cannot enable the helpers.
+            sanitize_faked_extension(VK_ARM_TRACE_HELPERS_EXTENSION_NAME);
+            sanitize_faked_extension(VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME);
+
+            if (graphics::vulkan_struct_remove_pnext<VkPhysicalDeviceExplicitHostUpdatesFeaturesARM>(
+                    &modified_create_info))
+            {
+                GFXRECON_LOG_WARNING("VkPhysicalDeviceExplicitHostUpdatesFeaturesARM instance was removed from "
+                                     "replay device creation");
+            }
         }
 
         if (options_.swapchain_option == util::SwapchainOption::kOffscreen)
@@ -16644,7 +16644,7 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
 
         if (replay_time_checksum != capture_time_checksum)
         {
-            GFXRECON_LOG_ERROR("Checksum diff for buffer %llu with offset %llu. Capture time checksum: %llu; Replay "
+            GFXRECON_LOG_FATAL("Checksum diff for buffer %llu with offset %llu. Capture time checksum: %llu; Replay "
                                "time checksum: %llu",
                                buffer_info->capture_id,
                                offset,
@@ -16660,12 +16660,12 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
 
     if (replay_time_checksum != capture_time_checksum)
     {
-        GFXRECON_LOG_WARNING("Checksum diff for buffer %llu with offset %llu. Capture time checksum: %llu; Replay "
-                             "time checksum: %llu",
-                             buffer_info->capture_id,
-                             offset,
-                             capture_time_checksum,
-                             replay_time_checksum);
+        GFXRECON_LOG_FATAL("Checksum diff for buffer %llu with offset %llu. Capture time checksum: %llu; Replay "
+                           "time checksum: %llu",
+                           buffer_info->capture_id,
+                           offset,
+                           capture_time_checksum,
+                           replay_time_checksum);
     }
 
     return result;

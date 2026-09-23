@@ -534,8 +534,12 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
 
     struct ResourceAllocInfo
     {
-        MemoryInfoType                    memory_info_type;
-        std::vector<VmaMemoryInfo*>       bound_memory_infos; // VideoSession and sparse could be multiple bindings.
+        MemoryInfoType              memory_info_type;
+        std::vector<VmaMemoryInfo*> bound_memory_infos; // VideoSession and sparse could be multiple bindings.
+        // Offset of this resource in its VMA allocation. vmaMapMemory returns the allocation base,
+        // while a resource may be bound to a subrange when multiple resources alias it.
+        VkDeviceSize direct_map_offset{ 0 };
+
         std::vector<VkMemoryRequirements> capture_mem_reqs{};
 
         VkObjectType      object_type{ VK_OBJECT_TYPE_UNKNOWN };
