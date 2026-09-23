@@ -1464,6 +1464,7 @@ VkResult VulkanRebindAllocator::BindImageMemory(VkImage                         
 
                 if (result >= 0)
                 {
+                    resource_alloc_info->direct_map_offset = offset;
                     UpdateAllocInfo(*resource_alloc_info,
                                     VK_HANDLE_TO_UINT64(image),
                                     MemoryInfoType::kBasic,
@@ -1560,6 +1561,7 @@ VkResult VulkanRebindAllocator::BindImageMemory2(uint32_t                     bi
 
                         if (result >= 0)
                         {
+                            image_alloc_info_ptr->direct_map_offset = offset;
                             UpdateAllocInfo(*image_alloc_info_ptr,
                                             VK_HANDLE_TO_UINT64(image),
                                             MemoryInfoType::kBasic,
@@ -4952,7 +4954,8 @@ VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                       
 
                     if (result >= 0)
                     {
-                        auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
+                        auto direct_map_offset = GetRebindOffsetFromVMA(memory_offset, *vma_mem_info);
+                        auto offset            = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
 
                         VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
                         bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
@@ -4963,6 +4966,7 @@ VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                       
 
                         if (result >= 0)
                         {
+                            resource_alloc_info->direct_map_offset = direct_map_offset;
                             UpdateAllocInfo(*resource_alloc_info,
                                             VK_HANDLE_TO_UINT64(tensor),
                                             MemoryInfoType::kBasic,
@@ -4999,7 +5003,8 @@ VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                       
                 if (result >= 0)
                 {
 
-                    auto offset = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
+                    auto direct_map_offset = GetRebindOffsetFromVMA(memory_offset, *vma_mem_info);
+                    auto offset            = GetRebindOffsetFromOriginalDeviceMemory(memory_offset, *vma_mem_info);
 
                     VkBindTensorMemoryInfoARM bind_tensor_memory_info{};
                     bind_tensor_memory_info.sType        = VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM;
@@ -5010,6 +5015,7 @@ VkResult VulkanRebindAllocator::BindTensorMemory(uint32_t                       
 
                     if (result >= 0)
                     {
+                        resource_alloc_info->direct_map_offset = direct_map_offset;
                         UpdateAllocInfo(*resource_alloc_info,
                                         VK_HANDLE_TO_UINT64(tensor),
                                         MemoryInfoType::kBasic,
