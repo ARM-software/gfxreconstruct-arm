@@ -2824,6 +2824,44 @@ void gfxrecon::encode::VulkanStateTracker::DestroyState(vulkan_wrappers::BufferW
     GFXRECON_ASSERT(buffer_wrapper != nullptr && buffer_wrapper->device != nullptr);
     buffer_wrapper->create_parameters = nullptr;
 
+    // A compacted child can outlive its source storage buffer. Preserve each source
+    // build state before this buffer leaves the state table, so its live children can
+    // recreate the source before replaying their compaction copy.
+    for (const auto& [source_id, source_state] : buffer_wrapper->acceleration_structures)
+    {
+        if (source_state == nullptr || source_state->copy_destinations.empty())
+        {
+            continue;
+        }
+
+        for (const format::HandleId destination_id : source_state->copy_destinations)
+        {
+            auto* destination_wrapper = state_table_.GetVulkanAccelerationStructureKHRWrapper(destination_id);
+            if (destination_wrapper == nullptr)
+            {
+                continue;
+            }
+
+            auto* destination_buffer = state_table_.GetVulkanBufferWrapper(destination_wrapper->buffer);
+            if (destination_buffer == nullptr)
+            {
+                continue;
+            }
+
+            auto destination_state = destination_buffer->acceleration_structures.find(destination_id);
+            if (destination_state == destination_buffer->acceleration_structures.end())
+            {
+                continue;
+            }
+
+            auto& dependencies = destination_state->second->dependencies;
+            if (std::find(dependencies.begin(), dependencies.end(), source_state) == dependencies.end())
+            {
+                dependencies.push_back(source_state);
+            }
+        }
+    }
+
     if (buffer_wrapper != nullptr && buffer_wrapper->device != nullptr)
     {
         device_address_trackers_[buffer_wrapper->device->handle].RemoveBuffer(buffer_wrapper);
