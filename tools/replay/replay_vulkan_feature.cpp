@@ -110,16 +110,6 @@ const char kSerializeComputeAndTransfer[]           = "--serialize-compute-and-t
 const char kOmitNullHardwareBuffersShortOption[]    = "--onhb";
 const char kOmitNullHardwareBuffersLongOption[]     = "--omit-null-hardware-buffers";
 
-// Arm specific
-const char kBlackholeOption[]                    = "--blackhole";
-const char kOmitAllHardwareBuffersShortOption[]  = "--oahb";
-const char kOmitAllHardwareBuffersLongOption[]   = "--omit-all-hardware-buffers";
-const char kColorspaceFallbackAliasOption[]      = "--colorspace-fallback";
-const char kUseExtFrameBoundaryOption[]          = "--use-ext-frame-boundary";
-const char kDisableSubpassFusionShortOption[]    = "--dsf";
-const char kDisableSubpassFusionLongOption[]     = "--disable-subpass-fusion";
-const char kMarkingLayersArgument[]              = "--marking-layers";
-
 const char kPresentModeCapture[]     = "capture";
 const char kPresentModeImmediate[]   = "immediate";
 const char kPresentModeMailbox[]     = "mailbox";
@@ -130,6 +120,16 @@ const char kPresentModeFifoRelaxed[] = "fifo_relaxed";
 const std::vector<std::string> kPresentModeValues = {
     kPresentModeCapture, kPresentModeImmediate, kPresentModeMailbox, kPresentModeFifo, kPresentModeFifoRelaxed
 };
+
+// Arm specific
+const char kBlackholeOption[]                   = "--blackhole";
+const char kOmitAllHardwareBuffersShortOption[] = "--oahb";
+const char kOmitAllHardwareBuffersLongOption[]  = "--omit-all-hardware-buffers";
+const char kColorspaceFallbackAliasOption[]     = "--colorspace-fallback";
+const char kUseExtFrameBoundaryOption[]         = "--use-ext-frame-boundary";
+const char kDisableSubpassFusionShortOption[]   = "--dsf";
+const char kDisableSubpassFusionLongOption[]    = "--disable-subpass-fusion";
+const char kMarkingLayersArgument[]             = "--marking-layers";
 
 static void CheckActiveLayers(const std::string& list)
 {
@@ -491,7 +491,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.blackhole = true;
     }
 
-    replay_options.omit_all_hardware_buffers  = arg_parser.IsOptionSet(kOmitAllHardwareBuffersShortOption);
+    replay_options.omit_all_hardware_buffers = arg_parser.IsOptionSet(kOmitAllHardwareBuffersShortOption);
 
     if (arg_parser.IsOptionSet(kUseExtFrameBoundaryOption))
     {
@@ -549,8 +549,10 @@ std::vector<util::FeatureOptionDesc> ReplayVulkanFeature::GetOptionDescs() const
                true,
                kSurfaceIndexArgument },
              { "<mode>",
-               { "Set the VkPresentModeKHR of the swapchain.",
-                 "    capture       The present mode from capture time.",
+               { "Set the VkPresentModeKHR of the swapchain. VK_PRESENT_MODE_FIFO_KHR is",
+                 "used if the selected present mode is not available on the replay",
+                 "device. Available present modes:",
+                 "    capture       The present mode used at capture time. (default)",
                  "    immediate     VK_PRESENT_MODE_IMMEDIATE_KHR",
                  "    mailbox       VK_PRESENT_MODE_MAILBOX_KHR",
                  "    fifo          VK_PRESENT_MODE_FIFO_KHR",
