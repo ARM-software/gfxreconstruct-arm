@@ -130,7 +130,9 @@ class KhronosStructHandleWrappersBodyGenerator():
         write('    {', file=self.outFile)
         write('    default:', file=self.outFile)
         write(
-            '        GFXRECON_LOG_WARNING("Failed to copy entire {0} chain when unwrapping handles due to unrecognized {1} %d", base->{1});'
+            ('        GFXRECON_LOG_WARNING("Skipping {0} structure with unrecognized {1} %d when unwrapping handles; subsequent structures will still be processed", base->{1});'
+             if api_data.api_name == 'Vulkan' else
+             '        GFXRECON_LOG_WARNING("Failed to copy entire {0} chain when unwrapping handles due to unrecognized {1} %d", base->{1});')
             .format(ext_var_name, type_var_name),
             file=self.outFile
         )
@@ -195,6 +197,19 @@ class KhronosStructHandleWrappersBodyGenerator():
             file=self.outFile
         )
         write('            }', file=self.outFile)
+        if api_data.api_name == 'Vulkan':
+            write('            else', file=self.outFile)
+            write('            {', file=self.outFile)
+            write(
+                '                // An unknown structure must not discard supported structures that follow it.',
+                file=self.outFile
+            )
+            write(
+                '                return Unwrap{0}StructHandles(base->{1}, unwrap_memory);'
+                .format(ext_struct_name, ext_var_name),
+                file=self.outFile
+            )
+            write('            }', file=self.outFile)
         write('            return copy;', file=self.outFile)
         write('        }', file=self.outFile)
         for base_type in sorted(self.all_possible_extendable_structs):

@@ -31,6 +31,7 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_tracker.h"
+#include "generated/generated_vulkan_struct_handle_wrappers.h"
 #include "format/format.h"
 #include "format/format_util.h"
 
@@ -75,6 +76,152 @@ TEST_CASE("handles can be wrapped and unwrapped", "[wrapper]")
     gfxrecon::encode::vulkan_wrappers::DestroyWrappedHandle<gfxrecon::encode::vulkan_wrappers::BufferWrapper>(buffer);
 
     gfxrecon::util::Log::Release();
+}
+
+TEST_CASE("Unknown device feature nodes do not truncate the pNext chain", "[wrapper][pnext]")
+{
+    using namespace gfxrecon::encode;
+
+    VkPhysicalDeviceBufferDeviceAddressFeatures address{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES
+    };
+    address.bufferDeviceAddress = VK_TRUE;
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptors{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT
+    };
+    descriptors.descriptorBuffer = VK_TRUE;
+    VkPhysicalDeviceTimelineSemaphoreFeatures timeline{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES };
+    timeline.timelineSemaphore = VK_TRUE;
+
+    // Deliberately unknown even after new extension implementations are added.
+    VkBaseInStructure unknown{ VK_STRUCTURE_TYPE_MAX_ENUM, nullptr };
+    VkBaseInStructure another_unknown{ VK_STRUCTURE_TYPE_MAX_ENUM, nullptr };
+    const auto*       address_base     = reinterpret_cast<const VkBaseInStructure*>(&address);
+    const auto*       descriptors_base = reinterpret_cast<const VkBaseInStructure*>(&descriptors);
+
+    VkDeviceCreateInfo info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+    info.pNext           = &address;
+    address.pNext        = &descriptors;
+    descriptors.pNext    = &timeline;
+    bool expect_features = true;
+
+    SECTION("Unknown head")
+    {
+        info.pNext    = &unknown;
+        unknown.pNext = address_base;
+    }
+    SECTION("Unknown middle")
+    {
+        address.pNext = &unknown;
+        unknown.pNext = descriptors_base;
+    }
+    SECTION("Consecutive unknown nodes")
+    {
+        address.pNext         = &unknown;
+        unknown.pNext         = &another_unknown;
+        another_unknown.pNext = descriptors_base;
+    }
+    SECTION("Unknown tail")
+    {
+        timeline.pNext = &unknown;
+    }
+    SECTION("Only unknown nodes")
+    {
+        info.pNext      = &unknown;
+        unknown.pNext   = &another_unknown;
+        expect_features = false;
+    }
+    SECTION("Empty chain")
+    {
+        info.pNext      = nullptr;
+        expect_features = false;
+    }
+    SECTION("All nodes supported") {}
+
+    const auto original_info_next            = info.pNext;
+    const auto original_address_next         = address.pNext;
+    const auto original_descriptors_next     = descriptors.pNext;
+    const auto original_timeline_next        = timeline.pNext;
+    const auto original_unknown_next         = unknown.pNext;
+    const auto original_another_unknown_next = another_unknown.pNext;
+
+    HandleUnwrapMemory memory;
+    const auto*        copied = vulkan_wrappers::UnwrapStructPtrHandles(&info, &memory);
+    REQUIRE(copied != nullptr);
+    REQUIRE(copied != &info);
+    if (expect_features)
+    {
+        const auto* copied_address = static_cast<const VkPhysicalDeviceBufferDeviceAddressFeatures*>(copied->pNext);
+        REQUIRE(copied_address != nullptr);
+        REQUIRE(copied_address != &address);
+        REQUIRE(copied_address->sType == address.sType);
+        REQUIRE(copied_address->bufferDeviceAddress == VK_TRUE);
+        const auto* copied_descriptors =
+            static_cast<const VkPhysicalDeviceDescriptorBufferFeaturesEXT*>(copied_address->pNext);
+        REQUIRE(copied_descriptors != nullptr);
+        REQUIRE(copied_descriptors != &descriptors);
+        REQUIRE(copied_descriptors->sType == descriptors.sType);
+        REQUIRE(copied_descriptors->descriptorBuffer == VK_TRUE);
+        const auto* copied_timeline =
+            static_cast<const VkPhysicalDeviceTimelineSemaphoreFeatures*>(copied_descriptors->pNext);
+        REQUIRE(copied_timeline != nullptr);
+        REQUIRE(copied_timeline != &timeline);
+        REQUIRE(copied_timeline->sType == timeline.sType);
+        REQUIRE(copied_timeline->timelineSemaphore == VK_TRUE);
+        REQUIRE(copied_timeline->pNext == nullptr);
+    }
+    else
+    {
+        REQUIRE(copied->pNext == nullptr);
+    }
+
+    REQUIRE(info.pNext == original_info_next);
+    REQUIRE(address.pNext == original_address_next);
+    REQUIRE(descriptors.pNext == original_descriptors_next);
+    REQUIRE(timeline.pNext == original_timeline_next);
+    REQUIRE(unknown.pNext == original_unknown_next);
+    REQUIRE(another_unknown.pNext == original_another_unknown_next);
+}
+
+TEST_CASE("Device group nodes after an unknown feature are preserved", "[wrapper][pnext]")
+{
+    using namespace gfxrecon::encode;
+    using namespace gfxrecon::encode::vulkan_wrappers;
+
+    const VkPhysicalDevice driver_device = gfxrecon::format::FromHandleId<VkPhysicalDevice>(0xabcd);
+    VkPhysicalDevice       app_device    = driver_device;
+
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptors{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT
+    };
+    descriptors.descriptorBuffer = VK_TRUE;
+    VkDeviceGroupDeviceCreateInfo group{ VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO };
+    group.physicalDeviceCount = 1;
+    group.pPhysicalDevices    = &app_device;
+    group.pNext               = &descriptors;
+    VkBaseInStructure  unknown{ VK_STRUCTURE_TYPE_MAX_ENUM, reinterpret_cast<const VkBaseInStructure*>(&group) };
+    VkDeviceCreateInfo info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+    info.pNext = &unknown;
+
+    HandleUnwrapMemory memory;
+    const auto*        copied       = UnwrapStructPtrHandles(&info, &memory);
+    const auto*        copied_group = static_cast<const VkDeviceGroupDeviceCreateInfo*>(copied->pNext);
+    REQUIRE(copied_group != nullptr);
+    REQUIRE(copied_group != &group);
+    REQUIRE(copied_group->sType == group.sType);
+    REQUIRE(copied_group->physicalDeviceCount == 1);
+    REQUIRE(copied_group->pPhysicalDevices[0] == driver_device);
+    const auto* copied_descriptors =
+        static_cast<const VkPhysicalDeviceDescriptorBufferFeaturesEXT*>(copied_group->pNext);
+    REQUIRE(copied_descriptors != nullptr);
+    REQUIRE(copied_descriptors->sType == descriptors.sType);
+    REQUIRE(copied_descriptors->descriptorBuffer == VK_TRUE);
+    REQUIRE(copied_descriptors->pNext == nullptr);
+    REQUIRE(info.pNext == &unknown);
+    REQUIRE(unknown.pNext == reinterpret_cast<const VkBaseInStructure*>(&group));
+    REQUIRE(group.pNext == &descriptors);
+    REQUIRE(group.pPhysicalDevices == &app_device);
+    REQUIRE(app_device == driver_device);
 }
 
 namespace // Support functions and data for TEST_CASE("Unsupported extension screening")

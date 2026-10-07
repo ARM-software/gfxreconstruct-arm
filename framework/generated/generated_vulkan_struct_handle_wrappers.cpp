@@ -12680,7 +12680,7 @@ VkBaseInStructure* CopyPNextStruct(const VkBaseInStructure* base, HandleUnwrapMe
     switch (base->sType)
     {
     default:
-        GFXRECON_LOG_WARNING("Failed to copy entire pNext chain when unwrapping handles due to unrecognized sType %d", base->sType);
+        GFXRECON_LOG_WARNING("Skipping pNext structure with unrecognized sType %d when unwrapping handles; subsequent structures will still be processed", base->sType);
         break;
     case VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO:
         copy = reinterpret_cast<VkBaseInStructure*>(MakeUnwrapStructs(reinterpret_cast<const VkLayerInstanceCreateInfo*>(base), 1, unwrap_memory));
@@ -16110,6 +16110,11 @@ const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwr
             if (copy != nullptr)
             {
                 copy->pNext = reinterpret_cast<const VkBaseInStructure*>(UnwrapPNextStructHandles(base->pNext, unwrap_memory));
+            }
+            else
+            {
+                // An unknown structure must not discard supported structures that follow it.
+                return UnwrapPNextStructHandles(base->pNext, unwrap_memory);
             }
             return copy;
         }
