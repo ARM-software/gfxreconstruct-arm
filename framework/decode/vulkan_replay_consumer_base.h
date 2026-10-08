@@ -1158,6 +1158,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                             const VulkanDescriptorUpdateTemplateInfo* descriptor_update_template_info,
                                             const StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
+    VkResult
+    OverrideWriteResourceDescriptorsEXT(PFN_vkWriteResourceDescriptorsEXT                          func,
+                                        VkResult                                                   original_result,
+                                        const VulkanDeviceInfo*                                    device_info,
+                                        uint32_t                                                   resourceCount,
+                                        StructPointerDecoder<Decoded_VkResourceDescriptorInfoEXT>* pResources,
+                                        const StructPointerDecoder<Decoded_VkHostAddressRangeEXT>* pDescriptors);
+
     VkResult OverrideCreateShaderModule(PFN_vkCreateShaderModule                                      func,
                                         VkResult                                                      original_result,
                                         const VulkanDeviceInfo*                                       device_info,

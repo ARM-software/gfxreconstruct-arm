@@ -32,6 +32,7 @@
 
 #include <cassert>
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -498,6 +499,91 @@ void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantAR
                 "Couldn't find VkTensorDescriptionARM pNext structure in VkDataGraphPipelineConstantARM; found: %s",
                 util::ToString((reinterpret_cast<const VkBaseInStructure*>(value.pNext))->sType).c_str());
         }
+    }
+}
+
+void EncodeStruct(ParameterEncoder* encoder, const VkResourceDescriptorInfoEXT& value)
+{
+    encoder->EncodeEnumValue(value.sType);
+    EncodePNextStruct(encoder, value.pNext);
+    encoder->EncodeEnumValue(value.type);
+
+    switch (value.type)
+    {
+        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            EncodeStructPtr(encoder, value.data.pTexelBuffer);
+            break;
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            EncodeStructPtr(encoder, value.data.pAddressRange);
+            break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            EncodeStructPtr(encoder, value.data.pImage);
+            break;
+        case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+            EncodeStructPtr(encoder, value.data.pTensorARM);
+            break;
+        default:
+            break;
+    }
+}
+
+void EncodeStruct(ParameterEncoder* encoder, const VkDescriptorSetAndBindingMappingEXT& value)
+{
+
+    encoder->EncodeEnumValue(value.sType);
+    EncodePNextStruct(encoder, value.pNext);
+    encoder->EncodeUInt32Value(value.descriptorSet);
+    encoder->EncodeUInt32Value(value.firstBinding);
+    encoder->EncodeUInt32Value(value.bindingCount);
+    encoder->EncodeEnumValue(value.resourceMask);
+    encoder->EncodeEnumValue(value.source);
+
+    switch (value.source)
+    {
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+            EncodeStruct(encoder, value.sourceData.constantOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+            EncodeStruct(encoder, value.sourceData.pushIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+            EncodeStruct(encoder, value.sourceData.indirectIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+            EncodeStruct(encoder, value.sourceData.indirectIndexArray);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT:
+            EncodeStruct(encoder, value.sourceData.heapData);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_DATA_EXT:
+            encoder->EncodeUInt32Value(value.sourceData.pushDataOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_ADDRESS_EXT:
+            encoder->EncodeUInt32Value(value.sourceData.pushAddressOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_INDIRECT_ADDRESS_EXT:
+            EncodeStruct(encoder, value.sourceData.indirectAddress);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+            EncodeStruct(encoder, value.sourceData.shaderRecordIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
+            encoder->EncodeUInt32Value(value.sourceData.shaderRecordDataOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
+            encoder->EncodeUInt32Value(value.sourceData.shaderRecordAddressOffset);
+            break;
+        default:
+            break;
     }
 }
 

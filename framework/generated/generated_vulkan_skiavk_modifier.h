@@ -1900,6 +1900,45 @@ class VulkanSkiaModifier : public util::VulkanModifierBase
     void Process_vkCmdCopyGpaSessionResultsAMD(
         const ApiCallInfo&                          call_info,
         args::CmdCopyGpaSessionResultsAMD&          args) override { CheckSkiavk(args.commandBuffer);}
+    void Process_vkWriteSamplerDescriptorsEXT(
+        const ApiCallInfo&                          call_info,
+        args::WriteSamplerDescriptorsEXT&           args) override { CheckSkiavk(args.device);}
+
+    void Process_vkWriteResourceDescriptorsEXT(
+        const ApiCallInfo&                          call_info,
+        args::WriteResourceDescriptorsEXT&          args) override { CheckSkiavk(args.device);}
+
+    void Process_vkCmdBindSamplerHeapEXT(
+        const ApiCallInfo&                          call_info,
+        args::CmdBindSamplerHeapEXT&                args) override { CheckSkiavk(args.commandBuffer);}
+
+    void Process_vkCmdBindResourceHeapEXT(
+        const ApiCallInfo&                          call_info,
+        args::CmdBindResourceHeapEXT&               args) override { CheckSkiavk(args.commandBuffer);}
+
+    void Process_vkCmdPushDataEXT(
+        const ApiCallInfo&                          call_info,
+        args::CmdPushDataEXT&                       args) override { CheckSkiavk(args.commandBuffer);}
+
+    void Process_vkGetImageOpaqueCaptureDataEXT(
+        const ApiCallInfo&                          call_info,
+        args::GetImageOpaqueCaptureDataEXT&         args) override { CheckSkiavk(args.device);}
+
+    void Process_vkGetPhysicalDeviceDescriptorSizeEXT(
+        const ApiCallInfo&                          call_info,
+        args::GetPhysicalDeviceDescriptorSizeEXT&   args) override { CheckSkiavk(args.physicalDevice);}
+
+    void Process_vkRegisterCustomBorderColorEXT(
+        const ApiCallInfo&                          call_info,
+        args::RegisterCustomBorderColorEXT&         args) override { CheckSkiavk(args.device);}
+
+    void Process_vkUnregisterCustomBorderColorEXT(
+        const ApiCallInfo&                          call_info,
+        args::UnregisterCustomBorderColorEXT&       args) override { CheckSkiavk(args.device);}
+
+    void Process_vkGetTensorOpaqueCaptureDataARM(
+        const ApiCallInfo&                          call_info,
+        args::GetTensorOpaqueCaptureDataARM&        args) override { CheckSkiavk(args.device);}
     void Process_vkCmdSetSampleLocationsEXT(
         const ApiCallInfo&                          call_info,
         args::CmdSetSampleLocationsEXT&             args) override { CheckSkiavk(args.commandBuffer);}

@@ -50,6 +50,11 @@ void MapStructHandles(Decoded_VkDescriptorGetInfoEXT* wrapper, const CommonObjec
 void MapStructHandles(Decoded_VkIndirectExecutionSetCreateInfoEXT* wrapper,
                       const CommonObjectInfoTable&                 object_info_table);
 
+void MapStructHandles(Decoded_VkResourceDescriptorInfoEXT* wrapper, const CommonObjectInfoTable& object_info_table);
+
+void MapStructHandles(Decoded_VkDescriptorSetAndBindingMappingEXT* wrapper,
+                      const CommonObjectInfoTable&                 object_info_table);
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

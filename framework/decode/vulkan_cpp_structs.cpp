@@ -24,6 +24,7 @@
 #include "generated/generated_vulkan_cpp_structs.h"
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "generated/generated_vulkan_cpp_consumer_extension.h"
+#include <vulkan/vulkan_core.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -1644,6 +1645,163 @@ std::string GenerateStruct_VkDataGraphPipelineConstantARM(std::ostream&         
     GFXRECON_UNREFERENCED_PARAMETER(metaInfo);
     GFXRECON_UNREFERENCED_PARAMETER(consumer);
     return {};
+}
+
+std::string GenerateStruct_VkDescriptorSetAndBindingMappingEXT(std::ostream&                                out,
+                                                               const VkDescriptorSetAndBindingMappingEXT*   structInfo,
+                                                               Decoded_VkDescriptorSetAndBindingMappingEXT* metaInfo,
+                                                               VulkanCppConsumerBase&                       consumer)
+{
+    std::stringstream struct_body;
+    std::string       pnext_name = GenerateExtension(out, structInfo->pNext, metaInfo->pNext, consumer);
+
+    // sType
+    struct_body << "\t"
+                << "VkStructureType(" << structInfo->sType << ")"
+                << "," << std::endl;
+    // pNext
+    struct_body << "\t\t\t" << pnext_name << "," << std::endl;
+    // descriptorSet
+    struct_body << "\t\t\t" << structInfo->descriptorSet << "," << std::endl;
+    // firstBinding
+    struct_body << "\t\t\t" << structInfo->firstBinding << "," << std::endl;
+    // bindingCount
+    struct_body << "\t\t\t" << structInfo->bindingCount << "," << std::endl;
+    // resourceMask
+    struct_body << "\t\t\t"
+                << "VkSpirvResourceTypeFlagsEXT(" << structInfo->resourceMask << ")," << std::endl;
+    // source
+    struct_body << "\t\t\t"
+                << "VkDescriptorMappingSourceEXT(" << structInfo->source << ")," << std::endl;
+    // sourceData
+    std::string sourceData = "";
+    switch (structInfo->source)
+    {
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceConstantOffsetEXT(
+                out, &(structInfo->sourceData.constantOffset), metaInfo->sourceData->constantOffset, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourcePushIndexEXT(
+                out, &(structInfo->sourceData.pushIndex), metaInfo->sourceData->pushIndex, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceIndirectIndexEXT(
+                out, &(structInfo->sourceData.indirectIndex), metaInfo->sourceData->indirectIndex, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceIndirectIndexArrayEXT(
+                out, &(structInfo->sourceData.indirectIndexArray), metaInfo->sourceData->indirectIndexArray, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceHeapDataEXT(
+                out, &(structInfo->sourceData.heapData), metaInfo->sourceData->heapData, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_DATA_EXT:
+            sourceData = std::to_string(structInfo->sourceData.pushDataOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_ADDRESS_EXT:
+            sourceData = std::to_string(structInfo->sourceData.pushAddressOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_INDIRECT_ADDRESS_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceIndirectAddressEXT(
+                out, &(structInfo->sourceData.indirectAddress), metaInfo->sourceData->indirectAddress, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+            sourceData = GenerateStruct_VkDescriptorMappingSourceShaderRecordIndexEXT(
+                out, &(structInfo->sourceData.shaderRecordIndex), metaInfo->sourceData->shaderRecordIndex, consumer);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
+            sourceData = std::to_string(structInfo->sourceData.shaderRecordDataOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
+            sourceData = std::to_string(structInfo->sourceData.shaderRecordAddressOffset);
+            break;
+        default:
+            break;
+    }
+    struct_body << "\t\t\t" << sourceData << "," << std::endl;
+
+    std::string variable_name = consumer.AddStruct(struct_body, "descriptorSetAndBindingMapping");
+    out << "\t\t"
+        << "VkDescriptorSetAndBindingMappingEXT " << variable_name << " {" << std::endl;
+    out << "\t\t" << struct_body.str() << std::endl;
+    out << "\t\t"
+        << "};" << std::endl;
+    return variable_name;
+}
+
+std::string GenerateStruct_VkResourceDescriptorDataEXT(std::ostream&                        out,
+                                                       const VkResourceDescriptorDataEXT*   structInfo,
+                                                       Decoded_VkResourceDescriptorDataEXT* metaInfo,
+                                                       VulkanCppConsumerBase&               consumer);
+
+std::string GenerateStruct_VkResourceDescriptorInfoEXT(std::ostream&                        out,
+                                                       const VkResourceDescriptorInfoEXT*   structInfo,
+                                                       Decoded_VkResourceDescriptorInfoEXT* metaInfo,
+                                                       VulkanCppConsumerBase&               consumer)
+{
+
+    std::stringstream struct_body;
+    std::string       pnext_name = GenerateExtension(out, structInfo->pNext, metaInfo->pNext, consumer);
+
+    // sType
+    struct_body << "\t"
+                << "VkStructureType(" << structInfo->sType << ")"
+                << "," << std::endl;
+    // pNext
+    struct_body << "\t\t\t" << pnext_name << "," << std::endl;
+    // type
+    struct_body << "\t\t\t"
+                << "VkDescriptorType(" << structInfo->type << ")"
+                << "," << std::endl;
+    // data
+    std::string data = "NULL";
+    switch (structInfo->type)
+    {
+        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            data = GenerateStruct_VkTexelBufferDescriptorInfoEXT(out,
+                                                                 metaInfo->decoded_value->data.pTexelBuffer,
+                                                                 metaInfo->data->pTexelBuffer->GetMetaStructPointer(),
+                                                                 consumer);
+            break;
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            data = GenerateStruct_VkDeviceAddressRangeKHR(out,
+                                                          metaInfo->decoded_value->data.pAddressRange,
+                                                          metaInfo->data->pAddressRange->GetMetaStructPointer(),
+                                                          consumer);
+            break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            data = GenerateStruct_VkImageDescriptorInfoEXT(
+                out, metaInfo->decoded_value->data.pImage, metaInfo->data->pImage->GetMetaStructPointer(), consumer);
+            break;
+        case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+            data = GenerateStruct_VkTensorViewCreateInfoARM(out,
+                                                            metaInfo->decoded_value->data.pTensorARM,
+                                                            metaInfo->data->pTensorARM->GetMetaStructPointer(),
+                                                            consumer);
+            break;
+        default:
+            break;
+    }
+    struct_body << "\t\t\t" << data << "," << std::endl;
+
+    std::string variable_name = consumer.AddStruct(struct_body, "resourceDescriptorInfoEXT");
+    out << "\t\t"
+        << "VkResourceDescriptorInfoEXT " << variable_name << " {" << std::endl;
+    out << "\t\t" << struct_body.str() << std::endl;
+    out << "\t\t"
+        << "};" << std::endl;
+    return variable_name;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

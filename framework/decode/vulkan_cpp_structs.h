@@ -175,6 +175,16 @@ std::string GenerateStruct_VkDataGraphPipelineConstantARM(std::ostream&         
                                                           Decoded_VkDataGraphPipelineConstantARM* metaInfo,
                                                           VulkanCppConsumerBase&                  consumer);
 
+std::string GenerateStruct_VkDescriptorSetAndBindingMappingEXT(std::ostream&                                out,
+                                                               const VkDescriptorSetAndBindingMappingEXT*   structInfo,
+                                                               Decoded_VkDescriptorSetAndBindingMappingEXT* metaInfo,
+                                                               VulkanCppConsumerBase&                       consumer);
+
+std::string GenerateStruct_VkResourceDescriptorInfoEXT(std::ostream&                        out,
+                                                       const VkResourceDescriptorInfoEXT*   structInfo,
+                                                       Decoded_VkResourceDescriptorInfoEXT* metaInfo,
+                                                       VulkanCppConsumerBase&               consumer);
+
 GFXRECON_END_NAMESPACE(gfxrecon)
 GFXRECON_END_NAMESPACE(decode)
 

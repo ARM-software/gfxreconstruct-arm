@@ -226,6 +226,40 @@ void MapStructHandles(Decoded_VkDescriptorGetInfoEXT* wrapper, const CommonObjec
     }
 }
 
+void MapStructHandles(Decoded_VkResourceDescriptorInfoEXT* wrapper, const CommonObjectInfoTable& object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkResourceDescriptorInfoEXT* value = wrapper->decoded_value;
+        switch (value->type)
+        {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                MapStructHandles(wrapper->data->pTexelBuffer->GetMetaStructPointer(), object_info_table);
+                break;
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                MapStructHandles(wrapper->data->pImage->GetMetaStructPointer(), object_info_table);
+                break;
+            case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+                MapStructHandles(wrapper->data->pTensorARM->GetMetaStructPointer(), object_info_table);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 void MapStructHandles(Decoded_VkIndirectExecutionSetCreateInfoEXT* wrapper,
                       const CommonObjectInfoTable&                 object_info_table)
 {
@@ -239,6 +273,59 @@ void MapStructHandles(Decoded_VkIndirectExecutionSetCreateInfoEXT* wrapper,
                 break;
             case VK_INDIRECT_EXECUTION_SET_INFO_TYPE_SHADER_OBJECTS_EXT:
                 MapStructHandles(wrapper->info->pShaderInfo->GetMetaStructPointer(), object_info_table);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void MapStructHandles(Decoded_VkDescriptorSetAndBindingMappingEXT* wrapper,
+                      const CommonObjectInfoTable&                 object_info_table)
+{
+    if ((wrapper != nullptr) && (wrapper->decoded_value != nullptr))
+    {
+        VkDescriptorSetAndBindingMappingEXT* value = wrapper->decoded_value;
+
+        if (wrapper->pNext)
+        {
+            MapPNextStructHandles(wrapper->pNext, object_info_table);
+        }
+
+        switch (value->source)
+        {
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+                MapStructHandles(wrapper->sourceData->constantOffset, object_info_table);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+                MapStructHandles(wrapper->sourceData->pushIndex, object_info_table);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+                MapStructHandles(wrapper->sourceData->indirectIndex, object_info_table);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+                MapStructHandles(wrapper->sourceData->indirectIndexArray, object_info_table);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_DATA_EXT:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_ADDRESS_EXT:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_INDIRECT_ADDRESS_EXT:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+                MapStructHandles(wrapper->sourceData->shaderRecordIndex, object_info_table);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
+                // No handle so no mapping function
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
+                // No handle so no mapping function
                 break;
             default:
                 break;

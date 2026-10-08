@@ -9191,6 +9191,28 @@ void VulkanReplayConsumerBase::OverrideDestroyDescriptorUpdateTemplate(
     func(device, descriptor_update_template, GetAllocationCallbacks(pAllocator));
 }
 
+// VkResult VulkanReplayConsumerBase::OverrideWriteResourceDescriptorsEXT(
+//     PFN_vkWriteResourceDescriptorsEXT                          func,
+//     VkResult                                                   original_result,
+//     const VulkanDeviceInfo*                                    device_info,
+//     uint32_t                                                   resourceCount,
+//     StructPointerDecoder<Decoded_VkResourceDescriptorInfoEXT>* pResources,
+//     const StructPointerDecoder<Decoded_VkHostAddressRangeEXT>* pDescriptors)
+// {
+//     GFXRECON_ASSERT((device_info != nullptr) && (pResources != nullptr) && (pDescriptors != nullptr));
+//     VkDevice                             in_device      = device_info->handle;
+//     VkResourceDescriptorInfoEXT*         in_pResources  = pResources->GetPointer();
+//     Decoded_VkResourceDescriptorInfoEXT* resources_meta = pResources->GetMetaStructPointer();
+//     MapStructArrayHandles(resources_meta, resourceCount, GetObjectInfoTable());
+//     const VkHostAddressRangeEXT* in_pDescriptors = pDescriptors->GetPointer();
+//
+//     VkResult result = func(in_device, resourceCount, in_pResources, in_pDescriptors);
+//     GFXRECON_ASSERT(result == original_result);
+//
+//     arm_features_->ProcessDeviceFaultData(result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+//     return result;
+// }
+
 VkResult VulkanReplayConsumerBase::OverrideCreateShaderModule(
     PFN_vkCreateShaderModule                                      func,
     VkResult                                                      original_result,

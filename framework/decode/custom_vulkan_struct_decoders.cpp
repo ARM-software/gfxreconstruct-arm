@@ -800,5 +800,154 @@ size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDataGra
     return bytes_read;
 }
 
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkResourceDescriptorInfoEXT* wrapper)
+{
+    GFXRECON_ASSERT(wrapper != nullptr && wrapper->decoded_value != nullptr);
+
+    size_t                       bytes_read = 0;
+    VkResourceDescriptorInfoEXT* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue(buffer + bytes_read, buffer_size - bytes_read, &value->sType);
+    bytes_read += DecodePNextStruct(buffer + bytes_read, buffer_size - bytes_read, &wrapper->pNext);
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read += ValueDecoder::DecodeEnumValue((buffer + bytes_read), (buffer_size - bytes_read), &(value->type));
+
+    wrapper->data                = DecodeAllocator::Allocate<Decoded_VkResourceDescriptorDataEXT>();
+    wrapper->data->decoded_value = &(value->data);
+
+    switch (value->type)
+    {
+        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            wrapper->data->pTexelBuffer =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkTexelBufferDescriptorInfoEXT>>();
+            bytes_read += wrapper->data->pTexelBuffer->Decode(buffer + bytes_read, buffer_size - bytes_read);
+            value->data.pTexelBuffer = wrapper->data->pTexelBuffer->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            wrapper->data->pAddressRange =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkDeviceAddressRangeEXT>>();
+            bytes_read += wrapper->data->pAddressRange->Decode(buffer + bytes_read, buffer_size - bytes_read);
+            value->data.pAddressRange = wrapper->data->pAddressRange->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            wrapper->data->pImage = DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkImageDescriptorInfoEXT>>();
+            bytes_read += wrapper->data->pImage->Decode(buffer + bytes_read, buffer_size - bytes_read);
+            value->data.pImage = wrapper->data->pImage->GetPointer();
+            break;
+        case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+            wrapper->data->pTensorARM =
+                DecodeAllocator::Allocate<StructPointerDecoder<Decoded_VkTensorViewCreateInfoARM>>();
+            bytes_read += wrapper->data->pTensorARM->Decode(buffer + bytes_read, buffer_size - bytes_read);
+            value->data.pTensorARM = wrapper->data->pTensorARM->GetPointer();
+            break;
+        default:
+            break;
+    }
+
+    return bytes_read;
+}
+
+size_t DecodeStruct(const uint8_t* buffer, size_t buffer_size, Decoded_VkDescriptorSetAndBindingMappingEXT* wrapper)
+{
+
+    GFXRECON_ASSERT(wrapper != nullptr && wrapper->decoded_value != nullptr);
+
+    size_t                               bytes_read = 0;
+    VkDescriptorSetAndBindingMappingEXT* value      = wrapper->decoded_value;
+
+    bytes_read += ValueDecoder::DecodeEnumValue(buffer + bytes_read, buffer_size - bytes_read, &value->sType);
+    bytes_read += DecodePNextStruct(buffer + bytes_read, buffer_size - bytes_read, &wrapper->pNext);
+    value->pNext = wrapper->pNext ? wrapper->pNext->GetPointer() : nullptr;
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value(buffer + bytes_read, buffer_size - bytes_read, &(value->descriptorSet));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value(buffer + bytes_read, buffer_size - bytes_read, &(value->firstBinding));
+    bytes_read +=
+        ValueDecoder::DecodeUInt32Value(buffer + bytes_read, buffer_size - bytes_read, &(value->bindingCount));
+    bytes_read += ValueDecoder::DecodeEnumValue(buffer + bytes_read, buffer_size - bytes_read, &(value->resourceMask));
+    bytes_read += ValueDecoder::DecodeEnumValue(buffer + bytes_read, buffer_size - bytes_read, &(value->source));
+
+    wrapper->sourceData                = DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceDataEXT>();
+    wrapper->sourceData->decoded_value = &(value->sourceData);
+
+    switch (value->source)
+    {
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+            wrapper->sourceData->constantOffset =
+                DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceConstantOffsetEXT>();
+            wrapper->sourceData->constantOffset->decoded_value = &(value->sourceData.constantOffset);
+            bytes_read +=
+                DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->constantOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+            wrapper->sourceData->pushIndex = DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourcePushIndexEXT>();
+            wrapper->sourceData->pushIndex->decoded_value = &(value->sourceData.pushIndex);
+            bytes_read += DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->pushIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+            wrapper->sourceData->indirectIndex =
+                DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceIndirectIndexEXT>();
+            wrapper->sourceData->indirectIndex->decoded_value = &(value->sourceData.indirectIndex);
+            bytes_read +=
+                DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->indirectIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+            wrapper->sourceData->indirectIndexArray =
+                DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceIndirectIndexArrayEXT>();
+            wrapper->sourceData->indirectIndexArray->decoded_value = &(value->sourceData.indirectIndexArray);
+            bytes_read +=
+                DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->indirectIndexArray);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT:
+            wrapper->sourceData->heapData = DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceHeapDataEXT>();
+            wrapper->sourceData->heapData->decoded_value = &(value->sourceData.heapData);
+            bytes_read += DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->heapData);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_DATA_EXT:
+            bytes_read += ValueDecoder::DecodeUInt32Value(
+                buffer + bytes_read, buffer_size - bytes_read, &(value->sourceData.pushDataOffset));
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_ADDRESS_EXT:
+            bytes_read += ValueDecoder::DecodeUInt32Value(
+                buffer + bytes_read, buffer_size - bytes_read, &(value->sourceData.pushAddressOffset));
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_INDIRECT_ADDRESS_EXT:
+            wrapper->sourceData->indirectAddress =
+                DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceIndirectAddressEXT>();
+            wrapper->sourceData->indirectAddress->decoded_value = &(value->sourceData.indirectAddress);
+            bytes_read +=
+                DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->indirectAddress);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+            wrapper->sourceData->shaderRecordIndex =
+                DecodeAllocator::Allocate<Decoded_VkDescriptorMappingSourceShaderRecordIndexEXT>();
+            wrapper->sourceData->shaderRecordIndex->decoded_value = &(value->sourceData.shaderRecordIndex);
+            bytes_read +=
+                DecodeStruct(buffer + bytes_read, buffer_size - bytes_read, wrapper->sourceData->shaderRecordIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
+            bytes_read += ValueDecoder::DecodeUInt32Value(
+                buffer + bytes_read, buffer_size - bytes_read, &(value->sourceData.shaderRecordDataOffset));
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
+            bytes_read += ValueDecoder::DecodeUInt32Value(
+                buffer + bytes_read, buffer_size - bytes_read, &(value->sourceData.shaderRecordAddressOffset));
+            break;
+        default:
+            break;
+    }
+
+    return bytes_read;
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

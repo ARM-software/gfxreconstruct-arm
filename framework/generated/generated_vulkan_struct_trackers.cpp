@@ -9758,6 +9758,265 @@ VkGpaSessionCreateInfoAMD* TrackStruct(const VkGpaSessionCreateInfoAMD* value, H
     return unwrapped_struct;
 }
 
+VkTexelBufferDescriptorInfoEXT* TrackStruct(const VkTexelBufferDescriptorInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkTexelBufferDescriptorInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkImageDescriptorInfoEXT* TrackStruct(const VkImageDescriptorInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkImageDescriptorInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkTensorViewCreateInfoARM* TrackStruct(const VkTensorViewCreateInfoARM* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkTensorViewCreateInfoARM* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkResourceDescriptorInfoEXT* TrackStruct(const VkResourceDescriptorInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkResourceDescriptorInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkBindHeapInfoEXT* TrackStruct(const VkBindHeapInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkBindHeapInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPushDataInfoEXT* TrackStruct(const VkPushDataInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPushDataInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkDescriptorSetAndBindingMappingEXT* TrackStruct(const VkDescriptorSetAndBindingMappingEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkDescriptorSetAndBindingMappingEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkShaderDescriptorSetAndBindingMappingInfoEXT* TrackStruct(const VkShaderDescriptorSetAndBindingMappingInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkShaderDescriptorSetAndBindingMappingInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+    if (unwrapped_struct->pMappings)
+    {
+        unwrapped_struct->pMappings = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pMappings, unwrapped_struct->mappingCount, unwrap_memory);
+    }
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkOpaqueCaptureDataCreateInfoEXT* TrackStruct(const VkOpaqueCaptureDataCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkOpaqueCaptureDataCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceDescriptorHeapFeaturesEXT* TrackStruct(const VkPhysicalDeviceDescriptorHeapFeaturesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceDescriptorHeapPropertiesEXT* TrackStruct(const VkPhysicalDeviceDescriptorHeapPropertiesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkCommandBufferInheritanceDescriptorHeapInfoEXT* TrackStruct(const VkCommandBufferInheritanceDescriptorHeapInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkCommandBufferInheritanceDescriptorHeapInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkSamplerCustomBorderColorIndexCreateInfoEXT* TrackStruct(const VkSamplerCustomBorderColorIndexCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkSamplerCustomBorderColorIndexCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkSamplerCustomBorderColorCreateInfoEXT* TrackStruct(const VkSamplerCustomBorderColorCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkSamplerCustomBorderColorCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkIndirectCommandsLayoutPushDataTokenNV* TrackStruct(const VkIndirectCommandsLayoutPushDataTokenNV* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkIndirectCommandsLayoutPushDataTokenNV* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkSubsampledImageFormatPropertiesEXT* TrackStruct(const VkSubsampledImageFormatPropertiesEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkSubsampledImageFormatPropertiesEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
+VkPhysicalDeviceDescriptorHeapTensorPropertiesARM* TrackStruct(const VkPhysicalDeviceDescriptorHeapTensorPropertiesARM* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value == nullptr)
+    {
+        return nullptr;
+    }
+
+    VkPhysicalDeviceDescriptorHeapTensorPropertiesARM* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
+
+
+    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
+
+    return unwrapped_struct;
+}
+
 VkAttachmentSampleCountInfoAMD* TrackStruct(const VkAttachmentSampleCountInfoAMD* value, HandleUnwrapMemory* unwrap_memory)
 {
     if (value == nullptr)
@@ -11912,21 +12171,6 @@ VkDeviceDeviceMemoryReportCreateInfoEXT* TrackStruct(const VkDeviceDeviceMemoryR
     }
 
     VkDeviceDeviceMemoryReportCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkSamplerCustomBorderColorCreateInfoEXT* TrackStruct(const VkSamplerCustomBorderColorCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkSamplerCustomBorderColorCreateInfoEXT* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
 
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
@@ -14441,21 +14685,6 @@ VkTensorCreateInfoARM* TrackStruct(const VkTensorCreateInfoARM* value, HandleUnw
     {
         unwrapped_struct->pQueueFamilyIndices = vulkan_wrappers::MakeUnwrapStructs(unwrapped_struct->pQueueFamilyIndices, unwrapped_struct->queueFamilyIndexCount, unwrap_memory);
     }
-
-    unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
-
-    return unwrapped_struct;
-}
-
-VkTensorViewCreateInfoARM* TrackStruct(const VkTensorViewCreateInfoARM* value, HandleUnwrapMemory* unwrap_memory)
-{
-    if (value == nullptr)
-    {
-        return nullptr;
-    }
-
-    VkTensorViewCreateInfoARM* unwrapped_struct = vulkan_wrappers::MakeUnwrapStructs(value, 1, unwrap_memory);
-
 
     unwrapped_struct->pNext = TrackStruct(unwrapped_struct->pNext, unwrap_memory);
 
@@ -19545,6 +19774,40 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkGpaDeviceGetClockInfoAMD*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_GPA_SESSION_CREATE_INFO_AMD:
             return TrackStruct(reinterpret_cast<const VkGpaSessionCreateInfoAMD*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkTexelBufferDescriptorInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkImageDescriptorInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_TENSOR_VIEW_CREATE_INFO_ARM:
+            return TrackStruct(reinterpret_cast<const VkTensorViewCreateInfoARM*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkResourceDescriptorInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkBindHeapInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkPushDataInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT:
+            return TrackStruct(reinterpret_cast<const VkDescriptorSetAndBindingMappingEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DATA_CREATE_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkOpaqueCaptureDataCreateInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceDescriptorHeapFeaturesEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceDescriptorHeapPropertiesEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkCommandBufferInheritanceDescriptorHeapInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_INDEX_CREATE_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkSamplerCustomBorderColorIndexCreateInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT:
+            return TrackStruct(reinterpret_cast<const VkSamplerCustomBorderColorCreateInfoEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_PUSH_DATA_TOKEN_NV:
+            return TrackStruct(reinterpret_cast<const VkIndirectCommandsLayoutPushDataTokenNV*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_SUBSAMPLED_IMAGE_FORMAT_PROPERTIES_EXT:
+            return TrackStruct(reinterpret_cast<const VkSubsampledImageFormatPropertiesEXT*>(value), unwrap_memory);
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_TENSOR_PROPERTIES_ARM:
+            return TrackStruct(reinterpret_cast<const VkPhysicalDeviceDescriptorHeapTensorPropertiesARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_ATTACHMENT_SAMPLE_COUNT_INFO_AMD:
             return TrackStruct(reinterpret_cast<const VkAttachmentSampleCountInfoAMD*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_SAMPLE_LOCATIONS_INFO_EXT:
@@ -19815,8 +20078,6 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkDeviceMemoryReportCallbackDataEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT:
             return TrackStruct(reinterpret_cast<const VkDeviceDeviceMemoryReportCreateInfoEXT*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT:
-            return TrackStruct(reinterpret_cast<const VkSamplerCustomBorderColorCreateInfoEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_PROPERTIES_EXT:
             return TrackStruct(reinterpret_cast<const VkPhysicalDeviceCustomBorderColorPropertiesEXT*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT:
@@ -20143,8 +20404,6 @@ void* TrackStruct(const void* value, HandleUnwrapMemory* unwrap_memory)
             return TrackStruct(reinterpret_cast<const VkTensorDescriptionARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_TENSOR_CREATE_INFO_ARM:
             return TrackStruct(reinterpret_cast<const VkTensorCreateInfoARM*>(value), unwrap_memory);
-        case VK_STRUCTURE_TYPE_TENSOR_VIEW_CREATE_INFO_ARM:
-            return TrackStruct(reinterpret_cast<const VkTensorViewCreateInfoARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_TENSOR_MEMORY_REQUIREMENTS_INFO_ARM:
             return TrackStruct(reinterpret_cast<const VkTensorMemoryRequirementsInfoARM*>(value), unwrap_memory);
         case VK_STRUCTURE_TYPE_BIND_TENSOR_MEMORY_INFO_ARM:

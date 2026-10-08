@@ -364,6 +364,53 @@ struct Decoded_VkDataGraphPipelineConstantARM
     void*      pConstantData{ nullptr };
 };
 
+struct Decoded_VkResourceDescriptorDataEXT
+{
+    using struct_type = VkResourceDescriptorDataEXT;
+
+    VkResourceDescriptorDataEXT* decoded_value{ nullptr };
+
+    StructPointerDecoder<Decoded_VkImageDescriptorInfoEXT>*       pImage;
+    StructPointerDecoder<Decoded_VkTexelBufferDescriptorInfoEXT>* pTexelBuffer;
+    StructPointerDecoder<Decoded_VkDeviceAddressRangeKHR>*        pAddressRange;
+    StructPointerDecoder<Decoded_VkTensorViewCreateInfoARM>*      pTensorARM;
+};
+
+struct Decoded_VkResourceDescriptorInfoEXT
+{
+    using struct_type = VkResourceDescriptorInfoEXT;
+
+    VkResourceDescriptorInfoEXT* decoded_value{ nullptr };
+
+    PNextNode*                           pNext{ nullptr };
+    Decoded_VkResourceDescriptorDataEXT* data{ nullptr };
+};
+
+struct Decoded_VkDescriptorMappingSourceDataEXT
+{
+    using struct_type = VkDescriptorMappingSourceDataEXT;
+
+    VkDescriptorMappingSourceDataEXT* decoded_value{ nullptr };
+
+    Decoded_VkDescriptorMappingSourceConstantOffsetEXT*     constantOffset{ nullptr };
+    Decoded_VkDescriptorMappingSourcePushIndexEXT*          pushIndex{ nullptr };
+    Decoded_VkDescriptorMappingSourceIndirectIndexEXT*      indirectIndex{ nullptr };
+    Decoded_VkDescriptorMappingSourceIndirectIndexArrayEXT* indirectIndexArray{ nullptr };
+    Decoded_VkDescriptorMappingSourceHeapDataEXT*           heapData{ nullptr };
+    Decoded_VkDescriptorMappingSourceIndirectAddressEXT*    indirectAddress{ nullptr };
+    Decoded_VkDescriptorMappingSourceShaderRecordIndexEXT*  shaderRecordIndex{ nullptr };
+};
+
+struct Decoded_VkDescriptorSetAndBindingMappingEXT
+{
+    using struct_type = VkDescriptorSetAndBindingMappingEXT;
+
+    VkDescriptorSetAndBindingMappingEXT* decoded_value{ nullptr };
+
+    PNextNode*                                pNext{ nullptr };
+    Decoded_VkDescriptorMappingSourceDataEXT* sourceData{ nullptr };
+};
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

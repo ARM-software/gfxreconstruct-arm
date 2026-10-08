@@ -100,6 +100,10 @@ void FieldToJson(nlohmann::ordered_json& jdata, VkDescriptorType discriminant, c
 
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorGetInfoEXT* data);
 
+void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkResourceDescriptorInfoEXT* data);
+
+void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorSetAndBindingMappingEXT* data);
+
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDataGraphPipelineConstantARM* data);
 
 template <typename T>

@@ -220,6 +220,76 @@ void UnwrapStructHandles(VkIndirectExecutionSetCreateInfoEXT* value, HandleUnwra
     }
 }
 
+void UnwrapStructHandles(VkResourceDescriptorInfoEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = UnwrapPNextStructHandles(value->pNext, unwrap_memory);
+        }
+
+        switch (value->type)
+        {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                UnwrapStructPtrHandles(value->data.pTexelBuffer, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                // No handle there so the unwrap func doesn't exist
+                break;
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                UnwrapStructPtrHandles(value->data.pImage, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+                UnwrapStructPtrHandles(value->data.pTensorARM, unwrap_memory);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void UnwrapStructHandles(VkDescriptorSetAndBindingMappingEXT* value, HandleUnwrapMemory* unwrap_memory)
+{
+    if (value != nullptr)
+    {
+        if (value->pNext != nullptr)
+        {
+            value->pNext = UnwrapPNextStructHandles(value->pNext, unwrap_memory);
+        }
+
+        switch (value->source)
+        {
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+                UnwrapStructHandles(&value->sourceData.constantOffset, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+                UnwrapStructHandles(&value->sourceData.pushIndex, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+                UnwrapStructHandles(&value->sourceData.indirectIndex, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+                UnwrapStructHandles(&value->sourceData.indirectIndexArray, unwrap_memory);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+                UnwrapStructHandles(&value->sourceData.shaderRecordIndex, unwrap_memory);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

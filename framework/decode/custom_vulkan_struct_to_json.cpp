@@ -653,6 +653,44 @@ void FieldToJson(nlohmann::ordered_json& jdata, VkDescriptorType discriminant, c
     }
 }
 
+void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkResourceDescriptorInfoEXT* data)
+{
+    if (data && data->decoded_value)
+    {
+        const auto& decoded_value = *data->decoded_value;
+        const auto& meta_struct   = *data;
+        jdata["sType"]            = decoded_value.sType;
+        jdata["type"]             = decoded_value.type;
+        FieldToJson(jdata["pNext"], meta_struct.pNext);
+        switch (decoded_value.type)
+        {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+                FieldToJson(jdata["data"], meta_struct.data->pTexelBuffer);
+                break;
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+                FieldToJson(jdata["data"], meta_struct.data->pAddressRange);
+                break;
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+                FieldToJson(jdata["data"], meta_struct.data->pImage);
+                break;
+            case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+                FieldToJson(jdata["data"], meta_struct.data->pTensorARM);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorGetInfoEXT* data)
 {
     if (data && data->decoded_value)
@@ -663,6 +701,61 @@ void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorGetInf
         jdata["type"]             = decoded_value.type;
         FieldToJson(jdata["data"], decoded_value.type, meta_struct.data);
         FieldToJson(jdata["pNext"], meta_struct.pNext);
+    }
+}
+
+void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_VkDescriptorSetAndBindingMappingEXT* data)
+{
+
+    const VkDescriptorSetAndBindingMappingEXT&         decoded_value = *data->decoded_value;
+    const Decoded_VkDescriptorSetAndBindingMappingEXT& meta_struct   = *data;
+
+    jdata["sType"]         = decoded_value.sType;
+    jdata["descriptorSet"] = decoded_value.descriptorSet;
+    jdata["firstBinding"]  = decoded_value.firstBinding;
+    jdata["bindingCount"]  = decoded_value.bindingCount;
+    jdata["resourceMask"]  = decoded_value.resourceMask;
+    jdata["source"]        = decoded_value.source;
+
+    FieldToJson(jdata["pNext"], meta_struct.pNext);
+
+    switch (decoded_value.source)
+    {
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->constantOffset);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->pushIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->indirectIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->indirectIndexArray);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->heapData);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_DATA_EXT:
+            jdata["sourceData"] = decoded_value.sourceData.pushDataOffset;
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_PUSH_ADDRESS_EXT:
+            jdata["sourceData"] = decoded_value.sourceData.pushAddressOffset;
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_INDIRECT_ADDRESS_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->indirectAddress);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+            FieldToJson(jdata["sourceData"], meta_struct.sourceData->shaderRecordIndex);
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
+            jdata["sourceData"] = decoded_value.sourceData.shaderRecordDataOffset;
+            break;
+        case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
+            jdata["sourceData"] = decoded_value.sourceData.shaderRecordAddressOffset;
+            break;
+        default:
+            break;
     }
 }
 

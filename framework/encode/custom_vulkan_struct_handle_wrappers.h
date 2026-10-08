@@ -50,6 +50,12 @@ void UnwrapStructHandles(VkDescriptorGetInfoEXT* value, HandleUnwrapMemory* unwr
 
 void UnwrapStructHandles(VkIndirectExecutionSetCreateInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkDescriptorSetAndBindingMappingEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkResourceDescriptorInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkDescriptorSetAndBindingMappingEXT* value, HandleUnwrapMemory* unwrap_memory);
+
 GFXRECON_END_NAMESPACE(vulkan_wrappers)
 GFXRECON_END_NAMESPACE(encode)
 GFXRECON_END_NAMESPACE(gfxrecon)

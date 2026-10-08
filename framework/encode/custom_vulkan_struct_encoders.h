@@ -52,6 +52,8 @@ void EncodeStruct(ParameterEncoder* encoder, const VkCopyImageToMemoryInfo& valu
 void EncodeStruct(ParameterEncoder* encoder, const VkLayerSettingEXT& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkDescriptorGetInfoEXT& value);
 void EncodeStruct(ParameterEncoder* encoder, const VkDataGraphPipelineConstantARM& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkResourceDescriptorInfoEXT& value);
+void EncodeStruct(ParameterEncoder* encoder, const VkDescriptorSetAndBindingMappingEXT& value);
 
 // Vulkan structures we check in the pNext chain that really should not be there.
 void EncodeStruct(ParameterEncoder* encoder, const VkMemoryToImageCopy& value);
