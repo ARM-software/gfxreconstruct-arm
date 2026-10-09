@@ -128,7 +128,14 @@ static void AddObject(const format::HandleId* p_id,
         }
         else
         {
-            assert(entry->second.object == *pp_object);
+            if (entry->second.object != *pp_object)
+            {
+                // The object pointer has changed via VKD3D. Release the new object and add a reference to the existing
+                // one.
+                reinterpret_cast<IUnknown*>(*pp_object)->Release();
+                reinterpret_cast<IUnknown*>(entry->second.object)->AddRef();
+            }
+
             ++(entry->second.ref_count);
         }
     }

@@ -1299,6 +1299,10 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
     --(replay_object_info->ref_count);
     if (replay_object_info->ref_count < original_result)
     {
+        for (ULONG i = replay_object_info->ref_count; i < original_result; ++i)
+        {
+            object->AddRef();
+        }
         replay_object_info->ref_count = original_result;
     }
 
@@ -1307,9 +1311,9 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
         if ((replay_object_info->extra_info != nullptr) &&
             (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12DeviceInfo))
         {
-            if (acceleration_structure_builders_.find(device_id) != acceleration_structure_builders_.end())
+            if (acceleration_structure_builders_.find(object_id) != acceleration_structure_builders_.end())
             {
-                acceleration_structure_builders_.erase(device_id);
+                acceleration_structure_builders_.erase(object_id);
             }
 
             active_devices_.erase(object_id);
