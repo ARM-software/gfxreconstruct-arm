@@ -230,6 +230,15 @@ std::vector<format::AddressLocationInfo> VulkanRayTracingModifier::GetBufferDevi
         const auto entries = buffer_device_address_ranges_.contains(value);
         for (const auto& entry : entries)
         {
+            auto buffer_info = buffer_entries_.find(entry.payload);
+            if (buffer_info != buffer_entries_.end())
+            {
+                if (buffer_info->second.creation_index > block_index_ ||
+                    buffer_info->second.destruction_index < block_index_)
+                {
+                    continue;
+                }
+            }
             format::AddressLocationInfo loc{};
             loc.id               = entry.payload;
             loc.original_address = entry.interval.first;
