@@ -301,8 +301,7 @@ void Dx12ReplayConsumerBase::OverrideEnableDebugLayer(DxObjectInfo* replay_objec
 Dx12ReplayConsumerBase::~Dx12ReplayConsumerBase()
 {
     // Wait for pending work to complete before destroying resources.
-    const DWORD kWaitMilliseconds = 2000;
-    if (WaitIdle(kWaitMilliseconds))
+    if (WaitIdle(kDefaultWaitTimeout))
     {
         DestroyActiveObjects();
         DestroyActiveWindows();
