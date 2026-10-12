@@ -303,6 +303,11 @@ Dx12ReplayConsumerBase::~Dx12ReplayConsumerBase()
     // Wait for pending work to complete before destroying resources.
     if (WaitIdle(kDefaultWaitTimeout))
     {
+        // This needs to be done before parent devices are destroyed
+        resource_value_mapper_ = nullptr;
+        dump_resources_        = nullptr;
+        acceleration_structure_builders_.clear();
+
         DestroyActiveObjects();
         DestroyActiveWindows();
         DestroyActiveEvents();
@@ -1332,11 +1337,6 @@ ULONG Dx12ReplayConsumerBase::OverrideRelease(DxObjectInfo* replay_object_info, 
         if ((replay_object_info->extra_info != nullptr) &&
             (replay_object_info->extra_info->extra_info_type == DxObjectInfoType::kID3D12DeviceInfo))
         {
-            if (acceleration_structure_builders_.find(object_id) != acceleration_structure_builders_.end())
-            {
-                acceleration_structure_builders_.erase(object_id);
-            }
-
             active_devices_.erase(object_id);
         }
 
