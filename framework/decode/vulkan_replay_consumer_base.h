@@ -2485,7 +2485,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     bool           device_fault_supported_;
     bool           device_fault_vendor_data_supported_;
     const uint32_t device_fault_vendor_binary_dump_v1_header_size_;
-    bool           is_trace_helpers_supported_{ false };
+    bool           has_trace_helper_markings_{ false };
 
     // option to override swapchain-image via debug-name
     format::HandleId present_override_image_id_ = format::kNullHandleId;

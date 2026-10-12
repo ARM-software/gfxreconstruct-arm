@@ -803,7 +803,7 @@ void VulkanReplayConsumerBase::ProcessResourceMemoryRequirements(
 void VulkanReplayConsumerBase::ProcessFixDeviceAddressCommand(const format::FixDeviceAddressCommandHeader&    header,
                                                               const std::vector<format::AddressLocationInfo>& infos)
 {
-    assert(is_trace_helpers_supported_ == false);
+    GFXRECON_ASSERT(has_trace_helper_markings_ == false);
 
     const VulkanDeviceInfo*       device_info = object_info_table_->GetVkDeviceInfo(header.relation_id);
     const VulkanDeviceMemoryInfo* memory_info = object_info_table_->GetVkDeviceMemoryInfo(header.relation_id);
@@ -1060,6 +1060,8 @@ void VulkanReplayConsumerBase::ProcessMarkedOffsetsARM(const VulkanDeviceInfo*  
                                  marked_offsets->pOffsets[i]);
         }
     }
+
+    has_trace_helper_markings_ = true;
 }
 
 void VulkanReplayConsumerBase::ReverseProcessMarkedOffsetsARM(const VulkanDeviceInfo*            device_info,
@@ -4175,19 +4177,10 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
             modified_extensions.emplace_back(VK_EXT_TOOLING_INFO_EXTENSION_NAME);
         }
 
-        // Detect if trace helpers extensions are supported, if not at replay time we will alter their behaviour
-        if (graphics::feature_util::IsSupportedExtension(available_extensions, VK_ARM_TRACE_HELPERS_EXTENSION_NAME) &&
-            graphics::feature_util::IsSupportedExtension(available_extensions,
-                                                         VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME))
+        // Fake VK_ARM_TRACE_HELPERS_EXTENSION_NAME and VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME if necessary
+        sanitize_faked_extension(VK_ARM_TRACE_HELPERS_EXTENSION_NAME);
+        if (sanitize_faked_extension(VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME))
         {
-            is_trace_helpers_supported_ = true;
-        }
-        else
-        {
-            // Use the fallback implementations when the replay device cannot enable the helpers.
-            sanitize_faked_extension(VK_ARM_TRACE_HELPERS_EXTENSION_NAME);
-            sanitize_faked_extension(VK_ARM_EXPLICIT_HOST_UPDATES_EXTENSION_NAME);
-
             if (graphics::vulkan_struct_remove_pnext<VkPhysicalDeviceExplicitHostUpdatesFeaturesARM>(
                     &modified_create_info))
             {
@@ -16573,7 +16566,7 @@ VulkanReplayConsumerBase::OverrideAssertBufferARM(PFN_vkAssertBufferARM   func,
         GetDeviceAddressTracker(device_info).GetBufferByHandle(p_info->GetPointer()->dstBuffer);
     GFXRECON_ASSERT(buffer_info != nullptr);
 
-    if (!is_trace_helpers_supported_)
+    if (IsExtensionBeingFaked(VK_ARM_TRACE_HELPERS_EXTENSION_NAME))
     {
         if ((buffer_info->memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
         {
@@ -16712,7 +16705,7 @@ VulkanReplayConsumerBase::OverrideAssertMemoryARM(PFN_vkAssertMemoryARM   func,
         return VK_SUCCESS;
     }
 
-    if (is_trace_helpers_supported_)
+    if (!IsExtensionBeingFaked(VK_ARM_TRACE_HELPERS_EXTENSION_NAME))
     {
         pInfo->pDstRange = &replay_device_address_ranges[0];
         return func(device_info->handle, pInfo, checksum->GetPointer(), comment->GetPointer());
@@ -16755,14 +16748,15 @@ void VulkanReplayConsumerBase::OverrideCmdUpdateBuffer2ARM(PFN_vkCmdUpdateBuffer
 
     auto device_table = GetDeviceTable(device_info->handle);
 
-    if (!is_trace_helpers_supported_)
+    if (IsExtensionBeingFaked(VK_ARM_TRACE_HELPERS_EXTENSION_NAME))
     {
         device_table->CmdUpdateBuffer(
             command_buffer_info->handle, pInfo->dstBuffer, pInfo->dstOffset, pInfo->dataSize, pInfo->pData);
-        return;
     }
-
-    func(command_buffer_info->handle, pInfo);
+    else
+    {
+        func(command_buffer_info->handle, pInfo);
+    }
 }
 
 void VulkanReplayConsumerBase::OverrideCmdUpdateMemoryKHR(
@@ -16831,7 +16825,7 @@ void VulkanReplayConsumerBase::OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory
             ProcessMarkedOffsetsARM(device_info, address_offset_arm, pData);
         }
 
-        if (!is_trace_helpers_supported_)
+        if (IsExtensionBeingFaked(VK_ARM_TRACE_HELPERS_EXTENSION_NAME))
         {
             OverrideCmdUpdateMemoryKHR(device_table->CmdUpdateMemoryKHR,
                                        command_buffer_info,
@@ -16876,14 +16870,15 @@ void VulkanReplayConsumerBase::OverrideCmdUpdateMemory2ARM(PFN_vkCmdUpdateMemory
         return;
     }
 
-    if (!is_trace_helpers_supported_)
+    if (IsExtensionBeingFaked(VK_ARM_TRACE_HELPERS_EXTENSION_NAME))
     {
         device_table->CmdUpdateMemoryKHR(
             command_buffer_info->handle, pInfo->pDstRange, pInfo->dstFlags, pInfo->dataSize, pInfo->pData);
-        return;
     }
-
-    func(command_buffer_info->handle, pInfo);
+    else
+    {
+        func(command_buffer_info->handle, pInfo);
+    }
 }
 
 void VulkanReplayConsumerBase::OverrideGetAccelerationStructureMemoryRequirementsNV(
