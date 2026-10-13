@@ -493,13 +493,6 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
 
     replay_options.omit_all_hardware_buffers  = arg_parser.IsOptionSet(kOmitAllHardwareBuffersShortOption);
 
-    if (arg_parser.IsOptionSet(kOffscreenSwapchainFrameBoundary))
-    {
-        GFXRECON_LOG_WARNING("Detected usage of deprecated \"--offscreen-swapchain-frame-boundary\". Use "
-                             "\"--use-ext-frame-boundary\" instead.");
-        // Because this is an aliased option name, kUseExtFrameBoundaryOption will also be set, so we can continue
-    }
-
     if (arg_parser.IsOptionSet(kUseExtFrameBoundaryOption))
     {
         replay_options.use_ext_frame_boundary = true;
