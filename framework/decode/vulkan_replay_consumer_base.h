@@ -1728,6 +1728,10 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
         VkDeviceAddress                                                indirectDeviceAddress);
 
+    void OverrideCmdTraceRaysIndirect2KHR(PFN_vkCmdTraceRaysIndirect2KHR func,
+                                          VulkanCommandBufferInfo*       command_buffer_info,
+                                          VkDeviceAddress                indirectDeviceAddress);
+
     void
     OverrideCmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2                            func,
                                 VulkanCommandBufferInfo*                             command_buffer_info,

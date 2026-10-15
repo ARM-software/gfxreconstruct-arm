@@ -72,6 +72,17 @@ void VulkanAddressReplacerARM::ProcessCmdTraceRays(
     }
 }
 
+void VulkanAddressReplacerARM::ProcessCmdTraceRaysIndirect2KHR(
+    const VulkanCommandBufferInfo*            command_buffer_info,
+    VkDeviceAddress&                          indirectDeviceAddress,
+    const decode::VulkanDeviceAddressTracker& address_tracker)
+{
+    GFXRECON_LOG_WARNING("vkCmdTraceRaysIndirect2KHR is not fully supported in VulkanAddressReplacerARM. Corruption or "
+                         "crash may happen.");
+
+    address_remap(indirectDeviceAddress, address_tracker);
+}
+
 bool VulkanAddressReplacerARM::ProcessMarkedOffsetARM(VkDeviceSize                              offset,
                                                       const void*                               pData,
                                                       const decode::VulkanDeviceAddressTracker& address_tracker)

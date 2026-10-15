@@ -183,6 +183,7 @@
     "vkCreateShadersEXT": "OverrideCreateShadersEXT",
     "vkCmdTraceRaysKHR": "OverrideCmdTraceRaysKHR",
     "vkCmdTraceRaysIndirectKHR": "OverrideCmdTraceRaysIndirectKHR",
+    "vkCmdTraceRaysIndirect2KHR": "OverrideCmdTraceRaysIndirect2KHR",
     "vkCreateAccelerationStructureKHR": "OverrideCreateAccelerationStructureKHR",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",

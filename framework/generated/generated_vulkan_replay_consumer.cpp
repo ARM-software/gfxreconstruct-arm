@@ -6006,13 +6006,13 @@ void VulkanReplayConsumer::Process_vkCmdTraceRaysIndirect2KHR(
     const ApiCallInfo&                          call_info,
     args::CmdTraceRaysIndirect2KHR&             args)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(args.commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(args.commandBuffer);
 
-    GetDeviceTable(in_commandBuffer)->CmdTraceRaysIndirect2KHR(in_commandBuffer, args.indirectDeviceAddress);
+    OverrideCmdTraceRaysIndirect2KHR(GetDeviceTable(in_commandBuffer->handle)->CmdTraceRaysIndirect2KHR, in_commandBuffer, args.indirectDeviceAddress);
 
     if (options_.dumping_resources)
     {
-        resource_dumper_->Process_vkCmdTraceRaysIndirect2KHR(call_info, GetInjectedDeviceCalls(in_commandBuffer), in_commandBuffer, args.indirectDeviceAddress);
+        resource_dumper_->Process_vkCmdTraceRaysIndirect2KHR(call_info, GetInjectedDeviceCalls(in_commandBuffer->handle), in_commandBuffer->handle, args.indirectDeviceAddress);
     }
 }
 

@@ -45,8 +45,7 @@ class VulkanAddressReplacerARM : public VulkanAddressReplacerBase
     VulkanAddressReplacerARM()  = default;
     ~VulkanAddressReplacerARM() = default;
 
-    VulkanAddressReplacerARM(const VulkanDeviceInfo*              device_info,
-                             const decode::CommonObjectInfoTable& object_table);
+    VulkanAddressReplacerARM(const VulkanDeviceInfo* device_info, const decode::CommonObjectInfoTable& object_table);
 
     //! prevent copying
     VulkanAddressReplacerARM(const VulkanAddressReplacerARM&) = delete;
@@ -85,6 +84,10 @@ class VulkanAddressReplacerARM : public VulkanAddressReplacerBase
                              const decode::VulkanDeviceAddressTracker& address_tracker,
                              const std::unordered_map<graphics::shader_group_handle_t, graphics::shader_group_handle_t>&
                                  group_handle_map) override;
+
+    void ProcessCmdTraceRaysIndirect2KHR(const VulkanCommandBufferInfo*            command_buffer_info,
+                                         VkDeviceAddress&                          indirectDeviceAddress,
+                                         const decode::VulkanDeviceAddressTracker& address_tracker) override;
 
     bool ProcessMarkedOffsetARM(VkDeviceSize                              offset,
                                 const void*                               pData,

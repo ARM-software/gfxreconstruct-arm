@@ -111,6 +111,11 @@ class VulkanAddressReplacerBase
         const std::unordered_map<graphics::shader_group_handle_t, graphics::shader_group_handle_t>& group_handle_map)
     {}
 
+    virtual void ProcessCmdTraceRaysIndirect2KHR(const VulkanCommandBufferInfo*            command_buffer_info,
+                                                 VkDeviceAddress&                          indirectDeviceAddress,
+                                                 const decode::VulkanDeviceAddressTracker& address_tracker)
+    {}
+
     virtual void
     ProcessCmdBuildAccelerationStructuresKHR(const VulkanCommandBufferInfo*               command_buffer_info,
                                              uint32_t                                     info_count,

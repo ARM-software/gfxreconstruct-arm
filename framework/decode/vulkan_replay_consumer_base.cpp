@@ -13553,6 +13553,25 @@ void VulkanReplayConsumerBase::OverrideCmdTraceRaysIndirectKHR(
     }
 }
 
+void VulkanReplayConsumerBase::OverrideCmdTraceRaysIndirect2KHR(PFN_vkCmdTraceRaysIndirect2KHR func,
+                                                                VulkanCommandBufferInfo*       command_buffer_info,
+                                                                VkDeviceAddress                indirectDeviceAddress)
+{
+    GFXRECON_ASSERT(command_buffer_info != nullptr);
+
+    const VulkanDeviceInfo* device_info = GetObjectInfoTable().GetVkDeviceInfo(command_buffer_info->parent_id);
+
+    if (UseAddressReplacement(device_info))
+    {
+        const auto& address_tracker  = GetDeviceAddressTracker(device_info);
+        auto&       address_replacer = GetDeviceAddressReplacer(device_info);
+
+        address_replacer.ProcessCmdTraceRaysIndirect2KHR(command_buffer_info, indirectDeviceAddress, address_tracker);
+    }
+
+    func(command_buffer_info->handle, indirectDeviceAddress);
+}
+
 VkResult VulkanReplayConsumerBase::OverrideCreateImageView(
     PFN_vkCreateImageView                                func,
     VkResult                                             original_result,
