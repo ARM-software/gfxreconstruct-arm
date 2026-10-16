@@ -457,6 +457,12 @@ void VulkanSpirvTrackModifier::Process_vkMapMemory(const ApiCallInfo& call_info,
     }
 }
 
+void VulkanSpirvTrackModifier::Process_vkMapMemory2KHR(const ApiCallInfo& call_info, args::MapMemory2KHR& args)
+{
+    args::MapMemory2& equivalent = reinterpret_cast<args::MapMemory2&>(args);
+    Process_vkMapMemory2(call_info, equivalent);
+}
+
 void VulkanSpirvTrackModifier::Process_vkMapMemory2(const ApiCallInfo& call_info, args::MapMemory2& args)
 {
     if (IsModificationPass())
@@ -498,6 +504,12 @@ void VulkanSpirvTrackModifier::Process_vkUnmapMemory(const ApiCallInfo& call_inf
         memory_binding_entries_[args.memory].mapping.map_memory    = 0;
         memory_binding_entries_[args.memory].mapping.shadow_memory = 0;
     }
+}
+
+void VulkanSpirvTrackModifier::Process_vkUnmapMemory2KHR(const ApiCallInfo& call_info, args::UnmapMemory2KHR& args)
+{
+    args::UnmapMemory2& equivalent = reinterpret_cast<args::UnmapMemory2&>(args);
+    Process_vkUnmapMemory2(call_info, equivalent);
 }
 
 void VulkanSpirvTrackModifier::Process_vkUnmapMemory2(const ApiCallInfo& call_info, args::UnmapMemory2& args)

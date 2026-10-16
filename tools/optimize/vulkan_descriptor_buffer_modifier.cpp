@@ -654,6 +654,12 @@ void VulkanDescriptorBufferModifier::Process_vkMapMemory(const ApiCallInfo& call
     }
 }
 
+void VulkanDescriptorBufferModifier::Process_vkMapMemory2KHR(const ApiCallInfo& call_info, args::MapMemory2KHR& args)
+{
+    args::MapMemory2& equivalent = reinterpret_cast<args::MapMemory2&>(args);
+    Process_vkMapMemory2(call_info, equivalent);
+}
+
 void VulkanDescriptorBufferModifier::Process_vkMapMemory2(const ApiCallInfo& call_info, args::MapMemory2& args)
 {
     if (IsModificationPass())
@@ -695,6 +701,13 @@ void VulkanDescriptorBufferModifier::Process_vkUnmapMemory(const ApiCallInfo& ca
         memory_binding_entries_[args.memory].mapping.map_memory    = 0;
         memory_binding_entries_[args.memory].mapping.shadow_memory = 0;
     }
+}
+
+void VulkanDescriptorBufferModifier::Process_vkUnmapMemory2KHR(const ApiCallInfo&     call_info,
+                                                               args::UnmapMemory2KHR& args)
+{
+    args::UnmapMemory2& equivalent = reinterpret_cast<args::UnmapMemory2&>(args);
+    Process_vkUnmapMemory2(call_info, equivalent);
 }
 
 void VulkanDescriptorBufferModifier::Process_vkUnmapMemory2(const ApiCallInfo& call_info, args::UnmapMemory2& args)

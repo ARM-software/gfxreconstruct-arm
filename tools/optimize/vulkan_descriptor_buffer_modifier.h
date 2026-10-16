@@ -77,9 +77,13 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
 
     void Process_vkMapMemory2(const ApiCallInfo& call_info, args::MapMemory2& args) override;
 
+    void Process_vkMapMemory2KHR(const ApiCallInfo& call_info, args::MapMemory2KHR& args) override;
+
     void Process_vkUnmapMemory(const ApiCallInfo& call_info, args::UnmapMemory& args) override;
 
     void Process_vkUnmapMemory2(const ApiCallInfo& call_info, args::UnmapMemory2& args) override;
+
+    void Process_vkUnmapMemory2KHR(const ApiCallInfo& call_info, args::UnmapMemory2KHR& args) override;
 
     void Process_vkBindBufferMemory(const ApiCallInfo& call_info, args::BindBufferMemory& args) override;
 
@@ -104,6 +108,9 @@ class VulkanDescriptorBufferModifier : public util::VulkanModifierBase
     void Process_vkGetDescriptorEXT(const ApiCallInfo& call_info, args::GetDescriptorEXT& args) override;
 
   private:
+    void ProcessMapMemory2(const StructPointerDecoder<Decoded_VkMemoryMapInfo>& memory_map_info,
+                           const PointerDecoder<uint64_t, void*>&               data);
+
     std::vector<format::DescriptorDataLocationInfo>
     GetDescriptorsInFillMemory(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data);
 

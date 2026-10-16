@@ -85,9 +85,13 @@ class VulkanSpirvTrackModifier : public util::VulkanModifierBase
 
     void Process_vkMapMemory2(const ApiCallInfo& call_info, args::MapMemory2& args) override;
 
+    void Process_vkMapMemory2KHR(const ApiCallInfo& call_info, args::MapMemory2KHR& args) override;
+
     void Process_vkUnmapMemory(const ApiCallInfo& call_info, args::UnmapMemory& args) override;
 
     void Process_vkUnmapMemory2(const ApiCallInfo& call_info, args::UnmapMemory2& args) override;
+
+    void Process_vkUnmapMemory2KHR(const ApiCallInfo& call_info, args::UnmapMemory2KHR& args) override;
 
     void Process_vkCreateAccelerationStructureKHR(const ApiCallInfo&                    call_info,
                                                   args::CreateAccelerationStructureKHR& args) override;
