@@ -24,11 +24,8 @@
 #define GFXRECON_DECODE_VULKAN_RESOURCE_INITIALIZER_H
 
 #include "decode/vulkan_resource_allocator.h"
-#include "generated/generated_vulkan_dispatch_table.h"
 #include "graphics/vulkan_injected_calls.h"
 #include "util/defines.h"
-
-#include "vulkan/vulkan.h"
 
 #include <unordered_map>
 #include <vector>
@@ -90,6 +87,8 @@ class VulkanResourceInitializer
     VkResult GetCommandExecObjects(uint32_t queue_family_index, VkCommandBuffer* command_buffer);
 
     VkResult BeginCommandBuffer(uint32_t queue_family_index, VkCommandBuffer* command_buffer_p = nullptr);
+
+    VkResult FlushPendingUploads();
 
   private:
     VkResult GetDrawDescriptorObjects(VkSampler* sampler, VkDescriptorSetLayout* set_layout, VkDescriptorSet* set);

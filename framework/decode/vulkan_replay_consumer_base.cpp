@@ -11928,6 +11928,15 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
     {
         if (loading_trim_state_)
         {
+            VulkanResourceInitializer* initializer = device_info->resource_initializer.get();
+            if (initializer != nullptr)
+            {
+                VkResult result = initializer->FlushPendingUploads();
+                if (result != VK_SUCCESS)
+                {
+                    GFXRECON_LOG_FATAL("Failed to flush pending resource initializer uploads before micromap build");
+                }
+            }
             for (uint32_t i = 0; i < infoCount; ++i)
             {
                 address_remap(infos[i].data.deviceAddress);
@@ -14986,6 +14995,16 @@ void VulkanReplayConsumerBase::ProcessVulkanBuildAccelerationStructuresCommand(
     if (!use_acceleration_structure_builder_)
     {
         return;
+    }
+
+    VulkanResourceInitializer* initializer = device_info->resource_initializer.get();
+    if (initializer != nullptr)
+    {
+        VkResult result = initializer->FlushPendingUploads();
+        if (result != VK_SUCCESS)
+        {
+            GFXRECON_LOG_FATAL("Failed to flush pending resource initializer uploads before AS build");
+        }
     }
 
     MapStructArrayHandles(pInfos->GetMetaStructPointer(), pInfos->GetLength(), GetObjectInfoTable());

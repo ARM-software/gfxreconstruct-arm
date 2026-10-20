@@ -28,7 +28,6 @@
 #include "graphics/vulkan_util.h"
 #include "util/logging.h"
 #include "util/platform.h"
-#include "util/alignment_utils.h"
 
 #include <algorithm>
 #include <cassert>
@@ -1595,6 +1594,11 @@ void VulkanResourceInitializer::FlushStagingBuffer()
 
         staging_buffer_offset_ = 0;
     }
+}
+
+VkResult VulkanResourceInitializer::FlushPendingUploads()
+{
+    return FlushRemainingResourcesInit();
 }
 
 GFXRECON_END_NAMESPACE(decode)
