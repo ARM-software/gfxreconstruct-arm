@@ -917,6 +917,13 @@ void Dx12ReplayConsumerBase::ProcessGetDx12AccelerationStructureSizeCommand(
         return;
     }
 
+    // Check TLAS prune support on the first run if it hasn't been determined yet.
+    static UINT64 tlas_prune_max_size = 0;
+    if (!tlas_prune_max_size)
+    {
+        tlas_prune_max_size = arm_features_->GetTlasPruneMaxPrebuildSize(command_header.device_id);
+    }
+
     // non-zero GPU VA must be set for values that will be used.
     const D3D12_GPU_VIRTUAL_ADDRESS kDefaultGpuVa = 1;
 
@@ -973,6 +980,11 @@ void Dx12ReplayConsumerBase::ProcessGetDx12AccelerationStructureSizeCommand(
         inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
         device5_ptr->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &replay_info);
         result_data_max_size = std::max(result_data_max_size, replay_info.ResultDataMaxSizeInBytes);
+    }
+
+    if (inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)
+    {
+        result_data_max_size = std::max(result_data_max_size, tlas_prune_max_size);
     }
 
     auto accel_struct_builder = GetAccelerationStructureBuilder(device_object_info);

@@ -1198,6 +1198,43 @@ void Dx12ReplayConsumerArmFeatures::ApplyFillMemoryResourceAddressCommand(uint64
     }
 }
 
+UINT64 Dx12ReplayConsumerArmFeatures::GetTlasPruneMaxPrebuildSize(format::HandleId device_id)
+{
+    auto device_object_info = consumer_->GetObjectInfo(device_id);
+    if ((device_object_info == nullptr) || (device_object_info->object == nullptr))
+    {
+        return 0;
+    }
+
+    graphics::dx12::ID3D12Device5ComPtr device5_ptr = nullptr;
+    device_object_info->object->QueryInterface(IID_PPV_ARGS(&device5_ptr));
+    if (device5_ptr == nullptr)
+    {
+        return 0;
+    }
+
+    const D3D12_GPU_VIRTUAL_ADDRESS kDefaultGpuVa      = 1;
+    const UINT64                    kDefaultResultSize = 1;
+    const UINT                      kTlasPruneNumDescs = 1000;
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO before_prune_info = {};
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO after_prune_info  = {};
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS  tlas_inputs       = {};
+    tlas_inputs.Type          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+    tlas_inputs.Flags         = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    tlas_inputs.DescsLayout   = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    tlas_inputs.InstanceDescs = kDefaultGpuVa;
+
+    tlas_inputs.NumDescs = kTlasPruneNumDescs;
+    device5_ptr->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_inputs, &before_prune_info);
+    tlas_inputs.NumDescs++;
+    device5_ptr->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_inputs, &after_prune_info);
+
+    return (before_prune_info.ResultDataMaxSizeInBytes > after_prune_info.ResultDataMaxSizeInBytes)
+               ? before_prune_info.ResultDataMaxSizeInBytes
+               : kDefaultResultSize;
+}
+
 void Dx12ReplayConsumerArmFeatures::SetResourceReplayRequiredSize(
     DxObjectInfo*                                       replay_object_info,
     StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC>*  pDesc,

@@ -103,6 +103,8 @@ class Dx12ReplayConsumerArmFeatures
 
     void ApplyFillMemoryResourceAddressCommand(uint64_t offset, uint64_t size, const uint8_t* data);
 
+    UINT64 GetTlasPruneMaxPrebuildSize(format::HandleId device_id);
+
     void SetResourceReplayRequiredSize(DxObjectInfo*                                       replay_object_info,
                                        StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC>*  pDesc,
                                        StructPointerDecoder<Decoded_D3D12_RESOURCE_DESC1>* pDesc1,
