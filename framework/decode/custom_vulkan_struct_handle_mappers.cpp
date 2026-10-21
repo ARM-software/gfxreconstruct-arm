@@ -133,6 +133,9 @@ void MapStructHandles(Decoded_VkAccelerationStructureGeometryKHR* wrapper,
             case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 // No handle there so the map func doesn't exist
                 break;
+            case VK_GEOMETRY_TYPE_MICROMAP_KHR:
+                // Micromap geometry data is in pNext and contains no handles.
+                break;
             default:
                 GFXRECON_LOG_WARNING("Attempting to map unknown acceleration structure geometry type");
                 break;

@@ -5864,21 +5864,21 @@ void VulkanReplayConsumer::Process_vkCreateAccelerationStructure2KHR(
     const ApiCallInfo&                          call_info,
     args::CreateAccelerationStructure2KHR&      args)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(args.device, &CommonObjectInfoTable::GetVkDeviceInfo);
-    const VkAccelerationStructureCreateInfo2KHR* in_pCreateInfo = args.pCreateInfo.GetPointer();
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(args.device);
+
     MapStructHandles(args.pCreateInfo.GetMetaStructPointer(), GetObjectInfoTable());
-    const VkAllocationCallbacks* in_pAllocator = GetAllocationCallbacks(&args.pAllocator);
     if (!args.pAccelerationStructure.IsNull()) { args.pAccelerationStructure.SetHandleLength(1); }
-    VkAccelerationStructureKHR* out_pAccelerationStructure = args.pAccelerationStructure.GetHandlePointer();
+    VulkanAccelerationStructureKHRInfo handle_info;
+    args.pAccelerationStructure.SetConsumerData(0, &handle_info);
 
     PushRecaptureHandleId(args.pAccelerationStructure.GetPointer());
-    VkResult replay_result = GetDeviceTable(in_device)->CreateAccelerationStructure2KHR(in_device, in_pCreateInfo, in_pAllocator, out_pAccelerationStructure);
+    VkResult replay_result = OverrideCreateAccelerationStructure2KHR(GetDeviceTable(in_device->handle)->CreateAccelerationStructure2KHR, args.result, in_device, &args.pCreateInfo, &args.pAllocator, &args.pAccelerationStructure);
     CheckResult("vkCreateAccelerationStructure2KHR", args.result, replay_result, call_info);
     ClearRecaptureHandleIds();
 
-    AddHandle<VulkanAccelerationStructureKHRInfo>(args.device, args.pAccelerationStructure.GetPointer(), out_pAccelerationStructure, &CommonObjectInfoTable::AddVkAccelerationStructureKHRInfo);
+    AddHandle<VulkanAccelerationStructureKHRInfo>(args.device, args.pAccelerationStructure.GetPointer(), args.pAccelerationStructure.GetHandlePointer(), std::move(handle_info), &CommonObjectInfoTable::AddVkAccelerationStructureKHRInfo);
 
-    arm_features_->ProcessDeviceFaultData(replay_result, in_device, GetDeviceTable(in_device)->GetDeviceFaultInfoEXT);
+    arm_features_->ProcessDeviceFaultData(replay_result, in_device->handle, GetDeviceTable(in_device->handle)->GetDeviceFaultInfoEXT);
 }
 
 void VulkanReplayConsumer::Process_vkCmdCopyBuffer2KHR(

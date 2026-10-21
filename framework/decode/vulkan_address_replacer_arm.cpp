@@ -23,6 +23,7 @@
 
 #include "decode/vulkan_address_replacer_arm.h"
 #include "decode/vulkan_object_info.h"
+#include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -30,7 +31,8 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 VulkanAddressReplacerARM::VulkanAddressReplacerARM(const VulkanDeviceInfo*              device_info,
                                                    const decode::CommonObjectInfoTable& object_table) :
-    device_info_(device_info), object_table_(&object_table)
+    device_info_(device_info),
+    object_table_(&object_table)
 {
     GFXRECON_ASSERT(device_info != nullptr)
 
@@ -123,7 +125,6 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
     for (uint32_t i = 0; i < info_count; ++i)
     {
         auto& build_geometry_info = build_geometry_infos[i];
-        auto  range_info          = build_range_infos[i];
 
         // check/correct scratch-address
         if (process_scratch_buffers)
@@ -149,10 +150,39 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
                     success         = address_remap(triangles.vertexData.deviceAddress, address_tracker) && success;
                     success         = address_remap(triangles.indexData.deviceAddress, address_tracker) && success;
                     success         = address_remap(triangles.transformData.deviceAddress, address_tracker) && success;
+                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapKHR*>(
+                            graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapKHR>(
+                                &triangles)))
+                    {
+                        success = address_remap(micromap->indexBuffer, address_tracker) && success;
+                    }
+                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                            graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
+                                &triangles)))
+                    {
+                        success = address_remap(micromap->indexBuffer.deviceAddress, address_tracker) && success;
+                    }
                     if (!success)
                     {
                         GFXRECON_LOG_WARNING_ONCE(
                             "ProcessCmdBuildAccelerationStructuresKHR: Address remap for TRIANGLES failed");
+                    }
+                    break;
+                }
+                case VK_GEOMETRY_TYPE_MICROMAP_KHR:
+                {
+                    auto* micromap = const_cast<VkAccelerationStructureGeometryMicromapDataKHR*>(
+                        graphics::vulkan_struct_get_pnext<VkAccelerationStructureGeometryMicromapDataKHR>(geometry));
+                    GFXRECON_ASSERT(micromap != nullptr);
+                    if (micromap != nullptr)
+                    {
+                        bool success = address_remap(micromap->data, address_tracker);
+                        success      = address_remap(micromap->triangleArray, address_tracker) && success;
+                        if (!success)
+                        {
+                            GFXRECON_LOG_WARNING_ONCE(
+                                "ProcessCmdBuildAccelerationStructuresKHR: Address remap for MICROMAP failed");
+                        }
                     }
                     break;
                 }

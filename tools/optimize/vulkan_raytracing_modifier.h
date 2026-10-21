@@ -130,6 +130,9 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     void Process_vkCreateAccelerationStructureKHR(const ApiCallInfo&                    call_info,
                                                   args::CreateAccelerationStructureKHR& args) override;
 
+    void Process_vkCreateAccelerationStructure2KHR(const ApiCallInfo&                     call_info,
+                                                   args::CreateAccelerationStructure2KHR& args) override;
+
     void Process_vkGetAccelerationStructureBuildSizesKHR(const ApiCallInfo&                           call_info,
                                                          args::GetAccelerationStructureBuildSizesKHR& args) override;
 
@@ -196,6 +199,9 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
     void Process_vkDestroyPipeline(const ApiCallInfo& call_info, args::DestroyPipeline& args) override;
 
   private:
+    template <typename CreateArgs>
+    void ProcessCreateAccelerationStructure(const ApiCallInfo& call_info, CreateArgs& args);
+
     void ProcessCmdPushConstants(format::HandleId         commandBuffer,
                                  format::HandleId         layout,
                                  VkShaderStageFlags       stageFlags,
@@ -277,18 +283,22 @@ class VulkanRayTracingModifier : public util::VulkanModifierBase
 
     struct AccelerationStructureBuildInfo
     {
-        VkAccelerationStructureBuildGeometryInfoKHR                                      info;
+        VkAccelerationStructureBuildGeometryInfoKHR                                      info{};
         std::vector<VkAccelerationStructureGeometryKHR>                                  geometries;
-        std::unordered_map<uint64_t, VkAccelerationStructureTrianglesOpacityMicromapEXT> omm_infos;
+        std::unordered_map<uint64_t, VkAccelerationStructureTrianglesOpacityMicromapEXT> omm_infos_ext;
+        std::unordered_map<uint64_t, VkAccelerationStructureTrianglesOpacityMicromapKHR> omm_infos_khr;
+        std::unordered_map<uint64_t, VkAccelerationStructureGeometryMicromapDataKHR>     micromap_infos_khr;
         std::unordered_map<uint64_t, format::HandleId>                                   geometry_omm_id_map;
-        std::unordered_map<uint64_t, std::vector<VkMicromapUsageEXT>>                    usage_infos;
+        std::unordered_map<uint64_t, std::vector<VkMicromapUsageEXT>>                    usage_infos_ext;
+        std::unordered_map<uint64_t, std::vector<VkMicromapUsageKHR>>                    usage_infos_khr;
         std::vector<uint32_t>                                                            primitive_counts;
-        bool                                                                             is_first_built;
-        bool                                                                             is_meta_copy;
-        uint64_t                                                                         process_compacted_as_index;
-        encode::ParameterBuffer                                                          create_parameter_buffer;
-        encode::ParameterBuffer                                                          get_address_parameter_buffer;
-        format::HandleId                                                                 source_of_compaction;
+        bool                                                                             is_first_built{ false };
+        bool                                                                             is_meta_copy{ false };
+        uint64_t                process_compacted_as_index{ 0 };
+        encode::ParameterBuffer create_parameter_buffer;
+        format::ApiCallId       create_call_id{ format::ApiCallId::ApiCall_vkCreateAccelerationStructureKHR };
+        encode::ParameterBuffer get_address_parameter_buffer;
+        format::HandleId        source_of_compaction{ format::kNullHandleId };
     };
 
     struct PipelineInfo

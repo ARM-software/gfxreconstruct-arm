@@ -58,6 +58,9 @@ void FieldToJson(nlohmann::ordered_json&                               jdata,
             case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 FieldToJson(jdata["instances"], data->instances);
                 break;
+            case VkGeometryTypeKHR::VK_GEOMETRY_TYPE_MICROMAP_KHR:
+                jdata = "Value ignored for micromaps";
+                break;
             default:
                 jdata = "Unknown GeometryType: " + std::to_string(discriminant);
         }

@@ -98,10 +98,6 @@ class VulkanMicromapBuilder
                                          VkDeviceSize               stride,
                                          VkQueryResultFlags         flags);
 
-    static void OnCmdBuildAccStrHandling(VulkanDeviceAddressTracker&                  device_address_tracker,
-                                         uint32_t                                     info_count,
-                                         VkAccelerationStructureBuildGeometryInfoKHR* infos);
-
     void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
     void OnDestroyMicromap(const VulkanMicromapEXTInfo* micromap_info);

@@ -123,6 +123,9 @@ void UnwrapStructHandles(VkAccelerationStructureGeometryKHR* value, HandleUnwrap
             case VK_GEOMETRY_TYPE_INSTANCES_KHR:
                 // No handle there so the unwrap func doesn't exist
                 break;
+            case VK_GEOMETRY_TYPE_MICROMAP_KHR:
+                // No handle there so the unwrap func doesn't exist
+                break;
             default:
                 GFXRECON_LOG_WARNING("Attempting to unwrap unknown acceleration structure geometry type");
                 break;

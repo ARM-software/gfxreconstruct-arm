@@ -83,6 +83,13 @@ class VulkanAccelerationStructureBuilder
                                            VulkanAccelerationStructureKHRInfo*         acceleration_structure_info,
                                            VkAccelerationStructureKHR*                 handle);
 
+    VkResult OnCreateAccelerationStructure2(const VulkanDeviceInfo*                      device_info,
+                                            const VkAccelerationStructureCreateInfo2KHR* create_info,
+                                            const VkAllocationCallbacks*                 pAllocator,
+                                            const VulkanBufferInfo*                      buffer_info,
+                                            VulkanAccelerationStructureKHRInfo*          acceleration_structure_info,
+                                            VkAccelerationStructureKHR*                  handle);
+
     void OnDestroyBuffer(const VulkanBufferInfo* buffer_info);
 
     void ProcessVulkanBuildAccelerationStructuresCommand(
@@ -123,11 +130,19 @@ class VulkanAccelerationStructureBuilder
                                          VkQueryResultFlags         flags);
 
   private:
+    const VulkanBufferInfo*
+    PrepareAccelerationStructureStorage(const VulkanDeviceInfo*             device_info,
+                                        const VulkanBufferInfo*             buffer_info,
+                                        VkDeviceSize                        capture_size,
+                                        VkDeviceSize                        offset,
+                                        VulkanAccelerationStructureKHRInfo* acceleration_structure_info);
+
     void InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table);
     struct Functions
     {
         PFN_vkGetAccelerationStructureBuildSizesKHR       get_acceleration_structure_build_sizes{ nullptr };
         PFN_vkCreateAccelerationStructureKHR              create_acceleration_structure{ nullptr };
+        PFN_vkCreateAccelerationStructure2KHR             create_acceleration_structure2{ nullptr };
         PFN_vkCmdBuildAccelerationStructuresKHR           cmd_build_acceleration_structures{ nullptr };
         PFN_vkGetAccelerationStructureDeviceAddressKHR    get_acceleration_structure_device_address{ nullptr };
         PFN_vkCmdCopyAccelerationStructureKHR             cmd_copy_acceleration_structure{ nullptr };

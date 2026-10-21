@@ -185,6 +185,7 @@
     "vkCmdTraceRaysIndirectKHR": "OverrideCmdTraceRaysIndirectKHR",
     "vkCmdTraceRaysIndirect2KHR": "OverrideCmdTraceRaysIndirect2KHR",
     "vkCreateAccelerationStructureKHR": "OverrideCreateAccelerationStructureKHR",
+    "vkCreateAccelerationStructure2KHR": "OverrideCreateAccelerationStructure2KHR",
     "vkDestroyAccelerationStructureKHR": "OverrideDestroyAccelerationStructureKHR",
     "vkCmdBuildAccelerationStructuresKHR": "OverrideCmdBuildAccelerationStructuresKHR",
     "vkCmdCopyAccelerationStructureKHR": "OverrideCmdCopyAccelerationStructureKHR",

@@ -11863,10 +11863,90 @@ VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructureKHR(
 
     // clean potential opaque creation-data
     device_info->opaque_descriptor_data.erase(capture_id);
+    if (result == VK_SUCCESS)
+    {
+        // track newly created acceleration-structure
+        acceleration_structure_info->handle = *replay_accel_struct;
+        GetDeviceAddressTracker(device_info).TrackAccelerationStructure(acceleration_structure_info);
+    }
 
-    // track newly created acceleration-structure
-    acceleration_structure_info->handle = replay_accel_struct ? *replay_accel_struct : VK_NULL_HANDLE;
-    GetDeviceAddressTracker(device_info).TrackAccelerationStructure(acceleration_structure_info);
+    return result;
+}
+
+VkResult VulkanReplayConsumerBase::OverrideCreateAccelerationStructure2KHR(
+    PFN_vkCreateAccelerationStructure2KHR                                      func,
+    VkResult                                                                   original_result,
+    VulkanDeviceInfo*                                                          device_info,
+    const StructPointerDecoder<Decoded_VkAccelerationStructureCreateInfo2KHR>* pCreateInfo,
+    const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                 pAllocator,
+    HandlePointerDecoder<VkAccelerationStructureKHR>*                          pAccelerationStructure)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    GFXRECON_ASSERT(device_info != nullptr && pCreateInfo != nullptr && pAccelerationStructure != nullptr &&
+                    !pAccelerationStructure->IsNull() && pAccelerationStructure->GetHandlePointer() != nullptr);
+
+    auto&  address_tracker = GetDeviceAddressTracker(device_info);
+    auto   create_info     = *pCreateInfo->GetPointer();
+    size_t offset          = 0;
+    auto*  buffer_info     = address_tracker.GetBufferByCaptureDeviceAddress(create_info.addressRange.address, &offset);
+    if (buffer_info == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Cannot find storage buffer for vkCreateAccelerationStructure2KHR at address 0x%" PRIx64,
+                           create_info.addressRange.address);
+        return VK_ERROR_UNKNOWN;
+    }
+
+    auto* acceleration_structure_info =
+        reinterpret_cast<VulkanAccelerationStructureKHRInfo*>(pAccelerationStructure->GetConsumerData(0));
+    GFXRECON_ASSERT(acceleration_structure_info != nullptr);
+    acceleration_structure_info->capture_id      = *pAccelerationStructure->GetPointer();
+    acceleration_structure_info->type            = create_info.type;
+    acceleration_structure_info->buffer          = buffer_info->handle;
+    acceleration_structure_info->offset          = offset;
+    acceleration_structure_info->size            = create_info.addressRange.size;
+    acceleration_structure_info->capture_address = create_info.addressRange.address;
+    acceleration_structure_info->replay_address  = buffer_info->replay_address + offset;
+
+    bool use_capture_replay_feature = device_info->property_feature_info.feature_accelerationStructureCaptureReplay &&
+                                      device_info->allocator->SupportsOpaqueDeviceAddresses();
+    VkResult                                   result;
+    auto                                       handle     = pAccelerationStructure->GetHandlePointer();
+    auto                                       capture_id = acceleration_structure_info->capture_id;
+    VkOpaqueCaptureDescriptorDataCreateInfoEXT opaque_descriptor_info{
+        VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT
+    };
+    if (use_capture_replay_feature)
+    {
+        create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
+        create_info.addressRange.address = acceleration_structure_info->replay_address;
+        if (auto it = device_info->opaque_descriptor_data.find(capture_id);
+            it != device_info->opaque_descriptor_data.end())
+        {
+            create_info.createFlags |= VK_ACCELERATION_STRUCTURE_CREATE_DESCRIPTOR_BUFFER_CAPTURE_REPLAY_BIT_EXT;
+            opaque_descriptor_info.opaqueCaptureDescriptorData = it->second.data();
+            graphics::vulkan_struct_add_pnext(&create_info, &opaque_descriptor_info);
+        }
+        result = func(device_info->handle, &create_info, GetAllocationCallbacks(pAllocator), handle);
+    }
+    else
+    {
+        create_info.createFlags &= ~VK_ACCELERATION_STRUCTURE_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_KHR;
+
+        result = GetAccelerationStructureBuilder(device_info)
+                     .OnCreateAccelerationStructure2(device_info,
+                                                     &create_info,
+                                                     GetAllocationCallbacks(pAllocator),
+                                                     buffer_info,
+                                                     acceleration_structure_info,
+                                                     handle);
+    }
+
+    device_info->opaque_descriptor_data.erase(capture_id);
+    if (result == VK_SUCCESS)
+    {
+        acceleration_structure_info->handle = *handle;
+        address_tracker.TrackAccelerationStructure(acceleration_structure_info);
+    }
     return result;
 }
 

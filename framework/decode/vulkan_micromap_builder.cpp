@@ -253,68 +253,6 @@ void VulkanMicromapBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
     scratch_double_buffer_.scratches_current.erase(buffer_info->capture_id);
 }
 
-void VulkanMicromapBuilder::OnCmdBuildAccStrHandling(VulkanDeviceAddressTracker& device_address_tracker,
-                                                     uint32_t                    info_count,
-                                                     VkAccelerationStructureBuildGeometryInfoKHR* infos)
-{
-    auto address_remap = [&device_address_tracker](VkDeviceAddress& capture_address) {
-        auto buffer_info = device_address_tracker.GetBufferByCaptureDeviceAddress(capture_address);
-        // TODO: we 'should' find that buffer here, check what's missing
-        if (buffer_info != nullptr && buffer_info->replay_address != 0)
-        {
-            uint64_t offset = capture_address - buffer_info->capture_address;
-            // in-place address-remap via const-cast
-            capture_address = buffer_info->replay_address + offset;
-        }
-    };
-
-    // replace indexBuffer address
-    for (uint64_t i = 0; i < info_count; i++)
-    {
-        uint32_t geometry_count = infos[i].geometryCount;
-
-        VkAccelerationStructureGeometryKHR*  pGeometries  = (VkAccelerationStructureGeometryKHR*)infos[i].pGeometries;
-        VkAccelerationStructureGeometryKHR** ppGeometries = (VkAccelerationStructureGeometryKHR**)infos[i].ppGeometries;
-
-        if ((infos[i].type != VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR) || (geometry_count == 0))
-        {
-            continue;
-        }
-
-        // If type is VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR then the geometryType member of each geometry in
-        // either pGeometries or ppGeometries must be the same
-        if ((pGeometries != nullptr && pGeometries->geometryType != VK_GEOMETRY_TYPE_TRIANGLES_KHR) ||
-            (ppGeometries != nullptr && (*ppGeometries)->geometryType != VK_GEOMETRY_TYPE_TRIANGLES_KHR))
-        {
-            continue;
-        }
-
-        for (uint64_t j = 0; j < geometry_count; j++)
-        {
-            VkBaseOutStructure* pNextStruct = nullptr;
-            if (pGeometries != nullptr)
-            {
-                pNextStruct = (VkBaseOutStructure*)(pGeometries[j].geometry.triangles.pNext);
-            }
-            else // ppGeometries != nullptr
-            {
-                pNextStruct = (VkBaseOutStructure*)(ppGeometries[j]->geometry.triangles.pNext);
-            }
-
-            while (pNextStruct != nullptr)
-            {
-                if (pNextStruct->sType == VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT)
-                {
-                    VkAccelerationStructureTrianglesOpacityMicromapEXT* micromap_struct =
-                        (VkAccelerationStructureTrianglesOpacityMicromapEXT*)pNextStruct;
-                    address_remap(micromap_struct->indexBuffer.deviceAddress);
-                }
-                pNextStruct = pNextStruct->pNext;
-            }
-        }
-    }
-}
-
 void VulkanMicromapBuilder::OnDestroyMicromap(const VulkanMicromapEXTInfo* micromap_info)
 {
     micromaps_.erase(micromap_info->handle);

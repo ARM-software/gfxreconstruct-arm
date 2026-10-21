@@ -1263,7 +1263,7 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
     for (uint32_t i = 0; i < info_count; ++i)
     {
         auto&       build_geometry_info = build_geometry_infos[i];
-        const auto* range_infos         = build_range_infos[i];
+        const auto* range_infos         = build_range_infos != nullptr ? build_range_infos[i] : nullptr;
 
         const VulkanBufferInfo* scratch_buffer_info =
             address_tracker.GetBufferByCaptureDeviceAddress(build_geometry_info.scratchData.deviceAddress);
@@ -1278,16 +1278,21 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
 
             {
                 std::vector<uint32_t> primitive_counts(build_geometry_info.geometryCount);
-                for (uint32_t j = 0; j < build_geometry_info.geometryCount; ++j)
+                if (range_infos != nullptr)
                 {
-                    primitive_counts[j] = range_infos[j].primitiveCount;
+                    for (uint32_t j = 0; j < build_geometry_info.geometryCount; ++j)
+                    {
+                        primitive_counts[j] = range_infos[j].primitiveCount;
+                    }
                 }
-
-                injected->GetAccelerationStructureBuildSizesKHR(device_,
-                                                                VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                                &build_geometry_info,
-                                                                primitive_counts.data(),
-                                                                &build_size_info);
+                injected->GetAccelerationStructureBuildSizesKHR(
+                    device_,
+                    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                    &build_geometry_info,
+                    build_geometry_info.type == VK_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_KHR
+                        ? nullptr
+                        : primitive_counts.data(),
+                    &build_size_info);
             }
 
             bool as_buffer_usable = false;
@@ -1462,6 +1467,30 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
                     address_remap(triangles.vertexData.deviceAddress);
                     address_remap(triangles.indexData.deviceAddress);
                     address_remap(triangles.transformData.deviceAddress);
+                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapKHR*>(
+                            graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapKHR>(
+                                &triangles)))
+                    {
+                        address_remap(micromap->indexBuffer);
+                    }
+                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                            graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
+                                &triangles)))
+                    {
+                        address_remap(micromap->indexBuffer.deviceAddress);
+                    }
+                    break;
+                }
+                case VK_GEOMETRY_TYPE_MICROMAP_KHR:
+                {
+                    auto* micromap = const_cast<VkAccelerationStructureGeometryMicromapDataKHR*>(
+                        graphics::vulkan_struct_get_pnext<VkAccelerationStructureGeometryMicromapDataKHR>(geometry));
+                    GFXRECON_ASSERT(micromap != nullptr);
+                    if (micromap != nullptr)
+                    {
+                        address_remap(micromap->data);
+                        address_remap(micromap->triangleArray);
+                    }
                     break;
                 }
                 case VK_GEOMETRY_TYPE_AABBS_KHR:

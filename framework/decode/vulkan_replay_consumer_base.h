@@ -1466,6 +1466,14 @@ class VulkanReplayConsumerBase : public VulkanConsumer
         const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                pAllocator,
         HandlePointerDecoder<VkAccelerationStructureKHR>*                         pAccelerationStructureKHR);
 
+    VkResult OverrideCreateAccelerationStructure2KHR(
+        PFN_vkCreateAccelerationStructure2KHR                                      func,
+        VkResult                                                                   original_result,
+        VulkanDeviceInfo*                                                          device_info,
+        const StructPointerDecoder<Decoded_VkAccelerationStructureCreateInfo2KHR>* pCreateInfo,
+        const StructPointerDecoder<Decoded_VkAllocationCallbacks>*                 pAllocator,
+        HandlePointerDecoder<VkAccelerationStructureKHR>*                          pAccelerationStructure);
+
     void OverrideDestroyAccelerationStructureKHR(PFN_vkDestroyAccelerationStructureKHR     func,
                                                  const VulkanDeviceInfo*                   device_info,
                                                  const VulkanAccelerationStructureKHRInfo* acceleration_structure_info,
