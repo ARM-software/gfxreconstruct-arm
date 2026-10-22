@@ -11983,28 +11983,25 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     gfxrecon::decode::VulkanQueryPoolInfo*            query_pool_info,
     uint32_t                                          firstQuery)
 {
-    VulkanDeviceInfo* device_info = object_info_table_->GetVkDeviceInfo(command_buffer_info->parent_id);
+    VulkanDeviceInfo*           device_info    = object_info_table_->GetVkDeviceInfo(command_buffer_info->parent_id);
+    VkCommandBuffer             command_buffer = command_buffer_info->handle;
+    VkAccelerationStructureKHR* acceleration_structs = pAccelerationStructures->GetHandlePointer();
+    VkQueryPool                 query_pool           = query_pool_info->handle;
 
-    VkCommandBuffer                   command_buffer       = command_buffer_info->handle;
-    const VkAccelerationStructureKHR* acceleration_structs = pAccelerationStructures->GetHandlePointer();
-    VkQueryPool                       query_pool           = query_pool_info->handle;
-    auto&                             address_replacer     = GetDeviceAddressReplacer(device_info);
-    address_replacer.ProcessCmdWriteAccelerationStructuresPropertiesKHR(count,
-                                                                        pAccelerationStructures->GetHandlePointer(),
-                                                                        queryType,
-                                                                        query_pool,
-                                                                        firstQuery,
-                                                                        GetDeviceAddressTracker(device_info));
+    if (UseAddressReplacement(device_info))
+    {
+        auto& address_replacer = GetDeviceAddressReplacer(device_info);
+        address_replacer.ProcessCmdWriteAccelerationStructuresPropertiesKHR(
+            count, acceleration_structs, queryType, query_pool, firstQuery, GetDeviceAddressTracker(device_info));
+    }
+
+    func(command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
 
     if (!loading_trim_state_ && use_acceleration_structure_builder_)
     {
         GetAccelerationStructureBuilder(device_info)
-            .OnCmdWriteAccelerationStructuresProperties(command_buffer_info->handle,
-                                                        count,
-                                                        pAccelerationStructures->GetHandlePointer(),
-                                                        queryType,
-                                                        query_pool_info->handle,
-                                                        firstQuery);
+            .OnCmdWriteAccelerationStructuresProperties(
+                command_buffer, count, acceleration_structs, queryType, query_pool, firstQuery);
     }
 
     command_buffer_info->recorded_query_ops.push_back({ query_pool_info->capture_id, firstQuery, count, true });

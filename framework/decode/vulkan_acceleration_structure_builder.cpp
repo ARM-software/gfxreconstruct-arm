@@ -237,7 +237,8 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanWriteAccelerationStructure
     BeginCommandBuffer();
 
     functions_.cmd_reset_query_pool(cmd_execute_obj_.command_buffer_, cmd_execute_obj_.query_pool_, 0, 1);
-
+    functions_.cmd_write_acceleration_structures_properties(
+        cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, cmd_execute_obj_.query_pool_, 0);
     OnCmdWriteAccelerationStructuresProperties(
         cmd_execute_obj_.command_buffer_, 1, &acceleration_structure, query_type, cmd_execute_obj_.query_pool_, 0);
 
@@ -515,9 +516,6 @@ void VulkanAccelerationStructureBuilder::OnCmdWriteAccelerationStructuresPropert
     VkQueryPool                 pool,
     uint32_t                    first_query)
 {
-    functions_.cmd_write_acceleration_structures_properties(
-        command_buffer, count, acceleration_structures, query_type, pool, first_query);
-
     if (query_type != VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
     {
         return;
