@@ -210,6 +210,14 @@ A folder named `D3D12` that contains the required Agility SDK runtime must exist
 
 ### Command Line Arguments
 
+Onscreen replay can be affected by the available display modes, especially for
+fullscreen swapchains. After onscreen swapchain creation or a successful buffer
+resize, replay warns if a nonzero requested dimension differs from the actual
+back-buffer dimension. The warning reports both sizes; screenshots use the actual
+back-buffer size, not the desktop image. Use `--swapchain offscreen` to avoid
+display-mode constraints and preserve explicitly specified buffer dimensions.
+Zero dimensions let DXGI choose the size and are not treated as mismatches.
+
 The `gfxrecon-replay` tool accepts the following command line arguments:
 
 ```text

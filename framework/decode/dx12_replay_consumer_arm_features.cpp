@@ -370,6 +370,47 @@ UINT Dx12ReplayConsumerArmFeatures::GetVirtualSwapchainCurrentBackBufferIndex(Dx
     return mapped_result.value();
 }
 
+void Dx12ReplayConsumerArmFeatures::CheckSwapchainSize(IDXGISwapChain*  swapchain,
+                                                       format::HandleId capture_id,
+                                                       uint32_t         requested_width,
+                                                       uint32_t         requested_height)
+{
+    // Zero dimensions let DXGI choose the size and are not a size mismatch.
+    if ((requested_width == 0) && (requested_height == 0))
+    {
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> back_buffer;
+    const HRESULT                          result = swapchain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
+    if (FAILED(result))
+    {
+        GFXRECON_LOG_WARNING("Failed to query onscreen swapchain back-buffer size at block %" PRIu64
+                             " for swapchain %" PRIu64 " (HRESULT: 0x%08X).",
+                             consumer_->GetCurrentBlockIndex(),
+                             capture_id,
+                             result);
+        return;
+    }
+
+    const auto actual_desc = back_buffer->GetDesc();
+    if (((requested_width != 0) && (actual_desc.Width != requested_width)) ||
+        ((requested_height != 0) && (actual_desc.Height != requested_height)))
+    {
+        GFXRECON_LOG_WARNING(
+            "Onscreen swapchain size differs at block %" PRIu64 " for swapchain %" PRIu64
+            ": requested %ux%u, actual %" PRIu64 "x%u. Screenshots use the actual back-buffer size. "
+            "Display/fullscreen constraints may affect onscreen dimensions; use --swapchain offscreen to avoid "
+            "display-mode constraints.",
+            consumer_->GetCurrentBlockIndex(),
+            capture_id,
+            requested_width,
+            requested_height,
+            actual_desc.Width,
+            actual_desc.Height);
+    }
+}
+
 HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChain(DxObjectInfo* replay_object_info,
                                                        HRESULT       original_result,
                                                        DxObjectInfo* device_info,
@@ -425,6 +466,8 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChain(DxObjectInfo* replay_obje
 
     GFXRECON_UNREFERENCED_PARAMETER(original_result);
 
+    const UINT requested_width  = desc_pointer->BufferDesc.Width;
+    const UINT requested_height = desc_pointer->BufferDesc.Height;
     const UINT buffer_count = desc_pointer->BufferCount;
     result                  = replay_object->CreateSwapChain(device, desc_pointer, swapchain->GetHandlePointer());
 
@@ -452,6 +495,10 @@ HRESULT Dx12ReplayConsumerArmFeatures::CreateSwapChain(DxObjectInfo* replay_obje
             (*swapchain->GetHandlePointer())->Release();
             *swapchain->GetHandlePointer() = nullptr;
             window_factory->Destroy(window);
+        }
+        else
+        {
+            CheckSwapchainSize(*swapchain->GetHandlePointer(), capture_id, requested_width, requested_height);
         }
     }
     else
@@ -522,6 +569,8 @@ Dx12ReplayConsumerArmFeatures::CreateSwapChainForHwnd(DxObjectInfo*             
 
     GFXRECON_UNREFERENCED_PARAMETER(original_result);
 
+    const UINT requested_width  = desc->Width;
+    const UINT requested_height = desc->Height;
     const UINT buffer_count = desc->BufferCount;
     result                  = replay_object->CreateSwapChainForHwnd(
         device, hwnd, desc, full_screen_desc, restrict_to_output, swapchain->GetHandlePointer());
@@ -547,6 +596,10 @@ Dx12ReplayConsumerArmFeatures::CreateSwapChainForHwnd(DxObjectInfo*             
             (*swapchain->GetHandlePointer())->Release();
             *swapchain->GetHandlePointer() = nullptr;
             window_factory->Destroy(window);
+        }
+        else
+        {
+            CheckSwapchainSize(*swapchain->GetHandlePointer(), capture_id, requested_width, requested_height);
         }
     }
     else

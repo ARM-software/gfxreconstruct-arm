@@ -4205,6 +4205,8 @@ void Dx12ReplayConsumerBase::ResetSwapchainImages(DxObjectInfo* info,
         {
             // Resize the swapchain's window.
             swapchain_info->window->SetSize(width, height);
+            arm_features_->CheckSwapchainSize(
+                static_cast<IDXGISwapChain*>(info->object), info->capture_id, width, height);
         }
     }
 }

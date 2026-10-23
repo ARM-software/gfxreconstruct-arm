@@ -49,6 +49,11 @@ class Dx12ReplayConsumerArmFeatures
 
     UINT GetVirtualSwapchainCurrentBackBufferIndex(DxObjectInfo* swapchain_info, UINT capture_result);
 
+    void CheckSwapchainSize(IDXGISwapChain*  swapchain,
+                            format::HandleId capture_id,
+                            uint32_t         requested_width,
+                            uint32_t         requested_height);
+
     HRESULT CreateSwapChain(DxObjectInfo*                                       replay_object_info,
                             HRESULT                                             original_result,
                             DxObjectInfo*                                       device_info,
