@@ -551,8 +551,10 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource(format::HandleId              
                 aliasing_offset   = HeapOffset;
             }
 
-            auto& offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
-            if (offset_map.find(allocation_offset) == offset_map.end())
+            auto&      offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
+            const auto allocation_key =
+                std::make_pair(pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER, allocation_offset);
+            if (offset_map.find(allocation_key) == offset_map.end())
             {
                 auto replay_alloc_info = GetReplayResourceDescAllocationInfo1(pDesc);
                 max_aliasing_size      = std::max(max_aliasing_size, replay_alloc_info.SizeInBytes);
@@ -579,14 +581,14 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource(format::HandleId              
                 result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &allocation);
                 if (SUCCEEDED(result))
                 {
-                    offset_map[allocation_offset] = allocation;
-                    aliasing_alloc                = allocation.Get();
+                    offset_map[allocation_key] = allocation;
+                    aliasing_alloc             = allocation.Get();
                 }
             }
             else
             {
                 result         = S_OK;
-                aliasing_alloc = offset_map[allocation_offset].Get();
+                aliasing_alloc = offset_map[allocation_key].Get();
                 allocation     = aliasing_alloc;
             }
 
@@ -753,8 +755,10 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId             
                 aliasing_offset   = HeapOffset;
             }
 
-            auto& offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
-            if (offset_map.find(allocation_offset) == offset_map.end())
+            auto&      offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
+            const auto allocation_key =
+                std::make_pair(pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER, allocation_offset);
+            if (offset_map.find(allocation_key) == offset_map.end())
             {
                 auto replay_alloc_info = GetReplayResourceDescAllocationInfo2(pDesc);
                 max_aliasing_size      = std::max(max_aliasing_size, replay_alloc_info.SizeInBytes);
@@ -781,14 +785,14 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource1(format::HandleId             
                 result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &allocation);
                 if (SUCCEEDED(result))
                 {
-                    offset_map[allocation_offset] = allocation;
-                    aliasing_alloc                = allocation.Get();
+                    offset_map[allocation_key] = allocation;
+                    aliasing_alloc             = allocation.Get();
                 }
             }
             else
             {
                 result         = S_OK;
-                aliasing_alloc = offset_map[allocation_offset].Get();
+                aliasing_alloc = offset_map[allocation_key].Get();
                 allocation     = aliasing_alloc;
             }
 
@@ -966,8 +970,10 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
                 aliasing_offset   = HeapOffset;
             }
 
-            auto& offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
-            if (offset_map.find(allocation_offset) == offset_map.end())
+            auto&      offset_map = heap_id_offset_aliasing_allocation_[heap_capture_id];
+            const auto allocation_key =
+                std::make_pair(pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER, allocation_offset);
+            if (offset_map.find(allocation_key) == offset_map.end())
             {
                 auto replay_alloc_info =
                     GetReplayResourceDescAllocationInfo3(pDesc, NumCastableFormats, pCastableFormats);
@@ -996,14 +1002,14 @@ HRESULT Dx12RebindAllocator::CreatePlacedResource2(format::HandleId             
                 result = allocator_->AllocateMemory(&alloc_desc, &alloc_info, &allocation);
                 if (SUCCEEDED(result))
                 {
-                    offset_map[allocation_offset] = allocation;
-                    aliasing_alloc                = allocation.Get();
+                    offset_map[allocation_key] = allocation;
+                    aliasing_alloc             = allocation.Get();
                 }
             }
             else
             {
                 result         = S_OK;
-                aliasing_alloc = offset_map[allocation_offset].Get();
+                aliasing_alloc = offset_map[allocation_key].Get();
                 allocation     = aliasing_alloc;
             }
 

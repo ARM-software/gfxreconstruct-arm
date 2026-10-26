@@ -27,7 +27,9 @@
 #include "util/platform.h"
 #include "decode/dx12_resource_allocator.h"
 #include "D3D12MemAlloc.h"
+#include <map>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <list>
 
@@ -247,8 +249,9 @@ class Dx12RebindAllocator : public Dx12ResourceAllocator
     ComPtr<D3D12MA::Allocator> allocator_;
     bool                       enable_as_committed_; // Cache for GFXRECON_ACCEL_STRUCT_COMMITTED env var
 
-    // heap id -> heap offset -> allocation
-    std::unordered_map<format::HandleId, std::unordered_map<UINT64, ComPtr<D3D12MA::Allocation>>>
+    // Keep whole-heap buffer allocations separate from per-offset texture allocations.
+    using AliasingAllocationKey = std::pair<bool, UINT64>;
+    std::unordered_map<format::HandleId, std::map<AliasingAllocationKey, ComPtr<D3D12MA::Allocation>>>
                                                                           heap_id_offset_aliasing_allocation_;
     std::unordered_map<format::HandleId, ComPtr<D3D12MA::Allocation>>     resource_id_allocation_;
     std::unordered_map<format::HandleId, ComPtr<D3D12MA::Pool>>           heap_id_custom_pool_;
