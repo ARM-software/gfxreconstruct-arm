@@ -46,6 +46,7 @@
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <unordered_set>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -70,6 +71,13 @@ class VulkanStateTracker
                         util::FileOutputStream*          asset_file_stream,
                         const std::string*               asset_file_name)
     {
+        std::unique_lock<std::mutex> lock(state_table_mutex_);
+        if (!DrainAccelerationStructureSnapshotSubmissions())
+        {
+            GFXRECON_LOG_FATAL("Cannot write trim state without valid acceleration structure input snapshots");
+            return 0;
+        }
+
         VulkanStateWriter state_writer(file_stream,
                                        compressor,
                                        thread_data,
@@ -79,7 +87,6 @@ class VulkanStateTracker
                                        asset_file_name,
                                        asset_file_stream != nullptr ? &asset_file_offsets_ : nullptr);
 
-        std::unique_lock<std::mutex> lock(state_table_mutex_);
         return state_writer.WriteState(state_table_, frame_number);
     }
 
@@ -518,10 +525,15 @@ class VulkanStateTracker
 
     void TrackCommandBuffersSubmision(uint32_t command_buffer_count, const VkCommandBuffer* command_buffers);
 
-    void TrackAccelerationStructureSnapshotSubmission(VkQueue                queue,
-                                                      uint32_t               command_buffer_count,
-                                                      const VkCommandBuffer* command_buffers,
-                                                      VkFence                fence);
+    void TrackAccelerationStructureSnapshotSubmission(VkQueue             queue,
+                                                      uint32_t            submit_count,
+                                                      const VkSubmitInfo* submits,
+                                                      VkFence             fence);
+
+    void TrackAccelerationStructureSnapshotSubmission2(VkQueue              queue,
+                                                       uint32_t             submit_count,
+                                                       const VkSubmitInfo2* submits,
+                                                       VkFence              fence);
 
     void CompleteAccelerationStructureSnapshotFence(VkFence fence);
 
@@ -926,25 +938,27 @@ class VulkanStateTracker
     void MarkReferencedAssetsAsDirty(vulkan_wrappers::CommandBufferWrapper* cmd_buf_wrapper);
 
     bool CreateAccelerationStructureInputBufferCopy(vulkan_wrappers::DeviceWrapper*   device_wrapper,
-                                                    AccelerationStructureInputBuffer* input_buffer);
-
-    void CaptureAccelerationStructureBuildInputs(VkCommandBuffer                           command_buffer,
-                                                 vulkan_wrappers::DeviceWrapper*           device_wrapper,
-                                                 AccelerationStructureKHRBuildCommandData* build_command);
+                                                    AccelerationStructureInputBuffer& input_buffer);
 
     void CaptureBuildInputBuffers(VkCommandBuffer                                command_buffer,
                                   vulkan_wrappers::DeviceWrapper*                device_wrapper,
-                                  std::vector<AccelerationStructureInputBuffer*> input_buffers,
+                                  std::vector<AccelerationStructureInputBuffer>& input_buffers,
                                   VkAccessFlags                                  build_read_access);
 
     void ReleaseAccelerationStructureSnapshots(vulkan_wrappers::CommandBufferWrapper* wrapper);
 
+    // Caller must hold acceleration_structure_snapshot_mutex_ for readback and destruction.
     bool ReadAccelerationStructureSnapshot(const std::shared_ptr<AccelerationStructureInputBufferSnapshot>& snapshot);
 
     void
     DestroyAccelerationStructureSnapshot(const std::shared_ptr<AccelerationStructureInputBufferSnapshot>& snapshot);
 
     void CompleteAccelerationStructureSnapshotSubmissions(VkQueue queue, uint64_t serial);
+
+    bool DrainAccelerationStructureSnapshotSubmissions();
+    void PublishAccelerationStructureBuild(const AccelerationStructureRecordedBuild& build);
+
+    friend class AccelerationStructureSnapshotTest;
 
     std::mutex       state_table_mutex_;
     VulkanStateTable state_table_;
@@ -962,16 +976,16 @@ class VulkanStateTracker
 
     struct AccelerationStructureSnapshotSubmission
     {
-        uint64_t                                                               serial{ 0 };
-        VkDevice                                                               device{ VK_NULL_HANDLE };
-        std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
+        uint64_t                                                                      submission_id{ 0 };
+        std::unordered_set<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
     };
     struct AccelerationStructureSnapshotQueueState
     {
-        uint64_t                                            next_serial{ 0 };
+        uint64_t                                            submission_counter{ 0 };
         VkDevice                                            device{ VK_NULL_HANDLE };
         std::deque<AccelerationStructureSnapshotSubmission> submissions;
     };
+    // Protects submission bookkeeping, snapshot readback/destruction, and publication of submitted builds.
     std::mutex                                                           acceleration_structure_snapshot_mutex_;
     std::unordered_map<VkQueue, AccelerationStructureSnapshotQueueState> acceleration_structure_snapshot_queue_states_;
     std::unordered_map<VkFence, std::pair<VkQueue, uint64_t>>            acceleration_structure_snapshot_fences_;

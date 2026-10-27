@@ -1840,7 +1840,7 @@ void VulkanStateWriter::WriteRestorableBufferBinding(encode::RestoreableBuffer& 
     WriteFunctionCall(format::ApiCall_vkBindBufferMemory, &parameter_stream_);
     parameter_stream_.Clear();
 
-    VkBufferDeviceAddressInfo pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, buffer.handle };
+    VkBufferDeviceAddressInfo pInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, VK_NULL_HANDLE };
     mock_address_counter_ -= memory_requirements->size;
     buffer.actual_address = mock_address_counter_;
 
@@ -2016,7 +2016,7 @@ void VulkanStateWriter::AppendBuildCommand(encode::AccelerationStructureBuildSta
             break;
     }
 
-    for (auto& [handle_id, buffer] : build_command.input_buffers)
+    for (auto& buffer : build_command.input_buffers)
     {
         if (buffer.build_copy_snapshot != nullptr)
         {
@@ -2155,7 +2155,7 @@ void VulkanStateWriter::WriteAccelerationStructureStateMetaCommands(const Vulkan
 void VulkanStateWriter::WriteAccelerationStructureResourceInit(
     encode::AccelerationStructureKHRBuildCommandData* command)
 {
-    for (auto& [handle_id, buffer] : command->input_buffers)
+    for (auto& buffer : command->input_buffers)
     {
         const auto& snapshot       = buffer.build_copy_snapshot;
         const bool  has_build_copy = snapshot != nullptr && !snapshot->bytes.empty();
@@ -2186,7 +2186,7 @@ void VulkanStateWriter::WriteAccelerationStructureBuildState(const VulkanStateTa
 
     EncodeAccelerationStructureBuildMetaCommand(command);
 
-    for (auto& [handle_id, buffer] : command->input_buffers)
+    for (auto& buffer : command->input_buffers)
     {
         if (buffer.build_copy_snapshot != nullptr && !buffer.build_copy_snapshot->bytes.empty())
         {
@@ -2254,7 +2254,7 @@ void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCom
         }
     }
 
-    for (const auto& [handle_id, buffer] : command->input_buffers)
+    for (const auto& buffer : command->input_buffers)
     {
         const auto& snapshot = buffer.build_copy_snapshot;
         if (snapshot != nullptr && !snapshot->bytes.empty())
@@ -2430,7 +2430,11 @@ void VulkanStateWriter::EncodeAccelerationStructureWritePropertiesCommand(
     {
         target_handle_id = target->handle_id;
     }
-    GFXRECON_ASSERT(target_handle_id != format::kNullHandleId);
+    if (target_handle_id == format::kNullHandleId)
+    {
+        GFXRECON_LOG_FATAL("Cannot find remapped id for vkCmdWriteAccelerationStructuresPropertiesKHR %" PRIu64,
+                           command->acceleration_structure);
+    }
 
     encoder_.EncodeHandleIdValue(target_handle_id);
 

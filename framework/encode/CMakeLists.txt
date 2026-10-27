@@ -227,6 +227,7 @@ if (${RUN_TESTS})
     add_executable(gfxrecon_encode_test "")
     target_sources(gfxrecon_encode_test PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/test/main.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/test/acceleration_structure_snapshot_test.cpp
         ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp)
     target_link_libraries(gfxrecon_encode_test PRIVATE gfxrecon_encode)
     if (MSVC)

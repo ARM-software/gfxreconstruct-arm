@@ -23,14 +23,11 @@
 
 #include "encode/vulkan_state_tracker.h"
 
-#include "decode/vulkan_object_info.h"
 #include "encode/vulkan_acceleration_structure_build_state.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_info.h"
 #include "encode/vulkan_handle_wrapper_util.h"
-#include "encode/vulkan_state_table_base.h"
 #include "encode/vulkan_track_struct.h"
-#include "graphics/vulkan_struct_deep_copy.h"
 #include "graphics/vulkan_util.h"
 #include "generated/generated_vulkan_struct_trackers.h"
 #include "format/format.h"
@@ -39,8 +36,6 @@
 #include "util/page_guard_manager.h"
 #include "util/platform.h"
 #include "Vulkan-Utility-Libraries/vk_format_utils.h"
-#include "util/to_string.h"
-#include "vulkan/vulkan_core.h"
 
 #include "util/page_status_tracker.h"
 
@@ -49,6 +44,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <vulkan/vulkan_core.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -550,18 +546,18 @@ void VulkanStateTracker::TrackDataGraphPipelineSessionMemoryBinding(VkDevice    
 }
 
 bool VulkanStateTracker::CreateAccelerationStructureInputBufferCopy(vulkan_wrappers::DeviceWrapper*   device_wrapper,
-                                                                    AccelerationStructureInputBuffer* input_buffer)
+                                                                    AccelerationStructureInputBuffer& input_buffer)
 {
-    GFXRECON_ASSERT(device_wrapper != nullptr && input_buffer != nullptr);
+    GFXRECON_ASSERT(device_wrapper != nullptr);
 
-    auto snapshot = input_buffer->build_copy_snapshot;
+    auto snapshot = input_buffer.build_copy_snapshot;
     GFXRECON_ASSERT(snapshot != nullptr && snapshot->size != 0);
     snapshot->device             = device_wrapper;
-    snapshot->queue_family_index = input_buffer->queue_family_index;
+    snapshot->queue_family_index = input_buffer.queue_family_index;
 
     VkBufferCreateInfo create_info{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     create_info.size        = snapshot->size;
-    create_info.usage       = input_buffer->usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    create_info.usage       = input_buffer.usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VkResult result =
@@ -646,7 +642,7 @@ bool VulkanStateTracker::CreateAccelerationStructureInputBufferCopy(vulkan_wrapp
         return false;
     }
 
-    input_buffer->build_copy_snapshot = snapshot;
+    input_buffer.build_copy_snapshot = snapshot;
     {
         std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
         acceleration_structure_input_buffer_resources_[device_wrapper->handle].push_back(snapshot);
@@ -654,68 +650,56 @@ bool VulkanStateTracker::CreateAccelerationStructureInputBufferCopy(vulkan_wrapp
     return true;
 }
 
-void VulkanStateTracker::CaptureAccelerationStructureBuildInputs(
-    VkCommandBuffer                           command_buffer,
-    vulkan_wrappers::DeviceWrapper*           device_wrapper,
-    AccelerationStructureKHRBuildCommandData* build_command)
-{
-    GFXRECON_ASSERT(command_buffer != VK_NULL_HANDLE && device_wrapper != nullptr && build_command != nullptr);
-
-    std::vector<AccelerationStructureInputBuffer*> input_buffers;
-    input_buffers.reserve(build_command->input_buffers.size());
-    for (auto& [handle_id, input_buffer] : build_command->input_buffers)
-    {
-        input_buffers.push_back(&input_buffer);
-    }
-
-    CaptureBuildInputBuffers(
-        command_buffer, device_wrapper, std::move(input_buffers), VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR);
-}
-
 void VulkanStateTracker::CaptureBuildInputBuffers(VkCommandBuffer                                command_buffer,
                                                   vulkan_wrappers::DeviceWrapper*                device_wrapper,
-                                                  std::vector<AccelerationStructureInputBuffer*> input_buffers,
+                                                  std::vector<AccelerationStructureInputBuffer>& input_buffers,
                                                   VkAccessFlags                                  build_read_access)
 {
     GFXRECON_ASSERT(command_buffer != VK_NULL_HANDLE && device_wrapper != nullptr);
 
-    std::vector<AccelerationStructureInputBuffer*> copied_buffers;
-    copied_buffers.reserve(input_buffers.size());
-    for (AccelerationStructureInputBuffer* input_buffer : input_buffers)
+    uint32_t successfull_input_buffer_copies_created = 0;
+    for (AccelerationStructureInputBuffer& input_buffer : input_buffers)
     {
-        if (input_buffer != nullptr && input_buffer->build_copy_snapshot != nullptr &&
-            input_buffer->build_copy_snapshot->size != 0 && input_buffer->handle != VK_NULL_HANDLE &&
+        if (input_buffer.build_copy_snapshot != nullptr && input_buffer.build_copy_snapshot->size != 0 &&
+            input_buffer.handle != VK_NULL_HANDLE &&
             CreateAccelerationStructureInputBufferCopy(device_wrapper, input_buffer))
         {
-            copied_buffers.push_back(input_buffer);
+            ++successfull_input_buffer_copies_created;
         }
     }
-
-    if (copied_buffers.empty())
+    if (successfull_input_buffer_copies_created == 0)
     {
         return;
     }
 
     auto* command_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(command_buffer);
     GFXRECON_ASSERT(command_buffer_wrapper != nullptr);
-    for (const AccelerationStructureInputBuffer* input_buffer : copied_buffers)
+    for (const AccelerationStructureInputBuffer& input_buffer : input_buffers)
     {
-        command_buffer_wrapper->acceleration_structure_input_snapshots.push_back(input_buffer->build_copy_snapshot);
+        if (input_buffer.build_copy_snapshot == nullptr || input_buffer.build_copy_snapshot->buffer == VK_NULL_HANDLE)
+        {
+            continue;
+        }
+        command_buffer_wrapper->acceleration_structure_input_snapshots.push_back(input_buffer.build_copy_snapshot);
     }
 
     std::vector<VkBufferMemoryBarrier> pre_copy_barriers;
-    pre_copy_barriers.reserve(copied_buffers.size());
-    for (const AccelerationStructureInputBuffer* input_buffer : copied_buffers)
+    pre_copy_barriers.reserve(successfull_input_buffer_copies_created);
+    for (const AccelerationStructureInputBuffer& input_buffer : input_buffers)
     {
+        if (input_buffer.build_copy_snapshot == nullptr || input_buffer.build_copy_snapshot->buffer == VK_NULL_HANDLE)
+        {
+            continue;
+        }
         pre_copy_barriers.push_back({ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                                       nullptr,
                                       VK_ACCESS_MEMORY_WRITE_BIT,
                                       VK_ACCESS_TRANSFER_READ_BIT,
                                       VK_QUEUE_FAMILY_IGNORED,
                                       VK_QUEUE_FAMILY_IGNORED,
-                                      input_buffer->handle,
-                                      input_buffer->build_copy_source_offset,
-                                      input_buffer->build_copy_snapshot->size });
+                                      input_buffer.handle,
+                                      input_buffer.build_copy_source_offset,
+                                      input_buffer.build_copy_snapshot->size });
     }
     device_wrapper->layer_table.CmdPipelineBarrier(command_buffer,
                                                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -728,37 +712,45 @@ void VulkanStateTracker::CaptureBuildInputBuffers(VkCommandBuffer               
                                                    0,
                                                    nullptr);
 
-    for (const AccelerationStructureInputBuffer* input_buffer : copied_buffers)
+    for (const AccelerationStructureInputBuffer& input_buffer : input_buffers)
     {
-        const VkBufferCopy copy_region{ input_buffer->build_copy_source_offset,
+        if (input_buffer.build_copy_snapshot == nullptr || input_buffer.build_copy_snapshot->buffer == VK_NULL_HANDLE)
+        {
+            continue;
+        }
+        const VkBufferCopy copy_region{ input_buffer.build_copy_source_offset,
                                         0,
-                                        input_buffer->build_copy_snapshot->size };
+                                        input_buffer.build_copy_snapshot->size };
         device_wrapper->layer_table.CmdCopyBuffer(
-            command_buffer, input_buffer->handle, input_buffer->build_copy_snapshot->buffer, 1, &copy_region);
+            command_buffer, input_buffer.handle, input_buffer.build_copy_snapshot->buffer, 1, &copy_region);
     }
 
     std::vector<VkBufferMemoryBarrier> post_copy_barriers;
-    post_copy_barriers.reserve(copied_buffers.size() * 2);
-    for (const AccelerationStructureInputBuffer* input_buffer : copied_buffers)
+    post_copy_barriers.reserve(2 * successfull_input_buffer_copies_created);
+    for (const AccelerationStructureInputBuffer& input_buffer : input_buffers)
     {
+        if (input_buffer.build_copy_snapshot == nullptr || input_buffer.build_copy_snapshot->buffer == VK_NULL_HANDLE)
+        {
+            continue;
+        }
         post_copy_barriers.push_back({ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                                        nullptr,
                                        VK_ACCESS_TRANSFER_READ_BIT,
                                        build_read_access,
                                        VK_QUEUE_FAMILY_IGNORED,
                                        VK_QUEUE_FAMILY_IGNORED,
-                                       input_buffer->handle,
-                                       input_buffer->build_copy_source_offset,
-                                       input_buffer->build_copy_snapshot->size });
+                                       input_buffer.handle,
+                                       input_buffer.build_copy_source_offset,
+                                       input_buffer.build_copy_snapshot->size });
         post_copy_barriers.push_back({ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                                        nullptr,
                                        VK_ACCESS_TRANSFER_WRITE_BIT,
                                        VK_ACCESS_HOST_READ_BIT | VK_ACCESS_MEMORY_READ_BIT,
                                        VK_QUEUE_FAMILY_IGNORED,
                                        VK_QUEUE_FAMILY_IGNORED,
-                                       input_buffer->build_copy_snapshot->buffer,
+                                       input_buffer.build_copy_snapshot->buffer,
                                        0,
-                                       input_buffer->build_copy_snapshot->size });
+                                       input_buffer.build_copy_snapshot->size });
     }
     device_wrapper->layer_table.CmdPipelineBarrier(command_buffer,
                                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -802,13 +794,12 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
         auto storage_buffer = state_table_.GetVulkanBufferWrapper(wrapper->buffer);
         GFXRECON_ASSERT(storage_buffer != nullptr);
 
-        auto& build_state = storage_buffer->acceleration_structures[wrapper->handle_id];
-
         encode::AccelerationStructureKHRBuildCommandData dst_command{};
 
         for (uint32_t g = 0; g < build_info.geometryCount; ++g)
         {
-            auto geometry = build_info.pGeometries != nullptr ? build_info.pGeometries + g : build_info.ppGeometries[g];
+            const VkAccelerationStructureGeometryKHR* geometry =
+                build_info.pGeometries != nullptr ? build_info.pGeometries + g : build_info.ppGeometries[g];
             const VkAccelerationStructureBuildRangeInfoKHR& range = pp_buildRange_infos[i][g];
 
             // Each range starts at the address stored in the geometry. Dynamic offsets are included in the size so
@@ -922,101 +913,62 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                                          range_size);
                 }
 
-                encode::AccelerationStructureInputBuffer& buffer =
-                    dst_command.input_buffers[target_buffer_wrapper->handle_id];
-
-                buffer.capture_address    = address;
-                buffer.handle             = target_buffer_wrapper->handle;
-                buffer.handle_id          = target_buffer_wrapper->handle_id;
-                buffer.device             = target_buffer_wrapper->device;
-                buffer.queue_family_index = target_buffer_wrapper->queue_family_index;
-                buffer.created_size       = target_buffer_wrapper->size;
-                buffer.usage              = target_buffer_wrapper->usage;
-                if (buffer.build_copy_snapshot == nullptr)
+                auto buffer = std::find_if(dst_command.input_buffers.begin(),
+                                           dst_command.input_buffers.end(),
+                                           [&target_buffer_wrapper](AccelerationStructureInputBuffer& buffer) {
+                                               return buffer.handle_id == target_buffer_wrapper->handle_id;
+                                           });
+                if (buffer == dst_command.input_buffers.end())
                 {
-                    buffer.build_copy_snapshot = std::make_shared<AccelerationStructureInputBufferSnapshot>();
+                    buffer = dst_command.input_buffers.insert(dst_command.input_buffers.end(),
+                                                              AccelerationStructureInputBuffer{});
                 }
-                auto& snapshot = *buffer.build_copy_snapshot;
+
+                buffer->capture_address    = address;
+                buffer->handle             = target_buffer_wrapper->handle;
+                buffer->handle_id          = target_buffer_wrapper->handle_id;
+                buffer->device             = target_buffer_wrapper->device;
+                buffer->queue_family_index = target_buffer_wrapper->queue_family_index;
+                buffer->created_size       = target_buffer_wrapper->size;
+                buffer->usage              = target_buffer_wrapper->usage;
+                if (buffer->build_copy_snapshot == nullptr)
+                {
+                    buffer->build_copy_snapshot = std::make_shared<AccelerationStructureInputBufferSnapshot>();
+                }
+                auto& snapshot = *buffer->build_copy_snapshot;
                 if (snapshot.size == 0)
                 {
-                    buffer.build_copy_source_offset  = source_offset;
-                    buffer.build_copy_source_address = address;
-                    snapshot.size                    = range_size;
+                    buffer->build_copy_source_offset  = source_offset;
+                    buffer->build_copy_source_address = address;
+                    snapshot.size                     = range_size;
                 }
                 else
                 {
-                    const VkDeviceSize range_begin = std::min(buffer.build_copy_source_offset, source_offset);
+                    const VkDeviceSize range_begin = std::min(buffer->build_copy_source_offset, source_offset);
                     const VkDeviceSize range_end =
-                        std::max(buffer.build_copy_source_offset + snapshot.size, source_offset + range_size);
-                    buffer.build_copy_source_offset  = range_begin;
-                    buffer.build_copy_source_address = target_buffer_wrapper->address + range_begin;
-                    snapshot.size                    = range_end - range_begin;
+                        std::max(buffer->build_copy_source_offset + snapshot.size, source_offset + range_size);
+                    buffer->build_copy_source_offset  = range_begin;
+                    buffer->build_copy_source_address = target_buffer_wrapper->address + range_begin;
+                    snapshot.size                     = range_end - range_begin;
                 }
             }
         }
 
-        CaptureAccelerationStructureBuildInputs(command_buffer, device_wrapper, &dst_command);
-
-        // Multiple acceleration structure objects may alias the same buffer storage. A build into an overlapping
-        // range replaces the contents of that storage, so retaining builds for the older AS objects would try to
-        // reconstruct several historical states into the same bytes. Keep only the most recent build for an
-        // aliased range.
-        const auto ranges_overlap = [](VkDeviceSize first_offset,
-                                       VkDeviceSize first_size,
-                                       VkDeviceSize second_offset,
-                                       VkDeviceSize second_size) {
-            if (first_offset < second_offset)
-            {
-                return first_size > (second_offset - first_offset);
-            }
-            return second_size > (first_offset - second_offset);
-        };
-
-        for (auto& [alias_id, alias_state] : storage_buffer->acceleration_structures)
-        {
-            if (alias_id == wrapper->handle_id || alias_state->type != VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR ||
-                !alias_state->latest_build_command.has_value())
-            {
-                continue;
-            }
-
-            const auto& alias_command = alias_state->latest_build_command.value();
-            if (ranges_overlap(wrapper->offset, wrapper->size, alias_command.offset, alias_command.size))
-            {
-                alias_state->latest_build_command.reset();
-            }
-        }
+        CaptureBuildInputBuffers(
+            command_buffer, device_wrapper, dst_command.input_buffers, VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR);
 
         // track all AS builds as regular builds, we'll have no AS to 'update'
         GFXRECON_ASSERT(wrapper->address != 0 && wrapper->size != 0);
-        dst_command.device_id     = device_wrapper->handle_id;
-        dst_command.handle_id     = wrapper->handle_id;
-        dst_command.type          = wrapper->type;
-        dst_command.size          = wrapper->size;
-        dst_command.offset        = wrapper->offset;
-        dst_command.geometry_info = build_info;
-
+        dst_command.device_id          = device_wrapper->handle_id;
+        dst_command.handle_id          = wrapper->handle_id;
+        dst_command.type               = wrapper->type;
+        dst_command.size               = wrapper->size;
+        dst_command.offset             = wrapper->offset;
+        const auto* tracked_build_info = static_cast<const VkAccelerationStructureBuildGeometryInfoKHR*>(
+            vulkan_trackers::TrackStruct(&build_info, dst_command.geometry_info_memory));
+        dst_command.geometry_info                          = *tracked_build_info;
         dst_command.geometry_info.mode                     = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         dst_command.geometry_info.srcAccelerationStructure = VK_NULL_HANDLE;
-        if (build_info.pGeometries != nullptr)
-        {
-            VkAccelerationStructureGeometryKHR* unwrapped = gfxrecon::encode::vulkan_trackers::TrackStructs(
-                build_info.pGeometries, build_info.geometryCount, dst_command.geometry_info_memory);
-            dst_command.geometry_info.pGeometries = unwrapped;
-        }
-        else if (build_info.ppGeometries != nullptr)
-        {
-            std::vector<VkAccelerationStructureGeometryKHR> geometries(build_info.geometryCount);
-            for (uint32_t g = 0; g < build_info.geometryCount; ++g)
-            {
-                geometries[g] = *build_info.ppGeometries[g];
-            }
-
-            VkAccelerationStructureGeometryKHR* unwrapped = gfxrecon::encode::vulkan_trackers::TrackStructs(
-                geometries.data(), build_info.geometryCount, dst_command.geometry_info_memory);
-            dst_command.geometry_info.pGeometries  = unwrapped;
-            dst_command.geometry_info.ppGeometries = nullptr;
-        }
         dst_command.build_range_infos.insert(dst_command.build_range_infos.end(),
                                              pp_buildRange_infos[i],
                                              pp_buildRange_infos[i] + build_info.geometryCount);
@@ -1033,17 +985,17 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
         storage_buffer->device->layer_table.GetBufferMemoryRequirements(
             storage_buffer->device->handle, storage_buffer->handle, &dst_command.storage_buffer.memory_requirements);
 
-        wrapper->blas.clear();
-
         for (uint32_t g = 0; g < build_info.geometryCount; ++g)
         {
-            if (dst_command.geometry_info.pGeometries[g].geometryType != VK_GEOMETRY_TYPE_INSTANCES_KHR)
+            const auto* geometry = dst_command.geometry_info.pGeometries != nullptr
+                                       ? dst_command.geometry_info.pGeometries + g
+                                       : dst_command.geometry_info.ppGeometries[g];
+            if (geometry->geometryType != VK_GEOMETRY_TYPE_INSTANCES_KHR)
             {
                 continue;
             }
-            const VkDeviceAddress address =
-                dst_command.geometry_info.pGeometries[g].geometry.instances.data.deviceAddress;
-            const uint32_t primitive_count = pp_buildRange_infos[i]->primitiveCount;
+            const VkDeviceAddress address         = geometry->geometry.instances.data.deviceAddress;
+            const uint32_t        primitive_count = pp_buildRange_infos[i]->primitiveCount;
             // According to spec both address and primitiveCount can be 0.
             // Nothing to handle in these cases.
             if (address && primitive_count)
@@ -1056,7 +1008,17 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
             }
         }
 
-        build_state->latest_build_command = std::move(dst_command);
+        AccelerationStructureRecordedBuild recorded;
+        recorded.command = std::move(dst_command);
+        recorded.state   = storage_buffer->acceleration_structures[wrapper->handle_id];
+        for (const auto& [alias_id, alias_state] : storage_buffer->acceleration_structures)
+        {
+            if (alias_id != wrapper->handle_id)
+            {
+                recorded.aliases.push_back(alias_state);
+            }
+        }
+        cmd_buf_wrapper->acceleration_structure_build_events.emplace_back(std::move(recorded));
     }
 }
 
@@ -1170,14 +1132,8 @@ void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer              
 
         if (infos[i].mode == VK_BUILD_MICROMAP_MODE_BUILD_EXT)
         {
-            std::vector<AccelerationStructureInputBuffer*> input_buffers;
-            input_buffers.reserve(dst_command->input_buffers.size());
-            for (AccelerationStructureInputBuffer& input_buffer : dst_command->input_buffers)
-            {
-                input_buffers.push_back(&input_buffer);
-            }
             CaptureBuildInputBuffers(
-                command_buffer, wrapper->device, std::move(input_buffers), VK_ACCESS_MEMORY_READ_BIT);
+                command_buffer, wrapper->device, dst_command->input_buffers, VK_ACCESS_MEMORY_READ_BIT);
             wrapper->latest_build_command_ = std::move(dst_command);
         }
     }
@@ -1326,6 +1282,7 @@ void VulkanStateTracker::TrackExecuteCommands(VkCommandBuffer        command_buf
         assert(secondary_wrapper != nullptr);
 
         primary_wrapper->secondaries.push_back(secondary_wrapper);
+        primary_wrapper->acceleration_structure_build_events.emplace_back(secondary_wrapper);
 
         for (const auto& layout_entry : secondary_wrapper->pending_layouts)
         {
@@ -2684,8 +2641,7 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DeviceWrapper* wrapper)
     assert(wrapper != nullptr);
     wrapper->create_parameters = nullptr;
 
-    CompleteAccelerationStructureSnapshotDevice(wrapper->handle);
-
+    // Device destruction is not a successful completion notification. Discard pending records without readback.
     {
         std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
         std::unordered_set<VkQueue> device_queues;
@@ -2725,14 +2681,10 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DeviceWrapper* wrapper)
             input_resources = std::move(resources_it->second);
             acceleration_structure_input_buffer_resources_.erase(resources_it);
         }
-    }
-    for (const auto& resource : input_resources)
-    {
-        if (!resource->resources_destroyed && resource->bytes.size() != resource->size)
+        for (const auto& resource : input_resources)
         {
-            ReadAccelerationStructureSnapshot(resource);
+            DestroyAccelerationStructureSnapshot(resource);
         }
-        DestroyAccelerationStructureSnapshot(resource);
     }
 
     {
@@ -3281,6 +3233,11 @@ void VulkanStateTracker::TrackCommandBuffersSubmision(uint32_t               com
                                      : vulkan_wrappers::CommandBufferWrapper::kExecutable;
 
         // Track acceleration structures
+        for (const auto& entry : cmd_buf_wrapper->tlas_build_info_map)
+        {
+            entry.first->blas.clear();
+        }
+
         for (const auto& tlas_build_info : cmd_buf_wrapper->tlas_build_info_map)
         {
             // Sanity checks. Build infos with one of these 0 should not be inserted in the map
@@ -3385,14 +3342,14 @@ void VulkanStateTracker::TrackCommandBuffersSubmision(uint32_t               com
     }
 }
 
-void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue                queue,
-                                                                      uint32_t               command_buffer_count,
-                                                                      const VkCommandBuffer* command_buffers,
-                                                                      VkFence                fence)
+void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue             queue,
+                                                                      uint32_t            submit_count,
+                                                                      const VkSubmitInfo* submits,
+                                                                      VkFence             fence)
 {
-    std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
-    std::unordered_set<AccelerationStructureInputBufferSnapshot*>          unique_snapshots;
-    VkDevice                                                               device = VK_NULL_HANDLE;
+    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
+    std::unordered_set<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
+    VkDevice                                                                      device = VK_NULL_HANDLE;
 
     std::function<void(vulkan_wrappers::CommandBufferWrapper*)> collect_snapshots =
         [&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
@@ -3406,10 +3363,10 @@ void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue   
             }
             for (const auto& snapshot : wrapper->acceleration_structure_input_snapshots)
             {
-                if (snapshot != nullptr && unique_snapshots.insert(snapshot.get()).second)
+                if (snapshot != nullptr)
                 {
                     snapshot->release_on_completion |= wrapper->one_time_submission;
-                    snapshots.push_back(snapshot);
+                    snapshots.insert(snapshot);
                 }
             }
             for (auto* secondary : wrapper->secondaries)
@@ -3418,10 +3375,16 @@ void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue   
             }
         };
 
-    for (uint32_t i = 0; i < command_buffer_count; ++i)
+    for (uint32_t s = 0; s < submit_count; ++s)
     {
-        collect_snapshots(vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(command_buffers[i]));
+        const VkSubmitInfo& submit_info = submits[s];
+        for (uint32_t i = 0; i < submit_info.commandBufferCount; ++i)
+        {
+            collect_snapshots(
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(submit_info.pCommandBuffers[i]));
+        }
     }
+
     if (device == VK_NULL_HANDLE && fence != VK_NULL_HANDLE)
     {
         auto* fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(fence);
@@ -3431,9 +3394,8 @@ void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue   
         }
     }
 
-    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
-    auto&                       queue_state = acceleration_structure_snapshot_queue_states_[queue];
-    const uint64_t              serial      = ++queue_state.next_serial;
+    auto&          queue_state   = acceleration_structure_snapshot_queue_states_[queue];
+    const uint64_t submission_id = ++queue_state.submission_counter;
     if (queue_state.device == VK_NULL_HANDLE)
     {
         queue_state.device = device;
@@ -3443,24 +3405,163 @@ void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission(VkQueue   
         for (const auto& snapshot : snapshots)
         {
             ++snapshot->pending_submissions;
+            snapshot->copy_completed     = false;
+            snapshot->readback_succeeded = false;
         }
-        queue_state.submissions.push_back({ serial, device, std::move(snapshots) });
+        queue_state.submissions.push_back({ submission_id, std::move(snapshots) });
     }
+
+    // Publish only after successful submission, in primary/secondary execution order.
+    std::function<void(vulkan_wrappers::CommandBufferWrapper*)> publish_builds =
+        [&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
+            if (wrapper == nullptr)
+            {
+                return;
+            }
+            for (const auto& event : wrapper->acceleration_structure_build_events)
+            {
+                if (const auto* build = std::get_if<AccelerationStructureRecordedBuild>(&event))
+                {
+                    PublishAccelerationStructureBuild(*build);
+                }
+                else
+                {
+                    publish_builds(std::get<vulkan_wrappers::CommandBufferWrapper*>(event));
+                }
+            }
+        };
+
+    for (uint32_t s = 0; s < submit_count; ++s)
+    {
+        const VkSubmitInfo& submit_info = submits[s];
+        for (uint32_t i = 0; i < submit_info.commandBufferCount; ++i)
+        {
+            publish_builds(
+                vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(submit_info.pCommandBuffers[i]));
+        }
+    }
+
     if (fence != VK_NULL_HANDLE)
     {
-        acceleration_structure_snapshot_fences_[fence] = { queue, serial };
+        acceleration_structure_snapshot_fences_[fence] = { queue, submission_id };
+    }
+}
+
+void VulkanStateTracker::TrackAccelerationStructureSnapshotSubmission2(VkQueue              queue,
+                                                                       uint32_t             submit_count,
+                                                                       const VkSubmitInfo2* submits,
+                                                                       VkFence              fence)
+{
+    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
+    std::unordered_set<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> snapshots;
+    VkDevice                                                                      device = VK_NULL_HANDLE;
+
+    std::function<void(vulkan_wrappers::CommandBufferWrapper*)> collect_snapshots =
+        [&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
+            if (wrapper == nullptr)
+            {
+                return;
+            }
+            if (device == VK_NULL_HANDLE && wrapper->parent_pool != nullptr && wrapper->parent_pool->device != nullptr)
+            {
+                device = wrapper->parent_pool->device->handle;
+            }
+            for (const auto& snapshot : wrapper->acceleration_structure_input_snapshots)
+            {
+                if (snapshot != nullptr)
+                {
+                    snapshot->release_on_completion |= wrapper->one_time_submission;
+                    snapshots.insert(snapshot);
+                }
+            }
+            for (auto* secondary : wrapper->secondaries)
+            {
+                collect_snapshots(secondary);
+            }
+        };
+
+    for (uint32_t s = 0; s < submit_count; ++s)
+    {
+        const VkSubmitInfo2& submit_info = submits[s];
+        for (uint32_t i = 0; i < submit_info.commandBufferInfoCount; ++i)
+        {
+            collect_snapshots(vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
+                submit_info.pCommandBufferInfos[i].commandBuffer));
+        }
+    }
+
+    if (device == VK_NULL_HANDLE && fence != VK_NULL_HANDLE)
+    {
+        auto* fence_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::FenceWrapper>(fence);
+        if (fence_wrapper != nullptr && fence_wrapper->device != nullptr)
+        {
+            device = fence_wrapper->device->handle;
+        }
+    }
+
+    auto&          queue_state   = acceleration_structure_snapshot_queue_states_[queue];
+    const uint64_t submission_id = ++queue_state.submission_counter;
+    if (queue_state.device == VK_NULL_HANDLE)
+    {
+        queue_state.device = device;
+    }
+    if (!snapshots.empty())
+    {
+        for (const auto& snapshot : snapshots)
+        {
+            ++snapshot->pending_submissions;
+            snapshot->copy_completed     = false;
+            snapshot->readback_succeeded = false;
+        }
+        queue_state.submissions.push_back({ submission_id, std::move(snapshots) });
+    }
+
+    // Publish only after successful submission, in primary/secondary execution order.
+    std::function<void(vulkan_wrappers::CommandBufferWrapper*)> publish_builds =
+        [&](vulkan_wrappers::CommandBufferWrapper* wrapper) {
+            if (wrapper == nullptr)
+            {
+                return;
+            }
+            for (const auto& event : wrapper->acceleration_structure_build_events)
+            {
+                if (const auto* build = std::get_if<AccelerationStructureRecordedBuild>(&event))
+                {
+                    PublishAccelerationStructureBuild(*build);
+                }
+                else
+                {
+                    publish_builds(std::get<vulkan_wrappers::CommandBufferWrapper*>(event));
+                }
+            }
+        };
+
+    for (uint32_t s = 0; s < submit_count; ++s)
+    {
+        const VkSubmitInfo2& submit_info = submits[s];
+        for (uint32_t i = 0; i < submit_info.commandBufferInfoCount; ++i)
+        {
+            publish_builds(vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
+                submit_info.pCommandBufferInfos[i].commandBuffer));
+        }
+    }
+
+    if (fence != VK_NULL_HANDLE)
+    {
+        acceleration_structure_snapshot_fences_[fence] = { queue, submission_id };
     }
 }
 
 bool VulkanStateTracker::ReadAccelerationStructureSnapshot(
     const std::shared_ptr<AccelerationStructureInputBufferSnapshot>& snapshot)
 {
-    if (snapshot == nullptr || snapshot->resources_destroyed || snapshot->buffer == VK_NULL_HANDLE ||
-        snapshot->device == nullptr)
+    if (snapshot == nullptr || !snapshot->copy_completed || snapshot->pending_submissions != 0 ||
+        snapshot->resources_destroyed || snapshot->buffer == VK_NULL_HANDLE || snapshot->device == nullptr)
     {
         return false;
     }
 
+    snapshot->readback_succeeded = false;
     if ((snapshot->memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
     {
         void*    mapped_memory = nullptr;
@@ -3485,10 +3586,11 @@ bool VulkanStateTracker::ReadAccelerationStructureSnapshot(
         }
         if (result != VK_SUCCESS)
         {
-            GFXRECON_LOG_FATAL("Failed to map acceleration structure input build-copy buffer: %s",
+            GFXRECON_LOG_ERROR("Failed to map acceleration structure input build-copy buffer: %s",
                                util::ToString(result).c_str());
         }
-        return result == VK_SUCCESS;
+        snapshot->readback_succeeded = result == VK_SUCCESS;
+        return snapshot->readback_succeeded;
     }
 
     std::lock_guard<std::mutex> resource_utils_lock(resource_utils_mutex_);
@@ -3506,11 +3608,12 @@ bool VulkanStateTracker::ReadAccelerationStructureSnapshot(
         snapshot->buffer, snapshot->size, 0, snapshot->queue_family_index, bytes);
     if (result != VK_SUCCESS)
     {
-        GFXRECON_LOG_FATAL("Failed to read acceleration structure input build-copy buffer: %s",
+        GFXRECON_LOG_ERROR("Failed to read acceleration structure input build-copy buffer: %s",
                            util::ToString(result).c_str());
         return false;
     }
-    snapshot->bytes = std::move(bytes);
+    snapshot->bytes              = std::move(bytes);
+    snapshot->readback_succeeded = true;
     return true;
 }
 
@@ -3533,7 +3636,6 @@ void VulkanStateTracker::DestroyAccelerationStructureSnapshot(
     }
     snapshot->resources_destroyed = true;
 
-    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
     auto resources_it = acceleration_structure_input_buffer_resources_.find(snapshot->device->handle);
     if (resources_it != acceleration_structure_input_buffer_resources_.end())
     {
@@ -3545,47 +3647,138 @@ void VulkanStateTracker::DestroyAccelerationStructureSnapshot(
     }
 }
 
-void VulkanStateTracker::CompleteAccelerationStructureSnapshotSubmissions(VkQueue queue, uint64_t serial)
+void VulkanStateTracker::CompleteAccelerationStructureSnapshotSubmissions(VkQueue queue, uint64_t submission_id)
 {
-    std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> ready_snapshots;
+    // Keep readback and destruction under the same lock as submission/reset bookkeeping.
+    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
+    const auto                  queue_it = acceleration_structure_snapshot_queue_states_.find(queue);
+    if (queue_it == acceleration_structure_snapshot_queue_states_.end())
     {
-        std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
-        auto                        queue_it = acceleration_structure_snapshot_queue_states_.find(queue);
-        if (queue_it == acceleration_structure_snapshot_queue_states_.end())
+        return;
+    }
+    auto& submissions = queue_it->second.submissions;
+    while (!submissions.empty() && submissions.front().submission_id <= submission_id)
+    {
+        for (const auto& snapshot : submissions.front().snapshots)
         {
-            return;
-        }
-        auto& submissions = queue_it->second.submissions;
-        while (!submissions.empty() && submissions.front().serial <= serial)
-        {
-            for (const auto& snapshot : submissions.front().snapshots)
+            if (snapshot->pending_submissions > 0 && --snapshot->pending_submissions == 0)
             {
-                if (snapshot->pending_submissions > 0 && --snapshot->pending_submissions == 0)
+                snapshot->copy_completed = true;
+                if (snapshot->release_on_completion)
                 {
-                    if (snapshot->release_on_completion)
-                    {
-                        snapshot->recording_alive = false;
-                    }
-                    ready_snapshots.push_back(snapshot);
+                    snapshot->recording_alive = false;
+                }
+                ReadAccelerationStructureSnapshot(snapshot);
+                if (!snapshot->recording_alive)
+                {
+                    DestroyAccelerationStructureSnapshot(snapshot);
                 }
             }
-            submissions.pop_front();
         }
+        submissions.pop_front();
+    }
+}
+
+void VulkanStateTracker::PublishAccelerationStructureBuild(const AccelerationStructureRecordedBuild& build)
+{
+    // The writer mutates build addresses/handles, so give AS state its own geometry storage.
+    // Input snapshots remain shared with the recording and the existing submission bookkeeping.
+    auto        command       = build.command;
+    const auto* geometry_info = static_cast<const VkAccelerationStructureBuildGeometryInfoKHR*>(
+        vulkan_trackers::TrackStruct(&build.command.geometry_info, command.geometry_info_memory));
+    command.geometry_info = *geometry_info;
+
+    // Multiple AS objects may alias storage. Only a submitted replacement invalidates an older TLAS build.
+    for (const auto& alias : build.aliases)
+    {
+        if (alias->type != VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR || !alias->latest_build_command)
+        {
+            continue;
+        }
+        const auto& alias_command = *alias->latest_build_command;
+        const bool  overlaps      = command.offset < alias_command.offset
+                                        ? command.size > alias_command.offset - command.offset
+                                        : alias_command.size > command.offset - alias_command.offset;
+        if (overlaps)
+        {
+            alias->latest_build_command.reset();
+        }
+    }
+    build.state->latest_build_command = std::move(command);
+}
+
+bool VulkanStateTracker::DrainAccelerationStructureSnapshotSubmissions()
+{
+    bool success = true;
+    state_table_.VisitWrappers([&](vulkan_wrappers::DeviceWrapper* device) {
+        bool pending = false;
+        {
+            std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
+            for (const auto& [queue, state] : acceleration_structure_snapshot_queue_states_)
+            {
+                pending |= state.device == device->handle && !state.submissions.empty();
+            }
+        }
+        if (pending)
+        {
+            const VkResult result = device->layer_table.DeviceWaitIdle(device->handle);
+            if (result != VK_SUCCESS)
+            {
+                GFXRECON_LOG_ERROR("Cannot complete acceleration structure snapshots before writing trim state: %s",
+                                   util::ToString(result).c_str());
+                success = false;
+                return;
+            }
+            CompleteAccelerationStructureSnapshotDevice(device->handle);
+        }
+    });
+
+    if (!success)
+    {
+        return false;
     }
 
-    for (const auto& snapshot : ready_snapshots)
-    {
-        if (ReadAccelerationStructureSnapshot(snapshot) && !snapshot->recording_alive)
+    std::lock_guard<std::mutex>                                 lock(acceleration_structure_snapshot_mutex_);
+    std::unordered_set<const AccelerationStructureBuildState*>  visited;
+    std::function<void(const AccelerationStructureBuildState*)> validate_build =
+        [&](const AccelerationStructureBuildState* state) {
+            if (!visited.insert(state).second)
+            {
+                return;
+            }
+            if (state->latest_build_command)
+            {
+                for (const auto& input : state->latest_build_command->input_buffers)
+                {
+                    const auto& snapshot = input.build_copy_snapshot;
+                    if (snapshot == nullptr || snapshot->pending_submissions != 0 || !snapshot->copy_completed ||
+                        !snapshot->readback_succeeded || snapshot->bytes.size() != snapshot->size)
+                    {
+                        GFXRECON_LOG_ERROR("Input snapshot for acceleration structure %" PRIu64
+                                           " is unavailable; cannot write trim state",
+                                           state->id);
+                        success = false;
+                    }
+                }
+            }
+            for (const auto& dependency : state->dependencies)
+            {
+                validate_build(dependency.get());
+            }
+        };
+    state_table_.VisitWrappers([&](vulkan_wrappers::BufferWrapper* buffer) {
+        for (const auto& [id, state] : buffer->acceleration_structures)
         {
-            DestroyAccelerationStructureSnapshot(snapshot);
+            validate_build(state.get());
         }
-    }
+    });
+    return success;
 }
 
 void VulkanStateTracker::CompleteAccelerationStructureSnapshotFence(VkFence fence)
 {
-    VkQueue  queue  = VK_NULL_HANDLE;
-    uint64_t serial = 0;
+    VkQueue  queue         = VK_NULL_HANDLE;
+    uint64_t submission_id = 0;
     {
         std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
         auto                        fence_it = acceleration_structure_snapshot_fences_.find(fence);
@@ -3593,15 +3786,15 @@ void VulkanStateTracker::CompleteAccelerationStructureSnapshotFence(VkFence fenc
         {
             return;
         }
-        queue  = fence_it->second.first;
-        serial = fence_it->second.second;
+        queue         = fence_it->second.first;
+        submission_id = fence_it->second.second;
     }
-    CompleteAccelerationStructureSnapshotSubmissions(queue, serial);
+    CompleteAccelerationStructureSnapshotSubmissions(queue, submission_id);
 }
 
 void VulkanStateTracker::CompleteAccelerationStructureSnapshotQueue(VkQueue queue)
 {
-    uint64_t serial = 0;
+    uint64_t submission_id = 0;
     {
         std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
         auto                        queue_it = acceleration_structure_snapshot_queue_states_.find(queue);
@@ -3609,9 +3802,9 @@ void VulkanStateTracker::CompleteAccelerationStructureSnapshotQueue(VkQueue queu
         {
             return;
         }
-        serial = queue_it->second.next_serial;
+        submission_id = queue_it->second.submission_counter;
     }
-    CompleteAccelerationStructureSnapshotSubmissions(queue, serial);
+    CompleteAccelerationStructureSnapshotSubmissions(queue, submission_id);
 }
 
 void VulkanStateTracker::CompleteAccelerationStructureSnapshotDevice(VkDevice device)
@@ -3623,42 +3816,31 @@ void VulkanStateTracker::CompleteAccelerationStructureSnapshotDevice(VkDevice de
         {
             if (queue_state.device == device)
             {
-                queues.emplace_back(queue, queue_state.next_serial);
+                queues.emplace_back(queue, queue_state.submission_counter);
             }
         }
     }
-    for (const auto& [queue, serial] : queues)
+    for (const auto& [queue, submission_id] : queues)
     {
-        CompleteAccelerationStructureSnapshotSubmissions(queue, serial);
+        CompleteAccelerationStructureSnapshotSubmissions(queue, submission_id);
     }
 }
 
 void VulkanStateTracker::ReleaseAccelerationStructureSnapshots(vulkan_wrappers::CommandBufferWrapper* wrapper)
 {
-    if (wrapper == nullptr || wrapper->acceleration_structure_input_snapshots.empty())
+    if (wrapper == nullptr)
     {
         return;
     }
 
-    auto snapshots = std::move(wrapper->acceleration_structure_input_snapshots);
-    {
-        std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
-        for (const auto& snapshot : snapshots)
-        {
-            snapshot->recording_alive     = false;
-            snapshot->pending_submissions = 0;
-            for (auto& [queue, queue_state] : acceleration_structure_snapshot_queue_states_)
-            {
-                for (auto& submission : queue_state.submissions)
-                {
-                    std::erase(submission.snapshots, snapshot);
-                }
-            }
-        }
-    }
+    std::lock_guard<std::mutex> lock(acceleration_structure_snapshot_mutex_);
+    auto                        snapshots = std::move(wrapper->acceleration_structure_input_snapshots);
+    wrapper->acceleration_structure_build_events.clear();
     for (const auto& snapshot : snapshots)
     {
-        if ((snapshot->bytes.size() == snapshot->size || ReadAccelerationStructureSnapshot(snapshot)))
+        snapshot->recording_alive = false;
+        // Pending submissions retain their copies. Never read a copy just because its recording was discarded.
+        if (snapshot->pending_submissions == 0)
         {
             DestroyAccelerationStructureSnapshot(snapshot);
         }

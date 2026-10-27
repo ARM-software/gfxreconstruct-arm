@@ -1128,19 +1128,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         {
             assert((state_tracker_ != nullptr) && ((submitCount == 0) || (pSubmits != nullptr)));
 
-            std::vector<VkCommandBuffer> command_buffers;
-            for (uint32_t i = 0; i < submitCount; ++i)
-            {
-                if (pSubmits[i].commandBufferCount != 0)
-                {
-                    command_buffers.insert(command_buffers.end(),
-                                           pSubmits[i].pCommandBuffers,
-                                           pSubmits[i].pCommandBuffers + pSubmits[i].commandBufferCount);
-                }
-            }
-            state_tracker_->TrackAccelerationStructureSnapshotSubmission(
-                queue, command_buffers.size(), command_buffers.data(), fence);
-
+            state_tracker_->TrackAccelerationStructureSnapshotSubmission(queue, submitCount, pSubmits, fence);
             state_tracker_->TrackCommandBufferSubmissions(submitCount, pSubmits);
 
             for (uint32_t i = 0; i < submitCount; ++i)
@@ -1185,16 +1173,7 @@ class VulkanCaptureManager : public ApiCaptureManager
         {
             assert((state_tracker_ != nullptr) && ((submitCount == 0) || (pSubmits != nullptr)));
 
-            std::vector<VkCommandBuffer> command_buffers;
-            for (uint32_t i = 0; i < submitCount; ++i)
-            {
-                for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j)
-                {
-                    command_buffers.push_back(pSubmits[i].pCommandBufferInfos[j].commandBuffer);
-                }
-            }
-            state_tracker_->TrackAccelerationStructureSnapshotSubmission(
-                queue, command_buffers.size(), command_buffers.data(), fence);
+            state_tracker_->TrackAccelerationStructureSnapshotSubmission2(queue, submitCount, pSubmits, fence);
 
             state_tracker_->TrackCommandBufferSubmissions2(submitCount, pSubmits);
 

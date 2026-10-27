@@ -527,6 +527,9 @@ struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
     std::unordered_set<AssetWrapperBase*>                                  modified_assets;
     std::vector<CommandBufferWrapper*>                                     secondaries;
     std::vector<std::shared_ptr<AccelerationStructureInputBufferSnapshot>> acceleration_structure_input_snapshots;
+    // Execute-secondary events are interleaved with builds to preserve execution order on submission.
+    using AccelerationStructureBuildEvent = std::variant<AccelerationStructureRecordedBuild, CommandBufferWrapper*>;
+    std::vector<AccelerationStructureBuildEvent> acceleration_structure_build_events;
 };
 
 struct DeferredOperationKHRWrapper : public HandleWrapper<VkDeferredOperationKHR>

@@ -42,7 +42,8 @@ struct AccelerationStructureKHRWrapper;
 
 struct RestoreableBuffer
 {
-    // Required data to correctly create a buffer
+    // Buffer information inherited from original buffer
+    // Changed during state write if buffer is restored
     VkBuffer                              handle{ VK_NULL_HANDLE };
     format::HandleId                      handle_id{ format::kNullHandleId };
     const vulkan_wrappers::DeviceWrapper* device{ nullptr };
@@ -69,9 +70,12 @@ struct AccelerationStructureInputBufferSnapshot
     VkMemoryPropertyFlags           memory_properties{ 0 };
     std::vector<uint8_t>            bytes;
     uint32_t                        pending_submissions{ 0 };
-    bool                            recording_alive{ true };
-    bool                            release_on_completion{ false };
-    bool                            resources_destroyed{ false };
+    // Set only after successful submission completion, never merely after recording.
+    bool copy_completed{ false };
+    bool readback_succeeded{ false };
+    bool recording_alive{ true };
+    bool release_on_completion{ false };
+    bool resources_destroyed{ false };
 };
 
 struct AccelerationStructureInputBuffer : public RestoreableBuffer
@@ -92,11 +96,11 @@ struct AccelerationStructureKHRBuildCommandData
     format::HandleId               replaced_handle_id = format::kNullHandleId;
     VkAccelerationStructureKHR     replaced_handle    = VK_NULL_HANDLE;
 
-    VkAccelerationStructureBuildGeometryInfoKHR                            geometry_info;
-    std::vector<uint8_t>                                                   geometry_info_memory;
-    std::vector<VkAccelerationStructureBuildRangeInfoKHR>                  build_range_infos;
-    std::unordered_map<format::HandleId, AccelerationStructureInputBuffer> input_buffers;
-    RestoreableBuffer                                                      storage_buffer;
+    VkAccelerationStructureBuildGeometryInfoKHR           geometry_info;
+    std::vector<uint8_t>                                  geometry_info_memory;
+    std::vector<VkAccelerationStructureBuildRangeInfoKHR> build_range_infos;
+    std::vector<AccelerationStructureInputBuffer>         input_buffers;
+    RestoreableBuffer                                     storage_buffer;
 };
 
 struct AccelerationStructureCopyCommandData
@@ -115,14 +119,23 @@ struct AccelerationStructureWritePropertiesCommandData
 
 struct AccelerationStructureBuildState
 {
-    format::HandleId                                               id{ format::kNullHandleId };
-    VkAccelerationStructureTypeKHR                                 type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    format::HandleId               id{ format::kNullHandleId };
+    VkAccelerationStructureTypeKHR type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    // Latest successfully submitted build; input bytes become available after completion/readback.
     std::optional<AccelerationStructureKHRBuildCommandData>        latest_build_command{ std::nullopt };
     std::optional<AccelerationStructureCopyCommandData>            latest_copy_command{ std::nullopt };
     std::optional<AccelerationStructureWritePropertiesCommandData> latest_write_properties_command{ std::nullopt };
 
     std::vector<format::HandleId>                                 copy_destinations;
     std::vector<std::shared_ptr<AccelerationStructureBuildState>> dependencies{};
+};
+
+// Owned by a command-buffer recording; published to AS state only after successful submission.
+struct AccelerationStructureRecordedBuild
+{
+    AccelerationStructureKHRBuildCommandData                      command;
+    std::shared_ptr<AccelerationStructureBuildState>              state;
+    std::vector<std::shared_ptr<AccelerationStructureBuildState>> aliases;
 };
 
 GFXRECON_END_NAMESPACE(encode)
