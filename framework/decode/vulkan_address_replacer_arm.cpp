@@ -63,9 +63,9 @@ void VulkanAddressReplacerARM::ProcessCmdTraceRays(
 
     // in-place remap: capture-addresses -> replay-addresses
     bool success = address_remap(raygen_sbt->deviceAddress, address_tracker);
-    success      = success && address_remap(miss_sbt->deviceAddress, address_tracker);
-    success      = success && address_remap(hit_sbt->deviceAddress, address_tracker);
-    success      = success && address_remap(callable_sbt->deviceAddress, address_tracker);
+    success      = address_remap(miss_sbt->deviceAddress, address_tracker) && success;
+    success      = address_remap(hit_sbt->deviceAddress, address_tracker) && success;
+    success      = address_remap(callable_sbt->deviceAddress, address_tracker) && success;
     if (!success)
     {
         GFXRECON_LOG_WARNING_ONCE("VulkanAddressReplacerARM::ProcessCmdTraceRays: remap failed")
@@ -80,7 +80,10 @@ void VulkanAddressReplacerARM::ProcessCmdTraceRaysIndirect2KHR(
     GFXRECON_LOG_WARNING("vkCmdTraceRaysIndirect2KHR is not fully supported in VulkanAddressReplacerARM. Corruption or "
                          "crash may happen.");
 
-    address_remap(indirectDeviceAddress, address_tracker);
+    if (!address_remap(indirectDeviceAddress, address_tracker))
+    {
+        GFXRECON_LOG_WARNING_ONCE("ProcessCmdTraceRaysIndirect2KHR: Address remap for indirectDeviceAddress failed");
+    }
 }
 
 bool VulkanAddressReplacerARM::ProcessMarkedOffsetARM(VkDeviceSize                              offset,
@@ -97,7 +100,12 @@ bool VulkanAddressReplacerARM::ProcessMarkedOffsetARM(VkDeviceSize              
         GFXRECON_ASSERT(false);
     }
 
-    return address_remap(address, address_tracker);
+    if (!address_remap(address, address_tracker))
+    {
+        GFXRECON_LOG_WARNING_ONCE("ProcessMarkedOffsetARM: Address remap for address failed");
+        return false;
+    }
+    return true;
 }
 
 void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
@@ -119,7 +127,11 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
         // check/correct scratch-address
         if (process_scratch_buffers)
         {
-            address_remap(build_geometry_info.scratchData.deviceAddress, address_tracker);
+            if (!address_remap(build_geometry_info.scratchData.deviceAddress, address_tracker))
+            {
+                GFXRECON_LOG_WARNING_ONCE(
+                    "ProcessCmdBuildAccelerationStructuresKHR: Address remap for scratchData failed");
+            }
         }
 
         for (uint32_t j = 0; j < build_geometry_info.geometryCount; ++j)
@@ -133,9 +145,9 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
                 {
                     auto& triangles = geometry->geometry.triangles;
                     bool  success   = true;
-                    success         = success && address_remap(triangles.vertexData.deviceAddress, address_tracker);
-                    success         = success && address_remap(triangles.indexData.deviceAddress, address_tracker);
-                    success         = success && address_remap(triangles.transformData.deviceAddress, address_tracker);
+                    success         = address_remap(triangles.vertexData.deviceAddress, address_tracker) && success;
+                    success         = address_remap(triangles.indexData.deviceAddress, address_tracker) && success;
+                    success         = address_remap(triangles.transformData.deviceAddress, address_tracker) && success;
                     if (!success)
                     {
                         GFXRECON_LOG_WARNING_ONCE(
@@ -304,7 +316,10 @@ void VulkanAddressReplacerARM::ProcessSpecializationInfo(VkSpecializationInfo*  
     uint8_t* data = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(info->pData));
     for (size_t offset = 0; (offset + sizeof(VkDeviceAddress)) <= info->dataSize; ++offset)
     {
-        address_remap(*reinterpret_cast<VkDeviceAddress*>(data + offset), address_tracker);
+        if (!address_remap(*reinterpret_cast<VkDeviceAddress*>(data + offset), address_tracker))
+        {
+            GFXRECON_LOG_WARNING_ONCE("ProcessSpecializationInfo: Address remap for data failed");
+        };
     }
 }
 
