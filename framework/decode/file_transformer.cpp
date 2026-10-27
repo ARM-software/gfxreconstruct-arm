@@ -21,10 +21,13 @@
 */
 
 #include "file_transformer.h"
+#include "util/date_time.h"
 
 #include PROJECT_VERSION_HEADER_FILE
+
+#include <nlohmann/json.hpp>
+
 #include "decode/block_buffer.h"
-#include "format/format_arm.h"
 #include "format/format_util.h"
 #include "util/logging.h"
 #include "util/platform.h"
@@ -130,20 +133,20 @@ bool FileTransformer::Process()
 
     if (!tool_.empty())
     {
-        std::string data = "";
-        data += "{\n";
-        data += "  \"input\": " + input_filename_ + ",\n";
-        data += "  \"output\": " + output_filename_ + ",\n";
-        data += "  \"tool\": " + tool_ + "\n";
-        data += "}";
-        const size_t data_length = data.size();
+        nlohmann::json jdata{ { "input", input_filename_ },
+                              { "output", output_filename_ },
+                              { "tool", tool_ },
+                              { "version", GetProjectVersionString() },
+                              { "timestamp", util::datetime::GetTimestamp() } };
+        std::string    data        = jdata.dump();
+        const size_t   data_length = data.size();
 
         format::AnnotationHeader annotation;
         annotation.block_header.size = format::GetAnnotationBlockBaseSize() + label_length + data_length;
         annotation.block_header.type = format::BlockType::kAnnotation;
         annotation.annotation_type   = format::kJson;
         GFXRECON_NARROWING_ASSIGN(annotation.label_length, label_length);
-        annotation.data_length       = data_length;
+        annotation.data_length = data_length;
         if (!WriteBytes(&annotation, sizeof(annotation)) || !WriteBytes(label, label_length) ||
             !WriteBytes(data.c_str(), data_length))
         {
