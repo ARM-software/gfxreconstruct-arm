@@ -52,7 +52,7 @@
 #include "util/defines.h"
 #include "util/logging.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
-#include "decode/vulkan_micromap_builder.h"
+#include "decode/vulkan_micromap_ext_builder.h"
 #include "util/threadpool.h"
 
 #include "application/application.h"
@@ -136,8 +136,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     virtual void ProcessFixDescriptorDataCommand(const format::FixDescriptorDataCommandHeader&          header,
                                                  const std::vector<format::DescriptorDataLocationInfo>& infos) override;
 
-    virtual void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
-                                                            const std::vector<format::HandleId>& children) override;
+    virtual void ProcessMicromapEXTCompactionDependencyCommand(format::HandleId                     parent,
+                                                               const std::vector<format::HandleId>& children) override;
 
     virtual void
     ProcessAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,
@@ -1513,11 +1513,11 @@ class VulkanReplayConsumerBase : public VulkanConsumer
                                        const VulkanDeviceInfo*                                      device_info,
                                        const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
                                        const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromap);
+                                       HandlePointerDecoder<VkMicromapEXT>*                         pMicromapEXT);
 
     void OverrideDestroyMicromapEXT(PFN_vkDestroyMicromapEXT                             func,
                                     const VulkanDeviceInfo*                              device_info,
-                                    const VulkanMicromapEXTInfo*                         micromap_info,
+                                    const VulkanMicromapEXTInfo*                         micromap_ext_info,
                                     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator);
 
     void OverrideGetMicromapBuildSizesEXT(PFN_vkGetMicromapBuildSizesEXT                             func,
@@ -1533,7 +1533,7 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     void OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdWriteMicromapsPropertiesEXT   func,
                                                 VulkanCommandBufferInfo*               command_buffer_info,
                                                 uint32_t                               count,
-                                                HandlePointerDecoder<VkMicromapEXT>*   pMicromaps,
+                                                HandlePointerDecoder<VkMicromapEXT>*   pMicromapsEXT,
                                                 VkQueryType                            queryType,
                                                 gfxrecon::decode::VulkanQueryPoolInfo* query_pool_info,
                                                 uint32_t                               firstQuery);
@@ -2278,8 +2278,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
     VulkanSubmitJobExecutor&            GetDeviceSubmitJobExecutor(const VulkanDeviceInfo* device_info);
 
     decode::VulkanAccelerationStructureBuilder&
-                                   GetAccelerationStructureBuilder(const decode::VulkanDeviceInfo* device_info);
-    decode::VulkanMicromapBuilder& GetMicromapBuilder(const decode::VulkanDeviceInfo* device_info);
+                                      GetAccelerationStructureBuilder(const decode::VulkanDeviceInfo* device_info);
+    decode::VulkanMicromapEXTBuilder& GetMicromapEXTBuilder(const decode::VulkanDeviceInfo* device_info);
 
     /**
      * @brief   UseExtraDescriptorInfo returns true if additional information about layouts/descriptors/bindings etc.
@@ -2503,8 +2503,8 @@ class VulkanReplayConsumerBase : public VulkanConsumer
 
     // map acceleration structure builders for each device
     std::unordered_map<const decode::VulkanDeviceInfo*, VulkanAccelerationStructureBuilder>
-                                                                               acceleration_structure_builders_;
-    std::unordered_map<const decode::VulkanDeviceInfo*, VulkanMicromapBuilder> micromap_builders_;
+                                                                                  acceleration_structure_builders_;
+    std::unordered_map<const decode::VulkanDeviceInfo*, VulkanMicromapEXTBuilder> micromap_ext_builders_;
 
     bool           use_acceleration_structure_builder_;
     bool           device_fault_supported_;

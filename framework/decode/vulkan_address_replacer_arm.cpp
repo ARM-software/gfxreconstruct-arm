@@ -156,11 +156,11 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
                     {
                         success = address_remap(micromap->indexBuffer, address_tracker) && success;
                     }
-                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                    if (auto* micromapEXT = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
                             graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
                                 &triangles)))
                     {
-                        success = address_remap(micromap->indexBuffer.deviceAddress, address_tracker) && success;
+                        success = address_remap(micromapEXT->indexBuffer.deviceAddress, address_tracker) && success;
                     }
                     if (!success)
                     {

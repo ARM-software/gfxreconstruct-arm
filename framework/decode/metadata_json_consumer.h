@@ -401,10 +401,10 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    void ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
-                                                    const std::vector<format::HandleId>& children)
+    void ProcessMicromapEXTCompactionDependencyCommand(format::HandleId                     parent,
+                                                       const std::vector<format::HandleId>& children)
     {
-        auto& jdata = WriteMetaCommandStart("MicromapCompactionDependencyCommand");
+        auto& jdata = WriteMetaCommandStart("MicromapEXTCompactionDependencyCommand");
         HandleToJson(jdata["Parent"], parent);
         for (const auto& child : children)
         {

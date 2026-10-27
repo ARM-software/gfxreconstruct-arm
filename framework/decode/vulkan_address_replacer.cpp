@@ -1473,11 +1473,11 @@ void VulkanAddressReplacer::ProcessCmdBuildAccelerationStructuresKHR(
                     {
                         address_remap(micromap->indexBuffer);
                     }
-                    if (auto* micromap = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
+                    if (auto* micromapEXT = const_cast<VkAccelerationStructureTrianglesOpacityMicromapEXT*>(
                             graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
                                 &triangles)))
                     {
-                        address_remap(micromap->indexBuffer.deviceAddress);
+                        address_remap(micromapEXT->indexBuffer.deviceAddress);
                     }
                     break;
                 }

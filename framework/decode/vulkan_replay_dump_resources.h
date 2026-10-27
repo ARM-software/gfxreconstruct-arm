@@ -537,8 +537,8 @@ class VulkanReplayDumpResourcesBase
     void OverrideCmdWriteMicromapsPropertiesEXT(const ApiCallInfo&                   call_info,
                                                 PFN_vkCmdWriteMicromapsPropertiesEXT func,
                                                 VkCommandBuffer                      original_command_buffer,
-                                                uint32_t                             micromapCount,
-                                                const format::HandleId*              pMicromaps,
+                                                uint32_t                             micromapEXTCount,
+                                                const format::HandleId*              pMicromapsEXT,
                                                 VkQueryType                          queryType,
                                                 const VulkanQueryPoolInfo*           queryPool,
                                                 uint32_t                             firstQuery);

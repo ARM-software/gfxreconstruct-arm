@@ -88,7 +88,7 @@ struct VulkanDevicePropertyFeatureInfo
 
     VkBool32 feature_bufferDeviceAddressCaptureReplay{ VK_FALSE };
     VkBool32 feature_accelerationStructureCaptureReplay{ VK_FALSE };
-    VkBool32 feature_micromapCaptureReplay{ VK_FALSE };
+    VkBool32 feature_micromapCaptureReplayEXT{ VK_FALSE };
     VkBool32 feature_rayTracingPipelineShaderGroupHandleCaptureReplay{ VK_FALSE };
     VkBool32 feature_descriptorBufferCaptureReplay{ VK_FALSE };
 
@@ -159,8 +159,8 @@ class VulkanDeviceUtil
     VkBool32  bufferDeviceAddressCaptureReplay_original{ VK_FALSE };
 
     // VkPhysicalDeviceOpacityMicromapFeaturesEXT::micromapCaptureReplay
-    VkBool32* micromapCaptureReplay_ptr{ nullptr };
-    VkBool32  micromapCaptureReplay_original{ VK_FALSE };
+    VkBool32* micromapCaptureReplayEXT_ptr{ nullptr };
+    VkBool32  micromapCaptureReplayEXT_original{ VK_FALSE };
 
     // VkPhysicalDeviceAccelerationStructureFeaturesKHR::accelerationStructureCaptureReplay
     VkBool32* accelerationStructureCaptureReplay_ptr{ nullptr };

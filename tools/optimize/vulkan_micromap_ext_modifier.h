@@ -21,8 +21,8 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef GFXRECON_DECODE_VULKAN_MICROMAP_MODIFIER_BASE_H
-#define GFXRECON_DECODE_VULKAN_MICROMAP_MODIFIER_BASE_H
+#ifndef GFXRECON_DECODE_VULKAN_MICROMAP_EXT_MODIFIER_BASE_H
+#define GFXRECON_DECODE_VULKAN_MICROMAP_EXT_MODIFIER_BASE_H
 
 #include "decode/referenced_resource_table.h"
 #include "generated/generated_vulkan_consumer.h"
@@ -41,10 +41,10 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-class VulkanMicromapModifier : public util::VulkanModifierBase
+class VulkanMicromapEXTModifier : public util::VulkanModifierBase
 {
   public:
-    VulkanMicromapModifier();
+    VulkanMicromapEXTModifier();
 
     bool CanOptimize() override;
 
@@ -58,7 +58,7 @@ class VulkanMicromapModifier : public util::VulkanModifierBase
     void Process_vkCmdCopyMicromapEXT(const ApiCallInfo& call_info, args::CmdCopyMicromapEXT& args) override;
 
   private:
-    struct BuildInfoMicromaps
+    struct BuildInfoMicromapsEXT
     {
         bool                            is_first_built;
         VkMicromapBuildInfoEXT          info;
@@ -68,10 +68,10 @@ class VulkanMicromapModifier : public util::VulkanModifierBase
         format::HandleId source_of_compaction;
     };
 
-    std::unordered_map<format::HandleId, BuildInfoMicromaps> handle_id_to_build_info_{};
+    std::unordered_map<format::HandleId, BuildInfoMicromapsEXT> handle_id_to_build_info_{};
 };
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif // GFXRECON_DECODE_VULKAN_MICROMAP_MODIFIER_BASE_H
+#endif // GFXRECON_DECODE_VULKAN_MICROMAP_EXT_MODIFIER_BASE_H

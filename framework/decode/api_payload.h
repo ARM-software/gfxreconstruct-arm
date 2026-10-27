@@ -548,7 +548,7 @@ struct SetTlasToBlasDependencyArgs
 
     auto GetTuple() const { return std::tie(tlas, blases); }
 };
-struct MicromapCompactionDependencyArgs
+struct MicromapEXTCompactionDependencyArgs
 {
     format::MetaDataId meta_data_id; // Needed by DispatchVisitor, but not ApiDecoder
 
@@ -950,9 +950,9 @@ struct DispatchTraits<SetTlasToBlasDependencyArgs> : DispatchFlagTraits<SetTlasT
 };
 
 template <>
-struct DispatchTraits<MicromapCompactionDependencyArgs> : DispatchFlagTraits<MicromapCompactionDependencyArgs>
+struct DispatchTraits<MicromapEXTCompactionDependencyArgs> : DispatchFlagTraits<MicromapEXTCompactionDependencyArgs>
 {
-    static constexpr auto kDecoderMethod = &ApiDecoder::DispatchMicromapCompactionDependencyCommand;
+    static constexpr auto kDecoderMethod = &ApiDecoder::DispatchMicromapEXTCompactionDependencyCommand;
 };
 
 template <>
@@ -1102,7 +1102,7 @@ using DispatchArgs = std::variant<std::monostate,
                                   GetDx12RuntimeArgs*,
                                   ExecuteBlocksFromFileArgs*,
                                   SetTlasToBlasDependencyArgs*,
-                                  MicromapCompactionDependencyArgs*,
+                                  MicromapEXTCompactionDependencyArgs*,
                                   AccelerationStructureCompactionDependencyArgs*,
                                   SetEnvironmentVariablesArgs*,
                                   VulkanAccelerationStructuresBuildMetaArgs*,

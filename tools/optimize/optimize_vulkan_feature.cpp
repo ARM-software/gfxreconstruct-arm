@@ -25,7 +25,7 @@
 #include "file_optimizer.h"
 #include "replay_options_editor.h"
 #include "vulkan_file_optimizer.h"
-#include "vulkan_micromap_modifier.h"
+#include "vulkan_micromap_ext_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
 #include "vulkan_raytracing_modifier.h"
 #include "vulkan_debug_object_name_modifier.h"
@@ -304,10 +304,10 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
     {
         gfxrecon::decode::VulkanDecoder decoder;
         // gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
-        auto feature_tracker_consumer      = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
-        auto micromap_modifier_consumer    = std::make_unique<gfxrecon::decode::VulkanMicromapModifier>();
-        auto vulkan_skia_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
-        auto raytracing_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>(options);
+        auto feature_tracker_consumer       = std::make_unique<gfxrecon::decode::VulkanFeatureTrackerConsumerBase>();
+        auto micromap_ext_modifier_consumer = std::make_unique<gfxrecon::decode::VulkanMicromapEXTModifier>();
+        auto vulkan_skia_modifier_consumer  = std::make_unique<gfxrecon::decode::VulkanSkiaModifier>();
+        auto raytracing_modifier_consumer   = std::make_unique<gfxrecon::decode::VulkanRayTracingModifier>(options);
         auto resource_memory_requirements_modifier =
             std::make_unique<gfxrecon::decode::ResourceMemoryRequirementsModifier>();
         auto descriptor_buffer_modifier_consumer =
@@ -322,7 +322,7 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
 
         // decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
-        decoder.AddConsumer(micromap_modifier_consumer.get());
+        decoder.AddConsumer(micromap_ext_modifier_consumer.get());
         decoder.AddConsumer(vulkan_skia_modifier_consumer.get());
         decoder.AddConsumer(descriptor_buffer_modifier_consumer.get());
         decoder.AddConsumer(raytracing_modifier_consumer.get());
@@ -353,9 +353,9 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
         {
             vulkan_opt_data->modifiers.push_back(std::move(feature_tracker_consumer));
         }
-        if (micromap_modifier_consumer->CanOptimize())
+        if (micromap_ext_modifier_consumer->CanOptimize())
         {
-            vulkan_opt_data->modifiers.push_back(std::move(micromap_modifier_consumer));
+            vulkan_opt_data->modifiers.push_back(std::move(micromap_ext_modifier_consumer));
         }
         if (vulkan_skia_modifier_consumer->CanOptimize())
         {

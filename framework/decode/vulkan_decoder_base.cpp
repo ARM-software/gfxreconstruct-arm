@@ -612,12 +612,12 @@ void VulkanDecoderBase::DispatchSetTlasToBlasDependencyCommand(format::HandleId 
     }
 }
 
-void VulkanDecoderBase::DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
-                                                                    const std::vector<format::HandleId>& children)
+void VulkanDecoderBase::DispatchMicromapEXTCompactionDependencyCommand(format::HandleId                     parent,
+                                                                       const std::vector<format::HandleId>& children)
 {
     for (auto consumer : consumers_)
     {
-        consumer->ProcessMicromapCompactionDependencyCommand(parent, children);
+        consumer->ProcessMicromapEXTCompactionDependencyCommand(parent, children);
     }
 }
 

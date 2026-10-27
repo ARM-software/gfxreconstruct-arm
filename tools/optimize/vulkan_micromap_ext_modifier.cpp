@@ -21,7 +21,7 @@
 ** DEALINGS IN THE SOFTWARE.
 */
 
-#include "vulkan_micromap_modifier.h"
+#include "vulkan_micromap_ext_modifier.h"
 
 #include "util/logging.h"
 
@@ -46,26 +46,26 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 /*TODOs:
- * Add support for alias micromaps
+ * Add support for alias EXT micromaps
  * Add support for compaction (vkCmdCopyMicromapEXT)
  * The current implementation assumes that the first build command contains the right info for the storage buffer size
  * computation. This can potentially not be the case.
  */
 
-VulkanMicromapModifier::VulkanMicromapModifier() {}
+VulkanMicromapEXTModifier::VulkanMicromapEXTModifier() {}
 
-void VulkanMicromapModifier::Process_vkCreateMicromapEXT(const ApiCallInfo& call_info, args::CreateMicromapEXT& args)
+void VulkanMicromapEXTModifier::Process_vkCreateMicromapEXT(const ApiCallInfo& call_info, args::CreateMicromapEXT& args)
 {
     if (!IsModificationPass())
     {
         return;
     }
 
-    format::HandleId micromap_id = *args.pMicromap.GetPointer();
+    format::HandleId micromap_ext_id = *args.pMicromap.GetPointer();
 
-    assert(handle_id_to_build_info_.count(micromap_id) == 1);
+    assert(handle_id_to_build_info_.count(micromap_ext_id) == 1);
 
-    if (handle_id_to_build_info_[micromap_id].is_first_built)
+    if (handle_id_to_build_info_[micromap_ext_id].is_first_built)
     {
         auto new_call       = CreatePreCall();
         new_call->type      = NewCallDataType::ApiCall;
@@ -74,10 +74,10 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(const ApiCallInfo& call
         gfxrecon::encode::ParameterEncoder encoder(&new_call->parameter_buffer);
         encoder.EncodeHandleIdValue(args.device);
 
-        VkMicromapBuildInfoEXT pBuildInfo = handle_id_to_build_info_[micromap_id].info;
-        pBuildInfo.pUsageCounts           = handle_id_to_build_info_[micromap_id].usages.data();
+        VkMicromapBuildInfoEXT pBuildInfo = handle_id_to_build_info_[micromap_ext_id].info;
+        pBuildInfo.pUsageCounts           = handle_id_to_build_info_[micromap_ext_id].usages.data();
         // TODO:Encoding a handle that doesn't exist yet is not possible. Find a workaround around that for the future
-        // pBuildInfo.dstMicromap            = (VkMicromapEXT)micromap_id;
+        // pBuildInfo.dstMicromap            = (VkMicromapEXT)micromap_ext_id;
         const VkMicromapBuildSizesInfoEXT pSizeInfo{ VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
 
         encoder.EncodeEnumValue(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR);
@@ -94,8 +94,8 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(const ApiCallInfo& call
         header.meta_header.meta_data_id      = format::MakeMetaDataId(format::ApiFamilyId::ApiFamily_Vulkan,
                                                                  format::MetaDataType::kParentToChildDependency);
         header.thread_id                     = 1;
-        header.dependency_type               = format::ParentToChildDependencyType::kMicromapCompactionDependency;
-        header.parent_id                     = handle_id_to_build_info_[micromap_id].source_of_compaction;
+        header.dependency_type               = format::ParentToChildDependencyType::kMicromapEXTCompactionDependency;
+        header.parent_id                     = handle_id_to_build_info_[micromap_ext_id].source_of_compaction;
         header.child_count                   = 1;
 
         auto new_call = CreatePreCall();
@@ -104,12 +104,12 @@ void VulkanMicromapModifier::Process_vkCreateMicromapEXT(const ApiCallInfo& call
         // Encode Struct
         new_call->parameter_buffer.Write(&header, sizeof(header));
         // Encode Child
-        new_call->parameter_buffer.Write(&micromap_id, sizeof(micromap_id));
+        new_call->parameter_buffer.Write(&micromap_ext_id, sizeof(micromap_ext_id));
     }
 }
 
-void VulkanMicromapModifier::Process_vkCmdBuildMicromapsEXT(const ApiCallInfo&          call_info,
-                                                            args::CmdBuildMicromapsEXT& args)
+void VulkanMicromapEXTModifier::Process_vkCmdBuildMicromapsEXT(const ApiCallInfo&          call_info,
+                                                               args::CmdBuildMicromapsEXT& args)
 {
     if (IsModificationPass())
     {
@@ -134,14 +134,15 @@ void VulkanMicromapModifier::Process_vkCmdBuildMicromapsEXT(const ApiCallInfo&  
     }
 }
 
-void VulkanMicromapModifier::Process_vkGetMicromapBuildSizesEXT(const ApiCallInfo&              call_info,
-                                                                args::GetMicromapBuildSizesEXT& args)
+void VulkanMicromapEXTModifier::Process_vkGetMicromapBuildSizesEXT(const ApiCallInfo&              call_info,
+                                                                   args::GetMicromapBuildSizesEXT& args)
 {
     // TODO: delete original call since we insert it ourselves. This is meant to be done at the end of other TODOs
     // delete_current_call = true;
 }
 
-void VulkanMicromapModifier::Process_vkCmdCopyMicromapEXT(const ApiCallInfo& call_info, args::CmdCopyMicromapEXT& args)
+void VulkanMicromapEXTModifier::Process_vkCmdCopyMicromapEXT(const ApiCallInfo&        call_info,
+                                                             args::CmdCopyMicromapEXT& args)
 {
 
     if (IsModificationPass())
@@ -167,7 +168,7 @@ void VulkanMicromapModifier::Process_vkCmdCopyMicromapEXT(const ApiCallInfo& cal
     }
 }
 
-bool VulkanMicromapModifier::CanOptimize()
+bool VulkanMicromapEXTModifier::CanOptimize()
 {
     bool result = (!handle_id_to_build_info_.empty());
 

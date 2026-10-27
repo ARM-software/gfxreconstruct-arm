@@ -1680,10 +1680,10 @@ ParsedBlock& BlockParser::ParseMetaData(BlockBuffer& block_buffer)
                         Emplace<SetTlasToBlasDependencyArgs>(meta_data_id, header.parent_id, std::move(children));
                     return MakeIncompressibleParsedBlock(block_buffer, payload);
                 }
-                case format::kMicromapCompactionDependency:
+                case format::kMicromapEXTCompactionDependency:
                 {
-                    auto* payload =
-                        Emplace<MicromapCompactionDependencyArgs>(meta_data_id, header.parent_id, std::move(children));
+                    auto* payload = Emplace<MicromapEXTCompactionDependencyArgs>(
+                        meta_data_id, header.parent_id, std::move(children));
                     return MakeIncompressibleParsedBlock(block_buffer, payload);
                 }
                 case format::kAccelerationStructureCompactionDependency:

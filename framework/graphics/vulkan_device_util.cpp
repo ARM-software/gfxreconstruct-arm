@@ -290,28 +290,29 @@ VulkanDeviceUtil::EnableRequiredPhysicalDeviceFeatures(const VulkanInstanceUtilI
 
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT:
             {
-                // Enable micromapCaptureReplay
-                auto micromap_features = reinterpret_cast<VkPhysicalDeviceOpacityMicromapFeaturesEXT*>(current_struct);
+                // Enable EXT micromapCaptureReplay
+                auto micromap_ext_features =
+                    reinterpret_cast<VkPhysicalDeviceOpacityMicromapFeaturesEXT*>(current_struct);
 
-                micromapCaptureReplay_ptr      = (&micromap_features->micromapCaptureReplay);
-                micromapCaptureReplay_original = micromap_features->micromapCaptureReplay;
+                micromapCaptureReplayEXT_ptr      = (&micromap_ext_features->micromapCaptureReplay);
+                micromapCaptureReplayEXT_original = micromap_ext_features->micromapCaptureReplay;
 
-                if (micromap_features->micromap && !micromap_features->micromapCaptureReplay)
+                if (micromap_ext_features->micromap && !micromap_ext_features->micromapCaptureReplay)
                 {
-                    // Get micromap properties
+                    // Get EXT micromap properties
                     VkPhysicalDeviceOpacityMicromapFeaturesEXT supported_features{
                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT, nullptr
                     };
                     GetPhysicalDeviceFeatures(instance_info, instance_table, physical_device, supported_features);
 
-                    // Enable micromapCaptureReplay if it is supported
+                    // Enable EXT micromapCaptureReplay if it is supported
                     if (supported_features.micromapCaptureReplay)
                     {
-                        micromap_features->micromapCaptureReplay = VK_TRUE;
+                        micromap_ext_features->micromapCaptureReplay = VK_TRUE;
                     }
                 }
 
-                result.feature_micromapCaptureReplay = micromap_features->micromapCaptureReplay;
+                result.feature_micromapCaptureReplayEXT = micromap_ext_features->micromapCaptureReplay;
             }
             break;
 
@@ -602,10 +603,10 @@ void VulkanDeviceUtil::RestoreModifiedPhysicalDeviceFeatures()
         (*bufferDeviceAddressCaptureReplay_ptr) = bufferDeviceAddressCaptureReplay_original;
         bufferDeviceAddressCaptureReplay_ptr    = nullptr;
     }
-    if (micromapCaptureReplay_ptr != nullptr)
+    if (micromapCaptureReplayEXT_ptr != nullptr)
     {
-        (*micromapCaptureReplay_ptr) = micromapCaptureReplay_original;
-        micromapCaptureReplay_ptr    = nullptr;
+        (*micromapCaptureReplayEXT_ptr) = micromapCaptureReplayEXT_original;
+        micromapCaptureReplayEXT_ptr    = nullptr;
     }
     if (accelerationStructureCaptureReplay_ptr != nullptr)
     {

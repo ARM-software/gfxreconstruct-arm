@@ -263,8 +263,8 @@ class ApiDecoder
     virtual void DispatchSetTlasToBlasDependencyCommand(format::HandleId                     tlas,
                                                         const std::vector<format::HandleId>& blases){};
 
-    virtual void DispatchMicromapCompactionDependencyCommand(format::HandleId                     parent,
-                                                             const std::vector<format::HandleId>& children){};
+    virtual void DispatchMicromapEXTCompactionDependencyCommand(format::HandleId                     parent,
+                                                                const std::vector<format::HandleId>& children){};
 
     virtual void
     DispatchAccelerationStructureCompactionDependencyCommand(format::HandleId                     parent,

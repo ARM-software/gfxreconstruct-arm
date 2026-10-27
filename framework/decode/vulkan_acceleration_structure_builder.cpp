@@ -25,7 +25,7 @@
 #include "decode/vulkan_query_util.h"
 #include "format/format.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
-#include "decode/vulkan_micromap_builder.h"
+#include "decode/vulkan_micromap_ext_builder.h"
 #include "util/logging.h"
 
 #include <algorithm>

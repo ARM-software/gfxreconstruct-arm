@@ -3591,23 +3591,23 @@ void VulkanReplayDumpResourcesBase::OverrideCmdWriteAccelerationStructuresProper
 void VulkanReplayDumpResourcesBase::OverrideCmdWriteMicromapsPropertiesEXT(const ApiCallInfo& call_info,
                                                                            PFN_vkCmdWriteMicromapsPropertiesEXT func,
                                                                            VkCommandBuffer original_command_buffer,
-                                                                           uint32_t        micromapCount,
-                                                                           const format::HandleId*    pMicromaps,
+                                                                           uint32_t        micromapEXTCount,
+                                                                           const format::HandleId*    pMicromapsEXT,
                                                                            VkQueryType                queryType,
                                                                            const VulkanQueryPoolInfo* queryPool,
                                                                            uint32_t                   firstQuery)
 {
     if (IsRecording())
     {
-        std::vector<VkMicromapEXT> micromaps(micromapCount, VK_NULL_HANDLE);
-        for (uint32_t i = 0; i < micromapCount; ++i)
+        std::vector<VkMicromapEXT> micromapsEXT(micromapEXTCount, VK_NULL_HANDLE);
+        for (uint32_t i = 0; i < micromapEXTCount; ++i)
         {
-            const VulkanMicromapEXTInfo* micromap_info = object_info_table_->GetVkMicromapEXTInfo(pMicromaps[i]);
-            micromaps[i] = (micromap_info != nullptr) ? micromap_info->handle : VK_NULL_HANDLE;
+            const VulkanMicromapEXTInfo* micromap_ext_info = object_info_table_->GetVkMicromapEXTInfo(pMicromapsEXT[i]);
+            micromapsEXT[i] = (micromap_ext_info != nullptr) ? micromap_ext_info->handle : VK_NULL_HANDLE;
         }
 
         ForEachStateCommandBuffer(original_command_buffer, [&](VkCommandBuffer command_buffer) {
-            func(command_buffer, micromapCount, micromaps.data(), queryType, queryPool->handle, firstQuery);
+            func(command_buffer, micromapEXTCount, micromapsEXT.data(), queryType, queryPool->handle, firstQuery);
         });
     }
 }

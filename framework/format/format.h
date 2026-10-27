@@ -798,7 +798,7 @@ enum ParentToChildDependencyType : uint32_t
 {
     kUnknownDependency                         = 0,
     kAccelerationStructuresDependency          = 1,
-    kMicromapCompactionDependency              = 2,
+    kMicromapEXTCompactionDependency           = 2,
     kAccelerationStructureCompactionDependency = 3
 };
 

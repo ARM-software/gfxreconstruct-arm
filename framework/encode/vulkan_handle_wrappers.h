@@ -703,26 +703,26 @@ struct MicromapEXTWrapper : public HandleWrapper<VkMicromapEXT>
 
     VkMicromapTypeEXT type_;
 
-    struct MicromapBuildCommandData
+    struct MicromapEXTBuildCommandData
     {
-        VkMicromapBuildInfoEXT                        micromap_build_info;
-        std::unique_ptr<uint8_t[]>                    micromap_usage_counts_memory;
+        VkMicromapBuildInfoEXT                        micromap_ext_build_info;
+        std::unique_ptr<uint8_t[]>                    micromap_ext_usage_counts_memory;
         std::vector<AccelerationStructureInputBuffer> input_buffers;
     };
 
-    std::unique_ptr<MicromapBuildCommandData> latest_build_command_{};
+    std::unique_ptr<MicromapEXTBuildCommandData> latest_build_command_{};
 
-    struct MicromapCopyCommandData
+    struct MicromapEXTCopyCommandData
     {
         VkCopyMicromapInfoEXT info;
     };
-    std::unique_ptr<MicromapCopyCommandData> latest_copy_command_{};
+    std::unique_ptr<MicromapEXTCopyCommandData> latest_copy_command_{};
 
-    struct MicromapWritePropertiesCommandData
+    struct MicromapEXTWritePropertiesCommandData
     {
         VkQueryType query_type;
     };
-    std::unique_ptr<MicromapWritePropertiesCommandData> latest_write_properties_command_{};
+    std::unique_ptr<MicromapEXTWritePropertiesCommandData> latest_write_properties_command_{};
 };
 
 struct PrivateDataSlotWrapper : public HandleWrapper<VkPrivateDataSlot>

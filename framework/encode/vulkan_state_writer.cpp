@@ -2277,12 +2277,12 @@ void VulkanStateWriter::UpdateAddresses(encode::AccelerationStructureKHRBuildCom
                 insert_address(geometry->geometry.triangles.vertexData.deviceAddress);
                 insert_address(geometry->geometry.triangles.indexData.deviceAddress);
                 insert_address(geometry->geometry.triangles.transformData.deviceAddress);
-                auto opacity_micromap =
+                auto opacity_micromap_ext =
                     graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
                         &geometry->geometry.triangles);
-                if (opacity_micromap != nullptr)
+                if (opacity_micromap_ext != nullptr)
                 {
-                    insert_address(opacity_micromap->indexBuffer.deviceAddress);
+                    insert_address(opacity_micromap_ext->indexBuffer.deviceAddress);
                 }
                 break;
             }
@@ -2602,25 +2602,25 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
 
     static const VkAllocationCallbacks* allocation_callbacks = nullptr;
 
-    std::unordered_map<DeviceWrapper*, MicromapsCallInjectionUtilitiesHandles> omm_inject_utilities;
+    std::unordered_map<DeviceWrapper*, MicromapsEXTCallInjectionUtilitiesHandles> omm_ext_inject_utilities;
 
     state_table.VisitWrappers([&](MicromapEXTWrapper* wrapper) {
         assert(wrapper != nullptr);
         if (wrapper->latest_build_command_)
         {
-            omm_inject_utilities[wrapper->device].wrappers_build.push_back(wrapper);
+            omm_ext_inject_utilities[wrapper->device].wrappers_build.push_back(wrapper);
         }
         if (wrapper->latest_copy_command_)
         {
-            omm_inject_utilities[wrapper->device].wrappers_copy.push_back(wrapper);
+            omm_ext_inject_utilities[wrapper->device].wrappers_copy.push_back(wrapper);
         }
         if (wrapper->latest_write_properties_command_)
         {
-            omm_inject_utilities[wrapper->device].wrappers_write_prop.push_back(wrapper);
+            omm_ext_inject_utilities[wrapper->device].wrappers_write_prop.push_back(wrapper);
         }
     });
 
-    if (omm_inject_utilities.empty())
+    if (omm_ext_inject_utilities.empty())
     {
         return;
     }
@@ -2634,7 +2634,7 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
     alloc_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount          = 1;
 
-    for (auto& it : omm_inject_utilities)
+    for (auto& it : omm_ext_inject_utilities)
     {
         it.second.command_pool_id   = get_unique_id_();
         it.second.command_buffer_id = get_unique_id_();
@@ -2707,20 +2707,20 @@ void VulkanStateWriter::WriteMicromapEXTState(const VulkanStateTable& state_tabl
     }
 }
 
-void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                          device_wrapper,
-                                              MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                             device_wrapper,
+                                              MicromapsEXTCallInjectionUtilitiesHandles& omm_ext_inject_utilities)
 {
     // Untested for Multiple VkDevice
 
-    if (omm_inject_utilities.wrappers_build.empty())
+    if (omm_ext_inject_utilities.wrappers_build.empty())
     {
         return;
     }
 
-    format::HandleId&                 command_pool_id   = omm_inject_utilities.command_pool_id;
-    format::HandleId&                 command_buffer_id = omm_inject_utilities.command_buffer_id;
-    format::HandleId&                 queue_id          = omm_inject_utilities.queue_id;
-    std::vector<MicromapEXTWrapper*>& wrappers_build    = omm_inject_utilities.wrappers_build;
+    format::HandleId&                 command_pool_id   = omm_ext_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id = omm_ext_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id          = omm_ext_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_build    = omm_ext_inject_utilities.wrappers_build;
 
     size_t max_resource_size = 0;
 
@@ -2756,9 +2756,10 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
         if (!(wrapper->latest_build_command_->input_buffers.empty()))
         {
             std::array<VkDeviceAddress*, 2> addresses_to_replace = {
-                const_cast<VkDeviceAddress*>(&wrapper->latest_build_command_->micromap_build_info.data.deviceAddress),
                 const_cast<VkDeviceAddress*>(
-                    &wrapper->latest_build_command_->micromap_build_info.triangleArray.deviceAddress)
+                    &wrapper->latest_build_command_->micromap_ext_build_info.data.deviceAddress),
+                const_cast<VkDeviceAddress*>(
+                    &wrapper->latest_build_command_->micromap_ext_build_info.triangleArray.deviceAddress)
             };
 
             for (VkDeviceAddress* address : addresses_to_replace)
@@ -2777,12 +2778,12 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
             }
         }
 
-        // Creation of Micromap Handle
+        // Creation of EXT micromap handle
         if ((wrapper->device_id != format::kNullHandleId) && (wrapper->address != 0))
         {
-            // If the micromap has a device address, write the 'set opaque address' command
+            // If the EXT micromap has a device address, write the 'set opaque address' command
             // before writing
-            // the API call to create the micromap.  The address will need to be passed to
+            // the API call to create the EXT micromap.  The address will need to be passed to
             // vkCreateMicromapEXT through the
             // VkMicromapCreateInfoEXT::deviceAddress.
             WriteSetOpaqueAddressCommand(wrapper->device_id, wrapper->handle_id, wrapper->address);
@@ -2795,10 +2796,10 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
         // vkCmdBuildMicromapsEXT
         parameter_stream_.Clear();
 
-        VkMicromapBuildInfoEXT mm_build_info = wrapper->latest_build_command_->micromap_build_info;
+        VkMicromapBuildInfoEXT micromap_ext_build_info = wrapper->latest_build_command_->micromap_ext_build_info;
         encoder_.EncodeHandleIdValue(command_buffer_id);
         encoder_.EncodeUInt32Value(1);
-        EncodeStructArray(&encoder_, &mm_build_info, 1);
+        EncodeStructArray(&encoder_, &micromap_ext_build_info, 1);
         WriteFunctionCall(format::ApiCall_vkCmdBuildMicromapsEXT, &parameter_stream_);
 
         InjectEndCommandBufferSubmitWaitQueue(command_buffer_id, queue_id);
@@ -2815,20 +2816,20 @@ void VulkanStateWriter::WriteMicromapEXTBuild(DeviceWrapper*                    
     EndResourceInitSection(device_wrapper->handle_id);
 }
 
-void VulkanStateWriter::WriteMicromapEXTWriteProperties(DeviceWrapper*                          device_wrapper,
-                                                        MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+void VulkanStateWriter::WriteMicromapEXTWriteProperties(
+    DeviceWrapper* device_wrapper, MicromapsEXTCallInjectionUtilitiesHandles& omm_ext_inject_utilities)
 {
     // Untested for Multiple VkDevice
 
-    if (omm_inject_utilities.wrappers_write_prop.empty())
+    if (omm_ext_inject_utilities.wrappers_write_prop.empty())
     {
         return;
     }
 
-    format::HandleId&                 command_pool_id     = omm_inject_utilities.command_pool_id;
-    format::HandleId&                 command_buffer_id   = omm_inject_utilities.command_buffer_id;
-    format::HandleId&                 queue_id            = omm_inject_utilities.queue_id;
-    std::vector<MicromapEXTWrapper*>& wrappers_write_prop = omm_inject_utilities.wrappers_write_prop;
+    format::HandleId&                 command_pool_id     = omm_ext_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id   = omm_ext_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id            = omm_ext_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_write_prop = omm_ext_inject_utilities.wrappers_write_prop;
 
     std::vector<format::HandleId> mm_vector;
 
@@ -2908,20 +2909,20 @@ void VulkanStateWriter::WriteMicromapEXTWriteProperties(DeviceWrapper*          
     parameter_stream_.Clear();
 }
 
-void VulkanStateWriter::WriteMicromapEXTCopy(DeviceWrapper*                          device_wrapper,
-                                             MicromapsCallInjectionUtilitiesHandles& omm_inject_utilities)
+void VulkanStateWriter::WriteMicromapEXTCopy(DeviceWrapper*                             device_wrapper,
+                                             MicromapsEXTCallInjectionUtilitiesHandles& omm_ext_inject_utilities)
 {
     // Untested for Multiple VkDevice
 
-    if (omm_inject_utilities.wrappers_copy.empty())
+    if (omm_ext_inject_utilities.wrappers_copy.empty())
     {
         return;
     }
 
-    format::HandleId&                 command_pool_id   = omm_inject_utilities.command_pool_id;
-    format::HandleId&                 command_buffer_id = omm_inject_utilities.command_buffer_id;
-    format::HandleId&                 queue_id          = omm_inject_utilities.queue_id;
-    std::vector<MicromapEXTWrapper*>& wrappers_copy     = omm_inject_utilities.wrappers_copy;
+    format::HandleId&                 command_pool_id   = omm_ext_inject_utilities.command_pool_id;
+    format::HandleId&                 command_buffer_id = omm_ext_inject_utilities.command_buffer_id;
+    format::HandleId&                 queue_id          = omm_ext_inject_utilities.queue_id;
+    std::vector<MicromapEXTWrapper*>& wrappers_copy     = omm_ext_inject_utilities.wrappers_copy;
 
     InjectResetBeginCommandBuffer(command_buffer_id);
 

@@ -337,7 +337,7 @@ VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     VulkanReplayConsumerBase::WaitDevicesIdle();
 
     acceleration_structure_builders_.clear();
-    micromap_builders_.clear();
+    micromap_ext_builders_.clear();
     // free replacer internal vulkan-resources
     device_address_replacers_.clear();
     device_command_buffer_utils_.clear();
@@ -1169,18 +1169,18 @@ void VulkanReplayConsumerBase::ProcessFixDescriptorDataCommand(
     }
 }
 
-void VulkanReplayConsumerBase::ProcessMicromapCompactionDependencyCommand(format::HandleId                     parent,
-                                                                          const std::vector<format::HandleId>& children)
+void VulkanReplayConsumerBase::ProcessMicromapEXTCompactionDependencyCommand(
+    format::HandleId parent, const std::vector<format::HandleId>& children)
 {
-    const VulkanMicromapEXTInfo* micromap_info = object_info_table_->GetVkMicromapEXTInfo(parent);
-    const VulkanDeviceInfo*      device_info   = object_info_table_->GetVkDeviceInfo(micromap_info->parent_id);
+    const VulkanMicromapEXTInfo* micromap_ext_info = object_info_table_->GetVkMicromapEXTInfo(parent);
+    const VulkanDeviceInfo*      device_info       = object_info_table_->GetVkDeviceInfo(micromap_ext_info->parent_id);
 
     if (device_info->allocator->SupportsOpaqueDeviceAddresses())
     {
         return;
     }
 
-    GetMicromapBuilder(device_info).OnMicromapCompactionDependencyCommand(micromap_info->handle, children);
+    GetMicromapEXTBuilder(device_info).OnMicromapEXTCompactionDependencyCommand(micromap_ext_info->handle, children);
 }
 
 void VulkanReplayConsumerBase::ProcessAccelerationStructureCompactionDependencyCommand(
@@ -4640,7 +4640,7 @@ void VulkanReplayConsumerBase::OverrideDestroyDevice(
 
         if (use_acceleration_structure_builder_)
         {
-            micromap_builders_.erase(device_info);
+            micromap_ext_builders_.erase(device_info);
             acceleration_structure_builders_.erase(device_info);
         }
 
@@ -5381,7 +5381,7 @@ void VulkanReplayConsumerBase::OverrideCmdCopyQueryPoolResults(PFN_vkCmdCopyQuer
     if (use_acceleration_structure_builder_)
     {
         GetAccelerationStructureBuilder(device_info).OnCmdCopyQueryPoolResults(command_buffer_info, query_pool_info);
-        GetMicromapBuilder(device_info).OnCmdCopyQueryPoolResults(command_buffer_info, query_pool_info);
+        GetMicromapEXTBuilder(device_info).OnCmdCopyQueryPoolResults(command_buffer_info, query_pool_info);
     }
 
     func(command_buffer, query_pool, firstQuery, queryCount, dst_buffer, dstOffset, stride, flags);
@@ -5580,7 +5580,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoo
             GetAccelerationStructureBuilder(device_info)
                 .ProcessCapturedQueryPoolResults(
                     query_pool_info, firstQuery, queryCount, pData->GetPointer(), pData->GetLength(), stride, flags);
-            GetMicromapBuilder(device_info)
+            GetMicromapEXTBuilder(device_info)
                 .ProcessCapturedQueryPoolResults(
                     query_pool_info, firstQuery, queryCount, pData->GetPointer(), pData->GetLength(), stride, flags);
         }
@@ -5618,7 +5618,7 @@ VkResult VulkanReplayConsumerBase::OverrideGetQueryPoolResults(PFN_vkGetQueryPoo
         if (use_acceleration_structure_builder_)
         {
             GetAccelerationStructureBuilder(device_info).OnGetQueryPoolResults(device_info, query_pool_info);
-            GetMicromapBuilder(device_info).OnGetQueryPoolResults(device_info, query_pool_info);
+            GetMicromapEXTBuilder(device_info).OnGetQueryPoolResults(device_info, query_pool_info);
         }
     }
     return result;
@@ -8241,7 +8241,7 @@ void VulkanReplayConsumerBase::OverrideDestroyBuffer(
         if (use_acceleration_structure_builder_)
         {
             GetAccelerationStructureBuilder(device_info).OnDestroyBuffer(buffer_info);
-            GetMicromapBuilder(device_info).OnDestroyBuffer(buffer_info);
+            GetMicromapEXTBuilder(device_info).OnDestroyBuffer(buffer_info);
         }
     }
 
@@ -11968,7 +11968,7 @@ void VulkanReplayConsumerBase::OverrideGetMicromapBuildSizesEXT(
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
     else
     {
-        GetMicromapBuilder(device).OnGetMicromapBuildSizes(device, buildType, in_pBuildInfo, out_pSizeInfo);
+        GetMicromapEXTBuilder(device).OnGetMicromapEXTBuildSizes(device, buildType, in_pBuildInfo, out_pSizeInfo);
     }
 }
 
@@ -11978,16 +11978,16 @@ VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
     const VulkanDeviceInfo*                                      device_info,
     const StructPointerDecoder<Decoded_VkMicromapCreateInfoEXT>* pCreateInfo,
     const StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-    HandlePointerDecoder<VkMicromapEXT>*                         pMicromap)
+    HandlePointerDecoder<VkMicromapEXT>*                         pMicromapEXT)
 {
     GFXRECON_ASSERT(device_info != nullptr);
 
-    assert((device_info != nullptr) && (pCreateInfo != nullptr) && (pMicromap != nullptr) && !pMicromap->IsNull() &&
-           (pMicromap->GetHandlePointer() != nullptr));
+    assert((device_info != nullptr) && (pCreateInfo != nullptr) && (pMicromapEXT != nullptr) &&
+           !pMicromapEXT->IsNull() && (pMicromapEXT->GetHandlePointer() != nullptr));
 
     VkResult result             = VK_SUCCESS;
-    auto     replay_micromap    = pMicromap->GetHandlePointer();
-    auto     capture_id         = (*pMicromap->GetPointer());
+    auto     replay_micromap_ext = pMicromapEXT->GetHandlePointer();
+    auto     capture_id          = (*pMicromapEXT->GetPointer());
     auto     replay_create_info = pCreateInfo->GetPointer();
     VkDevice device             = device_info->handle;
     auto     device_table       = GetDeviceTable(device);
@@ -12013,15 +12013,18 @@ VkResult VulkanReplayConsumerBase::OverrideCreateMicromapEXT(
         modified_create_info.deviceAddress = device_address;
 
         result = device_table->CreateMicromapEXT(
-            device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_micromap);
+            device, &modified_create_info, GetAllocationCallbacks(pAllocator), replay_micromap_ext);
     }
     else
     {
         modified_create_info.createFlags &= ~VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
         modified_create_info.deviceAddress = 0;
-        GetMicromapBuilder(device_info)
-            .OnCreateMicromap(
-                device_info, &modified_create_info, GetAllocationCallbacks(pAllocator), capture_id, replay_micromap);
+        GetMicromapEXTBuilder(device_info)
+            .OnCreateMicromapEXT(device_info,
+                                 &modified_create_info,
+                                 GetAllocationCallbacks(pAllocator),
+                                 capture_id,
+                                 replay_micromap_ext);
     }
 
     return result;
@@ -12136,7 +12139,7 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
                 VkResult result = initializer->FlushPendingUploads();
                 if (result != VK_SUCCESS)
                 {
-                    GFXRECON_LOG_FATAL("Failed to flush pending resource initializer uploads before micromap build");
+                    GFXRECON_LOG_FATAL("Failed to flush pending resource initializer uploads before micromapEXT build");
                 }
             }
             for (uint32_t i = 0; i < infoCount; ++i)
@@ -12151,7 +12154,7 @@ void VulkanReplayConsumerBase::OverrideCmdBuildMicromapsEXT(
     // Use the builder when the rebind allocator is selected and the trimming is done / not used
     else
     {
-        GetMicromapBuilder(device_info).OnCmdBuildMicromaps(command_buffer, infoCount, infos);
+        GetMicromapEXTBuilder(device_info).OnCmdBuildMicromapsEXT(command_buffer, infoCount, infos);
     }
 }
 
@@ -12210,30 +12213,31 @@ void VulkanReplayConsumerBase::OverrideCmdWriteAccelerationStructuresPropertiesK
     track_query_state_ = true;
 }
 
-void VulkanReplayConsumerBase::OverrideCmdWriteMicromapsPropertiesEXT(PFN_vkCmdWriteMicromapsPropertiesEXT func,
-                                                                      VulkanCommandBufferInfo* command_buffer_info,
-                                                                      uint32_t                 count,
-                                                                      HandlePointerDecoder<VkMicromapEXT>* pMicromaps,
-                                                                      VkQueryType                          queryType,
-                                                                      VulkanQueryPoolInfo* query_pool_info,
-                                                                      uint32_t             firstQuery)
+void VulkanReplayConsumerBase::OverrideCmdWriteMicromapsPropertiesEXT(
+    PFN_vkCmdWriteMicromapsPropertiesEXT func,
+    VulkanCommandBufferInfo*             command_buffer_info,
+    uint32_t                             count,
+    HandlePointerDecoder<VkMicromapEXT>* pMicromapsEXT,
+    VkQueryType                          queryType,
+    VulkanQueryPoolInfo*                 query_pool_info,
+    uint32_t                             firstQuery)
 {
     const VulkanDeviceInfo* device_info    = object_info_table_->GetVkDeviceInfo(command_buffer_info->parent_id);
     VkCommandBuffer         command_buffer = command_buffer_info->handle;
-    const VkMicromapEXT*    pMicromaps_dec = pMicromaps->GetHandlePointer();
+    const VkMicromapEXT*    pMicromapsEXT_dec = pMicromapsEXT->GetHandlePointer();
     VkQueryPool             query_pool     = query_pool_info->handle;
 
     if (use_acceleration_structure_builder_)
     {
-        GetMicromapBuilder(device_info)
-            .OnCmdWriteMicromapsProperties(command_buffer_info->handle,
-                                           count,
-                                           pMicromaps->GetHandlePointer(),
-                                           queryType,
-                                           query_pool_info->handle,
-                                           firstQuery);
+        GetMicromapEXTBuilder(device_info)
+            .OnCmdWriteMicromapsEXTProperties(command_buffer_info->handle,
+                                              count,
+                                              pMicromapsEXT->GetHandlePointer(),
+                                              queryType,
+                                              query_pool_info->handle,
+                                              firstQuery);
     }
-    func(command_buffer, count, pMicromaps_dec, queryType, query_pool, firstQuery);
+    func(command_buffer, count, pMicromapsEXT_dec, queryType, query_pool, firstQuery);
 
     command_buffer_info->recorded_query_ops.push_back({ query_pool_info->capture_id, firstQuery, count, true });
     track_query_state_ = true;
@@ -14087,7 +14091,7 @@ void VulkanReplayConsumerBase::OverrideDestroyAccelerationStructureKHR(
 void VulkanReplayConsumerBase::OverrideDestroyMicromapEXT(
     PFN_vkDestroyMicromapEXT                             func,
     const VulkanDeviceInfo*                              device_info,
-    const VulkanMicromapEXTInfo*                         micromap_info,
+    const VulkanMicromapEXTInfo*                         micromap_ext_info,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
     assert(device_info != nullptr);
@@ -14095,20 +14099,20 @@ void VulkanReplayConsumerBase::OverrideDestroyMicromapEXT(
     auto allocator = device_info->allocator.get();
     assert(allocator != nullptr);
 
-    VkMicromapEXT                         micromap       = VK_NULL_HANDLE;
+    VkMicromapEXT                         micromapEXT    = VK_NULL_HANDLE;
     VulkanResourceAllocator::ResourceData allocator_data = 0;
 
-    if (micromap_info != nullptr)
+    if (micromap_ext_info != nullptr)
     {
-        micromap = micromap_info->handle;
+        micromapEXT = micromap_ext_info->handle;
     }
 
     if (!allocator->SupportsOpaqueDeviceAddresses())
     {
-        GetMicromapBuilder(device_info).OnDestroyMicromap(micromap_info);
+        GetMicromapEXTBuilder(device_info).OnDestroyMicromapEXT(micromap_ext_info);
     }
 
-    func(device_info->handle, micromap, GetAllocationCallbacks(pAllocator));
+    func(device_info->handle, micromapEXT, GetAllocationCallbacks(pAllocator));
 }
 
 // We want to allow skipping the query for tool properties because the capture layer actually adds this
@@ -14820,15 +14824,16 @@ VulkanReplayConsumerBase::GetAccelerationStructureBuilder(const decode::VulkanDe
 
     return it->second;
 }
-decode::VulkanMicromapBuilder& VulkanReplayConsumerBase::GetMicromapBuilder(const decode::VulkanDeviceInfo* device_info)
+decode::VulkanMicromapEXTBuilder&
+VulkanReplayConsumerBase::GetMicromapEXTBuilder(const decode::VulkanDeviceInfo* device_info)
 {
-    auto it = micromap_builders_.find(device_info);
-    if (it == micromap_builders_.end())
+    auto it = micromap_ext_builders_.find(device_info);
+    if (it == micromap_ext_builders_.end())
     {
         const decode::VulkanPhysicalDeviceInfo* physical_device_info =
             object_info_table_->GetVkPhysicalDeviceInfo(device_info->parent_id);
 
-        auto [new_it, success] = micromap_builders_.emplace(
+        auto [new_it, success] = micromap_ext_builders_.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(device_info),
             std::forward_as_tuple(GetDeviceTable(device_info->handle),

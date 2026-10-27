@@ -56,7 +56,7 @@ VkDeviceSize GetStridedSize(uint64_t count, VkDeviceSize stride, VkDeviceSize el
     return count == 0 ? 0 : ((count - 1) * stride) + element_size;
 }
 
-bool GetOpacityMicromapTriangleDataSize(const VkMicromapUsageEXT& usage, VkDeviceSize* size)
+bool GetOpacityMicromapEXTTriangleDataSize(const VkMicromapUsageEXT& usage, VkDeviceSize* size)
 {
     GFXRECON_ASSERT(size != nullptr);
 
@@ -86,11 +86,11 @@ bool GetOpacityMicromapTriangleDataSize(const VkMicromapUsageEXT& usage, VkDevic
     return true;
 }
 
-bool GetMicromapBuildInputSizes(VkMicromapTypeEXT                      type,
-                                const std::vector<VkMicromapUsageEXT>& usage_counts,
-                                VkDeviceSize                           triangle_array_stride,
-                                VkDeviceSize*                          data_size,
-                                VkDeviceSize*                          triangle_array_size)
+bool GetMicromapEXTBuildInputSizes(VkMicromapTypeEXT                      type,
+                                   const std::vector<VkMicromapUsageEXT>& usage_counts,
+                                   VkDeviceSize                           triangle_array_stride,
+                                   VkDeviceSize*                          data_size,
+                                   VkDeviceSize*                          triangle_array_size)
 {
     GFXRECON_ASSERT(data_size != nullptr && triangle_array_size != nullptr);
     *data_size           = 0;
@@ -104,7 +104,7 @@ bool GetMicromapBuildInputSizes(VkMicromapTypeEXT                      type,
         switch (type)
         {
             case VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT:
-                valid_format = GetOpacityMicromapTriangleDataSize(usage, &triangle_data_size);
+                valid_format = GetOpacityMicromapEXTTriangleDataSize(usage, &triangle_data_size);
                 break;
             default:
                 return false;
@@ -846,16 +846,17 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                                                   range.transformOffset + sizeof(VkTransformMatrixKHR));
                     }
 
-                    auto micromap_struct =
+                    auto micromap_ext_struct =
                         graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(
                             &triangles);
-                    if (micromap_struct != nullptr && micromap_struct->indexBuffer.deviceAddress != 0)
+                    if (micromap_ext_struct != nullptr && micromap_ext_struct->indexBuffer.deviceAddress != 0)
                     {
-                        const VkDeviceSize micromap_index_size =
-                            graphics::VkIndexTypeToBytes(micromap_struct->indexType);
-                        input_ranges.emplace_back(
-                            micromap_struct->indexBuffer.deviceAddress,
-                            GetStridedSize(range.primitiveCount, micromap_struct->indexStride, micromap_index_size));
+                        const VkDeviceSize micromap_ext_index_size =
+                            graphics::VkIndexTypeToBytes(micromap_ext_struct->indexType);
+                        input_ranges.emplace_back(micromap_ext_struct->indexBuffer.deviceAddress,
+                                                  GetStridedSize(range.primitiveCount,
+                                                                 micromap_ext_struct->indexStride,
+                                                                 micromap_ext_index_size));
                     }
 
                     break;
@@ -1022,9 +1023,9 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
     }
 }
 
-void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer               command_buffer,
-                                                   uint32_t                      info_count,
-                                                   const VkMicromapBuildInfoEXT* infos)
+void VulkanStateTracker::TrackMicromapEXTBuildCommand(VkCommandBuffer               command_buffer,
+                                                      uint32_t                      info_count,
+                                                      const VkMicromapBuildInfoEXT* infos)
 {
     if (info_count == 0 || !infos)
     {
@@ -1060,27 +1061,27 @@ void VulkanStateTracker::TrackMicromapBuildCommand(VkCommandBuffer              
 
         VkDeviceSize data_size           = 0;
         VkDeviceSize triangle_array_size = 0;
-        if (!GetMicromapBuildInputSizes(
+        if (!GetMicromapEXTBuildInputSizes(
                 infos[i].type, usage_counts, infos[i].triangleArrayStride, &data_size, &triangle_array_size))
         {
-            GFXRECON_LOG_WARNING("Skipping micromap input snapshots with unsupported input parameters");
+            GFXRECON_LOG_WARNING("Skipping micromapEXT input snapshots with unsupported input parameters");
             continue;
         }
 
-        auto dst_command = std::make_unique<MicromapEXTWrapper::MicromapBuildCommandData>();
-        // Extract command information for 1 Micromap
-        dst_command->micromap_build_info = infos[i];
+        auto dst_command = std::make_unique<MicromapEXTWrapper::MicromapEXTBuildCommandData>();
+        // Extract command information for one EXT micromap
+        dst_command->micromap_ext_build_info = infos[i];
 
-        dst_command->micromap_usage_counts_memory =
+        dst_command->micromap_ext_usage_counts_memory =
             std::make_unique<uint8_t[]>(sizeof(VkMicromapUsageEXT) * infos[i].usageCountsCount);
 
         std::copy(usage_counts.begin(),
                   usage_counts.end(),
-                  reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_usage_counts_memory.get()));
+                  reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_ext_usage_counts_memory.get()));
 
-        dst_command->micromap_build_info.pUsageCounts =
-            reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_usage_counts_memory.get());
-        dst_command->micromap_build_info.ppUsageCounts = nullptr;
+        dst_command->micromap_ext_build_info.pUsageCounts =
+            reinterpret_cast<VkMicromapUsageEXT*>(dst_command->micromap_ext_usage_counts_memory.get());
+        dst_command->micromap_ext_build_info.ppUsageCounts = nullptr;
         dst_command->input_buffers.reserve(2);
 
         const std::array<std::pair<VkDeviceAddress, VkDeviceSize>, 2> inputs = {
@@ -2510,11 +2511,13 @@ void VulkanStateTracker::TrackAccelerationStructureKHRDeviceAddress(VkDevice    
     }
 }
 
-void VulkanStateTracker::TrackMicromapDeviceAddress(VkDevice device, VkMicromapEXT micromap, VkDeviceAddress address)
+void VulkanStateTracker::TrackMicromapEXTDeviceAddress(VkDevice        device,
+                                                       VkMicromapEXT   micromapEXT,
+                                                       VkDeviceAddress address)
 {
-    assert((device != VK_NULL_HANDLE) && (micromap != VK_NULL_HANDLE));
+    assert((device != VK_NULL_HANDLE) && (micromapEXT != VK_NULL_HANDLE));
 
-    auto wrapper       = vulkan_wrappers::GetWrapper<vulkan_wrappers::MicromapEXTWrapper>(micromap);
+    auto wrapper       = vulkan_wrappers::GetWrapper<vulkan_wrappers::MicromapEXTWrapper>(micromapEXT);
     wrapper->device_id = vulkan_wrappers::GetWrappedId<vulkan_wrappers::DeviceWrapper>(device);
     wrapper->address   = address;
 
@@ -3882,7 +3885,7 @@ void VulkanStateTracker::TrackAccelerationStructureCopyCommand(VkCommandBuffer  
         destination_wrapper->handle_id);
 }
 
-void VulkanStateTracker::TrackMicromapCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info)
+void VulkanStateTracker::TrackMicromapEXTCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info)
 {
     // TODO: Support other types of copies (clone, serialize, deserialize)
     if ((info == nullptr) || (info->mode != VK_COPY_MICROMAP_MODE_COMPACT_EXT))
@@ -3893,7 +3896,7 @@ void VulkanStateTracker::TrackMicromapCopyCommand(VkCommandBuffer command_buffer
     auto wrapper = GetWrapper<MicromapEXTWrapper>(info->src);
     if (!wrapper->latest_copy_command_)
     {
-        wrapper->latest_copy_command_ = std::make_unique<MicromapEXTWrapper::MicromapCopyCommandData>();
+        wrapper->latest_copy_command_ = std::make_unique<MicromapEXTWrapper::MicromapEXTCopyCommandData>();
     }
     wrapper->latest_copy_command_->info = *info;
 }
@@ -3933,21 +3936,21 @@ void VulkanStateTracker::TrackWriteAccelerationStructuresPropertiesCommand(
     }
 }
 
-void VulkanStateTracker::TrackWriteMicromapsPropertiesCommand(VkCommandBuffer      commandBuffer,
-                                                              uint32_t             micromapCount,
-                                                              const VkMicromapEXT* pMicromaps,
-                                                              VkQueryType          queryType,
-                                                              VkQueryPool          queryPool,
-                                                              uint32_t             firstQuery)
+void VulkanStateTracker::TrackWriteMicromapsEXTPropertiesCommand(VkCommandBuffer      commandBuffer,
+                                                                 uint32_t             micromapEXTCount,
+                                                                 const VkMicromapEXT* pMicromapsEXT,
+                                                                 VkQueryType          queryType,
+                                                                 VkQueryPool          queryPool,
+                                                                 uint32_t             firstQuery)
 {
     CommandBufferWrapper* cmd_buf_wrapper    = GetWrapper<CommandBufferWrapper>(commandBuffer);
     QueryPoolWrapper*     query_pool_wrapper = GetWrapper<QueryPoolWrapper>(queryPool);
 
-    for (uint32_t i = 0; i < micromapCount; ++i)
+    for (uint32_t i = 0; i < micromapEXTCount; ++i)
     {
-        MicromapEXTWrapper* wrapper = GetWrapper<MicromapEXTWrapper>(pMicromaps[i]);
+        MicromapEXTWrapper* wrapper = GetWrapper<MicromapEXTWrapper>(pMicromapsEXT[i]);
         wrapper->latest_write_properties_command_ =
-            std::make_unique<MicromapEXTWrapper::MicromapWritePropertiesCommandData>();
+            std::make_unique<MicromapEXTWrapper::MicromapEXTWritePropertiesCommandData>();
         wrapper->latest_write_properties_command_->query_type = queryType;
     }
 }

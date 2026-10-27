@@ -22,7 +22,7 @@
 */
 
 #include "graphics/vulkan_resources_util.h"
-#include "decode/vulkan_micromap_builder.h"
+#include "decode/vulkan_micromap_ext_builder.h"
 #include "decode/vulkan_query_util.h"
 #include "util/callbacks.h"
 #include <algorithm>
@@ -30,11 +30,11 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-VulkanMicromapBuilder::VulkanMicromapBuilder(const graphics::VulkanDeviceTable*      device_table,
-                                             VkDevice                                device,
-                                             VulkanResourceAllocator*                allocator,
-                                             const VkPhysicalDeviceMemoryProperties& properties,
-                                             VulkanDeviceAddressTracker&             device_address_tracker) :
+VulkanMicromapEXTBuilder::VulkanMicromapEXTBuilder(const graphics::VulkanDeviceTable*      device_table,
+                                                   VkDevice                                device,
+                                                   VulkanResourceAllocator*                allocator,
+                                                   const VkPhysicalDeviceMemoryProperties& properties,
+                                                   VulkanDeviceAddressTracker&             device_address_tracker) :
     device_(device),
     allocator_(allocator), device_address_tracker_(device_address_tracker),
     internal_buffer_manager_(device_table, device, allocator, properties)
@@ -43,10 +43,10 @@ VulkanMicromapBuilder::VulkanMicromapBuilder(const graphics::VulkanDeviceTable* 
     InitializeFunctionPointers(device_table);
 }
 
-void VulkanMicromapBuilder::OnGetMicromapBuildSizes(const VulkanDeviceInfo*             device_info,
-                                                    VkAccelerationStructureBuildTypeKHR buildType,
-                                                    VkMicromapBuildInfoEXT*             info,
-                                                    VkMicromapBuildSizesInfoEXT*        size_info)
+void VulkanMicromapEXTBuilder::OnGetMicromapEXTBuildSizes(const VulkanDeviceInfo*             device_info,
+                                                          VkAccelerationStructureBuildTypeKHR buildType,
+                                                          VkMicromapBuildInfoEXT*             info,
+                                                          VkMicromapBuildSizesInfoEXT*        size_info)
 {
     auto address_remap = [this](VkDeviceAddress& capture_address) {
         auto buffer_info = device_address_tracker_.GetBufferByCaptureDeviceAddress(capture_address);
@@ -61,12 +61,12 @@ void VulkanMicromapBuilder::OnGetMicromapBuildSizes(const VulkanDeviceInfo*     
 
     address_remap(info->data.deviceAddress);
     address_remap(info->triangleArray.deviceAddress);
-    functions_.get_micromap_build_sizes(device_info->handle, buildType, info, size_info);
+    functions_.get_micromap_ext_build_sizes(device_info->handle, buildType, info, size_info);
     last_build_sizes_ = *size_info;
 }
 
-void VulkanMicromapBuilder::OnMicromapCompactionDependencyCommand(VkMicromapEXT                        parent,
-                                                                  const std::vector<format::HandleId>& children)
+void VulkanMicromapEXTBuilder::OnMicromapEXTCompactionDependencyCommand(VkMicromapEXT                        parent,
+                                                                        const std::vector<format::HandleId>& children)
 {
     for (uint64_t i = 0; i < children.size(); i++)
     {
@@ -74,14 +74,14 @@ void VulkanMicromapBuilder::OnMicromapCompactionDependencyCommand(VkMicromapEXT 
     }
 }
 
-VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      device_info,
-                                                 VkMicromapCreateInfoEXT*     info,
-                                                 const VkAllocationCallbacks* pAllocator,
-                                                 format::HandleId             capture_id,
-                                                 VkMicromapEXT*               handle)
+VkResult VulkanMicromapEXTBuilder::OnCreateMicromapEXT(const VulkanDeviceInfo*      device_info,
+                                                       VkMicromapCreateInfoEXT*     info,
+                                                       const VkAllocationCallbacks* pAllocator,
+                                                       format::HandleId             capture_id,
+                                                       VkMicromapEXT*               handle)
 {
-    // Create new storage buffer for Micromap based on previously recorded vkGetMicromapBuildSizesEXT (this call must be
-    // inserted by gfxrecon-optimize)
+    // Create new storage buffer for an EXT micromap based on previously recorded vkGetMicromapBuildSizesEXT (this call
+    // must be inserted by gfxrecon-optimize)
     auto allocator = device_info->allocator.get();
     assert(allocator != nullptr);
 
@@ -105,12 +105,12 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      de
                 std::vector<PreProcessingCompactionInfo>& vector = it->second;
                 for (uint64_t i = 0; i < vector.size(); i++)
                 {
-                    auto&                       buffer       = vector[i].buffer_info_wrapper;
-                    auto                        first_query  = vector[i].first_query;
-                    std::vector<VkMicromapEXT>& vector_of_mm = vector[i].parents;
+                    auto&                       buffer        = vector[i].buffer_info_wrapper;
+                    auto                        first_query   = vector[i].first_query;
+                    std::vector<VkMicromapEXT>& micromaps_ext = vector[i].parents;
 
-                    std::vector<uint64_t> vector_of_mm_sizes(vector_of_mm.size(), 0);
-                    uint64_t              buffer_size = vector_of_mm_sizes.size() * sizeof(uint64_t);
+                    std::vector<uint64_t> micromaps_ext_sizes(micromaps_ext.size(), 0);
+                    uint64_t              buffer_size = micromaps_ext_sizes.size() * sizeof(uint64_t);
 
                     util::MarkingLayersUtil::BeginInjected(device_);
                     void*    mapped;
@@ -118,20 +118,20 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      de
                         allocator_->MapResourceMemoryDirect(buffer_size, 0, &mapped, buffer->info_.allocator_data);
                     GFXRECON_ASSERT(mapping_result == VK_SUCCESS);
 
-                    util::platform::MemoryCopy(vector_of_mm_sizes.data(), buffer_size, mapped, buffer_size);
+                    util::platform::MemoryCopy(micromaps_ext_sizes.data(), buffer_size, mapped, buffer_size);
 
                     allocator_->UnmapResourceMemoryDirect(buffer->info_.allocator_data);
                     util::MarkingLayersUtil::EndInjected(device_);
 
-                    // This assert may get hit if the opacity micromaps were not build and the optimized sizes are
+                    // This assert may get hit if the EXT opacity micromaps were not build and the optimized sizes are
                     // not known. This situation can happen if gpu is mocked and the assert can be triggered in debug
                     // mode only
-                    GFXRECON_ASSERT(vector_of_mm_sizes != std::vector<uint64_t>(vector_of_mm.size(), 0));
+                    GFXRECON_ASSERT(micromaps_ext_sizes != std::vector<uint64_t>(micromaps_ext.size(), 0));
 
                     // add results to compacted_sizes_processed map
-                    for (uint64_t j = 0; j < vector_of_mm.size(); j++)
+                    for (uint64_t j = 0; j < micromaps_ext.size(); j++)
                     {
-                        compacted_sizes_processed_.try_emplace(vector_of_mm[j], vector_of_mm_sizes[j]);
+                        compacted_sizes_processed_.try_emplace(micromaps_ext[j], micromaps_ext_sizes[j]);
                     }
                 }
             }
@@ -150,36 +150,37 @@ VkResult VulkanMicromapBuilder::OnCreateMicromap(const VulkanDeviceInfo*      de
     info->buffer = bufferInfoWrapper->info_.handle;
     info->offset = 0;
 
-    VkResult result = functions_.create_micromap(device_info->handle, info, pAllocator, handle);
+    VkResult result = functions_.create_micromap_ext(device_info->handle, info, pAllocator, handle);
     assert(result == VK_SUCCESS);
 
-    micromaps_[*handle] = { capture_id, sizes, std::move(bufferInfoWrapper) };
+    micromaps_ext_[*handle] = { capture_id, sizes, std::move(bufferInfoWrapper) };
     return result;
 }
 
-void VulkanMicromapBuilder::OnCmdBuildMicromaps(VkCommandBuffer         command_buffer,
-                                                uint32_t                info_count,
-                                                VkMicromapBuildInfoEXT* build_infos)
+void VulkanMicromapEXTBuilder::OnCmdBuildMicromapsEXT(VkCommandBuffer         command_buffer,
+                                                      uint32_t                info_count,
+                                                      VkMicromapBuildInfoEXT* build_infos)
 {
     for (uint32_t i = 0; i < info_count; ++i)
     {
         assert(build_infos[i].type == VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT);
 
-        if (micromaps_.count(build_infos[i].dstMicromap) == 0)
+        if (micromaps_ext_.count(build_infos[i].dstMicromap) == 0)
         {
             GFXRECON_LOG_FATAL("Handle %ul for vkCmdBuildMicromapsEXT not found", build_infos[i].dstMicromap);
             GFXRECON_ASSERT(false);
         }
 
-        VkDeviceSize scratch_size = micromaps_[build_infos[i].dstMicromap].info.buildScratchSize;
+        VkDeviceSize scratch_size = micromaps_ext_[build_infos[i].dstMicromap].info.buildScratchSize;
 
         UpdateScratchDeviceAddress(build_infos[i], scratch_size);
         UpdateDeviceAddress(build_infos[i]);
     }
-    functions_.cmd_build_micromaps(command_buffer, info_count, build_infos);
+    functions_.cmd_build_micromaps_ext(command_buffer, info_count, build_infos);
 }
 
-void VulkanMicromapBuilder::UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& build_infos, VkDeviceSize scratch_size)
+void VulkanMicromapEXTBuilder::UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& build_infos,
+                                                          VkDeviceSize            scratch_size)
 {
     VkDeviceAddress capture_scratch_address = build_infos.scratchData.deviceAddress;
 
@@ -227,7 +228,7 @@ void VulkanMicromapBuilder::UpdateScratchDeviceAddress(VkMicromapBuildInfoEXT& b
     }
 }
 
-void VulkanMicromapBuilder::UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_info)
+void VulkanMicromapEXTBuilder::UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_info)
 {
 
     auto address_remap = [this](VkDeviceAddress& capture_address) {
@@ -247,30 +248,30 @@ void VulkanMicromapBuilder::UpdateDeviceAddress(VkMicromapBuildInfoEXT& build_in
     address_remap(triangleArray);
 }
 
-void VulkanMicromapBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
+void VulkanMicromapEXTBuilder::OnDestroyBuffer(const VulkanBufferInfo* buffer_info)
 {
     scratch_double_buffer_.scratches_previous.erase(buffer_info->capture_id);
     scratch_double_buffer_.scratches_current.erase(buffer_info->capture_id);
 }
 
-void VulkanMicromapBuilder::OnDestroyMicromap(const VulkanMicromapEXTInfo* micromap_info)
+void VulkanMicromapEXTBuilder::OnDestroyMicromapEXT(const VulkanMicromapEXTInfo* micromap_ext_info)
 {
-    micromaps_.erase(micromap_info->handle);
+    micromaps_ext_.erase(micromap_ext_info->handle);
 }
 
-void VulkanMicromapBuilder::OnCmdWriteMicromapsProperties(VkCommandBuffer command_buffer,
-                                                          uint32_t        count,
-                                                          VkMicromapEXT*  micromaps,
-                                                          VkQueryType     query_type,
-                                                          VkQueryPool     pool,
-                                                          uint32_t        first_query)
+void VulkanMicromapEXTBuilder::OnCmdWriteMicromapsEXTProperties(VkCommandBuffer command_buffer,
+                                                                uint32_t        count,
+                                                                VkMicromapEXT*  micromapsEXT,
+                                                                VkQueryType     query_type,
+                                                                VkQueryPool     pool,
+                                                                uint32_t        first_query)
 {
     if (query_type != VK_QUERY_TYPE_MICROMAP_COMPACTED_SIZE_EXT)
     {
         return;
     }
 
-    std::vector<VkMicromapEXT> handles_to_process(micromaps, micromaps + count);
+    std::vector<VkMicromapEXT> handles_to_process(micromapsEXT, micromapsEXT + count);
 
     std::unique_ptr<VulkanInternalBufferManager::BufferInfoWrapper> staging_buffer_entry =
         internal_buffer_manager_.CreateBuffer(
@@ -285,9 +286,9 @@ void VulkanMicromapBuilder::OnCmdWriteMicromapsProperties(VkCommandBuffer comman
 }
 
 // inject vkCmdCopyQueryPoolResults command that copies the results to internal buffer in the expected format
-// processing of the results happens in OnCreateMicromap
-void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferInfo* command_buffer_info,
-                                                      const VulkanQueryPoolInfo*     query_pool_info)
+// processing of the results happens in OnCreateMicromapEXT
+void VulkanMicromapEXTBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferInfo* command_buffer_info,
+                                                         const VulkanQueryPoolInfo*     query_pool_info)
 {
     if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
     {
@@ -335,8 +336,8 @@ void VulkanMicromapBuilder::OnCmdCopyQueryPoolResults(const VulkanCommandBufferI
 
 // inject vkGetQueryPoolResults command to retrieve data in the desired format and write results in correlation to AS in
 // processed map
-void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    device_info,
-                                                  const VulkanQueryPoolInfo* query_pool_info)
+void VulkanMicromapEXTBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    device_info,
+                                                     const VulkanQueryPoolInfo* query_pool_info)
 {
     if (!compacted_sizes_unprocessed_.count(query_pool_info->handle))
     {
@@ -348,40 +349,40 @@ void VulkanMicromapBuilder::OnGetQueryPoolResults(const VulkanDeviceInfo*    dev
     for (uint64_t i = 0; i < unprocessed.size(); i++)
     {
         PreProcessingCompactionInfo& pre_processed{ unprocessed[i] };
-        std::vector<VkMicromapEXT>&  vector_of_mm{ pre_processed.parents };
+        std::vector<VkMicromapEXT>&  micromaps_ext{ pre_processed.parents };
 
-        std::vector<uint64_t> vector_of_mm_sizes(pre_processed.parents.size(), 0);
+        std::vector<uint64_t> micromaps_ext_sizes(pre_processed.parents.size(), 0);
 
         util::MarkingLayersUtil::BeginInjected(device_);
 
         functions_.get_query_pool_results(device_info->handle,
                                           query_pool_info->handle,
                                           pre_processed.first_query,
-                                          vector_of_mm.size(),
-                                          vector_of_mm_sizes.size() * sizeof(uint64_t),
-                                          vector_of_mm_sizes.data(),
+                                          micromaps_ext.size(),
+                                          micromaps_ext_sizes.size() * sizeof(uint64_t),
+                                          micromaps_ext_sizes.data(),
                                           8,
                                           VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
         util::MarkingLayersUtil::EndInjected(device_);
 
-        GFXRECON_ASSERT(vector_of_mm_sizes != std::vector<uint64_t>(vector_of_mm.size(), 0));
+        GFXRECON_ASSERT(micromaps_ext_sizes != std::vector<uint64_t>(micromaps_ext.size(), 0));
 
         // add results to compacted_sizes_processed map
-        for (uint64_t j = 0; j < vector_of_mm.size(); j++)
+        for (uint64_t j = 0; j < micromaps_ext.size(); j++)
         {
-            compacted_sizes_processed_.try_emplace(vector_of_mm[j], vector_of_mm_sizes[j]);
+            compacted_sizes_processed_.try_emplace(micromaps_ext[j], micromaps_ext_sizes[j]);
         }
     }
     compacted_sizes_unprocessed_.erase(query_pool_info->handle);
 }
 
-void VulkanMicromapBuilder::ProcessCapturedQueryPoolResults(const VulkanQueryPoolInfo* query_pool_info,
-                                                            uint32_t                   first_query,
-                                                            uint32_t                   query_count,
-                                                            const uint8_t*             data,
-                                                            size_t                     data_size,
-                                                            VkDeviceSize               stride,
-                                                            VkQueryResultFlags         flags)
+void VulkanMicromapEXTBuilder::ProcessCapturedQueryPoolResults(const VulkanQueryPoolInfo* query_pool_info,
+                                                               uint32_t                   first_query,
+                                                               uint32_t                   query_count,
+                                                               const uint8_t*             data,
+                                                               size_t                     data_size,
+                                                               VkDeviceSize               stride,
+                                                               VkQueryResultFlags         flags)
 {
     if ((query_pool_info == nullptr) || (data == nullptr) ||
         !compacted_sizes_unprocessed_.count(query_pool_info->handle))
@@ -421,14 +422,14 @@ void VulkanMicromapBuilder::ProcessCapturedQueryPoolResults(const VulkanQueryPoo
     }
 }
 
-void VulkanMicromapBuilder::InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table)
+void VulkanMicromapEXTBuilder::InitializeFunctionPointers(const graphics::VulkanDeviceTable* device_table)
 {
-    functions_.get_micromap_build_sizes    = device_table->GetMicromapBuildSizesEXT;
-    functions_.create_micromap             = device_table->CreateMicromapEXT;
-    functions_.cmd_build_micromaps         = device_table->CmdBuildMicromapsEXT;
-    functions_.cmd_copy_query_pool_results = device_table->CmdCopyQueryPoolResults;
-    functions_.cmd_pipeline_barrier        = device_table->CmdPipelineBarrier;
-    functions_.get_query_pool_results      = device_table->GetQueryPoolResults;
+    functions_.get_micromap_ext_build_sizes = device_table->GetMicromapBuildSizesEXT;
+    functions_.create_micromap_ext          = device_table->CreateMicromapEXT;
+    functions_.cmd_build_micromaps_ext      = device_table->CmdBuildMicromapsEXT;
+    functions_.cmd_copy_query_pool_results  = device_table->CmdCopyQueryPoolResults;
+    functions_.cmd_pipeline_barrier         = device_table->CmdPipelineBarrier;
+    functions_.get_query_pool_results       = device_table->GetQueryPoolResults;
 }
 
 GFXRECON_END_NAMESPACE(decode)

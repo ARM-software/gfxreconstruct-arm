@@ -486,7 +486,7 @@ class VulkanStateTracker
                                                     VkAccelerationStructureKHR accel_struct,
                                                     VkDeviceAddress            address);
 
-    void TrackMicromapDeviceAddress(VkDevice device, VkMicromapEXT micromap, VkDeviceAddress address);
+    void TrackMicromapEXTDeviceAddress(VkDevice device, VkMicromapEXT micromapEXT, VkDeviceAddress address);
 
     void
     TrackAccelerationStructureBuildCommand(VkCommandBuffer                                        command_buffer,
@@ -494,8 +494,9 @@ class VulkanStateTracker
                                            const VkAccelerationStructureBuildGeometryInfoKHR*     infos,
                                            const VkAccelerationStructureBuildRangeInfoKHR* const* pp_buildRange_infos);
 
-    void
-    TrackMicromapBuildCommand(VkCommandBuffer commandBuffer, uint32_t infoCount, const VkMicromapBuildInfoEXT* pInfos);
+    void TrackMicromapEXTBuildCommand(VkCommandBuffer               commandBuffer,
+                                      uint32_t                      infoCount,
+                                      const VkMicromapBuildInfoEXT* pInfos);
 
     void TrackDeviceMemoryDeviceAddress(VkDevice device, VkDeviceMemory memory, VkDeviceAddress address);
 
@@ -546,7 +547,7 @@ class VulkanStateTracker
     void TrackAccelerationStructureCopyCommand(VkCommandBuffer                           command_buffer,
                                                const VkCopyAccelerationStructureInfoKHR* info);
 
-    void TrackMicromapCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info);
+    void TrackMicromapEXTCopyCommand(VkCommandBuffer command_buffer, const VkCopyMicromapInfoEXT* info);
 
     void TrackWriteAccelerationStructuresPropertiesCommand(VkCommandBuffer                   commandBuffer,
                                                            uint32_t                          accelerationStructureCount,
@@ -555,12 +556,12 @@ class VulkanStateTracker
                                                            VkQueryPool                       queryPool,
                                                            uint32_t                          firstQuery);
 
-    void TrackWriteMicromapsPropertiesCommand(VkCommandBuffer      commandBuffer,
-                                              uint32_t             micromapCount,
-                                              const VkMicromapEXT* pMicromaps,
-                                              VkQueryType          queryType,
-                                              VkQueryPool          queryPool,
-                                              uint32_t             firstQuery);
+    void TrackWriteMicromapsEXTPropertiesCommand(VkCommandBuffer      commandBuffer,
+                                                 uint32_t             micromapEXTCount,
+                                                 const VkMicromapEXT* pMicromapsEXT,
+                                                 VkQueryType          queryType,
+                                                 VkQueryPool          queryPool,
+                                                 uint32_t             firstQuery);
 
     void TrackCmdBindDescriptorSets(VkCommandBuffer        commandBuffer,
                                     VkPipelineBindPoint    pipelineBindPoint,

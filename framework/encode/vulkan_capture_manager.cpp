@@ -1772,7 +1772,7 @@ VulkanCaptureManager::OverrideCreateAccelerationStructureKHR(VkDevice           
 VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice                       device,
                                                          const VkMicromapCreateInfoEXT* pCreateInfo,
                                                          const VkAllocationCallbacks*   pAllocator,
-                                                         VkMicromapEXT*                 pMicromap)
+                                                         VkMicromapEXT*                 pMicromapEXT)
 {
     auto                               handle_unwrap_memory = VulkanCaptureManager::Get()->GetHandleUnwrapMemory();
     auto                               device_wrapper       = GetWrapper<DeviceWrapper>(device);
@@ -1781,24 +1781,24 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
     const VkMicromapCreateInfoEXT* pCreateInfo_unwrapped    = UnwrapStructPtrHandles(pCreateInfo, handle_unwrap_memory);
 
     VkResult result;
-    if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+    if (device_wrapper->property_feature_info.feature_micromapCaptureReplayEXT)
     {
         // Add flag to allow for opaque address capture
         VkMicromapCreateInfoEXT modified_create_info = (*pCreateInfo_unwrapped);
         modified_create_info.createFlags |= VK_MICROMAP_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT_EXT;
-        result = device_table->CreateMicromapEXT(device_unwrapped, &modified_create_info, pAllocator, pMicromap);
+        result = device_table->CreateMicromapEXT(device_unwrapped, &modified_create_info, pAllocator, pMicromapEXT);
     }
     else
     {
-        result = device_table->CreateMicromapEXT(device_unwrapped, pCreateInfo_unwrapped, pAllocator, pMicromap);
+        result = device_table->CreateMicromapEXT(device_unwrapped, pCreateInfo_unwrapped, pAllocator, pMicromapEXT);
     }
 
-    if ((result == VK_SUCCESS) && (pMicromap != nullptr))
+    if ((result == VK_SUCCESS) && (pMicromapEXT != nullptr))
     {
         CreateWrappedHandle<DeviceWrapper, NoParentWrapper, MicromapEXTWrapper>(
-            device, NoParentWrapper::kHandleValue, pMicromap, GetUniqueId);
+            device, NoParentWrapper::kHandleValue, pMicromapEXT, GetUniqueId);
 
-        auto micromap_wrapper = GetWrapper<MicromapEXTWrapper>(*pMicromap);
+        auto micromap_ext_wrapper = GetWrapper<MicromapEXTWrapper>(*pMicromapEXT);
 
         auto storage_buffer_wrapper = GetWrapper<BufferWrapper>(pCreateInfo->buffer);
 
@@ -1811,24 +1811,25 @@ VkResult VulkanCaptureManager::OverrideCreateMicromapEXT(VkDevice               
                                           .GetBufferDeviceAddress(device_unwrapped, &buffer_info) +
                                       pCreateInfo->offset;
 
-            micromap_wrapper->device = device_wrapper;
-            micromap_wrapper->type_  = pCreateInfo_unwrapped->type;
+            micromap_ext_wrapper->device = device_wrapper;
+            micromap_ext_wrapper->type_  = pCreateInfo_unwrapped->type;
 
             if (IsCaptureModeTrack())
             {
-                state_tracker_->TrackMicromapDeviceAddress(device, *pMicromap, address);
+                state_tracker_->TrackMicromapEXTDeviceAddress(device, *pMicromapEXT, address);
             }
 
-            if (device_wrapper->property_feature_info.feature_micromapCaptureReplay)
+            if (device_wrapper->property_feature_info.feature_micromapCaptureReplayEXT)
             {
                 // save address to use as pCreateInfo->deviceAddress during replay
-                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_wrapper->handle_id, address);
+                WriteSetOpaqueAddressCommand(device_wrapper->handle_id, micromap_ext_wrapper->handle_id, address);
             }
         }
         else
         {
-            GFXRECON_LOG_WARNING("Could not get device address for micromap %" PRIu64 ", storage buffer was not bound",
-                                 micromap_wrapper->handle_id);
+            GFXRECON_LOG_WARNING("Could not get device address for EXT micromap %" PRIu64
+                                 ", storage buffer was not bound",
+                                 micromap_ext_wrapper->handle_id);
         }
     }
     return result;
@@ -1854,7 +1855,7 @@ void VulkanCaptureManager::OverrideCmdBuildMicromapsEXT(VkCommandBuffer         
 {
     if (IsCaptureModeTrack())
     {
-        state_tracker_->TrackMicromapBuildCommand(commandBuffer, infoCount, pInfos);
+        state_tracker_->TrackMicromapEXTBuildCommand(commandBuffer, infoCount, pInfos);
     }
 
     const graphics::VulkanDeviceTable* device_table = GetDeviceTable(commandBuffer);
@@ -1878,7 +1879,7 @@ void VulkanCaptureManager::OverrideCmdCopyMicromapEXT(VkCommandBuffer           
 {
     if (IsCaptureModeTrack())
     {
-        state_tracker_->TrackMicromapCopyCommand(command_buffer, pInfo);
+        state_tracker_->TrackMicromapEXTCopyCommand(command_buffer, pInfo);
     }
 
     const graphics::VulkanDeviceTable* device_table = GetDeviceTable(command_buffer);
@@ -1905,21 +1906,21 @@ void VulkanCaptureManager::OverrideCmdWriteAccelerationStructuresPropertiesKHR(
 }
 
 void VulkanCaptureManager::OverrideCmdWriteMicromapsPropertiesEXT(VkCommandBuffer      commandBuffer,
-                                                                  uint32_t             micromapCount,
-                                                                  const VkMicromapEXT* pMicromaps,
+                                                                  uint32_t             micromapEXTCount,
+                                                                  const VkMicromapEXT* pMicromapsEXT,
                                                                   VkQueryType          queryType,
                                                                   VkQueryPool          queryPool,
                                                                   uint32_t             firstQuery)
 {
     if (IsCaptureModeTrack())
     {
-        state_tracker_->TrackWriteMicromapsPropertiesCommand(
-            commandBuffer, micromapCount, pMicromaps, queryType, queryPool, firstQuery);
+        state_tracker_->TrackWriteMicromapsEXTPropertiesCommand(
+            commandBuffer, micromapEXTCount, pMicromapsEXT, queryType, queryPool, firstQuery);
     }
 
     const graphics::VulkanDeviceTable* device_table = GetDeviceTable(commandBuffer);
     device_table->CmdWriteMicromapsPropertiesEXT(
-        commandBuffer, micromapCount, pMicromaps, queryType, queryPool, firstQuery);
+        commandBuffer, micromapEXTCount, pMicromapsEXT, queryType, queryPool, firstQuery);
 }
 
 VkResult VulkanCaptureManager::OverrideAllocateMemory(VkDevice                     device,

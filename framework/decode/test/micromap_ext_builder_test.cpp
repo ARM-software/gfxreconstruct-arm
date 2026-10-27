@@ -24,7 +24,7 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "decode/vulkan_micromap_builder.h"
+#include "decode/vulkan_micromap_ext_builder.h"
 #include "format/format.h"
 #include "vulkan_resource_allocator_mock.h"
 
@@ -35,16 +35,16 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-class VulkanMicromapBuilderTestAccess
+class VulkanMicromapEXTBuilderTestAccess
 {
   public:
-    static void AddPendingCompaction(VulkanMicromapBuilder&   builder,
-                                     VkDevice                 device,
-                                     VkQueryPool              query_pool,
-                                     uint32_t                 first_query,
-                                     VkBuffer                 buffer,
-                                     size_t                   result_count,
-                                     VulkanResourceAllocator* allocator)
+    static void AddPendingCompaction(VulkanMicromapEXTBuilder& builder,
+                                     VkDevice                  device,
+                                     VkQueryPool               query_pool,
+                                     uint32_t                  first_query,
+                                     VkBuffer                  buffer,
+                                     size_t                    result_count,
+                                     VulkanResourceAllocator*  allocator)
     {
         VulkanBufferInfo buffer_info{};
         buffer_info.handle = buffer;
@@ -123,7 +123,7 @@ T MakeHandle(format::HandleId id)
     return format::FromHandleId<T>(id);
 }
 
-TEST_CASE("Micromap compacted-size query barrier covers every result byte", "[decode][micromap][query]")
+TEST_CASE("EXT micromap compacted-size query barrier covers every result byte", "[decode][micromap-ext][query]")
 {
     const size_t result_count = GENERATE(size_t{ 1 }, size_t{ 3 });
     query_copy_capture        = {};
@@ -150,8 +150,8 @@ TEST_CASE("Micromap compacted-size query barrier covers every result byte", "[de
     graphics::VulkanInstanceTable instance_table;
     allocator.Initialize(nullptr, device, device_create_info, {}, instance_table, &device_table);
 
-    VulkanMicromapBuilder builder(&device_table, device, &allocator, memory_properties, device_address_tracker);
-    VulkanMicromapBuilderTestAccess::AddPendingCompaction(
+    VulkanMicromapEXTBuilder builder(&device_table, device, &allocator, memory_properties, device_address_tracker);
+    VulkanMicromapEXTBuilderTestAccess::AddPendingCompaction(
         builder, device, query_pool, kFirstQuery, buffer, result_count, &allocator);
 
     VulkanCommandBufferInfo command_buffer_info{};

@@ -359,7 +359,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     VkResult OverrideCreateMicromapEXT(VkDevice                       device,
                                        const VkMicromapCreateInfoEXT* pCreateInfo,
                                        const VkAllocationCallbacks*   pAllocator,
-                                       VkMicromapEXT*                 pMicromap);
+                                       VkMicromapEXT*                 pMicromapEXT);
 
     void
     OverrideCmdBuildAccelerationStructuresKHR(VkCommandBuffer                                        commandBuffer,
@@ -457,8 +457,8 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                              VkQueryPool                       queryPool,
                                                              uint32_t                          firstQuery);
     void OverrideCmdWriteMicromapsPropertiesEXT(VkCommandBuffer      commandBuffer,
-                                                uint32_t             micromapCount,
-                                                const VkMicromapEXT* pMicromaps,
+                                                uint32_t             micromapEXTCount,
+                                                const VkMicromapEXT* pMicromapsEXT,
                                                 VkQueryType          queryType,
                                                 VkQueryPool          queryPool,
                                                 uint32_t             firstQuery);

@@ -314,8 +314,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_offscreen_swapchain.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_builder.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_builder.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_builder.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_ext_builder.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_ext_builder.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_internal_buffer_manager.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_tracker_consumer_base.h
@@ -525,22 +525,22 @@ if (${RUN_TESTS})
 endif()
 
 if (${RUN_TESTS})
-    add_executable(gfxrecon_micromap_builder_test "")
-    target_sources(gfxrecon_micromap_builder_test PRIVATE
-            ${CMAKE_CURRENT_LIST_DIR}/test/micromap_builder_test.cpp
+    add_executable(gfxrecon_micromap_ext_builder_test "")
+    target_sources(gfxrecon_micromap_ext_builder_test PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/test/micromap_ext_builder_test.cpp
             ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp)
-    target_link_libraries(gfxrecon_micromap_builder_test PRIVATE gfxrecon_decode)
+    target_link_libraries(gfxrecon_micromap_ext_builder_test PRIVATE gfxrecon_decode)
     if (MSVC)
         # Force inclusion of "gfxrecon_disable_popup_result" variable in linking.
         # On 32-bit windows, MSVC prefixes symbols with "_" but on 64-bit windows it doesn't.
         if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-            target_link_options(gfxrecon_micromap_builder_test PUBLIC "LINKER:/Include:_gfxrecon_disable_popup_result")
+            target_link_options(gfxrecon_micromap_ext_builder_test PUBLIC "LINKER:/Include:_gfxrecon_disable_popup_result")
         else()
-            target_link_options(gfxrecon_micromap_builder_test PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
+            target_link_options(gfxrecon_micromap_ext_builder_test PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
         endif()
     endif()
-    common_build_directives(gfxrecon_micromap_builder_test)
-    common_test_directives(gfxrecon_micromap_builder_test)
+    common_build_directives(gfxrecon_micromap_ext_builder_test)
+    common_test_directives(gfxrecon_micromap_ext_builder_test)
 endif()
 
 if (${RUN_TESTS})
