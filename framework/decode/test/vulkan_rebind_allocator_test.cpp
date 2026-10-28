@@ -114,11 +114,24 @@ class VulkanRebindAllocatorTestAccess
         return allocator.AdjustMemoryUsage(desired_usage, replay_requirements);
     }
 
-    static std::vector<VmaAllocationCreateInfo> BuildAllocationRequests(VulkanRebindAllocator&         allocator,
-                                                                        const VmaAllocationCreateInfo& base_request,
-                                                                        VkMemoryPropertyFlags capture_properties)
+    static VmaMemoryUsage BufferMemoryUsage(VulkanRebindAllocator&      allocator,
+                                            VkBufferUsageFlags          usage,
+                                            VkMemoryPropertyFlags       capture_properties,
+                                            const VkMemoryRequirements& requirements,
+                                            VkPhysicalDeviceType        capture_device_type)
     {
-        return allocator.BuildAllocationRequests(base_request, capture_properties);
+        allocator.capture_device_type_ = capture_device_type;
+        return allocator.GetBufferMemoryUsage(usage, capture_properties, requirements);
+    }
+
+    static VmaMemoryUsage TensorMemoryUsage(VulkanRebindAllocator&      allocator,
+                                            VkTensorTilingARM           tiling,
+                                            const VkMemoryRequirements& requirements)
+    {
+        return allocator.GetTensorMemoryUsage(VK_TENSOR_USAGE_TRANSFER_DST_BIT_ARM,
+                                              tiling,
+                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                                              requirements);
     }
 
     static VkResult AllocateMemoryForImage(VulkanRebindAllocator&                  allocator,
@@ -920,9 +933,9 @@ TEST_CASE("GetImageMemoryUsage selects expected usage classes for representative
           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
           MakeMemoryRequirements({ kHostVisibleTypeIndex }),
           VMA_MEMORY_USAGE_CPU_TO_GPU },
-        { "host cached capture memory keeps the image in gpu-to-cpu usage",
+        { "host cached capture memory keeps linear images in gpu-to-cpu usage",
           VK_IMAGE_USAGE_SAMPLED_BIT,
-          VK_IMAGE_TILING_OPTIMAL,
+          VK_IMAGE_TILING_LINEAR,
           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
           MakeMemoryRequirements({ kHostVisibleTypeIndex }),
           VMA_MEMORY_USAGE_GPU_TO_CPU },
@@ -932,6 +945,12 @@ TEST_CASE("GetImageMemoryUsage selects expected usage classes for representative
           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
           MakeMemoryRequirements({ kHostVisibleTypeIndex }),
           VMA_MEMORY_USAGE_CPU_TO_GPU },
+        { "optimal images prefer locality over captured host caching",
+          VK_IMAGE_USAGE_SAMPLED_BIT,
+          VK_IMAGE_TILING_OPTIMAL,
+          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+          MakeMemoryRequirements({ kHostVisibleTypeIndex, kDeviceLocalTypeIndex }),
+          VMA_MEMORY_USAGE_GPU_ONLY },
         { "device-local capture memory can promote a linear upload image back to gpu-only",
           VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
           VK_IMAGE_TILING_LINEAR,
@@ -946,7 +965,7 @@ TEST_CASE("GetImageMemoryUsage selects expected usage classes for representative
           VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED },
         { "amd property bits are ignored when selecting host-cached usage",
           VK_IMAGE_USAGE_SAMPLED_BIT,
-          VK_IMAGE_TILING_OPTIMAL,
+          VK_IMAGE_TILING_LINEAR,
           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
               VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD | VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD,
           MakeMemoryRequirements({ kHostVisibleTypeIndex }),
@@ -1020,56 +1039,83 @@ TEST_CASE("AdjustMemoryUsage falls back when replay memory types cannot satisfy 
     }
 }
 
-TEST_CASE("BuildAllocationRequests prefers captured host-coherent memory with a compatibility fallback",
-          "[decode][rebind]")
+TEST_CASE("Buffer memory selection preserves the existing usage heuristics", "[decode][rebind]")
 {
     ImageMemorySelectionFixture fixture;
-
-    VmaAllocationCreateInfo base_request{};
-    base_request.flags          = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-    base_request.usage          = VMA_MEMORY_USAGE_CPU_TO_GPU;
-    base_request.requiredFlags  = VK_MEMORY_PROPERTY_PROTECTED_BIT;
-    base_request.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-    base_request.memoryTypeBits = MakeMemoryTypeBits({ kHostVisibleTypeIndex });
-
-    SECTION("coherent capture memory adds a strict first request and preserves the original fallback")
+    using Access                 = gfxrecon::decode::VulkanRebindAllocatorTestAccess;
+    const auto host_access       = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const auto local_host_access = host_access | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    const auto requirements      = MakeMemoryRequirements({ kHostVisibleTypeIndex, kDeviceLocalTypeIndex });
+    struct Case
     {
-        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
-            fixture.allocator,
-            base_request,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        REQUIRE(requests.size() == 2);
-        REQUIRE(requests[0].flags == base_request.flags);
-        REQUIRE(requests[0].usage == base_request.usage);
-        REQUIRE(requests[0].requiredFlags == (base_request.requiredFlags | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-        REQUIRE(requests[0].preferredFlags == base_request.preferredFlags);
-        REQUIRE(requests[0].memoryTypeBits == base_request.memoryTypeBits);
-        REQUIRE(requests[1].requiredFlags == base_request.requiredFlags);
-        REQUIRE(requests[1].preferredFlags == base_request.preferredFlags);
-    }
-
-    SECTION("non-coherent capture memory leaves the allocation request unchanged")
+        const char*           name;
+        VkBufferUsageFlags    usage;
+        VkMemoryPropertyFlags captured;
+        VkPhysicalDeviceType  device_type;
+        VmaMemoryUsage        expected;
+    };
+    const std::vector<Case> cases = {
+        { "transfer source staging",
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+          host_access,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_CPU_ONLY },
+        { "transfer destination readback",
+          VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+          host_access,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_GPU_TO_CPU },
+        { "general buffer upload",
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          host_access,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_CPU_TO_GPU },
+        { "integrated transfer destination locality",
+          VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          local_host_access,
+          VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
+          VMA_MEMORY_USAGE_GPU_ONLY },
+        { "discrete mixed usage",
+          VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          local_host_access,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_CPU_TO_GPU },
+        { "integrated uniform writes",
+          VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+          local_host_access,
+          VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
+          VMA_MEMORY_USAGE_CPU_TO_GPU },
+        { "captured caching overrides staging",
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+          host_access | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_GPU_TO_CPU },
+        { "captured device-only memory",
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+          VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+          VMA_MEMORY_USAGE_GPU_ONLY },
+    };
+    for (const auto& c : cases)
     {
-        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
-            fixture.allocator, base_request, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-        REQUIRE(requests.size() == 1);
-        REQUIRE(requests[0].requiredFlags == base_request.requiredFlags);
-        REQUIRE(requests[0].preferredFlags == base_request.preferredFlags);
+        INFO(c.name);
+        REQUIRE(Access::BufferMemoryUsage(fixture.allocator, c.usage, c.captured, requirements, c.device_type) ==
+                c.expected);
     }
+}
 
-    SECTION("an already coherent request is not duplicated")
-    {
-        base_request.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        const auto requests = gfxrecon::decode::VulkanRebindAllocatorTestAccess::BuildAllocationRequests(
-            fixture.allocator,
-            base_request,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        REQUIRE(requests.size() == 1);
-        REQUIRE(requests[0].requiredFlags == base_request.requiredFlags);
-    }
+TEST_CASE("Tensor memory usage distinguishes optimal and linear access", "[decode][rebind]")
+{
+    ImageMemorySelectionFixture fixture;
+    using Access            = gfxrecon::decode::VulkanRebindAllocatorTestAccess;
+    const auto requirements = MakeMemoryRequirements({ kHostVisibleTypeIndex, kDeviceLocalTypeIndex });
+    REQUIRE(Access::TensorMemoryUsage(fixture.allocator, VK_TENSOR_TILING_OPTIMAL_ARM, requirements) ==
+            VMA_MEMORY_USAGE_GPU_ONLY);
+    REQUIRE(Access::TensorMemoryUsage(fixture.allocator, VK_TENSOR_TILING_LINEAR_ARM, requirements) ==
+            VMA_MEMORY_USAGE_GPU_TO_CPU);
+    REQUIRE(Access::TensorMemoryUsage(
+                fixture.allocator, VK_TENSOR_TILING_OPTIMAL_ARM, MakeMemoryRequirements({ kHostVisibleTypeIndex })) ==
+            VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 
 TEST_CASE("AllocateMemoryForImage forwards the selected VMA usage and tracks the resulting allocation",
@@ -1142,7 +1188,7 @@ TEST_CASE("AllocateMemoryForImage forwards the selected VMA usage and tracks the
     REQUIRE(vma_mem_info->allocation == allocation);
 }
 
-TEST_CASE("AllocateMemoryForImage falls back when captured host-coherent memory is unavailable", "[decode][rebind]")
+TEST_CASE("AllocateMemoryForImage delegates fallback to VMA without requiring captured coherence", "[decode][rebind]")
 {
     ImageMemorySelectionFixture                    fixture;
     ImageMemorySelectionFixture::ResourceAllocInfo resource_alloc_info =
@@ -1172,11 +1218,6 @@ TEST_CASE("AllocateMemoryForImage falls back when captured host-coherent memory 
             prefers_dedicated  = false;
         }));
     EXPECT_CALL(fixture.mock_vma_backend, AllocateMemoryForImage(_, image, _, _, _))
-        .WillOnce(Invoke(
-            [&](VmaAllocator, VkImage, const VmaAllocationCreateInfo* create_info, VmaAllocation*, VmaAllocationInfo*) {
-                required_flags.push_back(create_info->requiredFlags);
-                return VK_ERROR_FEATURE_NOT_PRESENT;
-            }))
         .WillOnce(Invoke([&](VmaAllocator,
                              VkImage,
                              const VmaAllocationCreateInfo* create_info,
@@ -1201,7 +1242,7 @@ TEST_CASE("AllocateMemoryForImage falls back when captured host-coherent memory 
 
     REQUIRE(result == VK_SUCCESS);
     REQUIRE(vma_mem_info != nullptr);
-    REQUIRE(required_flags == std::vector<VkMemoryPropertyFlags>{ VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0 });
+    REQUIRE(required_flags == std::vector<VkMemoryPropertyFlags>{ 0 });
     REQUIRE(vma_mem_info->alc_create_info.requiredFlags == 0);
 }
 
@@ -1332,7 +1373,7 @@ TEST_CASE("AllocateMemoryForImage keeps trace-like device-local host-visible opt
     REQUIRE(result == VK_SUCCESS);
     REQUIRE(vma_mem_info != nullptr);
     REQUIRE(captured_create_info.usage == VMA_MEMORY_USAGE_GPU_ONLY);
-    REQUIRE(captured_create_info.requiredFlags == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    REQUIRE(captured_create_info.requiredFlags == 0);
 }
 
 TEST_CASE("Data graph rebind synthesizes the replay session binding set", "[decode][rebind][data-graph]")

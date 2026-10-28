@@ -668,6 +668,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                         const VkMemoryRequirements& replay_requirements);
 
     VmaMemoryUsage GetTensorMemoryUsage(VkTensorUsageFlagsARM       tensor_usage,
+                                        VkTensorTilingARM           tiling,
                                         VkMemoryPropertyFlags       capture_properties,
                                         const VkMemoryRequirements& replay_requirements);
 
@@ -680,9 +681,6 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                                               const VkMemoryRequirements& replay_requirements);
 
     VmaMemoryUsage AdjustMemoryUsage(VmaMemoryUsage desired_usage, const VkMemoryRequirements& replay_requirements);
-
-    std::vector<VmaAllocationCreateInfo> BuildAllocationRequests(const VmaAllocationCreateInfo& base_request,
-                                                                 VkMemoryPropertyFlags capture_properties) const;
 
     VmaMemoryUsage GetAliasedGroupMemoryUsage(uint8_t                     aliasing_group,
                                               const MemoryAllocInfo&      memory_alloc_info,
@@ -829,6 +827,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         VkObjectType                 object_type{ VK_OBJECT_TYPE_UNKNOWN };
         uint64_t                     usage{ 0 };
         std::optional<VkImageTiling> tiling{};
+        VkTensorTilingARM            tensor_tiling{ VK_TENSOR_TILING_LINEAR_ARM };
     };
 
     VmaAllocator                     allocator_;
