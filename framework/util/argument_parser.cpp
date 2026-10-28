@@ -25,6 +25,7 @@
 
 #include "util/logging.h"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstring>
 #include <sstream>
@@ -267,6 +268,16 @@ void ArgumentParser::Init(std::vector<std::string> command_line_args,
             positional_arguments_present_.push_back(current_argument);
         }
     }
+}
+
+size_t ArgumentParser::GetSetArgumentCount() const
+{
+    return std::count(arguments_present_.begin(), arguments_present_.end(), true);
+}
+
+size_t ArgumentParser::GetSetOptionCount() const
+{
+    return std::count(options_present_.begin(), options_present_.end(), true);
 }
 
 bool ArgumentParser::IsOptionSet(const std::string& option) const

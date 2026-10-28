@@ -55,6 +55,8 @@ class ArgumentParser
     const std::vector<std::string>  SplitStringByFlag(std::string& rawstring, char flag) const;
     size_t                          GetArgumentCount() const { return arguments_indices_.size(); }
     size_t                          GetOptionCount() const { return options_indices_.size(); }
+    size_t                          GetSetArgumentCount() const;
+    size_t                          GetSetOptionCount() const;
 
     // Add new arguments to existing commands without overwriting them
     void AddArguments(std::vector<std::string> command_line_args);

@@ -35,6 +35,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 struct VulkanOptimizationOptions : public OptimizationOptions
 {
     bool                     remove_rt{ false };
+    bool                     insert_debug_object_name{ false };
     bool                     remove_device_instance{ false };
     bool                     keep_device_instance{ false };
     std::vector<std::string> remove_app_name;

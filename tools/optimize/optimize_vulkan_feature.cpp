@@ -28,6 +28,7 @@
 #include "vulkan_micromap_modifier.h"
 #include "generated/generated_vulkan_skiavk_modifier.h"
 #include "vulkan_raytracing_modifier.h"
+#include "vulkan_debug_object_name_modifier.h"
 #include "vulkan_descriptor_buffer_modifier.h"
 #include "resource_memory_requirements_modifier.h"
 #include "vulkan_shader_replacement_modifier.h"
@@ -58,6 +59,7 @@ constexpr char kVulkanKeepDeviceInstanceArgument[]   = "--keep-device-instance";
 constexpr char kVulkanRemoveRtOption[]               = "--vk-remove-rt";
 constexpr char kVulkanReplaceShadersArgument[]       = "--replace-shaders";
 constexpr char kVulkanKeepFailedGetStatus[]          = "--keep-failed-get-status";
+constexpr char kVulkanInsertDebugObjectNameOption[]  = "--insert-debug-object-name";
 
 std::string OptimizeVulkanFeature::CompiledHeaderVersionString() const
 {
@@ -89,7 +91,8 @@ bool OptimizeVulkanFeature::ShouldRun(const util::ArgumentParser& args) const
         args.IsArgumentSet(kRemoveThreadArgument) || args.IsArgumentSet(kVulkanSetReplayOptionsArgument) ||
         args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument) ||
         args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument) || args.IsOptionSet(kVulkanRemoveRtOption) ||
-        args.IsArgumentSet(kVulkanReplaceShadersArgument) || args.IsOptionSet(kVulkanKeepFailedGetStatus);
+        args.IsArgumentSet(kVulkanReplaceShadersArgument) || args.IsOptionSet(kVulkanKeepFailedGetStatus) ||
+        args.IsOptionSet(kVulkanInsertDebugObjectNameOption);
     return manual_mode || WasDetected();
 }
 
@@ -103,6 +106,15 @@ decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util
         }
     }
 
+    if (args.IsOptionSet(kVulkanInsertDebugObjectNameOption))
+    {
+        if (args.GetSetOptionCount() != 1 || args.GetSetArgumentCount() != 0)
+        {
+            throw std::runtime_error(
+                "Option --insert-debug-object-name cannot be used with any other option. Exiting.");
+        }
+    }
+
     if (args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument) &&
         args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument))
     {
@@ -111,11 +123,13 @@ decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util
     }
 
     decode::VulkanOptimizationOptions options;
-    options.remove_rt              = args.IsOptionSet(kVulkanRemoveRtOption);
-    options.remove_device_instance = args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument);
-    options.keep_device_instance   = args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument);
-    options.replace_shader_dir     = args.GetArgumentValue(kVulkanReplaceShadersArgument);
-    options.keep_failed_get_status = args.IsOptionSet(kVulkanKeepFailedGetStatus);
+
+    options.remove_rt                = args.IsOptionSet(kVulkanRemoveRtOption);
+    options.remove_device_instance   = args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument);
+    options.keep_device_instance     = args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument);
+    options.replace_shader_dir       = args.GetArgumentValue(kVulkanReplaceShadersArgument);
+    options.keep_failed_get_status   = args.IsOptionSet(kVulkanKeepFailedGetStatus);
+    options.insert_debug_object_name = args.IsOptionSet(kVulkanInsertDebugObjectNameOption);
 
     std::string remove_app_string;
     if (options.remove_device_instance)
@@ -282,7 +296,11 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
     auto vulkan_opt_data = std::make_unique<gfxrecon::VulkanFileOptimizer::VulkanOptimizationData>();
 
     gfxrecon::decode::FileProcessor file_processor;
-    if (file_processor.Initialize(input_filename))
+    if (options.insert_debug_object_name)
+    {
+        vulkan_opt_data->modifiers.push_back(std::make_unique<decode::VulkanDebugObjectNameModifier>());
+    }
+    else if (file_processor.Initialize(input_filename))
     {
         gfxrecon::decode::VulkanDecoder decoder;
         // gfxrecon::decode::VulkanReferencedResourceConsumer resref_consumer;
@@ -386,7 +404,9 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
     }
 
     // Modification pass. Implement all identified optimizations in output file
-    gfxrecon::VulkanFileOptimizer file_optimizer(vulkan_opt_data.get(), options.removed_threads_ids);
+    gfxrecon::VulkanFileOptimizer file_optimizer(
+        vulkan_opt_data.get(),
+        options.insert_debug_object_name ? std::unordered_set<format::ThreadId>{} : options.removed_threads_ids);
     if (file_optimizer.Initialize(input_filename, output_filename, "optimize"))
     {
         file_optimizer.Process();
@@ -424,6 +444,11 @@ std::vector<util::FeatureOptionDesc> OptimizeVulkanFeature::GetOptionDescs() con
                true,
                kVulkanKeepDeviceInstanceArgument },
              { "", { "Remove ray-tracing related API calls from the trace." }, false, kVulkanRemoveRtOption },
+             { "",
+               { "Insert debug object names after simple vkCreate calls. When this is enabled, no other optimizations "
+                 "are being performed." },
+               false,
+               kVulkanInsertDebugObjectNameOption },
              { "<dir>",
                { "Replace the shader code in each `VkShaderModuleCreateInfo` with the",
                  "content of the matching file in <dir> if found. See gfxrecon-extract." },

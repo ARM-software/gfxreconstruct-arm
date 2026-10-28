@@ -44,6 +44,8 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/annotation_editor.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_raytracing_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_raytracing_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_debug_object_name_modifier.h
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_debug_object_name_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.h
