@@ -250,11 +250,8 @@ struct DxgiSwapchainInfo : DxObjectExtraInfo
 
     graphics::dx12::ID3D12CommandQueueComPtr command_queue{
         nullptr
-    };                           ///< The command queue that was used to create the swapchain.
-    bool is_fullscreen{ false }; ///< Swapchain full screen flag.
-    bool is_headless{ false };
-    bool is_offscreen{ false }; ///< Swapchain offscreen flag.
-
+    }; ///< The command queue that was used to create the swapchain.
+    bool                                  is_fullscreen{ false }; ///< Swapchain full screen flag.
     std::unique_ptr<Dx12VirtualSwapchain> virtual_swapchain;
 };
 

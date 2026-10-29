@@ -87,6 +87,36 @@ class Dx12ReplayConsumerArmFeatures
                                   DxObjectInfo*                           restrict_to_output_info,
                                   HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
 
+    HRESULT CreateSwapChainForReplay(DxObjectInfo*                                       replay_object_info,
+                                     HRESULT                                             original_result,
+                                     DxObjectInfo*                                       device_info,
+                                     StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC>* desc,
+                                     HandlePointerDecoder<IDXGISwapChain*>*              swapchain);
+
+    HRESULT CreateSwapChainForReplay(DxObjectInfo*                           replay_object_info,
+                                     HRESULT                                 original_result,
+                                     DxObjectInfo*                           device_info,
+                                     uint64_t                                hwnd_id,
+                                     uint64_t                                offscreen_hwnd_id,
+                                     DXGI_SWAP_CHAIN_DESC1*                  desc,
+                                     DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
+                                     DxObjectInfo*                           restrict_to_output_info,
+                                     HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
+
+    HRESULT CreateSwapChainForCoreWindow(DxObjectInfo*                                        replay_object_info,
+                                         HRESULT                                              original_result,
+                                         DxObjectInfo*                                        device_info,
+                                         StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC1>* desc,
+                                         DxObjectInfo*                                        restrict_to_output_info,
+                                         HandlePointerDecoder<IDXGISwapChain1*>*              swapchain);
+
+    HRESULT CreateSwapChainForCapturedComposition(DxObjectInfo* replay_object_info,
+                                                  HRESULT       original_result,
+                                                  DxObjectInfo* device_info,
+                                                  StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_DESC1>* desc,
+                                                  DxObjectInfo*                           restrict_to_output_info,
+                                                  HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
+
     // Create offscreen swapchain for IDXGIFactory::CreateSwapChain
     HRESULT
     CreateSwapChainForOffscreen(DxObjectInfo*                          replay_object_info,
@@ -105,6 +135,19 @@ class Dx12ReplayConsumerArmFeatures
                                 DXGI_SWAP_CHAIN_DESC1*                  desc,
                                 DXGI_SWAP_CHAIN_FULLSCREEN_DESC*        full_screen_desc,
                                 HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
+
+    HRESULT GetFullscreenDesc(DxObjectInfo*                                                  replay_object_info,
+                              HRESULT                                                        original_result,
+                              StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_FULLSCREEN_DESC>* pDesc);
+
+    HRESULT GetHwnd(DxObjectInfo* replay_object_info, HRESULT original_result, PointerDecoder<uint64_t, void*>* pHwnd);
+
+    HRESULT
+    SetFullscreenState(DxObjectInfo* swapchain_info, HRESULT original_result, BOOL fullscreen, DxObjectInfo* target);
+
+    HRESULT GetContainingOutput(DxObjectInfo*                       swapchain_info,
+                                HRESULT                             original_result,
+                                HandlePointerDecoder<IDXGIOutput*>* ppOutput);
 
     void ApplyFillMemoryResourceAddressCommand(uint64_t offset, uint64_t size, const uint8_t* data);
 
@@ -133,8 +176,8 @@ class Dx12ReplayConsumerArmFeatures
                              uint32_t         image_count,
                              IUnknown*        queue_iunknown,
                              bool             windowed,
-                             bool             headless  = false,
-                             bool             offscreen = false);
+                             bool             windowless = false,
+                             bool             offscreen  = false);
 
     bool RecreateSharedResourcePlaceholder(DxObjectInfo*              resource_object_info,
                                            const D3D12_RESOURCE_DESC& captured_desc);

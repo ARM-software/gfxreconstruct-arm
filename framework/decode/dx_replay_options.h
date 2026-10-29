@@ -55,7 +55,7 @@ struct DxReplayOptions : public ReplayOptions
     bool ags_inject_markers{ false };
 #endif
     int32_t memory_usage{ kDefaultBatchingMemoryUsage };
-    bool    headless{ false };
+    bool    use_composition_swapchain{ false };
 
     CreateDx12ResourceAllocator create_resource_allocator;
 };

@@ -1465,41 +1465,14 @@ Dx12ReplayConsumerBase::OverrideGetFullscreenDesc(DxObjectInfo* replay_object_in
                                                   HRESULT       original_result,
                                                   StructPointerDecoder<Decoded_DXGI_SWAP_CHAIN_FULLSCREEN_DESC>* pDesc)
 {
-    if (options_.headless)
-    {
-        GFXRECON_LOG_INFO("Skipping IDXGISwapChain1::GetFullscreenDesc for non-HWND swapchains");
-        return original_result;
-    }
-
-    auto replay_object = static_cast<IDXGISwapChain1*>(replay_object_info->object);
-    if (!pDesc->IsNull())
-    {
-        pDesc->AllocateOutputData(1);
-    }
-    auto replay_result = replay_object->GetFullscreenDesc(pDesc->GetOutputPointer());
-    return replay_result;
+    return arm_features_->GetFullscreenDesc(replay_object_info, original_result, pDesc);
 }
 
 HRESULT Dx12ReplayConsumerBase::OverrideGetHwnd(DxObjectInfo*                    replay_object_info,
                                                 HRESULT                          original_result,
                                                 PointerDecoder<uint64_t, void*>* pHwnd)
 {
-    if (options_.headless)
-    {
-        GFXRECON_LOG_INFO("Skipping IDXGISwapChain1::GetHwnd for non-HWND swapchains");
-        return original_result;
-    }
-
-    auto replay_object = static_cast<IDXGISwapChain1*>(replay_object_info->object);
-    if (!pHwnd->IsNull())
-    {
-        pHwnd->AllocateOutputData(1);
-    }
-    auto out_p_pHwnd   = pHwnd->GetPointer();
-    auto out_op_pHwnd  = reinterpret_cast<HWND*>(pHwnd->GetOutputPointer());
-    auto replay_result = replay_object->GetHwnd(out_op_pHwnd);
-
-    return replay_result;
+    return arm_features_->GetHwnd(replay_object_info, original_result, pHwnd);
 }
 
 HRESULT Dx12ReplayConsumerBase::OverrideCreateSwapChainForHwnd(
@@ -1514,37 +1487,15 @@ HRESULT Dx12ReplayConsumerBase::OverrideCreateSwapChainForHwnd(
 {
     GFXRECON_ASSERT((desc != nullptr) && (full_screen_desc != nullptr));
 
-    if (options_.swapchain_option == util::SwapchainOption::kOffscreen)
-    {
-        return arm_features_->CreateSwapChainForOffscreen(replay_object_info,
-                                                          original_result,
-                                                          device_info,
-                                                          hwnd_id,
-                                                          desc->GetPointer(),
-                                                          full_screen_desc->GetPointer(),
-                                                          swapchain);
-    }
-
-    if (options_.headless)
-    {
-        return arm_features_->CreateSwapChainForComposition(replay_object_info,
-                                                            original_result,
-                                                            device_info,
-                                                            hwnd_id,
-                                                            desc->GetPointer(),
-                                                            full_screen_desc->GetPointer(),
-                                                            restrict_to_output_info,
-                                                            swapchain);
-    }
-
-    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
-                                                 original_result,
-                                                 device_info,
-                                                 hwnd_id,
-                                                 desc->GetPointer(),
-                                                 full_screen_desc->GetPointer(),
-                                                 restrict_to_output_info,
-                                                 swapchain);
+    return arm_features_->CreateSwapChainForReplay(replay_object_info,
+                                                   original_result,
+                                                   device_info,
+                                                   hwnd_id,
+                                                   hwnd_id,
+                                                   desc->GetPointer(),
+                                                   full_screen_desc->GetPointer(),
+                                                   restrict_to_output_info,
+                                                   swapchain);
 }
 
 HRESULT
@@ -1556,19 +1507,7 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChain(DxObjectInfo*                   
 {
     assert(desc != nullptr);
 
-    if (options_.swapchain_option == util::SwapchainOption::kOffscreen)
-    {
-        return arm_features_->CreateSwapChainForOffscreen(
-            replay_object_info, original_result, device_info, desc->GetPointer(), swapchain);
-    }
-
-    if (options_.headless)
-    {
-        return arm_features_->CreateSwapChainForComposition(
-            replay_object_info, original_result, device_info, desc->GetPointer(), swapchain);
-    }
-
-    return arm_features_->CreateSwapChain(replay_object_info, original_result, device_info, desc, swapchain);
+    return arm_features_->CreateSwapChainForReplay(replay_object_info, original_result, device_info, desc, swapchain);
 }
 
 HRESULT
@@ -1584,49 +1523,8 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChainForCoreWindow(DxObjectInfo* repla
 
     GFXRECON_UNREFERENCED_PARAMETER(window_info);
 
-    auto desc_pointer = desc->GetPointer();
-
-    // Depending on creation parameters, the original application may have performed multi-plane rendering to a single
-    // surface with multiple swapchains. The HWND swapchain can't support this behavior, so related creation parameters
-    // must be cleared before swapchain creation. Replay will also have to create a separate window for each swapchain,
-    // so content that was composited by the original application will appear in different windows during replay.
-    if ((desc_pointer->AlphaMode == DXGI_ALPHA_MODE_PREMULTIPLIED) ||
-        (desc_pointer->AlphaMode == DXGI_ALPHA_MODE_STRAIGHT))
-    {
-        desc_pointer->AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    }
-
-    if ((desc_pointer->Flags & DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER) == DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER)
-    {
-        desc_pointer->Flags &= ~DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER;
-    }
-
-    if (options_.swapchain_option == util::SwapchainOption::kOffscreen)
-    {
-        return arm_features_->CreateSwapChainForOffscreen(
-            replay_object_info, original_result, device_info, 0, desc_pointer, nullptr, swapchain);
-    }
-
-    if (options_.headless)
-    {
-        return arm_features_->CreateSwapChainForComposition(replay_object_info,
-                                                            original_result,
-                                                            device_info,
-                                                            GetUniqueProxyWindowId(),
-                                                            desc_pointer,
-                                                            nullptr,
-                                                            restrict_to_output_info,
-                                                            swapchain);
-    }
-
-    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
-                                                 original_result,
-                                                 device_info,
-                                                 GetUniqueProxyWindowId(),
-                                                 desc_pointer,
-                                                 nullptr,
-                                                 restrict_to_output_info,
-                                                 swapchain);
+    return arm_features_->CreateSwapChainForCoreWindow(
+        replay_object_info, original_result, device_info, desc, restrict_to_output_info, swapchain);
 }
 
 HRESULT
@@ -1639,44 +1537,8 @@ Dx12ReplayConsumerBase::OverrideCreateSwapChainForComposition(DxObjectInfo* repl
 {
     GFXRECON_ASSERT(desc != nullptr);
 
-    auto desc_pointer = desc->GetPointer();
-
-    // Depending on creation parameters, the original application may have combined the output of multiple swapchains
-    // via composition. The HWND swapchain can't support this behavior, so related creation parameters must be cleared
-    // before swapchain creation. Replay will also have to create a separate window for each swapchain, so content that
-    // was composited by the original application will appear in different windows during replay.
-    if ((desc_pointer->AlphaMode == DXGI_ALPHA_MODE_PREMULTIPLIED) ||
-        (desc_pointer->AlphaMode == DXGI_ALPHA_MODE_STRAIGHT))
-    {
-        desc_pointer->AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    }
-
-    if (options_.swapchain_option == util::SwapchainOption::kOffscreen)
-    {
-        return arm_features_->CreateSwapChainForOffscreen(
-            replay_object_info, original_result, device_info, 0, desc_pointer, nullptr, swapchain);
-    }
-
-    if (options_.headless)
-    {
-        return arm_features_->CreateSwapChainForComposition(replay_object_info,
-                                                            original_result,
-                                                            device_info,
-                                                            GetUniqueProxyWindowId(),
-                                                            desc_pointer,
-                                                            nullptr,
-                                                            restrict_to_output_info,
-                                                            swapchain);
-    }
-
-    return arm_features_->CreateSwapChainForHwnd(replay_object_info,
-                                                 original_result,
-                                                 device_info,
-                                                 GetUniqueProxyWindowId(),
-                                                 desc_pointer,
-                                                 nullptr,
-                                                 restrict_to_output_info,
-                                                 swapchain);
+    return arm_features_->CreateSwapChainForCapturedComposition(
+        replay_object_info, original_result, device_info, desc, restrict_to_output_info, swapchain);
 }
 
 HRESULT Dx12ReplayConsumerBase::OverrideEnumAdapterByLuid(DxObjectInfo*                replay_object_info,
@@ -4217,7 +4079,7 @@ void Dx12ReplayConsumerBase::ResetSwapchainImages(DxObjectInfo* info,
         swapchain_info->image_ids.resize(buffer_count);
         std::fill(swapchain_info->image_ids.begin(), swapchain_info->image_ids.end(), format::kNullHandleId);
 
-        if (!swapchain_info->is_headless && !swapchain_info->is_offscreen)
+        if (swapchain_info->window != nullptr)
         {
             // Resize the swapchain's window.
             swapchain_info->window->SetSize(width, height);
@@ -5563,36 +5425,7 @@ Dx12ReplayConsumerBase::OverrideSetFullscreenState(DxObjectInfo* swapchain_info,
                                                    BOOL          Fullscreen,
                                                    DxObjectInfo* pTarget)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
-    GFXRECON_ASSERT(swapchain_info != nullptr);
-    GFXRECON_ASSERT(swapchain_info->object != nullptr);
-
-    if (options_.headless)
-    {
-        return original_result;
-    }
-
-    auto swapchain            = static_cast<IDXGISwapChain*>(swapchain_info->object);
-    auto swapchain_extra_info = GetExtraInfo<DxgiSwapchainInfo>(swapchain_info);
-
-    HRESULT replay_result = S_OK;
-    if ((options_.force_windowed) || (options_.force_windowed_origin))
-    {
-        replay_result                       = swapchain->SetFullscreenState(FALSE, nullptr);
-        swapchain_extra_info->is_fullscreen = false;
-    }
-    else
-    {
-        IDXGIOutput* in_pTarget = nullptr;
-        if (pTarget && pTarget->object)
-        {
-            in_pTarget = static_cast<IDXGIOutput*>(pTarget->object);
-        }
-        replay_result                       = swapchain->SetFullscreenState(Fullscreen, in_pTarget);
-        swapchain_extra_info->is_fullscreen = Fullscreen;
-        CheckReplayResult("IDXGISwapChain::SetFullscreenState", original_result, replay_result);
-    }
-    return replay_result;
+    return arm_features_->SetFullscreenState(swapchain_info, original_result, Fullscreen, pTarget);
 }
 
 HRESULT
@@ -5600,19 +5433,7 @@ Dx12ReplayConsumerBase::OverrideGetContainingOutput(DxObjectInfo*               
                                                     HRESULT                             original_result,
                                                     HandlePointerDecoder<IDXGIOutput*>* ppOutput)
 {
-    if (options_.headless)
-    {
-        GFXRECON_LOG_INFO("Skipping IDXGISwapChain::GetContainingOutput for non-HWND swapchains");
-        return original_result;
-    }
-
-    auto swapchain = static_cast<IDXGISwapChain*>(swapchain_info->object);
-    if (!ppOutput->IsNull())
-        ppOutput->SetHandleLength(1);
-    auto out_p_ppOutput  = ppOutput->GetPointer();
-    auto out_hp_ppOutput = ppOutput->GetHandlePointer();
-    auto replay_result   = swapchain->GetContainingOutput(out_hp_ppOutput);
-    return replay_result;
+    return arm_features_->GetContainingOutput(swapchain_info, original_result, ppOutput);
 }
 
 HRESULT Dx12ReplayConsumerBase::OverrideCreateCommandList(DxObjectInfo*                device_object_info,

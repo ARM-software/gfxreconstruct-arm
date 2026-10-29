@@ -66,6 +66,7 @@ const char kDeniedMessages[]                   = "--denied-messages";
 const char kAllowedMessages[]                  = "--allowed-messages";
 const char kDxTwoPassReplay[]                  = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]            = "--dx12-override-object-names";
+const char kDx12SwapchainArgument[]            = "--dx12-swapchain";
 const char kDxAgsMarkRenderPasses[]            = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[]      = "--batching-memory-usage";
 const char kDumpResourcesModifiableStateOnly[] = "--dump-resources-modifiable-state-only";
@@ -217,10 +218,13 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
 
     replay_options.create_resource_allocator = GetCreateResourceAllocatorFunc(arg_parser, replay_options);
 
-    const auto& value = arg_parser.GetArgumentValue(kWsiArgument);
-    if (gfxrecon::util::platform::StringCompareNoCase(kWsiPlatformHeadless, value.c_str()) == 0)
+    const auto& swapchain_mode = arg_parser.GetArgumentValue(kDx12SwapchainArgument);
+    if (!swapchain_mode.empty())
     {
-        replay_options.headless = true;
+        if (gfxrecon::util::platform::StringCompareNoCase("composition", swapchain_mode.c_str()) == 0)
+        {
+            replay_options.use_composition_swapchain = true;
+        }
     }
 
     return replay_options;
@@ -260,6 +264,13 @@ std::vector<util::FeatureOptionDesc> ReplayD3d12Feature::GetOptionDescs() const
                  "available system memory and GPU memory." },
                true,
                kBatchingMemoryUsageArgument },
+             { "<mode>",
+               { "Select the DXGI swapchain type used for replay. The 'composition' mode",
+                 "avoids creating a replay window. This is independent of --swapchain",
+                 "virtual, which controls swapchain virtualization." },
+               true,
+               kDx12SwapchainArgument,
+               { "composition" } },
              // The entries below have no description, so they stay out of the usage text. They keep
              // the same undocumented behavior that the shared option strings gave them.
              { "", {}, false, AliasNames(kDiscardCachedPsosShortOption, kDiscardCachedPsosLongOption) },
