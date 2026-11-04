@@ -500,7 +500,14 @@ class VulkanStateWriter
 
     void BeginResourceInitSection(format::HandleId device_id, uint64_t max_resource_size);
 
+    bool OverlapsLiveAccelerationStructureState(const VulkanStateTable&                                 state_table,
+                                                const encode::AccelerationStructureKHRBuildCommandData& command) const;
+
+    VkBufferCreateInfo MakeRestorableBufferCreateInfo(const encode::RestoreableBuffer& buffer, VkDeviceSize size) const;
+
     void WriteRestorableBufferCreate(encode::RestoreableBuffer& buffer, VkDeviceSize size = 0);
+
+    VkMemoryRequirements GetRestorableBufferMemoryRequirements(const encode::RestoreableBuffer& buffer);
 
     void WriteRestorableBufferBinding(encode::RestoreableBuffer&  buffer,
                                       const VkMemoryRequirements* memory_requirements = nullptr);
@@ -523,7 +530,8 @@ class VulkanStateWriter
     void WriteDataGraphPipelineSessionMemoryState(const VulkanStateTable& state_table);
     void WriteTensorMemoryState(const VulkanStateTable& state_table);
 
-    void WriteSyntheticAccelerationStructureCreate(encode::AccelerationStructureKHRBuildCommandData* build_command);
+    void WriteSyntheticAccelerationStructureCreate(encode::AccelerationStructureKHRBuildCommandData* build_command,
+                                                   format::HandleId                                  buffer_id);
     void WriteSyntheticAccelerationStructureGetDeviceAddressCall(
         encode::AccelerationStructureKHRBuildCommandData* build_command, VkDeviceAddress synthetic_device_address);
 
@@ -553,6 +561,7 @@ class VulkanStateWriter
 
     std::vector<encode::AccelerationStructureKHRBuildCommandData*>                          delayed_destruction;
     std::unordered_map<format::HandleId, encode::AccelerationStructureKHRBuildCommandData*> destroyed_as_id_remap;
+    std::unordered_map<format::HandleId, encode::RestoreableBuffer>                         temporary_as_storage_;
 };
 
 GFXRECON_END_NAMESPACE(encode)
