@@ -30,6 +30,7 @@
 #include "decode/vulkan_internal_buffer_manager.h"
 #include "format/format.h"
 #include "util/defines.h"
+#include "util/callbacks.h"
 
 #include <memory>
 #include <vector>
@@ -160,6 +161,7 @@ class VulkanAccelerationStructureBuilder
         {
             if (initialized_)
             {
+                util::MarkInjectedCommandsHelper injected(device_);
                 free_command_buffers_(device_, pool_, 1, &command_buffer_);
                 destroy_command_pool_(device_, pool_, nullptr);
                 destroy_query_pool_(device_, query_pool_, nullptr);

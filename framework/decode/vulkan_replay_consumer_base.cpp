@@ -14594,6 +14594,8 @@ VulkanReplayConsumerBase::GetAccelerationStructureBuilder(const decode::VulkanDe
     auto it = acceleration_structure_builders_.find(device_info);
     if (it == acceleration_structure_builders_.end())
     {
+        util::MarkInjectedCommandsHelper injected(device_info->handle);
+
         const decode::VulkanPhysicalDeviceInfo* physical_device_info =
             object_info_table_->GetVkPhysicalDeviceInfo(device_info->parent_id);
 

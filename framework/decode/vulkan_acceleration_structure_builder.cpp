@@ -211,6 +211,8 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanBuildAccelerationStructure
     VkAccelerationStructureBuildRangeInfoKHR**                    range_infos,
     std::vector<std::vector<VkAccelerationStructureInstanceKHR>>& instance_buffers_data)
 {
+    util::MarkInjectedCommandsHelper injected(device_);
+
     GFXRECON_UNREFERENCED_PARAMETER(instance_buffers_data);
 
     BeginCommandBuffer();
@@ -223,6 +225,8 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanBuildAccelerationStructure
 void VulkanAccelerationStructureBuilder::ProcessVulkanCopyAccelerationStructuresCommand(
     uint32_t info_count, VkCopyAccelerationStructureInfoKHR* copy_infos)
 {
+    util::MarkInjectedCommandsHelper injected(device_);
+
     BeginCommandBuffer();
     for (uint32_t i = 0; i < info_count; ++i)
     {
@@ -234,6 +238,8 @@ void VulkanAccelerationStructureBuilder::ProcessVulkanCopyAccelerationStructures
 void VulkanAccelerationStructureBuilder::ProcessVulkanWriteAccelerationStructuresPropertiesCommand(
     VkQueryType query_type, VkAccelerationStructureKHR acceleration_structure)
 {
+    util::MarkInjectedCommandsHelper injected(device_);
+
     BeginCommandBuffer();
 
     functions_.cmd_reset_query_pool(cmd_execute_obj_.command_buffer_, cmd_execute_obj_.query_pool_, 0, 1);
