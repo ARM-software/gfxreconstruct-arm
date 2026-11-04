@@ -1676,6 +1676,7 @@ void VulkanReplayConsumerBase::ProcessBeginResourceInitCommand(format::HandleId 
     if (device_info != nullptr)
     {
         GFXRECON_ASSERT(device_info->handle != VK_NULL_HANDLE);
+        util::MarkInjectedCommandsHelper injected(device_info->handle);
 
         VkResult       result = VK_SUCCESS;
         VkDevice       device = device_info->handle;
