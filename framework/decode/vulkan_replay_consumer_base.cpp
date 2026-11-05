@@ -3924,7 +3924,7 @@ void VulkanReplayConsumerBase::ModifyCreateDeviceInfo(
         auto  queue_family_index    = queue_create_info.queueFamilyIndex;
         if (queue_family_index >= queue_family_count)
         {
-            GFXRECON_LOG_FATAL("vkCreateDevice: VkDeviceQueueCreateInfo[%u] requests family %u, "
+            GFXRECON_LOG_ERROR("vkCreateDevice: VkDeviceQueueCreateInfo[%u] requests family %u, "
                                "but replay device exposes only %u families.",
                                i,
                                queue_family_index,
