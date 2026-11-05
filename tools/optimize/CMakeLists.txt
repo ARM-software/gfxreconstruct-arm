@@ -54,6 +54,8 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_shader_replacement_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_arm_trace_helpers_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_arm_trace_helpers_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_failed_get_status_removal_modifier.h
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_failed_get_status_removal_modifier.cpp
                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_skiavk_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_skia_modifier.cpp
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/optimize_dx12_feature.h>

@@ -32,6 +32,7 @@
 #include "resource_memory_requirements_modifier.h"
 #include "vulkan_shader_replacement_modifier.h"
 #include "vulkan_arm_trace_helpers_modifier.h"
+#include "vulkan_failed_get_status_removal_modifier.h"
 
 #include "decode/file_processor.h"
 #include "decode/vulkan_feature_tracker_consumer_base.h"
@@ -56,6 +57,7 @@ constexpr char kVulkanRemoveDeviceInstanceArgument[] = "--remove-device-instance
 constexpr char kVulkanKeepDeviceInstanceArgument[]   = "--keep-device-instance";
 constexpr char kVulkanRemoveRtOption[]               = "--vk-remove-rt";
 constexpr char kVulkanReplaceShadersArgument[]       = "--replace-shaders";
+constexpr char kVulkanKeepFailedGetStatus[]          = "--keep-failed-get-status";
 
 std::string OptimizeVulkanFeature::CompiledHeaderVersionString() const
 {
@@ -83,11 +85,11 @@ bool OptimizeVulkanFeature::WasDetected() const
 
 bool OptimizeVulkanFeature::ShouldRun(const util::ArgumentParser& args) const
 {
-    bool manual_mode = args.IsArgumentSet(kRemoveThreadArgument) ||
-                       args.IsArgumentSet(kVulkanSetReplayOptionsArgument) ||
-                       args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument) ||
-                       args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument) ||
-                       args.IsOptionSet(kVulkanRemoveRtOption) || args.IsArgumentSet(kVulkanReplaceShadersArgument);
+    bool manual_mode =
+        args.IsArgumentSet(kRemoveThreadArgument) || args.IsArgumentSet(kVulkanSetReplayOptionsArgument) ||
+        args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument) ||
+        args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument) || args.IsOptionSet(kVulkanRemoveRtOption) ||
+        args.IsArgumentSet(kVulkanReplaceShadersArgument) || args.IsOptionSet(kVulkanKeepFailedGetStatus);
     return manual_mode || WasDetected();
 }
 
@@ -113,6 +115,7 @@ decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util
     options.remove_device_instance = args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument);
     options.keep_device_instance   = args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument);
     options.replace_shader_dir     = args.GetArgumentValue(kVulkanReplaceShadersArgument);
+    options.keep_failed_get_status = args.IsOptionSet(kVulkanKeepFailedGetStatus);
 
     std::string remove_app_string;
     if (options.remove_device_instance)
@@ -296,6 +299,9 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
         auto shader_replacement_modifier_consumer =
             std::make_unique<gfxrecon::decode::VulkanShaderReplacementModifier>(options.replace_shader_dir);
 
+        auto failed_get_status_removal_modifier_consumer =
+            std::make_unique<gfxrecon::decode::VulkanFailedGetStatusRemovalModifier>(options.keep_failed_get_status);
+
         // decoder.AddConsumer(&resref_consumer);
         decoder.AddConsumer(feature_tracker_consumer.get());
         decoder.AddConsumer(micromap_modifier_consumer.get());
@@ -306,6 +312,10 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
         if (!options.replace_shader_dir.empty())
         {
             decoder.AddConsumer(shader_replacement_modifier_consumer.get());
+        }
+        if (!options.keep_failed_get_status)
+        {
+            decoder.AddConsumer(failed_get_status_removal_modifier_consumer.get());
         }
         decoder.AddConsumer(trace_helpers_modifier_consumer.get());
 
@@ -352,6 +362,10 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
         if (trace_helpers_modifier_consumer->CanOptimize())
         {
             vulkan_opt_data->modifiers.push_back(std::move(trace_helpers_modifier_consumer));
+        }
+        if (failed_get_status_removal_modifier_consumer->CanOptimize())
+        {
+            vulkan_opt_data->modifiers.push_back(std::move(failed_get_status_removal_modifier_consumer));
         }
     }
 
@@ -414,7 +428,13 @@ std::vector<util::FeatureOptionDesc> OptimizeVulkanFeature::GetOptionDescs() con
                { "Replace the shader code in each `VkShaderModuleCreateInfo` with the",
                  "content of the matching file in <dir> if found. See gfxrecon-extract." },
                true,
-               kVulkanReplaceShadersArgument } };
+               kVulkanReplaceShadersArgument },
+             { "",
+               { "Disable removing all calls that are unsuccessful due to the capture",
+                 "GPU being slow, like `vkGetFenceStatus` calls that returned",
+                 "`VK_NOT_READY` or `vkWaitForFences` calls that returned `VK_TIMEOUT`." },
+               true,
+               kVulkanKeepFailedGetStatus } };
 }
 
 GFXRECON_END_NAMESPACE(optimize)

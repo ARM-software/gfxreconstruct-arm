@@ -39,6 +39,7 @@ struct VulkanOptimizationOptions : public OptimizationOptions
     bool                     keep_device_instance{ false };
     std::vector<std::string> remove_app_name;
     std::string              replace_shader_dir{};
+    bool                     keep_failed_get_status{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)
