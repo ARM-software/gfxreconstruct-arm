@@ -633,7 +633,7 @@ gfxrecon-replay <file>  [-h | --help] [--version] [--cpu-mask <binary-mask>] [--
                         [--mfr|--measurement-frame-range <start-frame>-<end-frame>]
                         [--measurement-file <file>] [--quit-after-measurement-range]
                         [--flush-measurement-range] [--quit-after-frame <frame>]
-                        [--log-level <level>] [--log-file <file>] [--log-debugview]
+                        [--log-level <level>] [--log-file <file>] [--log-debugview] [--log-flush]
                         [--api <api>]
                         [--preload-measurement-range]
                         [--debug-messenger-level <level>]
@@ -664,6 +664,7 @@ Optional arguments:
   --log-level <level>   Specify lowest level message to log. Options are:
                         fatal, error, warning, info, and debug. Default is info.
   --log-timestamps      Output a timestamp in front of each log message.
+  --log-flush           Flush each log message to console/file output. Default is disabled.
   --log-file <file>     Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled).
   --log-debugview       Log messages with OutputDebugStringA. Windows only.
