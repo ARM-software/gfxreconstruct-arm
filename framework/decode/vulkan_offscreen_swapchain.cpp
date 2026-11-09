@@ -24,6 +24,7 @@
 #include "encode/vulkan_handle_wrapper_util.h"
 #include "decode/decoder_util.h"
 #include "generated/generated_vulkan_enum_to_string.h"
+#include "graphics/vulkan_struct_get_pnext.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -237,10 +238,32 @@ VkResult VulkanOffscreenSwapchain::QueuePresentKHR(VkResult                     
         submit_info.pNext = &frame_boundary_;
     }
 
-    if (swapchain_options_.use_ext_frame_boundary || present_info->waitSemaphoreCount > 0)
+    auto* fence_info = graphics::vulkan_struct_get_pnext<VkSwapchainPresentFenceInfoKHR>(present_info);
+    if (swapchain_options_.use_ext_frame_boundary || present_info->waitSemaphoreCount > 0 || fence_info != nullptr)
     {
+        VkFence fence = VK_NULL_HANDLE;
+        if (fence_info != nullptr)
+        {
+            for (uint32_t i = 0; i < fence_info->swapchainCount; ++i)
+            {
+                if (fence_info->pFences[i] != VK_NULL_HANDLE)
+                {
+                    if (fence == VK_NULL_HANDLE)
+                    {
+                        fence = fence_info->pFences[i];
+                    }
+                    else
+                    {
+                        GFXRECON_LOG_ERROR(
+                            "A single VkSwapchainPresentFenceInfoKHR is used to signal multiple fences. This is not "
+                            "supported by the offscreen swapchain and may result in an infinite hang.");
+                    }
+                }
+            }
+        }
+
         auto injected = injected_calls_->Open();
-        result        = injected->QueueSubmit(queue_info->handle, 1, &submit_info, VK_NULL_HANDLE);
+        result        = injected->QueueSubmit(queue_info->handle, 1, &submit_info, fence);
 
         if (result != VK_SUCCESS)
         {
