@@ -602,6 +602,15 @@ struct ID3D12StateObjectDatabaseInfo : public DxWrapperInfo
 struct ID3D12StateObjectDatabaseFactoryInfo : public DxWrapperInfo
 {};
 
+struct ID3D12RuntimeValidationControlInfo : public DxWrapperInfo
+{};
+
+struct ID3D12ApplicationIdentityInfo : public DxWrapperInfo
+{};
+
+struct ID3D12DeviceStatisticsInfo : public DxWrapperInfo
+{};
+
 struct AgsContextInfo : public DxWrapperInfo
 {};
 

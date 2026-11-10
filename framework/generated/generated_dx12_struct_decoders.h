@@ -569,6 +569,13 @@ struct Decoded_D3D12_FEATURE_DATA_D3D12_OPTIONS21
     D3D12_FEATURE_DATA_D3D12_OPTIONS21* decoded_value{ nullptr };
 };
 
+struct Decoded_D3D12_FEATURE_DATA_D3D12_OPTIONS22
+{
+    using struct_type = D3D12_FEATURE_DATA_D3D12_OPTIONS22;
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS22* decoded_value{ nullptr };
+};
+
 struct Decoded_D3D12_FEATURE_DATA_TIGHT_ALIGNMENT
 {
     using struct_type = D3D12_FEATURE_DATA_TIGHT_ALIGNMENT;
@@ -885,6 +892,13 @@ struct Decoded_D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV* decoded_value{ nullptr };
 };
 
+struct Decoded_D3D12_BUFFER_SRV_BYTE_OFFSET
+{
+    using struct_type = D3D12_BUFFER_SRV_BYTE_OFFSET;
+
+    D3D12_BUFFER_SRV_BYTE_OFFSET* decoded_value{ nullptr };
+};
+
 struct Decoded_D3D12_CONSTANT_BUFFER_VIEW_DESC
 {
     using struct_type = D3D12_CONSTANT_BUFFER_VIEW_DESC;
@@ -955,6 +969,13 @@ struct Decoded_D3D12_TEX3D_UAV
     using struct_type = D3D12_TEX3D_UAV;
 
     D3D12_TEX3D_UAV* decoded_value{ nullptr };
+};
+
+struct Decoded_D3D12_BUFFER_UAV_BYTE_OFFSET
+{
+    using struct_type = D3D12_BUFFER_UAV_BYTE_OFFSET;
+
+    D3D12_BUFFER_UAV_BYTE_OFFSET* decoded_value{ nullptr };
 };
 
 struct Decoded_D3D12_BUFFER_RTV
@@ -2057,6 +2078,13 @@ struct Decoded_D3D12_SHADER_CACHE_SESSION_DESC
     Decoded_GUID* Identifier{ nullptr };
 };
 
+struct Decoded_D3D12_FEATURE_DATA_BARRIER_LAYOUT
+{
+    using struct_type = D3D12_FEATURE_DATA_BARRIER_LAYOUT;
+
+    D3D12_FEATURE_DATA_BARRIER_LAYOUT* decoded_value{ nullptr };
+};
+
 struct Decoded_D3D12_BARRIER_SUBRESOURCE_RANGE
 {
     using struct_type = D3D12_BARRIER_SUBRESOURCE_RANGE;
@@ -2088,6 +2116,25 @@ struct Decoded_D3D12_BUFFER_BARRIER
     D3D12_BUFFER_BARRIER* decoded_value{ nullptr };
 
     format::HandleId pResource{ format::kNullHandleId };
+};
+
+struct Decoded_D3D12_TRIM_NOTIFICATION
+{
+    using struct_type = D3D12_TRIM_NOTIFICATION;
+
+    D3D12_TRIM_NOTIFICATION* decoded_value{ nullptr };
+
+    uint64_t pContext{ 0 };
+};
+
+struct Decoded_D3D12_REGISTER_TRIM_NOTIFICATION
+{
+    using struct_type = D3D12_REGISTER_TRIM_NOTIFICATION;
+
+    D3D12_REGISTER_TRIM_NOTIFICATION* decoded_value{ nullptr };
+
+    uint64_t pfnCallback{ 0 };
+    uint64_t pContext{ 0 };
 };
 
 struct Decoded_D3D12_EXISTING_COLLECTION_BY_KEY_DESC
@@ -2130,6 +2177,23 @@ struct Decoded_D3D12_DISPATCH_MESH_ARGUMENTS
     using struct_type = D3D12_DISPATCH_MESH_ARGUMENTS;
 
     D3D12_DISPATCH_MESH_ARGUMENTS* decoded_value{ nullptr };
+};
+
+struct Decoded_D3D12_CREATE_STATE_OBJECT_STATISTICS
+{
+    using struct_type = D3D12_CREATE_STATE_OBJECT_STATISTICS;
+
+    D3D12_CREATE_STATE_OBJECT_STATISTICS* decoded_value{ nullptr };
+};
+
+struct Decoded_D3D12_STATE_OBJECT_STATISTICS
+{
+    using struct_type = D3D12_STATE_OBJECT_STATISTICS;
+
+    D3D12_STATE_OBJECT_STATISTICS* decoded_value{ nullptr };
+
+    Decoded_D3D12_CREATE_STATE_OBJECT_STATISTICS* PipelineStateObjectStatistics{ nullptr };
+    Decoded_D3D12_CREATE_STATE_OBJECT_STATISTICS* StateObjectStatistics{ nullptr };
 };
 
 struct Decoded_D3D_SHADER_MACRO
