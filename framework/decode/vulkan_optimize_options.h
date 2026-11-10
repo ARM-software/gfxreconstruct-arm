@@ -42,6 +42,8 @@ struct VulkanOptimizationOptions : public OptimizationOptions
     std::vector<std::string> remove_app_name;
     std::string              replace_shader_dir{};
     bool                     keep_failed_get_status{ false };
+    bool                     memory_diff{ false };
+    uint64_t                 memory_diff_granularity{ 32 };
 };
 
 GFXRECON_END_NAMESPACE(decode)

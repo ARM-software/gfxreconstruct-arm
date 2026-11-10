@@ -34,6 +34,7 @@
 #include "vulkan_shader_replacement_modifier.h"
 #include "vulkan_arm_trace_helpers_modifier.h"
 #include "vulkan_failed_get_status_removal_modifier.h"
+#include "vulkan_memory_diff_modifier.h"
 #include "vulkan_acceleration_structure_modifier.h"
 #if defined(GFXRECON_HAS_SPIRV_ANALYSIS)
 #include "vulkan_spirv_tracker_modifier.h"
@@ -47,6 +48,7 @@
 #include "util/feature_module_registry.h"
 #include "util/logging.h"
 
+#include <charconv>
 #include <cinttypes>
 #include <memory>
 
@@ -56,15 +58,17 @@ GFXRECON_BEGIN_NAMESPACE(optimize)
 GFXR_UTIL_REGISTER_FEATURE_CREATOR(OptimizeFeature, OptimizeVulkanFeature)
 
 // Vulkan-specific CLI flag names, private to this translation unit.
-constexpr char kRemoveThreadArgument[]               = "--remove-thread";
-constexpr char kVulkanSetReplayOptionsArgument[]     = "--set-replay-options";
-constexpr char kVulkanRemoveDeviceInstanceArgument[] = "--remove-device-instance";
-constexpr char kVulkanKeepDeviceInstanceArgument[]   = "--keep-device-instance";
-constexpr char kVulkanRemoveRtOption[]               = "--vk-remove-rt";
-constexpr char kVulkanReplaceShadersArgument[]       = "--replace-shaders";
-constexpr char kVulkanKeepFailedGetStatus[]          = "--keep-failed-get-status";
-constexpr char kVulkanInsertDebugObjectNameOption[]  = "--insert-debug-object-name";
-constexpr char kVulkanBackendArgument[]              = "--vk-backend";
+constexpr char kRemoveThreadArgument[]                = "--remove-thread";
+constexpr char kVulkanSetReplayOptionsArgument[]      = "--set-replay-options";
+constexpr char kVulkanRemoveDeviceInstanceArgument[]  = "--remove-device-instance";
+constexpr char kVulkanKeepDeviceInstanceArgument[]    = "--keep-device-instance";
+constexpr char kVulkanRemoveRtOption[]                = "--vk-remove-rt";
+constexpr char kVulkanReplaceShadersArgument[]        = "--replace-shaders";
+constexpr char kVulkanKeepFailedGetStatus[]           = "--keep-failed-get-status";
+constexpr char kVulkanInsertDebugObjectNameOption[]   = "--insert-debug-object-name";
+constexpr char kVulkanBackendArgument[]               = "--vk-backend";
+constexpr char kVulkanMemoryDiff[]                    = "--memory-diff";
+constexpr char kVulkanMemoryDiffGranularityArgument[] = "--memory-diff-granularity";
 
 bool OptimizeVulkanFeature::ScanVulkanCapture(const std::string& input_filename, decode::VulkanDecoder& decoder)
 {
@@ -269,12 +273,21 @@ bool OptimizeVulkanFeature::ShouldRun(const util::ArgumentParser& args) const
         args.IsArgumentSet(kVulkanRemoveDeviceInstanceArgument) ||
         args.IsArgumentSet(kVulkanKeepDeviceInstanceArgument) || args.IsOptionSet(kVulkanRemoveRtOption) ||
         args.IsArgumentSet(kVulkanReplaceShadersArgument) || args.IsOptionSet(kVulkanKeepFailedGetStatus) ||
-        args.IsOptionSet(kVulkanInsertDebugObjectNameOption);
+        args.IsOptionSet(kVulkanInsertDebugObjectNameOption) || args.IsOptionSet(kVulkanMemoryDiff) ||
+        args.IsArgumentSet(kVulkanMemoryDiffGranularityArgument);
     return manual_mode || WasDetected();
 }
 
 decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util::ArgumentParser& args) const
 {
+    if (args.IsOptionSet(kVulkanMemoryDiff) &&
+        (args.GetSetOptionCount() != 1 ||
+         args.GetSetArgumentCount() != (args.IsArgumentSet(kVulkanMemoryDiffGranularityArgument) ? 1 : 0)))
+    {
+        throw std::runtime_error(
+            "Option --memory-diff cannot be used with any other option except --memory-diff-granularity.");
+    }
+
     if (args.IsArgumentSet(kVulkanSetReplayOptionsArgument))
     {
         if (args.GetOptionCount() != 0 || args.GetArgumentCount() != 1)
@@ -319,6 +332,23 @@ decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util
     options.replace_shader_dir       = args.GetArgumentValue(kVulkanReplaceShadersArgument);
     options.keep_failed_get_status   = args.IsOptionSet(kVulkanKeepFailedGetStatus);
     options.insert_debug_object_name = args.IsOptionSet(kVulkanInsertDebugObjectNameOption);
+    options.memory_diff              = args.IsOptionSet(kVulkanMemoryDiff);
+
+    if (args.IsArgumentSet(kVulkanMemoryDiffGranularityArgument))
+    {
+        if (!options.memory_diff)
+        {
+            throw std::runtime_error("Option --memory-diff-granularity requires --memory-diff.");
+        }
+
+        const std::string& value = args.GetArgumentValue(kVulkanMemoryDiffGranularityArgument);
+        const auto [end, error] =
+            std::from_chars(value.data(), value.data() + value.size(), options.memory_diff_granularity);
+        if (error != std::errc{} || end != value.data() + value.size() || options.memory_diff_granularity == 0)
+        {
+            throw std::runtime_error("Option --memory-diff-granularity must be a positive integer.");
+        }
+    }
 
     if (options.use_spirv_simulator && options.remove_rt)
     {
@@ -504,6 +534,10 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
     {
         vulkan_opt_data->modifiers.push_back(std::make_unique<decode::VulkanDebugObjectNameModifier>());
     }
+    else if (options.memory_diff)
+    {
+        vulkan_opt_data->modifiers.push_back(std::make_unique<gfxrecon::decode::VulkanMemoryDiffModifier>(options));
+    }
     else if (options.use_spirv_simulator)
     {
         AnalyzeWithSimulator(input_filename, options, *vulkan_opt_data);
@@ -580,6 +614,15 @@ std::vector<util::FeatureOptionDesc> OptimizeVulkanFeature::GetOptionDescs() con
                  "are being performed." },
                false,
                kVulkanInsertDebugObjectNameOption },
+             { "",
+               { "Write only changed bytes in repeated memory updates.",
+                 "Cannot be combined with other options except --memory-diff-granularity." },
+               false,
+               kVulkanMemoryDiff },
+             { "<bytes>",
+               { "Comparison chunk size for --memory-diff (default: 32). Requires --memory-diff." },
+               true,
+               kVulkanMemoryDiffGranularityArgument },
              { "<dir>",
                { "Replace the shader code in each `VkShaderModuleCreateInfo` with the",
                  "content of the matching file in <dir> if found. See gfxrecon-extract." },

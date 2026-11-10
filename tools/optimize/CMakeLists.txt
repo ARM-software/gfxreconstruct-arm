@@ -67,6 +67,8 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_debug_object_name_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_ext_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_ext_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_memory_diff_modifier.h
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_memory_diff_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_descriptor_buffer_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/resource_memory_requirements_modifier.h
