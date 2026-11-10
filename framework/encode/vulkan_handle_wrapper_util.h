@@ -34,10 +34,13 @@
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "util/defines.h"
 #include "graphics/vulkan_util.h"
+#include "util/logging.h"
 
 #include <algorithm>
 #include <iterator>
 #include <cassert>
+#include <mutex>
+#include <ranges>
 #include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -344,14 +347,16 @@ inline void CreateWrappedHandle<DeviceWrapper, NoParentWrapper, QueueWrapper>(
 
     auto parent_wrapper = GetWrapper<DeviceWrapper>(parent);
 
-    // Filter duplicate physical device retrieval.
+    // Filter duplicate queue retrieval.
     QueueWrapper* wrapper = nullptr;
-    for (auto entry : parent_wrapper->child_queues)
     {
-        if (entry->handle == (*handle))
+        std::lock_guard<std::mutex> child_queues_lock(parent_wrapper->queues_map_mutex);
+        for (const auto& queue : parent_wrapper->child_queues | std::views::values)
         {
-            wrapper = entry;
-            break;
+            if ((queue.wrapper != nullptr) && (queue.wrapper->handle == (*handle)))
+            {
+                wrapper = queue.wrapper;
+            }
         }
     }
 
@@ -361,7 +366,6 @@ inline void CreateWrappedHandle<DeviceWrapper, NoParentWrapper, QueueWrapper>(
 
         wrapper                  = GetWrapper<QueueWrapper>(*handle);
         wrapper->layer_table_ref = &parent_wrapper->layer_table;
-        parent_wrapper->child_queues.push_back(wrapper);
     }
 }
 
@@ -595,13 +599,15 @@ inline void DestroyWrappedHandle<DeviceWrapper>(VkDevice handle)
     {
         // Destroy child wrappers.
         auto wrapper = GetWrapper<DeviceWrapper>(handle);
-
-        for (auto queue_wrapper : wrapper->child_queues)
         {
-            RemoveWrapper<QueueWrapper>(queue_wrapper);
-            delete queue_wrapper;
+            std::lock_guard<std::mutex> child_queues_lock(wrapper->queues_map_mutex);
+            for (const auto& queue : wrapper->child_queues | std::views::values)
+            {
+                RemoveWrapper<QueueWrapper>(queue.wrapper);
+                delete queue.wrapper;
+            }
+            wrapper->child_queues.clear();
         }
-
         RemoveWrapper<DeviceWrapper>(wrapper);
         delete wrapper;
     }

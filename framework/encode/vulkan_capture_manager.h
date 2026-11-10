@@ -1930,6 +1930,25 @@ class VulkanCaptureManager : public ApiCaptureManager
                                                  VkDevice                            device,
                                                  const VkDebugUtilsObjectTagInfoEXT* pTagInfo);
 
+    void PostProcess_vkGetDeviceQueue(VkDevice device, uint32_t queueFamilyIndex, uint32_t queueIndex, VkQueue* pQueue);
+
+    void PostProcess_vkGetDeviceQueue2(VkDevice device, const VkDeviceQueueInfo2* pQueueInfo, VkQueue* pQueue);
+
+    VkResult OverrideQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+
+    VkResult OverrideQueueSubmit2(VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
+    VkResult OverrideQueueSubmit2KHR(VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
+    VkResult OverrideQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo);
+
+    VkResult OverrideQueueWaitIdle(VkQueue queue);
+
+    VkResult OverrideDeviceWaitIdle(VkDevice device);
+
+    VkResult
+    OverrideQueueBindSparse(VkQueue queue, uint32_t bindInfoCount, const VkBindSparseInfo* pBindInfo, VkFence fence);
+
 #if ENABLE_OPENXR_SUPPORT
     void PostProcess_vkImportFenceWin32HandleKHR(VkResult                               result,
                                                  VkDevice                               device,
@@ -2138,6 +2157,9 @@ class VulkanCaptureManager : public ApiCaptureManager
     bool IsExtensionBeingFaked(const char* extension);
 
     virtual void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock) override;
+
+    VkResult HandleQueueSubmit2(
+        VkQueue queue, uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence, PFN_vkQueueSubmit2 func);
 
   private:
     void QueueSubmitWriteFillMemoryCmd();

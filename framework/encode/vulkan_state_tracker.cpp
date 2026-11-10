@@ -24,6 +24,8 @@
 #include "encode/vulkan_state_tracker.h"
 
 #include "encode/vulkan_acceleration_structure_build_state.h"
+#include "decode/vulkan_object_info.h"
+#include "encode/vulkan_capture_common.h"
 #include "encode/vulkan_handle_wrappers.h"
 #include "encode/vulkan_state_info.h"
 #include "encode/vulkan_handle_wrapper_util.h"
@@ -42,9 +44,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <memory>
-#include <vulkan/vulkan_core.h>
+#include <ranges>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(encode)
@@ -2696,10 +2696,11 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::DeviceWrapper* wrapper)
 
     // Queues are not explicitly destroyed, so need to be removed from the state tracker when their parent device is
     // destroyed.
-    std::unique_lock<std::mutex> lock(state_table_mutex_);
-    for (const auto& entry : wrapper->child_queues)
+    std::unique_lock<std::mutex> state_table_lock(state_table_mutex_);
+    std::unique_lock<std::mutex> device_queues_lock(wrapper->queues_map_mutex);
+    for (const auto& queue : wrapper->child_queues | std::views::values)
     {
-        state_table_.RemoveWrapper(entry);
+        state_table_.RemoveWrapper(queue.wrapper);
     }
 }
 
