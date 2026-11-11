@@ -3873,7 +3873,12 @@ HRESULT Dx12ReplayConsumerBase::OverrideGetBuffer(DxObjectInfo*                r
                                                   Decoded_GUID                 riid,
                                                   HandlePointerDecoder<void*>* surface)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    if (FAILED(original_result))
+    {
+        GFXRECON_LOG_WARNING("Ignoring IDXGISwapChain::GetBuffer operation that failed at capture with result %s",
+                             enumutil::GetResultValueString(original_result).c_str());
+        return original_result;
+    }
 
     assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr) && (surface != nullptr));
 
@@ -3960,7 +3965,13 @@ HRESULT Dx12ReplayConsumerBase::OverrideResizeBuffers(DxObjectInfo* replay_objec
                                                       DXGI_FORMAT   new_format,
                                                       UINT          flags)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    // A resize that failed at capture must not replace buffers still referenced by recorded GPU work.
+    if (FAILED(original_result))
+    {
+        GFXRECON_LOG_WARNING("Ignoring IDXGISwapChain::ResizeBuffers operation that failed at capture with result %s",
+                             enumutil::GetResultValueString(original_result).c_str());
+        return original_result;
+    }
 
     assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr));
 
@@ -4011,7 +4022,12 @@ HRESULT Dx12ReplayConsumerBase::OverrideResizeBuffers1(DxObjectInfo*            
                                                        PointerDecoder<UINT>*            node_mask,
                                                        HandlePointerDecoder<IUnknown*>* present_queue)
 {
-    GFXRECON_UNREFERENCED_PARAMETER(original_result);
+    if (FAILED(original_result))
+    {
+        GFXRECON_LOG_WARNING("Ignoring IDXGISwapChain3::ResizeBuffers1 operation that failed at capture with result %s",
+                             enumutil::GetResultValueString(original_result).c_str());
+        return original_result;
+    }
 
     assert((replay_object_info != nullptr) && (replay_object_info->object != nullptr));
 
