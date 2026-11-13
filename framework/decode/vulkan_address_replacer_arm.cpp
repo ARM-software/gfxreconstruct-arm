@@ -114,7 +114,8 @@ void VulkanAddressReplacerARM::ProcessCmdBuildAccelerationStructuresKHR(
     VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos,
     VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos,
     const VulkanDeviceAddressTracker&            address_tracker,
-    bool                                         process_scratch_buffers)
+    bool                                         process_scratch_buffers,
+    std::span<const VkCommandBuffer>             clone_command_buffers)
 {
     // TODO: testing only -> remove when closing issue #1526
     constexpr bool force_replace = false;

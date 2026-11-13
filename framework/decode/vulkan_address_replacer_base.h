@@ -122,7 +122,8 @@ class VulkanAddressReplacerBase
                                              VkAccelerationStructureBuildGeometryInfoKHR* build_geometry_infos,
                                              VkAccelerationStructureBuildRangeInfoKHR**   build_range_infos,
                                              const decode::VulkanDeviceAddressTracker&    address_tracker,
-                                             bool                                         process_scratch_buffers)
+                                             bool                                         process_scratch_buffers,
+                                             std::span<const VkCommandBuffer>             clone_command_buffers = {})
     {}
 
     virtual void ProcessGetDescriptorEXT(const VulkanDeviceInfo*           device_info,

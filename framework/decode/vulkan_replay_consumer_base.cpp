@@ -11997,14 +11997,20 @@ void VulkanReplayConsumerBase::OverrideCmdBuildAccelerationStructuresKHR(
         auto& address_tracker  = GetDeviceAddressTracker(device_info);
         auto& address_replacer = GetDeviceAddressReplacer(device_info);
 
-        // Address replacer should not replace scratch buffer addresess when loading trim state is done/not used
-        // AccelerationStructureBuilder should take over scratch management
+        // Dumping records the build into clones as well, and they need the same address patching before it
+        std::vector<VkCommandBuffer> clone_command_buffers;
+        if (options_.dumping_resources)
+        {
+            clone_command_buffers = resource_dumper_->GetWorkCommandBuffers(command_buffer);
+        }
+
         address_replacer.ProcessCmdBuildAccelerationStructuresKHR(command_buffer_info,
                                                                   infoCount,
                                                                   build_geometry_infos,
                                                                   build_range_infos,
                                                                   address_tracker,
-                                                                  loading_trim_state_);
+                                                                  loading_trim_state_,
+                                                                  clone_command_buffers);
 
         // Use the builder when the rebind allocator is selected and the trimm state loading is done / not used
         if (!loading_trim_state_)
