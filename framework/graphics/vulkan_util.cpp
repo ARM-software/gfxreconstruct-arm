@@ -258,5 +258,77 @@ std::vector<VkPipelineBindPoint> ShaderStageFlagsToPipelineBindPoints(VkShaderSt
     return bind_points;
 }
 
+bool IsMemoryImportOperation(const VkMemoryAllocateInfo* allocate_info)
+{
+    if (allocate_info == nullptr)
+    {
+        return false;
+    }
+
+    for (const auto* current = reinterpret_cast<const VkBaseInStructure*>(allocate_info->pNext); current != nullptr;
+         current             = current->pNext)
+    {
+        switch (current->sType)
+        {
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR:
+                if (reinterpret_cast<const VkImportMemoryWin32HandleInfoKHR*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_NV:
+                if (reinterpret_cast<const VkImportMemoryWin32HandleInfoNV*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR:
+                if (reinterpret_cast<const VkImportMemoryFdInfoKHR*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT:
+                if (reinterpret_cast<const VkImportMemoryHostPointerInfoEXT*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID:
+                if (reinterpret_cast<const VkImportAndroidHardwareBufferInfoANDROID*>(current)->buffer != nullptr)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_ZIRCON_HANDLE_INFO_FUCHSIA:
+                if (reinterpret_cast<const VkImportMemoryZirconHandleInfoFUCHSIA*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_BUFFER_COLLECTION_FUCHSIA:
+                return true;
+#if defined(VK_USE_PLATFORM_SCREEN_QNX)
+            case VK_STRUCTURE_TYPE_IMPORT_SCREEN_BUFFER_INFO_QNX:
+                if (reinterpret_cast<const VkImportScreenBufferInfoQNX*>(current)->buffer != nullptr)
+                {
+                    return true;
+                }
+                break;
+#endif
+            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_METAL_HANDLE_INFO_EXT:
+                if (reinterpret_cast<const VkImportMemoryMetalHandleInfoEXT*>(current)->handleType != 0)
+                {
+                    return true;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    return false;
+}
+
 GFXRECON_END_NAMESPACE(graphics)
 GFXRECON_END_NAMESPACE(gfxrecon)

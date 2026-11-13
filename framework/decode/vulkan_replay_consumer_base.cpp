@@ -3690,13 +3690,22 @@ void VulkanReplayConsumerBase::ModifyCreateInstanceInfo(
         }
 
         if (graphics::feature_util::IsSupportedExtension(available_extensions,
-                                                         VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) &&
-            !graphics::feature_util::IsSupportedExtension(modified_extensions,
-                                                          VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))
+                                                         VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))
         {
+            if (!graphics::feature_util::IsSupportedExtension(modified_extensions, VK_KHR_SURFACE_EXTENSION_NAME) &&
+                graphics::feature_util::IsSupportedExtension(available_extensions, VK_KHR_SURFACE_EXTENSION_NAME))
+            {
+                GFXRECON_LOG_INFO("Enabling the %s extension", VK_KHR_SURFACE_EXTENSION_NAME);
+                modified_extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+            }
 
-            GFXRECON_LOG_INFO("Enabling the %s extension", VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
-            modified_extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+            if (graphics::feature_util::IsSupportedExtension(modified_extensions, VK_KHR_SURFACE_EXTENSION_NAME) &&
+                !graphics::feature_util::IsSupportedExtension(modified_extensions,
+                                                              VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))
+            {
+                GFXRECON_LOG_INFO("Enabling the %s extension", VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+                modified_extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+            }
         }
 
         // All VK_KHR_get_physical_device_properties2 functionalities are included in Vulkan 1.1,
@@ -7363,19 +7372,49 @@ VkResult VulkanReplayConsumerBase::OverrideAllocateMemory(
         if (device_info->property_feature_info.feature_descriptorBufferCaptureReplay &&
             !UseAddressReplacement(device_info))
         {
-            uses_address     = true;
-            flags_info.pNext = nullptr;
-            flags_info.flags |=
-                VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
-            graphics::vulkan_struct_add_pnext(modified_allocate_info, &flags_info);
+            uses_address = true;
+            if (opaque_address == 0)
+            {
+                auto opaque_address_pair = device_info->opaque_addresses.find(capture_id);
+                if (opaque_address_pair != device_info->opaque_addresses.end())
+                {
+                    opaque_address = opaque_address_pair->second;
+                }
+            }
+            if (auto* existing_flags =
+                    graphics::vulkan_struct_get_pnext<VkMemoryAllocateFlagsInfo>(modified_allocate_info);
+                existing_flags != nullptr)
+            {
+                existing_flags->flags |=
+                    VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+            }
+            else
+            {
+                flags_info.pNext = nullptr;
+                flags_info.flags |=
+                    VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT;
+                graphics::vulkan_struct_add_pnext(modified_allocate_info, &flags_info);
+            }
         }
 
-        if (uses_address && !address_override_found)
+        // VUID-VkMemoryAllocateInfo-pNext-03332, VUID-VkMemoryAllocateInfo-opaqueCaptureAddress-03333
+        const bool should_zero_opaque_address =
+            uses_host_pointer_memory ||
+            graphics::vulkan_struct_get_pnext<VkImportMemoryHostPointerInfoEXT>(modified_allocate_info) != nullptr ||
+            graphics::IsMemoryImportOperation(modified_allocate_info);
+
+        auto* existing_address_info =
+            graphics::vulkan_struct_get_pnext<VkMemoryOpaqueCaptureAddressAllocateInfo>(modified_allocate_info);
+        if (existing_address_info != nullptr)
         {
-            // The Vulkan spec states: If the pNext chain includes a VkImportMemoryHostPointerInfoEXT structure,
-            // VkMemoryOpaqueCaptureAddressAllocateInfo::opaqueCaptureAddress must be zero
-            // (https://vulkan.lunarg.com/doc/view/1.3.216.0/linux/1.3-extensions/vkspec.html#VUID-VkMemoryAllocateInfo-pNext-03332)
-            if (uses_host_pointer_memory)
+            if (should_zero_opaque_address)
+            {
+                existing_address_info->opaqueCaptureAddress = 0;
+            }
+        }
+        else if (uses_address && !address_override_found)
+        {
+            if (should_zero_opaque_address)
             {
                 opaque_address = 0;
             }
