@@ -1959,6 +1959,8 @@ void VulkanRayTracingModifier::EncodeVkGetAccelerationStructureBuildSizesKHR(for
                     encoder.EncodeUInt64Value(omm_info.indexBuffer);
                     encoder.EncodeUInt64Value(omm_info.indexStride);
                     encoder.EncodeUInt32Value(omm_info.baseTriangle);
+                    // TODO: check if this handle exists at this moment in time. If not move the micromap create call
+                    // before this current call
                     encoder.EncodeHandleIdValue(build_info.geometry_omm_id_map[g]);
                 }
                 else if (build_info.omm_infos_ext.contains(g))
@@ -1981,6 +1983,8 @@ void VulkanRayTracingModifier::EncodeVkGetAccelerationStructureBuildSizesKHR(for
                                         1);
 
                     // todo: All this monstrocity is done for this line
+                    // TODO: check if this handle exists at this moment in time. If not move the micromap create call
+                    // before this current call
                     encoder.EncodeHandleIdValue(build_info.geometry_omm_id_map[g]);
                 }
                 else

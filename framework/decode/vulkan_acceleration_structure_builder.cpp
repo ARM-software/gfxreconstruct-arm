@@ -26,6 +26,7 @@
 #include "format/format.h"
 #include "decode/vulkan_acceleration_structure_builder.h"
 #include "decode/vulkan_micromap_ext_builder.h"
+#include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
 
 #include <algorithm>
@@ -428,6 +429,39 @@ void VulkanAccelerationStructureBuilder::OnGetAccelerationStructureBuildSizes(
     const uint32_t*                                    max_primitive_counts,
     VkAccelerationStructureBuildSizesInfoKHR*          size_info)
 {
+    // Check if VkAccelerationStructureBuildGeometryInfoKHR contains blas with geometry type triangle, for which there
+    // are micromap structures in the pNext chain. If the micromap structures in the pNext chain have micromap field
+    // equal to 0, then log a warning as this is a scenario not supported yet by the optimizer and doesn't guarantee
+    // successfull replay.
+    if (build_Info != nullptr && build_Info->type == VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR)
+    {
+        for (uint32_t i = 0; i < build_Info->geometryCount; i++)
+        {
+            const auto* geometry =
+                build_Info->pGeometries != nullptr ? &build_Info->pGeometries[i] : build_Info->ppGeometries[i];
+            if (geometry->geometryType != VK_GEOMETRY_TYPE_TRIANGLES_KHR)
+            {
+                continue;
+            }
+
+            const auto* triangles = &geometry->geometry.triangles;
+            if (const auto* micromap =
+                    graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapKHR>(triangles);
+                micromap != nullptr && micromap->micromap == 0)
+            {
+                GFXRECON_LOG_WARNING_ONCE(
+                    "Unexpected VkAccelerationStructureTrianglesOpacityMicromapKHR micromap is 0");
+            }
+            if (const auto* micromap =
+                    graphics::vulkan_struct_get_pnext<VkAccelerationStructureTrianglesOpacityMicromapEXT>(triangles);
+                micromap != nullptr && micromap->micromap == 0)
+            {
+                GFXRECON_LOG_WARNING_ONCE(
+                    "Unexpected VkAccelerationStructureTrianglesOpacityMicromapEXT micromap is 0");
+            }
+        }
+    }
+
     functions_.get_acceleration_structure_build_sizes(
         device_info->handle, type, build_Info, max_primitive_counts, size_info);
     if (size_info->accelerationStructureSize > max_build_sizes_.accelerationStructureSize)
