@@ -60,6 +60,7 @@ constexpr char kVulkanRemoveRtOption[]               = "--vk-remove-rt";
 constexpr char kVulkanReplaceShadersArgument[]       = "--replace-shaders";
 constexpr char kVulkanKeepFailedGetStatus[]          = "--keep-failed-get-status";
 constexpr char kVulkanInsertDebugObjectNameOption[]  = "--insert-debug-object-name";
+constexpr char kVulkanBackendArgument[]              = "--vk-backend";
 
 std::string OptimizeVulkanFeature::CompiledHeaderVersionString() const
 {
@@ -120,6 +121,19 @@ decode::VulkanOptimizationOptions OptimizeVulkanFeature::BuildOptions(const util
     {
         throw std::runtime_error(
             "Options --remove-device-instance and --keep-device-instance cannot be used together.");
+    }
+
+    if (args.IsArgumentSet(kVulkanBackendArgument))
+    {
+        const auto backend = args.GetArgumentValue(kVulkanBackendArgument);
+        if (backend == "simulator")
+        {
+            throw std::runtime_error("--vk-backend simulator is not implemented");
+        }
+        if (backend != "heuristic")
+        {
+            throw std::runtime_error("--vk-backend expects simulator or heuristic");
+        }
     }
 
     decode::VulkanOptimizationOptions options;
@@ -428,7 +442,11 @@ bool OptimizeVulkanFeature::Optimize(const std::string&          input_filename,
 
 std::vector<util::FeatureOptionDesc> OptimizeVulkanFeature::GetOptionDescs() const
 {
-    return { { "<options>",
+    return { { "<simulator|heuristic>",
+               { "Select Vulkan analysis backend. Default: heuristic.", "Simulator analysis is not implemented." },
+               true,
+               kVulkanBackendArgument },
+             { "<options>",
                { "Add default playback options to the trace. Use quotation marks for",
                  "multiple arguments. Do NOT combine this option with any other option." },
                true,
