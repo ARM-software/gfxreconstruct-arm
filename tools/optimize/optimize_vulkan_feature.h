@@ -24,6 +24,7 @@
 #define GFXRECON_OPTIMIZE_VULKAN_FEATURE_H
 
 #include "optimize_feature.h"
+#include "vulkan_file_optimizer.h"
 
 #include "decode/vulkan_detection_consumer.h"
 #include "decode/vulkan_optimize_options.h"
@@ -58,6 +59,14 @@ class OptimizeVulkanFeature : public OptimizeFeature
     std::vector<util::FeatureOptionDesc> GetOptionDescs() const override;
 
   private:
+    static bool ScanVulkanCapture(const std::string& input_filename, decode::VulkanDecoder& decoder);
+    static void AnalyzeWithSimulator(const std::string&                           input_filename,
+                                     const decode::VulkanOptimizationOptions&     options,
+                                     VulkanFileOptimizer::VulkanOptimizationData& optimization_data);
+    static void AnalyzeWithHeuristics(const std::string&                           input_filename,
+                                      const decode::VulkanOptimizationOptions&     options,
+                                      VulkanFileOptimizer::VulkanOptimizationData& optimization_data);
+
     // Pass 1: collect handles that were never referenced in a command buffer submission.
     bool GetUnreferencedResources(const std::string&                    input_filename,
                                   std::unordered_set<format::HandleId>& unreferenced_ids);

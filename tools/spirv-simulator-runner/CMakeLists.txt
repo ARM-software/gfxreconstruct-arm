@@ -30,12 +30,6 @@ target_sources(gfxrecon-spirv-simulator
                    ${CMAKE_CURRENT_LIST_DIR}/../optimize/file_optimizer.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_file_optimizer.h
                    ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_file_optimizer.cpp
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_modifier.h
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_modifier.cpp
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_fixup_location_builder.h
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_fixup_location_builder.cpp
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_provenance_tracker.h
-                   ${CMAKE_CURRENT_LIST_DIR}/../optimize/vulkan_spirv_tracker_provenance_tracker.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/../platform_debug_helper.cpp
                    $<$<BOOL:WIN32>:${PROJECT_SOURCE_DIR}/version.rc>
               )
@@ -51,7 +45,6 @@ if (MSVC)
 endif()
 
 target_include_directories(gfxrecon-spirv-simulator PUBLIC ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR}/external/spirv-simulator/)
-target_compile_options(gfxrecon-spirv-simulator PRIVATE -std=c++20)
 
 target_link_libraries(gfxrecon-spirv-simulator
                           gfxrecon_application
@@ -61,7 +54,7 @@ target_link_libraries(gfxrecon-spirv-simulator
                           gfxrecon_format
                           gfxrecon_util
                           platform_specific
-                          spirv_simulator_lib)
+                          gfxrecon_vulkan_spirv_analysis)
 
 common_build_directives(gfxrecon-spirv-simulator)
 

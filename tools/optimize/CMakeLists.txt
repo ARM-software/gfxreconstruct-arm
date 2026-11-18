@@ -28,6 +28,23 @@
 
 add_executable(gfxrecon-optimize "")
 
+if (TARGET spirv_simulator_lib)
+    add_library(gfxrecon_vulkan_spirv_analysis STATIC
+                vulkan_spirv_tracker_modifier.cpp
+                vulkan_spirv_tracker_fixup_location_builder.cpp
+                vulkan_spirv_tracker_provenance_tracker.cpp)
+    target_include_directories(gfxrecon_vulkan_spirv_analysis PUBLIC
+                               ${CMAKE_BINARY_DIR}
+                               ${PROJECT_SOURCE_DIR}/external/spirv-simulator)
+    target_compile_features(gfxrecon_vulkan_spirv_analysis PUBLIC cxx_std_20)
+    target_link_libraries(gfxrecon_vulkan_spirv_analysis PUBLIC
+                          gfxrecon_decode gfxrecon_encode gfxrecon_graphics
+                          gfxrecon_format gfxrecon_util spirv_simulator_lib)
+    common_build_directives(gfxrecon_vulkan_spirv_analysis)
+    target_link_libraries(gfxrecon-optimize gfxrecon_vulkan_spirv_analysis)
+    target_compile_definitions(gfxrecon-optimize PRIVATE GFXRECON_HAS_SPIRV_ANALYSIS)
+endif()
+
 target_sources(gfxrecon-optimize
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
@@ -44,6 +61,8 @@ target_sources(gfxrecon-optimize
                    ${CMAKE_CURRENT_LIST_DIR}/annotation_editor.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_raytracing_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_raytracing_modifier.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_modifier.h
+                   ${CMAKE_CURRENT_LIST_DIR}/vulkan_acceleration_structure_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_debug_object_name_modifier.h
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_debug_object_name_modifier.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_micromap_ext_modifier.h
@@ -117,6 +136,18 @@ include(${PROJECT_SOURCE_DIR}/cmake/InstallDXC.cmake)
 install(TARGETS gfxrecon-optimize RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if (${RUN_TESTS})
+    add_executable(gfxrecon_vulkan_simulator_modifiers_test
+                   test/vulkan_simulator_modifiers_test.cpp
+                   vulkan_acceleration_structure_modifier.cpp
+                   ../platform_debug_helper.cpp)
+    target_include_directories(gfxrecon_vulkan_simulator_modifiers_test PRIVATE
+                               ${CMAKE_BINARY_DIR} ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/..)
+    target_link_libraries(gfxrecon_vulkan_simulator_modifiers_test PRIVATE
+                          gfxrecon_application gfxrecon_decode gfxrecon_encode gfxrecon_graphics
+                          gfxrecon_format platform_specific project_version)
+    target_compile_features(gfxrecon_vulkan_simulator_modifiers_test PRIVATE cxx_std_20)
+    common_build_directives(gfxrecon_vulkan_simulator_modifiers_test)
+    common_test_directives(gfxrecon_vulkan_simulator_modifiers_test)
     add_executable(gfxrecon_descriptor_buffer_modifier_test "")
     target_sources(gfxrecon_descriptor_buffer_modifier_test PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/test/vulkan_descriptor_buffer_modifier_test.cpp

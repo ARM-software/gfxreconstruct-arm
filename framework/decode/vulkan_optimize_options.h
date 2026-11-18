@@ -34,6 +34,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 struct VulkanOptimizationOptions : public OptimizationOptions
 {
+    bool                     use_spirv_simulator{ false };
     bool                     remove_rt{ false };
     bool                     insert_debug_object_name{ false };
     bool                     remove_device_instance{ false };
