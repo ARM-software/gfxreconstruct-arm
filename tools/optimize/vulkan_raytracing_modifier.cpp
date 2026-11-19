@@ -898,6 +898,11 @@ void VulkanRayTracingModifier::ProcessCreateAccelerationStructure(const ApiCallI
         const BufferInfo& buffer_entry_current = buffer_entries_.find(created_object.buf_handle)->second;
         const BufferInfo& buffer_entry_donor   = buffer_entries_.find(donor_candidate_info.buf_handle)->second;
 
+        if (buffer_entry_current.handle == buffer_entry_donor.handle)
+        {
+            continue;
+        }
+
         if (buffer_entry_current.memory_handle_id != buffer_entry_donor.memory_handle_id)
         {
             continue;
