@@ -50,6 +50,9 @@ class VulkanArmTraceHelpersModifier : public util::VulkanModifierBase
 
     void ProcessFillMemoryCommand(uint64_t memory_id, uint64_t offset, uint64_t size, const uint8_t* data) override;
 
+    void ProcessTraceHelpersDataCommand(const format::TraceHelpersDataCommandHeader&      header,
+                                        const std::vector<format::TraceHelpersDataInfos>& infos) override;
+
   private:
     VkDeviceSize GetDataSizeBasedOnHelpersType(const VkMarkingTypeARM&    marking_types,
                                                const VkMarkingSubTypeARM& sub_types);

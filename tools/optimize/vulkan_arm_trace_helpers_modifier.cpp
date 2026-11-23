@@ -113,6 +113,17 @@ VkDeviceSize VulkanArmTraceHelpersModifier::GetDataSizeBasedOnHelpersType(const 
     return 0;
 }
 
+void VulkanArmTraceHelpersModifier::ProcessTraceHelpersDataCommand(
+    const format::TraceHelpersDataCommandHeader& header, const std::vector<format::TraceHelpersDataInfos>& infos)
+{
+    if (!IsModificationPass())
+    {
+        return;
+    }
+    // Delete the old call to avoid duplication
+    SetDeleteCurrentCall();
+}
+
 void VulkanArmTraceHelpersModifier::ProcessFillMemoryCommand(uint64_t       memory_id,
                                                              uint64_t       offset,
                                                              uint64_t       size,
