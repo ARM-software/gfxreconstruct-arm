@@ -1221,9 +1221,7 @@ void VulkanSpirvTrackModifier::Process_vkBeginCommandBuffer(const ApiCallInfo&  
     command_buffer_recording[args.commandBuffer].bind_point        = VK_PIPELINE_BIND_POINT_MAX_ENUM;
     command_buffer_recording[args.commandBuffer].dispatch_geometry = {};
 
-    command_buffer_state[args.commandBuffer].command_buffer = args.commandBuffer;
-    command_buffer_state[args.commandBuffer].push_constant.assign(256, 0); // MAX_PUSHCONSTANT_SIZE
-    provenance_tracker_.ClearPushConstantProvenance(args.commandBuffer);
+    provenance_tracker_.ErasePushConstantProvenance(args.commandBuffer);
 }
 
 void VulkanSpirvTrackModifier::Process_vkEndCommandBuffer(const ApiCallInfo& call_info, args::EndCommandBuffer& args)
@@ -2675,20 +2673,26 @@ void VulkanSpirvTrackModifier::ApplyDescriptorStateCommands(format::HandleId    
 
 void VulkanSpirvTrackModifier::executeCommandBuffer(format::HandleId commandBuffer)
 {
-    if (command_buffer_submit_recordings.find(commandBuffer) == command_buffer_submit_recordings.end())
+    const auto recordings = command_buffer_submit_recordings.find(commandBuffer);
+    if (recordings == command_buffer_submit_recordings.end())
     {
         command_buffer_recording.erase(commandBuffer);
         command_buffer_entries_.at(commandBuffer).state = CommandBufferLifeCycle::Executable;
         return;
     }
 
-    for (const CommandBufferRecording& recording : command_buffer_submit_recordings[commandBuffer])
+    // Each submission starts with fresh binding and push-constant state.
+    CommandBufferState& current_command_buffer_state = command_buffer_state[commandBuffer];
+    current_command_buffer_state.command_buffer      = commandBuffer;
+    current_command_buffer_state.bind_point_state.clear();
+    current_command_buffer_state.descriptor_buffers.clear();
+    current_command_buffer_state.push_constant.assign(256, 0); // MAX_PUSHCONSTANT_SIZE
+    provenance_tracker_.ClearPushConstantProvenance(commandBuffer);
+
+    // Keep the saved commands available for subsequent submissions.
+    for (const CommandBufferRecording& recording : recordings->second)
     {
         ApplyActionCommands(recording);
-
-        // update commandBuffer state
-        CommandBufferState& current_command_buffer_state = command_buffer_state[commandBuffer];
-        current_command_buffer_state.command_buffer      = commandBuffer;
 
         for (const PushConstantData& pushconstant : recording.push_constants)
         {
@@ -2755,7 +2759,6 @@ void VulkanSpirvTrackModifier::executeCommandBuffer(format::HandleId commandBuff
             executeDispatchDraw(commandBuffer, recording.bind_point, dispatch_geometry);
         }
     }
-    command_buffer_submit_recordings.erase(commandBuffer);
     command_buffer_entries_.at(commandBuffer).state = CommandBufferLifeCycle::Executable;
 }
 
