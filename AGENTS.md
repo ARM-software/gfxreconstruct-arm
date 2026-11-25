@@ -14,6 +14,7 @@
 - Quick incremental build: `( cd build/<platform>/<arch>/cmake_output ; make -j 8 )`
 
 ## Coding Style & Naming Conventions
+- Match nearby code. See the [code style skill](.agents/skills/gfxreconstruct-code-style/SKILL.md) when conventions are unclear.
 - C++ follows the Google C++ Style Guide with the repo’s `.clang-format` (ClangFormat 14). Use `GFXRECON_ASSERT`.
 - Python follows PEP 8; use `yapf -i` with `.style.yapf`.
 - Keep interfaces STL-like when intended; prefer explicit.
