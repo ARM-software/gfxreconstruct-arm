@@ -421,6 +421,24 @@ class VulkanStructDeepCopyBodyGenerator(VulkanBaseGenerator):
                 write('        handle_struct_member(base_struct, base_struct.{0}, i, offset, out_data);'.format(value.name), file=self.outFile)
             elif self.handleAsSpecialUnion(typename, value):
                 write('        handle_union(base_struct, i, offset, out_data);', file=self.outFile)
+            elif typename == "VkDescriptorSetAndBindingMappingEXT" and value.name == "sourceData":
+                write('        switch (base_struct.source)', file=self.outFile)
+                write('        {', file=self.outFile)
+                for source, member in [
+                    ("CONSTANT_OFFSET", "constantOffset"),
+                    ("PUSH_INDEX", "pushIndex"),
+                    ("INDIRECT_INDEX", "indirectIndex"),
+                    ("INDIRECT_INDEX_ARRAY", "indirectIndexArray"),
+                    ("SHADER_RECORD_INDEX", "shaderRecordIndex"),
+                ]:
+                    write('            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_{}_EXT:'.format(source),
+                          file=self.outFile)
+                    write('                handle_pointer(base_struct, base_struct.sourceData.{}.'
+                          'pEmbeddedSampler, 1, i, offset, out_data);'.format(member), file=self.outFile)
+                    write('                break;', file=self.outFile)
+                write('            default:', file=self.outFile)
+                write('                break;', file=self.outFile)
+                write('        }', file=self.outFile)
 
         write('    }', file=self.outFile)
         write('    return offset;', file=self.outFile)

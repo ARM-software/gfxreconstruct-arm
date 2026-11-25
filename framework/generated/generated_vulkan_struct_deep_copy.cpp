@@ -16070,6 +16070,26 @@ size_t vulkan_struct_deep_copy(const VkDescriptorSetAndBindingMappingEXT* struct
             out_structures[i]   = base_struct;
         }
         handle_pnext(base_struct, i, offset, out_data);
+        switch (base_struct.source)
+        {
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+                handle_pointer(base_struct, base_struct.sourceData.constantOffset.pEmbeddedSampler, 1, i, offset, out_data);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+                handle_pointer(base_struct, base_struct.sourceData.pushIndex.pEmbeddedSampler, 1, i, offset, out_data);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+                handle_pointer(base_struct, base_struct.sourceData.indirectIndex.pEmbeddedSampler, 1, i, offset, out_data);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+                handle_pointer(base_struct, base_struct.sourceData.indirectIndexArray.pEmbeddedSampler, 1, i, offset, out_data);
+                break;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT:
+                handle_pointer(base_struct, base_struct.sourceData.shaderRecordIndex.pEmbeddedSampler, 1, i, offset, out_data);
+                break;
+            default:
+                break;
+        }
     }
     return offset;
 }

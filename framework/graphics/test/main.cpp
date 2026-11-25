@@ -31,6 +31,7 @@
 #include "graphics/vulkan_resources_util.h"
 #include "graphics/vulkan_feature_util.h"
 #include "graphics/vulkan_shader_group_handle.h"
+#include "graphics/vulkan_struct_deep_copy.h"
 
 TEST_CASE("vulkan_shader_group_handle - create empty handles", "[]")
 {
@@ -298,4 +299,43 @@ TEST_CASE("FilterPNextFeatures - remove unsupported", "[feature_util]")
         gfxrecon::graphics::feature_util::FilterPNextFeatures(&raster_create_info, enabled_none);
         REQUIRE(raster_create_info.pNext == nullptr);
     }
+}
+
+TEST_CASE("Descriptor heap mappings deep-copy embedded samplers", "[deep_copy]")
+{
+    const auto source          = GENERATE(VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+                                 VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT,
+                                 VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT,
+                                 VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT,
+                                 VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_SHADER_RECORD_INDEX_EXT);
+    auto       sampler_pointer = [](VkDescriptorSetAndBindingMappingEXT& mapping) -> const VkSamplerCreateInfo*& {
+        switch (mapping.source)
+        {
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+                return mapping.sourceData.constantOffset.pEmbeddedSampler;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+                return mapping.sourceData.pushIndex.pEmbeddedSampler;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT:
+                return mapping.sourceData.indirectIndex.pEmbeddedSampler;
+            case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_ARRAY_EXT:
+                return mapping.sourceData.indirectIndexArray.pEmbeddedSampler;
+            default:
+                return mapping.sourceData.shaderRecordIndex.pEmbeddedSampler;
+        }
+    };
+    VkSamplerCreateInfo sampler{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    sampler.maxLod                                  = 3.0f;
+    VkDescriptorSetAndBindingMappingEXT mappings[2] = { { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT },
+                                                        { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT } };
+    mappings[0].source = mappings[1].source = source;
+    sampler_pointer(mappings[1])            = &sampler;
+    const size_t size                       = gfxrecon::graphics::vulkan_struct_deep_copy(mappings, 2, nullptr);
+    REQUIRE(size == sizeof(mappings) + sizeof(sampler));
+    std::vector<uint8_t> data(size);
+    REQUIRE(gfxrecon::graphics::vulkan_struct_deep_copy(mappings, 2, data.data()) == size);
+    auto* copies = reinterpret_cast<VkDescriptorSetAndBindingMappingEXT*>(data.data());
+    REQUIRE(sampler_pointer(copies[0]) == nullptr);
+    REQUIRE(reinterpret_cast<const uint8_t*>(sampler_pointer(copies[1])) == data.data() + sizeof(mappings));
+    sampler.maxLod = 9.0f;
+    REQUIRE(sampler_pointer(copies[1])->maxLod == 3.0f);
 }
