@@ -225,6 +225,7 @@
     "vkGetDescriptorEXT": "OverrideGetDescriptorEXT",
     "vkCmdBindDescriptorBuffersEXT": "OverrideCmdBindDescriptorBuffersEXT",
     "vkCreateSampler": "OverrideCreateSampler",
+    "vkRegisterCustomBorderColorEXT": "OverrideRegisterCustomBorderColorEXT",
     "vkCreatePipelineBinariesKHR": "OverrideCreatePipelineBinariesKHR",
     "vkCmdBeginRendering": "OverrideCmdBeginRendering",
     "vkCmdBeginRenderingKHR": "OverrideCmdBeginRendering",
